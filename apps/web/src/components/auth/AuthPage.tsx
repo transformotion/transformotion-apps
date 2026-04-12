@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { signIn } from 'aws-amplify/auth';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { SignIn } from './SignIn';
 import { SignUp } from './SignUp';
@@ -11,30 +11,37 @@ type Screen = 'signin' | 'signup' | 'confirm' | 'forgot' | 'reset';
 
 /**
  * AuthPage — orchestrates all auth screens via local state.
- * Mounted by App.tsx when the user is not authenticated.
+ * Mounted at /auth by AppRouter when the user is not authenticated.
+ *
+ * After successful sign-in, navigates to location.state.from (the page
+ * the user was trying to reach) or falls back to '/'.
  */
 export function AuthPage() {
   const { refresh } = useAuth();
-  const [screen, setScreen]       = useState<Screen>('signin');
-  const [pendingEmail, setPending] = useState('');
+  const navigate    = useNavigate();
+  const location    = useLocation();
+  const from        = (location.state as { from?: { pathname: string } } | null)?.from?.pathname ?? '/';
 
-  async function handleConfirmSuccess() {
-    // After email confirmation, auto sign-in is not triggered — user needs to
-    // sign in manually. Redirect them to sign-in with the email pre-noted.
-    setScreen('signin');
-  }
-
-  async function handleResetSuccess() {
-    setScreen('signin');
-  }
+  const [screen, setScreen]        = useState<Screen>('signin');
+  const [pendingEmail, setPending]  = useState('');
 
   async function handleSignInSuccess() {
     await refresh();
+    navigate(from, { replace: true });
   }
 
-  async function handleSignUpSuccess(email: string) {
+  function handleSignUpSuccess(email: string) {
     setPending(email);
     setScreen('confirm');
+  }
+
+  function handleConfirmSuccess() {
+    // After email confirmation the user still needs to sign in
+    setScreen('signin');
+  }
+
+  function handleResetSuccess() {
+    setScreen('signin');
   }
 
   function handleConfirmRequired(email: string) {
@@ -46,11 +53,6 @@ export function AuthPage() {
     setPending(email);
     setScreen('reset');
   }
-
-  // After confirming email, auto-attempt sign-in isn't possible without the
-  // password, so we just go back to sign-in. The sign-in screen will handle
-  // cases where the user needs to sign in after confirming.
-  void signIn; // suppress unused import warning — may be used in future
 
   switch (screen) {
     case 'signin':

@@ -25,6 +25,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loadUser = useCallback(async () => {
     try {
       const { userId, username } = await getCurrentUser();
+      // fetchAuthSession auto-refreshes the access token if it has expired
       const session = await fetchAuthSession();
       const payload = session.tokens?.idToken?.payload;
       setUser({
@@ -33,15 +34,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email: (payload?.email as string | undefined) ?? undefined,
       });
     } catch {
-      // Not authenticated — expected on first load
       setUser(null);
     } finally {
       setIsLoading(false);
     }
   }, []);
 
+  // Initial session check on mount
   useEffect(() => {
     loadUser();
+  }, [loadUser]);
+
+  // Silently refresh the Cognito session when the tab regains focus.
+  // Amplify handles the actual token rotation; this just keeps our React
+  // state in sync (e.g. if the user signed out in another tab).
+  useEffect(() => {
+    async function handleFocus() {
+      try {
+        await fetchAuthSession({ forceRefresh: false });
+        // If we get here the session is still valid — re-check user in case
+        // Cognito attributes changed (e.g. account switcher in another tab)
+        await loadUser();
+      } catch {
+        // Session expired or revoked — clear user
+        setUser(null);
+      }
+    }
+
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
   }, [loadUser]);
 
   const signOut = useCallback(async () => {
