@@ -4,20 +4,35 @@ import { AuthPage } from '../components/auth/AuthPage';
 import { AppShell } from '../components/shell/AppShell';
 import { Launchpad } from '../components/launchpad/Launchpad';
 import { LaunchpadPlaceholder } from '../components/shell/LaunchpadPlaceholder';
+import { StockShell, StockRedirect } from '../components/stock/StockShell';
+import { MarketPage }    from '../pages/stock/MarketPage';
+import { RecsPage }      from '../pages/stock/RecsPage';
+import { EtfsPage }      from '../pages/stock/EtfsPage';
+import { MetalsPage }    from '../pages/stock/MetalsPage';
+import { AnalysePage }   from '../pages/stock/AnalysePage';
+import { PortfolioPage } from '../pages/stock/PortfolioPage';
+import { WatchlistPage } from '../pages/stock/WatchlistPage';
 
 /**
  * Top-level route table.
  *
  * Public:
- *   /auth       → AuthPage (sign in / sign up / confirm / forgot / reset)
+ *   /auth              → AuthPage
  *
- * Protected (require auth — gated by ProtectedRoute):
- *   /           → Launchpad (group-based app tiles)
- *   /stock/*    → Stock Analyser app shell + tabs  (Phase 3, S3.x)
- *   /budget/*   → Budget Tracker                   (Phase 5, S5.x)
- *   /framework  → Transformotion Framework          (Phase 6)
+ * Protected (gated by ProtectedRoute):
+ *   /                  → Launchpad (group-based app tiles)
  *
- * Unknown paths → / (which redirects to /auth if not signed in).
+ *   /stock             → redirect → /stock/market
+ *   /stock/market      → Market Analysis
+ *   /stock/recs        → Recommendations
+ *   /stock/etfs        → ETFs
+ *   /stock/metals      → Precious Metals
+ *   /stock/analyse     → Analyser
+ *   /stock/portfolio   → Portfolio
+ *   /stock/watchlist   → Watchlist
+ *
+ *   /budget/*          → Budget Tracker (Phase 5)
+ *   /framework/*       → Transformotion Framework (Phase 6)
  */
 export function AppRouter() {
   return (
@@ -28,17 +43,28 @@ export function AppRouter() {
       {/* ── Protected ───────────────────────────────────────────────── */}
       <Route element={<ProtectedRoute />}>
         <Route element={<AppShell />}>
+
           {/* Home — Launchpad */}
           <Route index element={<Launchpad />} />
 
-          {/* Stock Analyser — tab shell stubbed in S1.6 */}
-          <Route path="/stock/*" element={<LaunchpadPlaceholder />} />
+          {/* Stock Signal Analyser — 7 tabs */}
+          <Route path="stock" element={<StockShell />}>
+            <Route index element={<StockRedirect />} />
+            <Route path="market"    element={<MarketPage />} />
+            <Route path="recs"      element={<RecsPage />} />
+            <Route path="etfs"      element={<EtfsPage />} />
+            <Route path="metals"    element={<MetalsPage />} />
+            <Route path="analyse"   element={<AnalysePage />} />
+            <Route path="portfolio" element={<PortfolioPage />} />
+            <Route path="watchlist" element={<WatchlistPage />} />
+          </Route>
 
           {/* Budget Tracker — Phase 5 */}
-          <Route path="/budget/*" element={<LaunchpadPlaceholder />} />
+          <Route path="budget/*" element={<LaunchpadPlaceholder />} />
 
           {/* Transformotion Framework — Phase 6 */}
-          <Route path="/framework/*" element={<LaunchpadPlaceholder />} />
+          <Route path="framework/*" element={<LaunchpadPlaceholder />} />
+
         </Route>
       </Route>
 
