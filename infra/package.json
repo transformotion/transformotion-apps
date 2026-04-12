@@ -7,10 +7,12 @@
     "typecheck": "tsc --noEmit",
     "lint": "echo \"lint: infra\"",
     "cdk": "cdk",
-    "synth:dev": "cdk synth TransformotionDev-Network",
-    "synth:prod": "cdk synth TransformotionProd-Network",
-    "deploy:dev": "cdk deploy TransformotionDev-Network --require-approval never",
-    "deploy:prod": "cdk deploy TransformotionProd-Network --require-approval never"
+    "synth:dev": "cdk synth 'TransformotionDev-*'",
+    "synth:prod": "cdk synth 'TransformotionProd-*'",
+    "deploy:dev": "cdk deploy 'TransformotionDev-*' --require-approval never",
+    "deploy:prod": "cdk deploy 'TransformotionProd-*' --require-approval never",
+    "deploy:dev:auth": "cdk deploy TransformotionDev-Auth --require-approval never",
+    "deploy:prod:auth": "cdk deploy TransformotionProd-Auth --require-approval never"
   },
   "dependencies": {
     "aws-cdk-lib": "^2.100.0",
