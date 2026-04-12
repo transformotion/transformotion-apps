@@ -3,13 +3,26 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "build": "tsc --noEmit",
+    "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "lint": "echo \"lint: infra\""
+    "lint": "echo \"lint: infra\"",
+    "cdk": "cdk",
+    "synth:dev": "cdk synth 'TransformotionDev-*'",
+    "synth:prod": "cdk synth 'TransformotionProd-*'",
+    "deploy:dev": "cdk deploy 'TransformotionDev-*' --require-approval never",
+    "deploy:prod": "cdk deploy 'TransformotionProd-*' --require-approval never",
+    "deploy:dev:auth": "cdk deploy TransformotionDev-Auth --require-approval never",
+    "deploy:prod:auth": "cdk deploy TransformotionProd-Auth --require-approval never"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.100.0",
+    "constructs": "^10.0.0",
+    "source-map-support": "^0.5.21"
   },
   "devDependencies": {
-    "aws-cdk-lib": "^2.0.0",
-    "constructs": "^10.0.0",
-    "typescript": "*"
+    "@types/node": "^22.0.0",
+    "aws-cdk": "^2.100.0",
+    "ts-node": "^10.9.0",
+    "typescript": "^5.4.0"
   }
 }
