@@ -1,0 +1,12 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "cdk.out",
+    "rootDir": ".",
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "lib": ["ES2022"]
+  },
+  "include": ["bin/**/*.ts", "lib/**/*.ts"],
+  "exclude": ["node_modules", "cdk.out"]
+}
