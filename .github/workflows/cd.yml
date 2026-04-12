@@ -1,13 +1,73 @@
-# CD pipeline — implemented in Phase 0 session S0.4
-# Deploys to dev on merge to develop; deploys to prod on merge to main.
-# Uses OIDC for AWS authentication — no long-lived keys in GitHub secrets.
-# See DEVELOPMENT_PLAN.md Section 2.7.
 name: CD
+
 on:
   push:
-    branches: [main, develop]
+    branches:
+      - develop   # deploys to dev
+      - main      # deploys to prod
+
+concurrency:
+  group: cd-${{ github.ref_name }}
+  cancel-in-progress: false  # never cancel an in-flight deploy
+
+permissions:
+  id-token: write   # required for OIDC token exchange
+  contents: read
+
+env:
+  AWS_REGION: ap-southeast-2
+  AWS_ACCOUNT_ID: '959516291617'
+  ROLE_ARN: arn:aws:iam::959516291617:role/GitHubActionsDeployRole
+
 jobs:
-  deploy:
+  deploy-dev:
+    name: Deploy → Dev
     runs-on: ubuntu-latest
+    if: github.ref_name == 'develop'
+    environment: dev
     steps:
-      - run: echo "CDK deploy — wired up in S0.4"
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --workspace=infra
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: CDK Deploy — dev
+        working-directory: infra
+        run: npx cdk deploy TransformotionDev-Network --require-approval never
+
+  deploy-prod:
+    name: Deploy → Prod
+    runs-on: ubuntu-latest
+    if: github.ref_name == 'main'
+    environment: prod
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --workspace=infra
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: CDK Deploy — prod
+        working-directory: infra
+        run: npx cdk deploy TransformotionProd-Network --require-approval never
