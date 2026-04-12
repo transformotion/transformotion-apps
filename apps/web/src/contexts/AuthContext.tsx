@@ -5,6 +5,8 @@ interface AuthUser {
   userId: string;
   username: string;
   email?: string;
+  /** cognito:groups claim from the ID token — controls Launchpad and Lambda authoriser. */
+  groups: string[];
 }
 
 interface AuthState {
@@ -28,10 +30,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // fetchAuthSession auto-refreshes the access token if it has expired
       const session = await fetchAuthSession();
       const payload = session.tokens?.idToken?.payload;
+
+      // cognito:groups is a string array in the JWT payload
+      const rawGroups = payload?.['cognito:groups'];
+      const groups: string[] = Array.isArray(rawGroups) ? rawGroups as string[] : [];
+
       setUser({
         userId,
         username,
         email: (payload?.email as string | undefined) ?? undefined,
+        groups,
       });
     } catch {
       setUser(null);
@@ -46,21 +54,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [loadUser]);
 
   // Silently refresh the Cognito session when the tab regains focus.
-  // Amplify handles the actual token rotation; this just keeps our React
-  // state in sync (e.g. if the user signed out in another tab).
+  // Keeps React state in sync if the user signed out in another tab or
+  // if their group membership changed.
   useEffect(() => {
     async function handleFocus() {
       try {
         await fetchAuthSession({ forceRefresh: false });
-        // If we get here the session is still valid — re-check user in case
-        // Cognito attributes changed (e.g. account switcher in another tab)
         await loadUser();
       } catch {
-        // Session expired or revoked — clear user
         setUser(null);
       }
     }
-
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);
   }, [loadUser]);

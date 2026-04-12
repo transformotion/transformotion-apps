@@ -1,52 +1,64 @@
 /**
  * AppShell — the outer chrome for authenticated users.
  *
+ * Sidebar nav (desktop) and bottom tab nav (mobile) are driven by the
+ * user's accessible apps from the app registry + a Home/Launchpad entry.
+ *
+ * Tab routing stubs for all Stock Analyser tabs are wired up in S1.6.
+ * For now, child routes render via <Outlet />.
+ *
  * Layout:
  *   Mobile  (< 768px): header + scrollable content + fixed bottom tab nav
  *   Desktop (≥ 768px): sidebar nav + content area
- *
- * Tab routing and Launchpad content are wired up in S1.5 / S1.6.
- * For now, renders a welcome placeholder.
  */
 
 import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { getAccessibleApps } from '../../lib/appRegistry';
 
-const NAV_ITEMS = [
-  { to: '/stock',    label: 'Market',    icon: '📈' },
-  { to: '/stock/analyse', label: 'Analyse',  icon: '🔍' },
-  { to: '/stock/portfolio', label: 'Portfolio', icon: '💼' },
-  { to: '/stock/watchlist', label: 'Watchlist', icon: '⭐' },
-  { to: '/',         label: 'Home',      icon: '🏠' },
-];
-
-function navClass(isActive: boolean, base = '') {
-  const active = 'text-[var(--color-accent)]';
-  const inactive = 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]';
-  return `${base} ${isActive ? active : inactive} transition-colors`;
+function navCls(isActive: boolean) {
+  return isActive
+    ? 'text-[var(--color-accent)]'
+    : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]';
 }
 
 export function AppShell() {
   const { user, signOut } = useAuth();
+  const accessibleApps    = getAccessibleApps(user?.groups ?? []);
+
+  // Sidebar / bottom nav: Home + one entry per accessible app
+  const navItems = [
+    { to: '/',  label: 'Home',   icon: '🏠',  end: true },
+    ...accessibleApps.map((app) => ({
+      to:    app.route,
+      label: app.name.split(' ')[0], // first word: "Stock", "Budget", "Transformotion"
+      icon:  app.icon,
+      end:   false,
+    })),
+  ];
 
   return (
     <div className="flex flex-col h-full md:flex-row">
 
       {/* ── Desktop sidebar ──────────────────────────────────────────── */}
       <aside className="hidden md:flex md:flex-col md:w-56 md:shrink-0 border-r border-[var(--color-border)] bg-[var(--color-bg-surface)]">
+
+        {/* Logo */}
         <div className="px-5 py-4 border-b border-[var(--color-border)]">
-          <span className="text-[var(--color-accent)] font-bold text-lg tracking-tight">
+          <NavLink to="/" className="text-[var(--color-accent)] font-bold text-lg tracking-tight">
             Transformotion
-          </span>
+          </NavLink>
         </div>
+
+        {/* Nav links */}
         <nav className="flex-1 py-3">
-          {NAV_ITEMS.map((item) => (
+          {navItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
-              end={item.to === '/'}
+              end={item.end}
               className={({ isActive }) =>
-                navClass(isActive, 'flex items-center gap-3 px-5 py-3 text-sm w-full')
+                `flex items-center gap-3 px-5 py-3 text-sm w-full transition-colors ${navCls(isActive)}`
               }
             >
               <span className="text-base">{item.icon}</span>
@@ -54,6 +66,8 @@ export function AppShell() {
             </NavLink>
           ))}
         </nav>
+
+        {/* User + sign out */}
         <div className="px-5 py-4 border-t border-[var(--color-border)]">
           <p className="text-xs text-[var(--color-text-muted)] truncate mb-2">{user?.email}</p>
           <button
@@ -70,7 +84,9 @@ export function AppShell() {
 
         {/* Mobile header */}
         <header className="md:hidden flex items-center justify-between px-4 h-12 shrink-0 border-b border-[var(--color-border)] bg-[var(--color-bg-surface)]">
-          <span className="text-[var(--color-accent)] font-bold tracking-tight">Transformotion</span>
+          <NavLink to="/" className="text-[var(--color-accent)] font-bold tracking-tight">
+            Transformotion
+          </NavLink>
           <button
             onClick={signOut}
             className="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-danger)] transition-colors"
@@ -79,21 +95,21 @@ export function AppShell() {
           </button>
         </header>
 
-        {/* Page content — child routes render here in S1.5/S1.6 */}
-        <main className="flex-1 overflow-y-auto pb-[var(--bottom-nav-height)] md:pb-0 p-4">
+        {/* Page content */}
+        <main className="flex-1 overflow-y-auto pb-[var(--bottom-nav-height)] md:pb-0 px-4 py-4">
           <Outlet />
         </main>
       </div>
 
-      {/* ── Mobile bottom tab nav ─────────────────────────────────────── */}
+      {/* ── Mobile bottom tab nav (max 5 items) ──────────────────────── */}
       <nav className="md:hidden fixed bottom-0 inset-x-0 h-[var(--bottom-nav-height)] flex items-stretch bg-[var(--color-bg-surface)] border-t border-[var(--color-border)] z-50">
-        {NAV_ITEMS.map((item) => (
+        {navItems.slice(0, 5).map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
-            end={item.to === '/'}
+            end={item.end}
             className={({ isActive }) =>
-              navClass(isActive, 'flex-1 flex flex-col items-center justify-center gap-0.5')
+              `flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors ${navCls(isActive)}`
             }
           >
             <span className="text-lg leading-none">{item.icon}</span>

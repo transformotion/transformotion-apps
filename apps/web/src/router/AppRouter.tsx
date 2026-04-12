@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from './ProtectedRoute';
 import { AuthPage } from '../components/auth/AuthPage';
 import { AppShell } from '../components/shell/AppShell';
+import { Launchpad } from '../components/launchpad/Launchpad';
 import { LaunchpadPlaceholder } from '../components/shell/LaunchpadPlaceholder';
 
 /**
@@ -10,12 +11,13 @@ import { LaunchpadPlaceholder } from '../components/shell/LaunchpadPlaceholder';
  * Public:
  *   /auth       → AuthPage (sign in / sign up / confirm / forgot / reset)
  *
- * Protected (require auth — handled by ProtectedRoute):
- *   /           → AppShell → Launchpad (S1.5)
- *   /stock/*    → Stock Analyser tabs (Phase 3)
- *   /budget/*   → Budget Tracker (Phase 5)
+ * Protected (require auth — gated by ProtectedRoute):
+ *   /           → Launchpad (group-based app tiles)
+ *   /stock/*    → Stock Analyser app shell + tabs  (Phase 3, S3.x)
+ *   /budget/*   → Budget Tracker                   (Phase 5, S5.x)
+ *   /framework  → Transformotion Framework          (Phase 6)
  *
- * Unknown paths redirect to / (which will redirect to /auth if not signed in).
+ * Unknown paths → / (which redirects to /auth if not signed in).
  */
 export function AppRouter() {
   return (
@@ -26,12 +28,17 @@ export function AppRouter() {
       {/* ── Protected ───────────────────────────────────────────────── */}
       <Route element={<ProtectedRoute />}>
         <Route element={<AppShell />}>
-          {/* Home / Launchpad — wired up properly in S1.5 */}
-          <Route index element={<LaunchpadPlaceholder />} />
-          {/* Phase 3 — Stock Analyser tabs */}
+          {/* Home — Launchpad */}
+          <Route index element={<Launchpad />} />
+
+          {/* Stock Analyser — tab shell stubbed in S1.6 */}
           <Route path="/stock/*" element={<LaunchpadPlaceholder />} />
-          {/* Phase 5 — Budget Tracker */}
+
+          {/* Budget Tracker — Phase 5 */}
           <Route path="/budget/*" element={<LaunchpadPlaceholder />} />
+
+          {/* Transformotion Framework — Phase 6 */}
+          <Route path="/framework/*" element={<LaunchpadPlaceholder />} />
         </Route>
       </Route>
 
