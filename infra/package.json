@@ -1,0 +1,15 @@
+{
+  "name": "@transformotion/infra",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "lint": "echo \"lint: infra\""
+  },
+  "devDependencies": {
+    "aws-cdk-lib": "^2.0.0",
+    "constructs": "^10.0.0",
+    "typescript": "*"
+  }
+}

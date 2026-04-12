@@ -1,0 +1,13 @@
+# CD pipeline — implemented in Phase 0 session S0.4
+# Deploys to dev on merge to develop; deploys to prod on merge to main.
+# Uses OIDC for AWS authentication — no long-lived keys in GitHub secrets.
+# See DEVELOPMENT_PLAN.md Section 2.7.
+name: CD
+on:
+  push:
+    branches: [main, develop]
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "CDK deploy — wired up in S0.4"

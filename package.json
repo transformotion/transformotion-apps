@@ -1,0 +1,26 @@
+{
+  "name": "transformotion-apps",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "functions/*",
+    "infra"
+  ],
+  "scripts": {
+    "build": "turbo build",
+    "dev": "turbo dev",
+    "lint": "turbo lint",
+    "typecheck": "turbo typecheck",
+    "test": "turbo test",
+    "clean": "turbo clean && rm -rf node_modules"
+  },
+  "devDependencies": {
+    "turbo": "^2.0.0",
+    "typescript": "^5.4.0"
+  },
+  "packageManager": "npm@10.8.0",
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}

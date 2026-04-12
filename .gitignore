@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+cdk.out/
+
+# Turbo
+.turbo/
+
+# Environment / secrets — never commit
+.env
+.env.*
+*.env
+!.env.example
+
+# AWS CDK
+cdk.context.json
+
+# Test coverage
+coverage/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*

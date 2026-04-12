@@ -1,0 +1,15 @@
+{
+  "name": "@transformotion/fn-analysis-cache",
+  "version": "0.0.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "lint": "echo \"lint: analysis-cache\"",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "*"
+  }
+}
