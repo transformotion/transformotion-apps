@@ -39,3 +39,4 @@ desktop.ini
 # Logs
 *.log
 npm-debug.log*
+package-lock.json
