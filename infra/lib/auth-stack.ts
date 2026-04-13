@@ -120,53 +120,13 @@ export class AuthStack extends cdk.Stack {
     new secretsmanager.Secret(this, 'SecretAppleKeyId',            secretCfgOf('apple-key-id',            'Apple Sign-In key ID (placeholder)'));
     new secretsmanager.Secret(this, 'SecretApplePrivateKey',       secretCfgOf('apple-private-key',       'Apple Sign-In private key PEM (placeholder)'));
 
-    // Helper: reference a secret value by name (generates CloudFormation dynamic reference)
-    const secretVal  = (name: string) => cdk.SecretValue.secretsManager(`/${stage}/cognito/${name}`);
-    const secretStr  = (name: string) => secretVal(name).unsafeUnwrap();
-
     // ── Social Identity Providers ──────────────────────────────────────────
-    // IDPs are defined before the web client so CloudFormation creates them first.
-    // Credentials resolve at deploy time via {{resolve:secretsmanager:...}}.
-    // Social sign-in remains non-functional until real credentials are loaded.
-
-    const googleIdp = new cognito.UserPoolIdentityProviderGoogle(this, 'GoogleIdp', {
-      userPool:          this.userPool,
-      clientId:          secretStr('google-client-id'),
-      clientSecretValue: secretVal('google-client-secret'),
-      scopes:            ['email', 'profile', 'openid'],
-      attributeMapping: {
-        email:      cognito.ProviderAttribute.GOOGLE_EMAIL,
-        givenName:  cognito.ProviderAttribute.GOOGLE_GIVEN_NAME,
-        familyName: cognito.ProviderAttribute.GOOGLE_FAMILY_NAME,
-      },
-    });
-
-    const facebookIdp = new cognito.UserPoolIdentityProviderFacebook(this, 'FacebookIdp', {
-      userPool:     this.userPool,
-      clientId:     secretStr('facebook-app-id'),
-      clientSecret: secretStr('facebook-app-secret'),
-      scopes:       ['email', 'public_profile'],
-      apiVersion:   'v17.0',
-      attributeMapping: {
-        email:      cognito.ProviderAttribute.FACEBOOK_EMAIL,
-        givenName:  cognito.ProviderAttribute.other('first_name'),
-        familyName: cognito.ProviderAttribute.other('last_name'),
-      },
-    });
-
-    const microsoftIdp = new cognito.UserPoolIdentityProviderOidc(this, 'MicrosoftIdp', {
-      userPool:     this.userPool,
-      name:         'Microsoft',
-      clientId:     secretStr('microsoft-client-id'),
-      clientSecret: secretStr('microsoft-client-secret'),
-      issuerUrl:    'https://login.microsoftonline.com/common/v2.0',
-      scopes:       ['openid', 'email', 'profile'],
-      attributeMapping: {
-        email:      cognito.ProviderAttribute.other('email'),
-        givenName:  cognito.ProviderAttribute.other('given_name'),
-        familyName: cognito.ProviderAttribute.other('family_name'),
-      },
-    });
+    // Google, Facebook and Microsoft IDPs were registered manually in the
+    // Cognito console (the user had already configured them before CDK could
+    // create them, so they are NOT managed by CloudFormation).
+    // The Secrets Manager secrets above hold the credentials for reference.
+    // The client below lists the providers so Cognito Hosted UI and
+    // signInWithRedirect() work correctly.
 
     // ── Web App Client ─────────────────────────────────────────────────────
     // Public SPA client — no client secret (PKCE only).
@@ -230,8 +190,6 @@ export class AuthStack extends cdk.Stack {
       preventUserExistenceErrors: true,
     });
 
-    // Ensure IDPs exist before the client references them
-    this.userPoolClient.node.addDependency(googleIdp, facebookIdp, microsoftIdp);
 
     // ── Cognito Groups ─────────────────────────────────────────────────────
     const groups: Array<{ name: string; description: string; precedence: number }> = [
