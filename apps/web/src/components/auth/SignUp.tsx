@@ -1,8 +1,13 @@
 import { useState } from 'react';
-import { signUp } from 'aws-amplify/auth';
+import { signUp, signInWithRedirect } from 'aws-amplify/auth';
 import { AuthCard } from './AuthCard';
 import { FormField } from './FormField';
-import { UserPlusIcon } from '../icons/UserPlusIcon';
+import { UserPlusIcon }  from '../icons/UserPlusIcon';
+import { GoogleIcon }    from '../icons/GoogleIcon';
+import { MicrosoftIcon } from '../icons/MicrosoftIcon';
+import { FacebookIcon }  from '../icons/FacebookIcon';
+import { AppleIcon }     from '../icons/AppleIcon';
+import { SocialButton }  from './SocialButton';
 
 interface SignUpProps {
   onSuccess: (email: string) => void;
@@ -120,6 +125,22 @@ export function SignUp({ onSuccess, onSignIn }: SignUpProps) {
           {loading ? 'Creating account…' : 'Create account'}
         </button>
       </form>
+
+      {/* ── Social sign-up ─────────────────────────────────────────── */}
+      <div className="flex flex-col gap-3 pt-2 border-t border-[var(--color-border)]">
+        <p
+          className="text-xs text-center"
+          style={{ color: 'var(--color-text-muted)', fontFamily: 'var(--font-body)' }}
+        >
+          Or sign up with
+        </p>
+        <div className="grid grid-cols-2 gap-2">
+          <SocialButton label="Google"    bg="#ffffff"             textColor="#3c4043" onClick={() => signInWithRedirect({ provider: 'Google' })}><GoogleIcon    size={18} /></SocialButton>
+          <SocialButton label="Microsoft" bg="#ffffff"             textColor="#3c4043" onClick={() => signInWithRedirect({ provider: { custom: 'Microsoft' } })}><MicrosoftIcon size={18} /></SocialButton>
+          <SocialButton label="Facebook"  bg="#1877F2"             textColor="#ffffff" onClick={() => signInWithRedirect({ provider: 'Facebook' })}><FacebookIcon  size={18} /></SocialButton>
+          <SocialButton label="Apple"     bg="var(--color-navy3)"  textColor="var(--color-text-muted)" disabled title="Apple Sign-In coming soon"><AppleIcon size={18} /></SocialButton>
+        </div>
+      </div>
 
       <p className="text-sm text-[var(--color-text-muted)] text-center pt-2 border-t border-[var(--color-border)]">
         Already have an account?{' '}
