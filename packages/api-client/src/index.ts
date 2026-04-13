@@ -1,4 +1,55 @@
 // @transformotion/api-client
-// Typed API wrappers for all Transformotion Apps backend endpoints.
-// Implemented in Phase 2 (S2.7).
-export {};
+// Typed API client for all Transformotion backend endpoints.
+//
+// Usage in a React app:
+//   import { ApiClient } from '@transformotion/api-client';
+//   import { fetchAuthSession } from 'aws-amplify/auth';
+//
+//   const client = new ApiClient({
+//     baseUrl:      import.meta.env.VITE_API_URL,
+//     getToken:     () => fetchAuthSession().then(s => s.tokens?.accessToken?.toString() ?? ''),
+//     getAccountId: () => activeAccountId,   // from auth context
+//   });
+//
+//   const { holdings } = await client.getPortfolio();
+//   await client.putPortfolio({ holdings });
+//   const result = await client.claude({ prompt: '...' });
+
+export { ApiClient }                      from './client';
+export { ApiError }                       from './errors';
+export type { ApiClientOptions }          from './http';
+
+export type {
+  // Portfolio
+  PortfolioHolding,
+  GetPortfolioResponse,
+  PutPortfolioRequest,
+  PutPortfolioResponse,
+
+  // Watchlist
+  WatchlistItem,
+  GetWatchlistResponse,
+  PutWatchlistRequest,
+  PutWatchlistResponse,
+
+  // Analysis cache
+  CacheEntry,
+  PutCacheRequest,
+  PutCacheResponse,
+
+  // Accounts
+  Account,
+  AccountMember,
+  CreateAccountRequest,
+  CreateAccountResponse,
+  GetAccountResponse,
+  UpdateAccountRequest,
+  UpdateAccountResponse,
+  ListMembersResponse,
+  CreateInvitationRequest,
+  CreateInvitationResponse,
+
+  // Claude proxy
+  ClaudeProxyRequest,
+  ClaudeProxyResponse,
+} from './types';
