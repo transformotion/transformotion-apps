@@ -2,6 +2,7 @@ import * as path from 'path';
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as lambdaNodejs from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
@@ -21,11 +22,11 @@ export interface ApiStackProps extends cdk.StackProps {
  * wired in the same deploy.
  *
  *   POST  /api/claude             → S2.3 ✅ claude-proxy Lambda
- *   GET   /portfolio              → S2.4 Stub
+ *   GET   /portfolio              → S2.4 ✅ portfolio Lambda
  *   PUT   /portfolio
- *   GET   /watchlist              → S2.5 Stub
+ *   GET   /watchlist              → S2.5 ✅ watchlist Lambda
  *   PUT   /watchlist
- *   GET   /analysis-cache/{key}   → S2.6 Stub
+ *   GET   /analysis-cache/{key}   → S2.6 ✅ analysis-cache Lambda
  *   PUT   /analysis-cache/{key}
  *   DELETE /analysis-cache/{key}
  *   POST  /accounts               → S2.11 Stub
@@ -105,23 +106,77 @@ export class ApiStack extends cdk.Stack {
       .addResource('claude')
       .addMethod('POST', new apigateway.LambdaIntegration(claudeProxyFn, { proxy: true }), auth);
 
-    // ── /portfolio (S2.4) ────────────────────────────────────────────────────
+    // ── S2.4: /portfolio — Portfolio Lambda ───────────────────────────────────
+    const portfolioTable = dynamodb.Table.fromTableName(
+      this, 'PortfolioTable', `stock-analyser.portfolio-${stage}`,
+    );
+
+    const portfolioFn = new lambdaNodejs.NodejsFunction(this, 'PortfolioFn', {
+      functionName: `transformotion-portfolio-${stage}`,
+      entry:        path.join(__dirname, '../../functions/portfolio/src/index.ts'),
+      handler:      'handler',
+      runtime:      lambda.Runtime.NODEJS_20_X,
+      timeout:      cdk.Duration.seconds(15),
+      memorySize:   256,
+      environment:  { PORTFOLIO_TABLE: portfolioTable.tableName },
+      bundling:     { externalModules: ['@aws-sdk/*'], minify: true, sourceMap: false },
+    });
+
+    portfolioTable.grantReadWriteData(portfolioFn);
+
+    const portfolioIntegration = new apigateway.LambdaIntegration(portfolioFn, { proxy: true });
     const portfolio = this.api.root.addResource('portfolio');
-    portfolio.addMethod('GET', stub, auth);
-    portfolio.addMethod('PUT', stub, auth);
+    portfolio.addMethod('GET', portfolioIntegration, auth);
+    portfolio.addMethod('PUT', portfolioIntegration, auth);
 
-    // ── /watchlist (S2.5) ────────────────────────────────────────────────────
+    // ── S2.5: /watchlist — Watchlist Lambda ───────────────────────────────────
+    const watchlistTable = dynamodb.Table.fromTableName(
+      this, 'WatchlistTable', `stock-analyser.watchlist-${stage}`,
+    );
+
+    const watchlistFn = new lambdaNodejs.NodejsFunction(this, 'WatchlistFn', {
+      functionName: `transformotion-watchlist-${stage}`,
+      entry:        path.join(__dirname, '../../functions/watchlist/src/index.ts'),
+      handler:      'handler',
+      runtime:      lambda.Runtime.NODEJS_20_X,
+      timeout:      cdk.Duration.seconds(15),
+      memorySize:   256,
+      environment:  { WATCHLIST_TABLE: watchlistTable.tableName },
+      bundling:     { externalModules: ['@aws-sdk/*'], minify: true, sourceMap: false },
+    });
+
+    watchlistTable.grantReadWriteData(watchlistFn);
+
+    const watchlistIntegration = new apigateway.LambdaIntegration(watchlistFn, { proxy: true });
     const watchlist = this.api.root.addResource('watchlist');
-    watchlist.addMethod('GET', stub, auth);
-    watchlist.addMethod('PUT', stub, auth);
+    watchlist.addMethod('GET', watchlistIntegration, auth);
+    watchlist.addMethod('PUT', watchlistIntegration, auth);
 
-    // ── /analysis-cache/{key} (S2.6) ─────────────────────────────────────────
+    // ── S2.6: /analysis-cache/{key} — Analysis Cache Lambda ──────────────────
+    const cacheTable = dynamodb.Table.fromTableName(
+      this, 'CacheTable', `stock-analyser.cache-${stage}`,
+    );
+
+    const cacheFn = new lambdaNodejs.NodejsFunction(this, 'CacheFn', {
+      functionName: `transformotion-analysis-cache-${stage}`,
+      entry:        path.join(__dirname, '../../functions/analysis-cache/src/index.ts'),
+      handler:      'handler',
+      runtime:      lambda.Runtime.NODEJS_20_X,
+      timeout:      cdk.Duration.seconds(15),
+      memorySize:   256,
+      environment:  { CACHE_TABLE: cacheTable.tableName },
+      bundling:     { externalModules: ['@aws-sdk/*'], minify: true, sourceMap: false },
+    });
+
+    cacheTable.grantReadWriteData(cacheFn);
+
+    const cacheIntegration = new apigateway.LambdaIntegration(cacheFn, { proxy: true });
     const cacheKey = this.api.root
       .addResource('analysis-cache')
       .addResource('{key}');
-    cacheKey.addMethod('GET',    stub, auth);
-    cacheKey.addMethod('PUT',    stub, auth);
-    cacheKey.addMethod('DELETE', stub, auth);
+    cacheKey.addMethod('GET',    cacheIntegration, auth);
+    cacheKey.addMethod('PUT',    cacheIntegration, auth);
+    cacheKey.addMethod('DELETE', cacheIntegration, auth);
 
     // ── /accounts (S2.11) ────────────────────────────────────────────────────
     const accounts = this.api.root.addResource('accounts');
