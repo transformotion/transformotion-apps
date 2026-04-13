@@ -15,8 +15,12 @@ export function FormField({
   placeholder, autoComplete, disabled, error,
 }: FormFieldProps) {
   return (
-    <div className="flex flex-col gap-1">
-      <label htmlFor={id} className="text-xs font-medium text-[var(--color-text-muted)] uppercase tracking-wide">
+    <div className="flex flex-col gap-1.5">
+      <label
+        htmlFor={id}
+        className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)]"
+        style={{ fontFamily: 'var(--font-sub)' }}
+      >
         {label}
       </label>
       <input
@@ -27,11 +31,21 @@ export function FormField({
         placeholder={placeholder}
         autoComplete={autoComplete}
         disabled={disabled}
-        className="w-full bg-[var(--color-bg-surface2)] border rounded-lg px-3 py-2.5 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)] disabled:opacity-50 transition-colors"
-        style={{ borderColor: error ? 'var(--color-danger)' : 'var(--color-border)' }}
+        className="w-full rounded-lg px-3 py-2.5 text-sm focus:outline-none disabled:opacity-50 transition-colors"
+        style={{
+          background:   'var(--color-ink)',
+          border:       `1px solid ${error ? 'var(--color-danger)' : 'var(--color-border)'}`,
+          color:        'var(--color-text-primary)',
+          fontFamily:   'var(--font-body)',
+          // teal focus ring handled inline via onFocus/onBlur
+        }}
+        onFocus={(e) => !error && (e.target.style.borderColor = 'var(--color-teal)')}
+        onBlur={(e) => !error && (e.target.style.borderColor = 'var(--color-border)')}
       />
       {error && (
-        <p className="text-xs text-[var(--color-danger)]">{error}</p>
+        <p className="text-xs text-[var(--color-danger)]" style={{ fontFamily: 'var(--font-body)' }}>
+          {error}
+        </p>
       )}
     </div>
   );

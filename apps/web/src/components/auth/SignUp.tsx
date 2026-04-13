@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { signUp } from 'aws-amplify/auth';
 import { AuthCard } from './AuthCard';
 import { FormField } from './FormField';
+import { UserPlusIcon } from '../icons/UserPlusIcon';
 
 interface SignUpProps {
   onSuccess: (email: string) => void;
@@ -63,6 +64,7 @@ export function SignUp({ onSuccess, onSignIn }: SignUpProps) {
     <AuthCard
       title="Create account"
       subtitle="Join Transformotion Apps"
+      icon={<UserPlusIcon size={28} />}
       error={error}
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
