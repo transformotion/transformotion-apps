@@ -1,20 +1,17 @@
 {
-  "name": "@transformotion/fn-claude-proxy",
+  "name": "@transformotion/lambda-middleware",
   "version": "0.0.0",
   "private": true,
   "main": "./src/index.ts",
   "scripts": {
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
-    "lint": "echo \"lint: claude-proxy\"",
+    "lint": "echo \"lint: lambda-middleware\"",
     "test": "vitest run"
   },
-  "dependencies": {
-    "@transformotion/lambda-middleware": "*"
-  },
   "devDependencies": {
-    "@aws-sdk/client-secrets-manager": "^3",
     "@types/aws-lambda": "^8",
-    "typescript": "*"
+    "typescript": "*",
+    "vitest": "^1"
   }
 }
