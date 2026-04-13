@@ -8,6 +8,11 @@ interface AuthUser {
   email?: string;
   /** cognito:groups claim from the ID token — controls Launchpad and Lambda authoriser. */
   groups: string[];
+  /**
+   * The user's currently active account UUID (custom:active_account JWT claim).
+   * Undefined for brand-new users who haven't completed first-login setup yet.
+   */
+  activeAccountId?: string;
 }
 
 interface AuthState {
@@ -36,11 +41,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const rawGroups = payload?.['cognito:groups'];
       const groups: string[] = Array.isArray(rawGroups) ? rawGroups as string[] : [];
 
+      const activeAccountId = (payload?.['custom:active_account'] as string | undefined)?.trim() || undefined;
+
       setUser({
         userId,
         username,
         email:  (payload?.email as string | undefined) ?? undefined,
         groups,
+        activeAccountId,
       });
     } catch {
       setUser(null);

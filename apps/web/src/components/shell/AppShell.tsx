@@ -12,8 +12,10 @@
 
 import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { useFirstLogin } from '../../hooks/useFirstLogin';
 import { getAccessibleApps } from '../../lib/appRegistry';
 import { Wordmark } from '../Wordmark';
+import { MigrationBanner } from '../MigrationBanner';
 
 function navCls(isActive: boolean) {
   return isActive
@@ -24,6 +26,9 @@ function navCls(isActive: boolean) {
 export function AppShell() {
   const { user, signOut } = useAuth();
   const accessibleApps    = getAccessibleApps(user?.groups ?? []);
+
+  // First-login: create personal account + set Cognito custom attributes if absent
+  const { setupError } = useFirstLogin();
 
   const navItems = [
     { to: '/', label: 'Home', end: true },
@@ -115,6 +120,28 @@ export function AppShell() {
           <Outlet />
         </main>
       </div>
+
+      {/* ── First-login setup error (rare, shown as non-blocking toast) ─ */}
+      {setupError && (
+        <div style={{
+          position:    'fixed',
+          top:         'calc(var(--top-nav-height) + 0.75rem)',
+          right:       '1rem',
+          zIndex:      1001,
+          background:  '#7f1d1d',
+          border:      '1px solid #ef4444',
+          borderRadius:'6px',
+          padding:     '0.75rem 1rem',
+          color:       '#fca5a5',
+          fontSize:    '0.875rem',
+          maxWidth:    '320px',
+        }}>
+          Account setup failed: {setupError}
+        </div>
+      )}
+
+      {/* ── localStorage migration banner ─────────────────────────────── */}
+      <MigrationBanner />
 
       {/* ── Mobile bottom tab nav ─────────────────────────────────────── */}
       <nav

@@ -1,19 +1,20 @@
 import { useMemo } from 'react';
 import { fetchAuthSession } from 'aws-amplify/auth';
 import { ApiClient } from '@transformotion/api-client';
+import { useAuth } from '../contexts/AuthContext';
 
 /**
  * Returns a memoised ApiClient instance wired to Amplify auth.
  *
  * - `getToken`     — calls Amplify fetchAuthSession on every request;
  *                    Amplify auto-refreshes the access token if expired.
- * - `getAccountId` — reads VITE_API_ACCOUNT_ID from env for now;
- *                    replaced in S2.13 with the active account from auth context.
- *
- * The client is stable as long as the env vars don't change (i.e. for the
- * entire session), so re-renders don't recreate it unnecessarily.
+ * - `getAccountId` — reads activeAccountId from AuthContext (set by first-login setup).
+ *                    Returns undefined until setup completes, causing protected Lambda
+ *                    calls to fall back to the custom:active_account JWT claim.
  */
 export function useApiClient(): ApiClient {
+  const { user } = useAuth();
+
   return useMemo(
     () =>
       new ApiClient({
@@ -22,9 +23,10 @@ export function useApiClient(): ApiClient {
           const session = await fetchAuthSession();
           return session.tokens?.accessToken?.toString() ?? '';
         },
-        // TODO S2.13: replace with active account from auth context / account switcher
-        getAccountId: () => undefined,
+        getAccountId: () => user?.activeAccountId,
       }),
-    [],
+    // Re-create client when the active account changes (first-login, account switch)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [user?.activeAccountId],
   );
 }

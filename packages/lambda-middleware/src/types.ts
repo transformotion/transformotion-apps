@@ -44,6 +44,17 @@ export interface LambdaContext {
 export type ProtectedHandler = (ctx: LambdaContext) => Promise<LambdaResponse>;
 
 /**
+ * Auth-only context: JWT claims available but no account context resolved.
+ * Used by first-login / setup routes where the user has no account yet.
+ */
+export interface AuthOnlyContext {
+  auth: AuthClaims;
+  event: APIGatewayProxyEvent;
+}
+
+export type AuthOnlyHandler = (ctx: AuthOnlyContext) => Promise<LambdaResponse>;
+
+/**
  * Simplified response type. Middleware serialises `body` to JSON automatically.
  */
 export interface LambdaResponse {

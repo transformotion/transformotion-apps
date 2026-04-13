@@ -1,5 +1,5 @@
 import type { APIGatewayProxyEvent, APIGatewayProxyResult, LambdaResponse } from './types';
-import type { ProtectedHandler } from './types';
+import type { ProtectedHandler, AuthOnlyHandler } from './types';
 import { extractAuthClaims, resolveAccountContext } from './auth';
 import { HttpError } from './errors';
 import { errorResponse } from './response';
@@ -50,6 +50,47 @@ export function withAuth(inner: ProtectedHandler) {
       }
 
       // Unexpected error — log the real message server-side, return generic 500
+      console.error('[lambda-middleware] Unhandled error:', err);
+      return errorResponse(500, 'An unexpected error occurred');
+    }
+  };
+}
+
+/**
+ * Wrap a protected Lambda handler that requires Cognito auth but NOT an account context.
+ * Used for first-login / setup routes where the user has authenticated but has no account yet.
+ *
+ * Usage:
+ * ```ts
+ * import { withAuthOnly } from '@transformotion/lambda-middleware';
+ *
+ * export const handler = withAuthOnly(async ({ auth, event }) => {
+ *   // auth.userId, auth.email, auth.groups — no account context
+ *   return { statusCode: 200, body: { ok: true } };
+ * });
+ * ```
+ */
+export function withAuthOnly(inner: AuthOnlyHandler) {
+  return async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+    try {
+      const auth = extractAuthClaims(event);
+
+      const result = await inner({ auth, event });
+
+      return {
+        statusCode: result.statusCode,
+        headers: {
+          'Access-Control-Allow-Origin':  '*',
+          'Access-Control-Allow-Headers': 'Content-Type,Authorization,X-Account-Id',
+          'Content-Type':                 'application/json',
+          ...result.headers,
+        },
+        body: result.body === null ? '' : JSON.stringify(result.body),
+      };
+    } catch (err) {
+      if (err instanceof HttpError) {
+        return errorResponse(err.statusCode, err.message, err.detail);
+      }
       console.error('[lambda-middleware] Unhandled error:', err);
       return errorResponse(500, 'An unexpected error occurred');
     }

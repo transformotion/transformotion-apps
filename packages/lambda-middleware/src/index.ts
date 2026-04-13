@@ -2,8 +2,9 @@
 // Shared middleware for all Transformotion Lambda functions.
 //
 // Core wrappers:
-//   withAuth(handler)    — protected routes (Cognito JWT + account context)
-//   withPublic(handler)  — public routes (error handling + response serialisation only)
+//   withAuth(handler)      — protected routes (Cognito JWT + account context)
+//   withAuthOnly(handler)  — auth but no account context (first-login / setup routes)
+//   withPublic(handler)    — public routes (error handling + response serialisation only)
 //
 // Request helpers:
 //   parseBody<T>(event)              — parse + type-assert JSON body, throws 400 on failure
@@ -28,7 +29,7 @@
 //   userInGroup(claims, group)       — boolean membership check
 //   requireGroup(claims, ...groups)  — throws 403 if user not in any of the groups
 
-export { withAuth, withPublic }                         from './middleware';
+export { withAuth, withAuthOnly, withPublic }            from './middleware';
 export { ok, created, noContent, errorResponse }        from './response';
 export { HttpError, badRequest, unauthorised, forbidden, notFound, conflict } from './errors';
 export { parseBody, getPathParam, getQueryParam }        from './body';
@@ -37,8 +38,10 @@ export type {
   AuthClaims,
   AccountContext,
   LambdaContext,
+  AuthOnlyContext,
   LambdaResponse,
   ProtectedHandler,
+  AuthOnlyHandler,
   APIGatewayProxyEvent,
   APIGatewayProxyResult,
 } from './types';

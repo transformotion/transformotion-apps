@@ -3,6 +3,7 @@ import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as lambdaNodejs from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
@@ -10,7 +11,7 @@ import { Construct } from 'constructs';
 
 export interface ApiStackProps extends cdk.StackProps {
   stage: 'dev' | 'prod';
-  /** Imported from AuthStack — used by the Cognito JWT authoriser. */
+  /** Imported from AuthStack — used by the Cognito JWT authoriser and first-login Lambda. */
   userPool: cognito.IUserPool;
 }
 
@@ -21,6 +22,7 @@ export interface ApiStackProps extends cdk.StackProps {
  * Phase 2 session is completed. The stub comment is removed and the Lambda
  * wired in the same deploy.
  *
+ *   POST  /auth/setup              → S2.8 ✅ first-login Lambda
  *   POST  /api/claude             → S2.3 ✅ claude-proxy Lambda
  *   GET   /portfolio              → S2.4 ✅ portfolio Lambda
  *   PUT   /portfolio
@@ -69,6 +71,43 @@ export class ApiStack extends cdk.Stack {
     // ── Helpers ───────────────────────────────────────────────────────────────
     const stub = stubIntegration();
     const auth = authMethodOptions(this.authoriser);
+
+    // ── S2.8: /auth/setup — First-login Lambda ───────────────────────────────
+    const accountsTable = dynamodb.Table.fromTableName(
+      this, 'AccountsTable', `platform.accounts-${stage}`,
+    );
+    const accountMembersTable = dynamodb.Table.fromTableName(
+      this, 'AccountMembersTable', `platform.account-members-${stage}`,
+    );
+
+    const firstLoginFn = new lambdaNodejs.NodejsFunction(this, 'FirstLoginFn', {
+      functionName: `transformotion-first-login-${stage}`,
+      entry:        path.join(__dirname, '../../functions/first-login/src/index.ts'),
+      handler:      'handler',
+      runtime:      lambda.Runtime.NODEJS_20_X,
+      timeout:      cdk.Duration.seconds(15),
+      memorySize:   256,
+      environment: {
+        ACCOUNTS_TABLE:        accountsTable.tableName,
+        ACCOUNT_MEMBERS_TABLE: accountMembersTable.tableName,
+        USER_POOL_ID:          userPool.userPoolId,
+      },
+      bundling: { externalModules: ['@aws-sdk/*'], minify: true, sourceMap: false },
+    });
+
+    accountsTable.grantReadWriteData(firstLoginFn);
+    accountMembersTable.grantReadWriteData(firstLoginFn);
+
+    // Allow the Lambda to update Cognito user attributes (custom:active_account, custom:accounts)
+    firstLoginFn.addToRolePolicy(new iam.PolicyStatement({
+      actions:   ['cognito-idp:AdminUpdateUserAttributes'],
+      resources: [userPool.userPoolArn],
+    }));
+
+    const authResource = this.api.root.addResource('auth');
+    authResource
+      .addResource('setup')
+      .addMethod('POST', new apigateway.LambdaIntegration(firstLoginFn, { proxy: true }), auth);
 
     // ── /health — public, no auth ─────────────────────────────────────────────
     this.api.root
