@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
-import { NetworkStack }  from '../lib/network-stack';
-import { AuthStack }     from '../lib/auth-stack';
-import { AuthApiStack }  from '../lib/auth-api-stack';
+import { NetworkStack }         from '../lib/network-stack';
+import { AuthStack }            from '../lib/auth-stack';
+import { AuthApiStack }         from '../lib/auth-api-stack';
+import { ApiStack }             from '../lib/api-stack';
+import { PlatformTablesStack }  from '../lib/platform-tables-stack';
 
 const app = new cdk.App();
 
@@ -37,6 +39,19 @@ new AuthApiStack(app, 'TransformotionDev-AuthApi', {
   appUrl:      'https://dev.apps.transformotion.com.au',
 });
 
+new ApiStack(app, 'TransformotionDev-Api', {
+  env,
+  stage:       'dev',
+  description: 'Transformotion Apps — Dev main API (REST API Gateway + Cognito JWT authoriser)',
+  userPool:    devAuth.userPool,
+});
+
+new PlatformTablesStack(app, 'TransformotionDev-PlatformTables', {
+  env,
+  stage:       'dev',
+  description: 'Transformotion Apps — Dev platform DynamoDB tables',
+});
+
 // ── Prod stacks ────────────────────────────────────────────────────────────
 new NetworkStack(app, 'TransformotionProd-Network', {
   env,
@@ -58,4 +73,17 @@ new AuthApiStack(app, 'TransformotionProd-AuthApi', {
   userPoolId:  prodAuth.userPool.userPoolId,
   fromEmail:   'noreply@transformotion.com.au',
   appUrl:      'https://apps.transformotion.com.au',
+});
+
+new ApiStack(app, 'TransformotionProd-Api', {
+  env,
+  stage:       'prod',
+  description: 'Transformotion Apps — Prod main API (REST API Gateway + Cognito JWT authoriser)',
+  userPool:    prodAuth.userPool,
+});
+
+new PlatformTablesStack(app, 'TransformotionProd-PlatformTables', {
+  env,
+  stage:       'prod',
+  description: 'Transformotion Apps — Prod platform DynamoDB tables',
 });
