@@ -103,10 +103,10 @@ export class ApiStack extends cdk.Stack {
       resources: [userPool.userPoolArn],
     }));
 
+    const firstLoginIntegration = new apigateway.LambdaIntegration(firstLoginFn, { proxy: true });
     const authResource = this.api.root.addResource('auth');
-    authResource
-      .addResource('setup')
-      .addMethod('POST', new apigateway.LambdaIntegration(firstLoginFn, { proxy: true }), auth);
+    authResource.addResource('setup').addMethod('POST',  firstLoginIntegration, auth);
+    authResource.addResource('switch').addMethod('POST', firstLoginIntegration, auth);
 
     // ── /health — public, no auth ─────────────────────────────────────────────
     this.api.root

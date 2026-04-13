@@ -13,6 +13,11 @@ interface AuthUser {
    * Undefined for brand-new users who haven't completed first-login setup yet.
    */
   activeAccountId?: string;
+  /**
+   * All account UUIDs the user belongs to (custom:accounts JWT claim, comma-separated).
+   * Used by the account switcher to list available accounts.
+   */
+  accountIds: string[];
 }
 
 interface AuthState {
@@ -22,6 +27,12 @@ interface AuthState {
   /** Call after successful sign-in to refresh auth state. */
   refresh: () => Promise<void>;
   signOut: () => Promise<void>;
+  /**
+   * Switch the user's active account. Calls POST /auth/switch, then forces a
+   * session refresh so the new custom:active_account claim flows into all
+   * subsequent API requests.
+   */
+  switchAccount: (accountId: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -42,6 +53,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const groups: string[] = Array.isArray(rawGroups) ? rawGroups as string[] : [];
 
       const activeAccountId = (payload?.['custom:active_account'] as string | undefined)?.trim() || undefined;
+      const accountsRaw     = (payload?.['custom:accounts']        as string | undefined)?.trim() || '';
+      const accountIds      = accountsRaw ? accountsRaw.split(',').map(s => s.trim()).filter(Boolean) : [];
 
       setUser({
         userId,
@@ -49,6 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email:  (payload?.email as string | undefined) ?? undefined,
         groups,
         activeAccountId,
+        accountIds,
       });
     } catch {
       setUser(null);
@@ -97,6 +111,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
+  const switchAccount = useCallback(async (accountId: string) => {
+    const session = await fetchAuthSession();
+    const token   = session.tokens?.accessToken?.toString();
+    if (!token) throw new Error('No access token');
+
+    const baseUrl = import.meta.env.VITE_API_URL as string;
+    const res = await fetch(`${baseUrl}auth/switch`, {
+      method:  'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({ accountId }),
+    });
+
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({})) as { message?: string };
+      throw new Error(body.message ?? `Switch failed with status ${res.status}`);
+    }
+
+    // Force-refresh so the new custom:active_account claim is reflected in the JWT
+    await fetchAuthSession({ forceRefresh: true });
+    await loadUser();
+  }, [loadUser]);
+
   return (
     <AuthContext.Provider value={{
       user,
@@ -104,6 +143,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isLoading,
       refresh: loadUser,
       signOut,
+      switchAccount,
     }}>
       {children}
     </AuthContext.Provider>

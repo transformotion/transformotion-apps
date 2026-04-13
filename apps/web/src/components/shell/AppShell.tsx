@@ -16,6 +16,7 @@ import { useFirstLogin } from '../../hooks/useFirstLogin';
 import { getAccessibleApps } from '../../lib/appRegistry';
 import { Wordmark } from '../Wordmark';
 import { MigrationBanner } from '../MigrationBanner';
+import { AccountSwitcher } from './AccountSwitcher';
 
 function navCls(isActive: boolean) {
   return isActive
@@ -74,8 +75,9 @@ export function AppShell() {
           ))}
         </nav>
 
-        {/* User + sign out */}
+        {/* Account switcher + user + sign out */}
         <div className="flex items-center gap-3 shrink-0">
+          <AccountSwitcher />
           <span className="hidden sm:block text-xs text-[var(--color-text-muted)] truncate max-w-[160px]">
             {user?.email}
           </span>
