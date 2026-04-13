@@ -29,7 +29,7 @@ export function Launchpad() {
       {apps.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {apps.map((app) => (
-            <AppTile key={app.id} app={app} currentPhase={1} />
+            <AppTile key={app.id} app={app} currentPhase={3} />
           ))}
         </div>
       ) : (
