@@ -1,6 +1,10 @@
+import * as path from 'path';
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as lambdaNodejs from 'aws-cdk-lib/aws-lambda-nodejs';
+import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import { Construct } from 'constructs';
 
 export interface ApiStackProps extends cdk.StackProps {
@@ -12,28 +16,25 @@ export interface ApiStackProps extends cdk.StackProps {
 /**
  * ApiStack — main app REST API Gateway with Cognito JWT authoriser.
  *
- * All routes are wired with mock integrations that return a 200 stub
- * ("not_implemented"). Lambda integrations replace each stub as the
- * corresponding Phase 2 session is completed:
+ * Routes start as mock stubs and are replaced with Lambda integrations as each
+ * Phase 2 session is completed. The stub comment is removed and the Lambda
+ * wired in the same deploy.
  *
- *   POST  /api/claude             → S2.3 Anthropic proxy Lambda
- *   GET   /portfolio              → S2.4 Portfolio Lambda
+ *   POST  /api/claude             → S2.3 ✅ claude-proxy Lambda
+ *   GET   /portfolio              → S2.4 Stub
  *   PUT   /portfolio
- *   GET   /watchlist              → S2.5 Watchlist Lambda
+ *   GET   /watchlist              → S2.5 Stub
  *   PUT   /watchlist
- *   GET   /analysis-cache/{key}   → S2.6 Analysis cache Lambda
+ *   GET   /analysis-cache/{key}   → S2.6 Stub
  *   PUT   /analysis-cache/{key}
  *   DELETE /analysis-cache/{key}
- *   POST  /accounts               → S2.11 Accounts Lambda
+ *   POST  /accounts               → S2.11 Stub
  *   GET   /accounts/{id}
  *   PUT   /accounts/{id}
  *   DELETE /accounts/{id}
- *   GET   /accounts/{id}/members  → S2.12 Members Lambda
+ *   GET   /accounts/{id}/members  → S2.12 Stub
  *   DELETE /accounts/{id}/members/{userId}
- *   POST  /accounts/{id}/invitations → S2.12 Invitations Lambda
- *
- * The authoriser and api properties are exported so Lambda stacks can
- * replace mock integrations without modifying this file.
+ *   POST  /accounts/{id}/invitations → S2.12 Stub
  */
 export class ApiStack extends cdk.Stack {
   public readonly api: apigateway.RestApi;
@@ -52,14 +53,12 @@ export class ApiStack extends cdk.Stack {
       defaultCorsPreflightOptions: {
         allowOrigins: apigateway.Cors.ALL_ORIGINS,
         allowMethods: apigateway.Cors.ALL_METHODS,
-        allowHeaders: ['Content-Type', 'Authorization'],
+        allowHeaders: ['Content-Type', 'Authorization', 'X-Account-Id'],
         maxAge: cdk.Duration.hours(1),
       },
     });
 
     // ── Cognito JWT authoriser ────────────────────────────────────────────────
-    // Validates the Bearer token on every protected route.
-    // Results are cached for 5 minutes to reduce Cognito calls.
     this.authoriser = new apigateway.CognitoUserPoolsAuthorizer(this, 'JwtAuthoriser', {
       cognitoUserPools: [userPool],
       authorizerName:   `transformotion-jwt-${stage}`,
@@ -77,11 +76,34 @@ export class ApiStack extends cdk.Stack {
         methodResponses: [{ statusCode: '200' }],
       });
 
-    // ── /api/claude — Anthropic proxy (S2.3) ─────────────────────────────────
+    // ── S2.3: /api/claude — Anthropic proxy Lambda ────────────────────────────
+    const anthropicSecret = secretsmanager.Secret.fromSecretNameV2(
+      this, 'AnthropicApiKey', `${stage}/anthropic/api-key`,
+    );
+
+    const claudeProxyFn = new lambdaNodejs.NodejsFunction(this, 'ClaudeProxyFn', {
+      functionName: `transformotion-claude-proxy-${stage}`,
+      entry:        path.join(__dirname, '../../functions/claude-proxy/src/index.ts'),
+      handler:      'handler',
+      runtime:      lambda.Runtime.NODEJS_20_X,
+      timeout:      cdk.Duration.seconds(60),   // web_search can be slow
+      memorySize:   512,
+      environment: {
+        ANTHROPIC_SECRET_NAME: anthropicSecret.secretName,
+      },
+      bundling: {
+        externalModules: ['@aws-sdk/*'],
+        minify: true,
+        sourceMap: false,
+      },
+    });
+
+    anthropicSecret.grantRead(claudeProxyFn);
+
     this.api.root
       .addResource('api')
       .addResource('claude')
-      .addMethod('POST', stub, auth);
+      .addMethod('POST', new apigateway.LambdaIntegration(claudeProxyFn, { proxy: true }), auth);
 
     // ── /portfolio (S2.4) ────────────────────────────────────────────────────
     const portfolio = this.api.root.addResource('portfolio');
@@ -139,7 +161,7 @@ function stubIntegration(): apigateway.MockIntegration {
       statusCode: '200',
       responseParameters: {
         'method.response.header.Access-Control-Allow-Origin':  "'*'",
-        'method.response.header.Access-Control-Allow-Headers': "'Content-Type,Authorization'",
+        'method.response.header.Access-Control-Allow-Headers': "'Content-Type,Authorization,X-Account-Id'",
       },
       responseTemplates: {
         'application/json': '{"status":"not_implemented","message":"Lambda not yet wired — Phase 2 in progress"}',
@@ -175,9 +197,12 @@ function authMethodOptions(
           'method.response.header.Access-Control-Allow-Headers': true,
         },
       },
+      { statusCode: '400' },
       { statusCode: '401' },
       { statusCode: '403' },
+      { statusCode: '429' },
       { statusCode: '500' },
+      { statusCode: '502' },
     ],
   };
 }

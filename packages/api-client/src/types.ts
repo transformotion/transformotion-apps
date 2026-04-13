@@ -77,10 +77,12 @@ export interface CreateInvitationResponse { invitationId: string }
 // ── Claude proxy ──────────────────────────────────────────────────────────────
 
 export interface ClaudeProxyRequest {
-  prompt:    string;
-  system?:   string;
-  model?:    string;
+  prompt:     string;
+  system?:    string;
+  model?:     string;
   maxTokens?: number;
+  /** When true, enables the web_search tool so Claude can use live data. */
+  webSearch?: boolean;
 }
 
 export interface ClaudeProxyResponse {
