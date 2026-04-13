@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
 import { getCurrentUser, fetchAuthSession, signOut as amplifySignOut } from 'aws-amplify/auth';
+import { Hub } from 'aws-amplify/utils';
 
 interface AuthUser {
   userId: string;
@@ -21,7 +22,7 @@ interface AuthState {
 const AuthContext = createContext<AuthState | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(null);
+  const [user, setUser]         = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const loadUser = useCallback(async () => {
@@ -38,7 +39,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser({
         userId,
         username,
-        email: (payload?.email as string | undefined) ?? undefined,
+        email:  (payload?.email as string | undefined) ?? undefined,
         groups,
       });
     } catch {
@@ -67,6 +68,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);
+  }, [loadUser]);
+
+  // Hub listener — picks up social IDP sign-in after OAuth callback redirect.
+  // Amplify fires 'signedIn' once the authorization code has been exchanged.
+  useEffect(() => {
+    const cancel = Hub.listen('auth', ({ payload }) => {
+      if (payload.event === 'signedIn') {
+        loadUser();
+      } else if (payload.event === 'signedOut') {
+        setUser(null);
+        setIsLoading(false);
+      }
+    });
+    return cancel;
   }, [loadUser]);
 
   const signOut = useCallback(async () => {

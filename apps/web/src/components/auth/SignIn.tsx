@@ -1,7 +1,11 @@
 import { useState } from 'react';
-import { signIn } from 'aws-amplify/auth';
+import { signIn, signInWithRedirect } from 'aws-amplify/auth';
 import { AuthCard } from './AuthCard';
 import { FormField } from './FormField';
+import { GoogleIcon }    from '../icons/GoogleIcon';
+import { MicrosoftIcon } from '../icons/MicrosoftIcon';
+import { FacebookIcon }  from '../icons/FacebookIcon';
+import { AppleIcon }     from '../icons/AppleIcon';
 
 interface SignInProps {
   onSuccess: () => void;
@@ -89,6 +93,59 @@ export function SignIn({ onSuccess, onSignUp, onForgotPassword, onConfirmRequire
         </button>
       </form>
 
+      {/* ── Social sign-in ─────────────────────────────────────────── */}
+      <div className="flex flex-col gap-3 pt-2 border-t border-[var(--color-border)]">
+        <p
+          className="text-xs text-center"
+          style={{ color: 'var(--color-text-muted)', fontFamily: 'var(--font-body)' }}
+        >
+          Or continue with
+        </p>
+
+        <div className="grid grid-cols-2 gap-2">
+          {/* Google */}
+          <SocialButton
+            label="Google"
+            bg="#ffffff"
+            textColor="#3c4043"
+            onClick={() => signInWithRedirect({ provider: 'Google' })}
+          >
+            <GoogleIcon size={18} />
+          </SocialButton>
+
+          {/* Microsoft */}
+          <SocialButton
+            label="Microsoft"
+            bg="#ffffff"
+            textColor="#3c4043"
+            onClick={() => signInWithRedirect({ provider: { custom: 'Microsoft' } })}
+          >
+            <MicrosoftIcon size={18} />
+          </SocialButton>
+
+          {/* Facebook */}
+          <SocialButton
+            label="Facebook"
+            bg="#1877F2"
+            textColor="#ffffff"
+            onClick={() => signInWithRedirect({ provider: 'Facebook' })}
+          >
+            <FacebookIcon size={18} />
+          </SocialButton>
+
+          {/* Apple — coming soon */}
+          <SocialButton
+            label="Apple"
+            bg="var(--color-navy3)"
+            textColor="var(--color-text-muted)"
+            disabled
+            title="Apple Sign-In coming soon"
+          >
+            <AppleIcon size={18} />
+          </SocialButton>
+        </div>
+      </div>
+
       <p className="text-sm text-[var(--color-text-muted)] text-center pt-2 border-t border-[var(--color-border)]">
         No account?{' '}
         <button onClick={onSignUp} className="text-[var(--color-accent)] hover:underline font-medium">
@@ -96,5 +153,36 @@ export function SignIn({ onSuccess, onSignUp, onForgotPassword, onConfirmRequire
         </button>
       </p>
     </AuthCard>
+  );
+}
+
+interface SocialButtonProps {
+  label: string;
+  bg: string;
+  textColor: string;
+  onClick?: () => void;
+  disabled?: boolean;
+  title?: string;
+  children: React.ReactNode;
+}
+
+function SocialButton({ label, bg, textColor, onClick, disabled, title, children }: SocialButtonProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      className="flex items-center justify-center gap-2 rounded-lg py-2 px-3 text-xs font-medium transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+      style={{
+        background:  bg,
+        color:       textColor,
+        fontFamily:  'var(--font-body)',
+        border:      '1px solid transparent',
+      }}
+    >
+      {children}
+      <span>{label}</span>
+    </button>
   );
 }

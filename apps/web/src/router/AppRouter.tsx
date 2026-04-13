@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from './ProtectedRoute';
 import { AuthPage } from '../components/auth/AuthPage';
+import { OAuthCallback } from '../components/auth/OAuthCallback';
 import { AppShell } from '../components/shell/AppShell';
 import { Launchpad } from '../components/launchpad/Launchpad';
 import { LaunchpadPlaceholder } from '../components/shell/LaunchpadPlaceholder';
@@ -38,7 +39,8 @@ export function AppRouter() {
   return (
     <Routes>
       {/* ── Public ──────────────────────────────────────────────────── */}
-      <Route path="/auth" element={<AuthPage />} />
+      <Route path="/auth"     element={<AuthPage />} />
+      <Route path="/callback" element={<OAuthCallback />} />
 
       {/* ── Protected ───────────────────────────────────────────────── */}
       <Route element={<ProtectedRoute />}>
