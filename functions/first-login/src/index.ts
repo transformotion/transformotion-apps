@@ -71,6 +71,7 @@ export const handler = withAuthOnly(async ({ auth, event }) => {
             Item: {
               accountId,
               userId,
+              email,       // stored so accounts Lambda can return it without Cognito lookup
               role:     'owner',
               joinedAt: now,
             },

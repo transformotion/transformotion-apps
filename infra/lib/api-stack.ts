@@ -69,7 +69,6 @@ export class ApiStack extends cdk.Stack {
     });
 
     // ── Helpers ───────────────────────────────────────────────────────────────
-    const stub = stubIntegration();
     const auth = authMethodOptions(this.authoriser);
 
     // ── S2.8: /auth/setup — First-login Lambda ───────────────────────────────
@@ -217,23 +216,72 @@ export class ApiStack extends cdk.Stack {
     cacheKey.addMethod('PUT',    cacheIntegration, auth);
     cacheKey.addMethod('DELETE', cacheIntegration, auth);
 
-    // ── /accounts (S2.11) ────────────────────────────────────────────────────
+    // ── S2.11 + S2.12: /accounts — Accounts Lambda ───────────────────────────
+    // Handles: POST /accounts, GET/PUT/DELETE /accounts/{accountId},
+    //          GET /accounts/{accountId}/members,
+    //          DELETE /accounts/{accountId}/members/{userId}
+    const accountsTable2 = dynamodb.Table.fromTableName(
+      this, 'AccountsTable2', `platform.accounts-${stage}`,
+    );
+    const accountMembersTable2 = dynamodb.Table.fromTableName(
+      this, 'AccountMembersTable2', `platform.account-members-${stage}`,
+    );
+
+    const accountsFn = new lambdaNodejs.NodejsFunction(this, 'AccountsFn', {
+      functionName: `transformotion-accounts-${stage}`,
+      entry:        path.join(__dirname, '../../functions/accounts/src/index.ts'),
+      handler:      'handler',
+      runtime:      lambda.Runtime.NODEJS_20_X,
+      timeout:      cdk.Duration.seconds(15),
+      memorySize:   256,
+      environment: {
+        ACCOUNTS_TABLE:        accountsTable2.tableName,
+        ACCOUNT_MEMBERS_TABLE: accountMembersTable2.tableName,
+      },
+      bundling: { externalModules: ['@aws-sdk/*'], minify: true, sourceMap: false },
+    });
+
+    accountsTable2.grantReadWriteData(accountsFn);
+    accountMembersTable2.grantReadWriteData(accountsFn);
+
+    const accountsIntegration = new apigateway.LambdaIntegration(accountsFn, { proxy: true });
     const accounts = this.api.root.addResource('accounts');
-    accounts.addMethod('POST', stub, auth);
+    accounts.addMethod('POST', accountsIntegration, auth);
 
     const account = accounts.addResource('{accountId}');
-    account.addMethod('GET',    stub, auth);
-    account.addMethod('PUT',    stub, auth);
-    account.addMethod('DELETE', stub, auth);
+    account.addMethod('GET',    accountsIntegration, auth);
+    account.addMethod('PUT',    accountsIntegration, auth);
+    account.addMethod('DELETE', accountsIntegration, auth);
 
-    // ── /accounts/{accountId}/members (S2.12) ────────────────────────────────
     const members = account.addResource('members');
-    members.addMethod('GET', stub, auth);
+    members.addMethod('GET', accountsIntegration, auth);
+    members.addResource('{userId}').addMethod('DELETE', accountsIntegration, auth);
 
-    members.addResource('{userId}').addMethod('DELETE', stub, auth);
+    // ── S2.12: /accounts/{accountId}/invitations — Invitations Lambda ─────────
+    const invitationsTable = dynamodb.Table.fromTableName(
+      this, 'InvitationsTable', `platform.invitations-${stage}`,
+    );
 
-    // ── /accounts/{accountId}/invitations (S2.12) ────────────────────────────
-    account.addResource('invitations').addMethod('POST', stub, auth);
+    const invitationsFn = new lambdaNodejs.NodejsFunction(this, 'InvitationsFn', {
+      functionName: `transformotion-invitations-${stage}`,
+      entry:        path.join(__dirname, '../../functions/invitations/src/index.ts'),
+      handler:      'handler',
+      runtime:      lambda.Runtime.NODEJS_20_X,
+      timeout:      cdk.Duration.seconds(15),
+      memorySize:   256,
+      environment: {
+        ACCOUNTS_TABLE:    accountsTable2.tableName,
+        INVITATIONS_TABLE: invitationsTable.tableName,
+      },
+      bundling: { externalModules: ['@aws-sdk/*'], minify: true, sourceMap: false },
+    });
+
+    accountsTable2.grantReadData(invitationsFn);
+    invitationsTable.grantReadWriteData(invitationsFn);
+
+    account
+      .addResource('invitations')
+      .addMethod('POST', new apigateway.LambdaIntegration(invitationsFn, { proxy: true }), auth);
 
     // ── Outputs ───────────────────────────────────────────────────────────────
     new cdk.CfnOutput(this, 'ApiUrl', {
@@ -246,23 +294,6 @@ export class ApiStack extends cdk.Stack {
 
 // ── Integration / method helpers ──────────────────────────────────────────────
 
-/** Mock integration returning a 200 stub while the Lambda is not yet wired. */
-function stubIntegration(): apigateway.MockIntegration {
-  return new apigateway.MockIntegration({
-    passthroughBehavior: apigateway.PassthroughBehavior.NEVER,
-    requestTemplates: { 'application/json': '{"statusCode":200}' },
-    integrationResponses: [{
-      statusCode: '200',
-      responseParameters: {
-        'method.response.header.Access-Control-Allow-Origin':  "'*'",
-        'method.response.header.Access-Control-Allow-Headers': "'Content-Type,Authorization,X-Account-Id'",
-      },
-      responseTemplates: {
-        'application/json': '{"status":"not_implemented","message":"Lambda not yet wired — Phase 2 in progress"}',
-      },
-    }],
-  });
-}
 
 /** Public /health mock — no CORS headers needed. */
 function healthIntegration(): apigateway.MockIntegration {

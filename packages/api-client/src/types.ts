@@ -59,7 +59,7 @@ export interface Account {
 
 export interface AccountMember {
   userId:   string;
-  email:    string;
+  email?:   string;   // stored on write; absent for records created before S2.11
   role:     'owner' | 'member';
   joinedAt: string;
 }
