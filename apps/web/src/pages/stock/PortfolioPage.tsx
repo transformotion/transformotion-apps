@@ -184,39 +184,57 @@ export function PortfolioPage() {
 
     if (!staleHoldings.length) return;
 
-    // Phase 2: per-ticker Claude calls.
-    // A single batch call for many tickers with web search exceeds the API Gateway
-    // 29-second timeout. Per-ticker calls stay within the limit and allow progress
-    // to update after each one completes.
+    // Phase 2: single batch Claude call for all stale holdings.
+    // asyncMode=true (always used by useClaude) means the Lambda runs for up to
+    // 10 minutes — the old 29-second API Gateway timeout no longer applies.
+    // One batch call takes ~25-30s regardless of holding count, vs N × (25s + 10s gap)
+    // for sequential per-ticker calls (245s for 7 holdings, ~58 min for 100).
     const n = staleHoldings.length;
-    setEnrichProgress({ msg: `Enriching ${n} holding${n !== 1 ? 's' : ''}…`, pct: 5 });
+    setEnrichProgress({ msg: `Analysing ${n} holding${n !== 1 ? 's' : ''}…`, pct: 10 });
     setLoadingTickers(new Set(staleHoldings.map(h => h.ticker)));
 
-    for (let i = 0; i < staleHoldings.length; i++) {
-      const h = staleHoldings[i];
-      const pct = Math.round(5 + (i / n) * 90);
-      setEnrichProgress({ msg: `Analysing ${h.ticker} (${i + 1} of ${n})…`, pct });
+    const tickers = staleHoldings.map(h => h.ticker);
+    const prompt = `Financial analyst with web search. Analyse these ${n} holdings: ${tickers.join(', ')}
+For each ticker get current market data. USD-priced assets: apply current AUD/USD rate, provide currentPriceAUD in AUD.
+Return ONLY a JSON array — no markdown, no XML tags, no citation tags inside any field value:
+[{"ticker":"TICKER","companyName":"Full name","exchange":"ASX|NASDAQ|NYSE|LSE","type":"Stock or ETF","currentPrice":"e.g. A$38.50 or US$625.00","currentPriceAUD":38.50,"priceChange":"e.g. +1.2%","verdict":"BUY|HOLD|SELL|NEUTRAL","verdictReason":"One sentence.","cycleScore":65,"cycleStage":"early|mid|late|peak"},...]
+Include one object per ticker in the same order as the input list.`;
 
-      const prompt = `Financial analyst with web search. For ticker: ${h.ticker}
-Get current market data. If USD-priced, apply current AUD/USD exchange rate to provide currentPriceAUD in AUD.
-Return ONLY valid JSON. No markdown, no XML tags, no citation tags in any field value:
-{"ticker":"${h.ticker}","companyName":"Full name","exchange":"ASX|NASDAQ|NYSE|LSE","type":"Stock or ETF","currentPrice":"e.g. A$38.50 or US$625.00","currentPriceAUD":38.50,"priceChange":"e.g. +1.2%","verdict":"BUY|HOLD|SELL|NEUTRAL","verdictReason":"One sentence.","cycleScore":65,"cycleStage":"early|mid|late|peak"}
-Use web search for current price.`;
+    try {
+      const results = await callClaude<HoldingAnalysis[]>({
+        prompt,
+        webSearch: true,
+        maxTokens: Math.max(2000, n * 500),
+      });
 
-      try {
-        const result = await callClaude<HoldingAnalysis>({ prompt, webSearch: true, maxTokens: 400 });
-        const analysis: HoldingAnalysis = { ...result, ticker: h.ticker };
-        setAnalyses(prev => ({ ...prev, [h.ticker]: analysis }));
-        await putCache(CK.analysis(h.ticker), analysis, 'live', 'analyser');
-        if (analysis.cycleScore !== undefined) {
-          void putCache(CK.cycle(h.ticker), { cycleScore: analysis.cycleScore, cycleStage: analysis.cycleStage }, 'live', 'cycle');
+      setEnrichProgress({ msg: 'Saving results…', pct: 90 });
+
+      // Match results back by ticker — Claude may normalise casing or format
+      const resultMap = new Map<string, HoldingAnalysis>();
+      for (const r of (Array.isArray(results) ? results : [])) {
+        if (r?.ticker) {
+          resultMap.set(r.ticker.toUpperCase(), r);
+          // Also index by bare code (without exchange suffix) for fuzzy matching
+          resultMap.set(r.ticker.toUpperCase().split('.')[0], r);
         }
-      } catch {
-        // One ticker failing should not block the rest — leave it showing stale/no data
       }
 
-      setLoadingTickers(prev => { const next = new Set(prev); next.delete(h.ticker); return next; });
-      setEnrichProgress({ msg: `Analysing ${h.ticker} (${i + 1} of ${n})…`, pct: Math.round(5 + (i + 1) / n * 90) });
+      await Promise.allSettled(staleHoldings.map(async h => {
+        const key    = h.ticker.toUpperCase();
+        const bare   = key.split('.')[0];
+        const result = resultMap.get(key) ?? resultMap.get(bare);
+        if (result) {
+          const analysis: HoldingAnalysis = { ...result, ticker: h.ticker };
+          setAnalyses(prev => ({ ...prev, [h.ticker]: analysis }));
+          await putCache(CK.analysis(h.ticker), analysis, 'live', 'analyser');
+          if (analysis.cycleScore !== undefined) {
+            void putCache(CK.cycle(h.ticker), { cycleScore: analysis.cycleScore, cycleStage: analysis.cycleStage }, 'live', 'cycle');
+          }
+        }
+        setLoadingTickers(prev => { const next = new Set(prev); next.delete(h.ticker); return next; });
+      }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Portfolio analysis failed');
     }
 
     setEnrichProgress(null);
