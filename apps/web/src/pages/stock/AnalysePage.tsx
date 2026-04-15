@@ -2,44 +2,14 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useClaude } from '../../hooks/useClaude';
 import { useApiCache } from '../../hooks/useApiCache';
+import { useApiClient } from '../../hooks/useApiClient';
 import { useMode } from '../../contexts/ModeContext';
 import { ModeToggle } from '../../components/stock/ModeToggle';
 import { CycleGauge } from '../../components/stock/CycleGauge';
-import { SectionDivider, ErrorBox, LoadingSpinner, Footnote } from './MarketPage';
-import type { CyclePosition } from '@transformotion/cycle-engine';
-
-// ── Types ─────────────────────────────────────────────────────────────────────
-
-interface SignalItem {
-  value:  string;
-  signal: 'bull' | 'bear' | 'neutral';
-  note:   string;
-}
-
-interface AnalysisData {
-  ticker:       string;
-  companyName:  string;
-  exchange:     string;
-  type:         string;
-  verdict:      'BUY' | 'HOLD' | 'SELL' | 'NEUTRAL';
-  verdictReason:string;
-  currentPrice: string;
-  priceChange:  string;
-  cyclePosition?: CyclePosition;
-  signals: {
-    rsi:          SignalItem;
-    movingAverage:SignalItem;
-    macd:         SignalItem;
-    volume:       SignalItem;
-    pe:           SignalItem;
-    roe:          SignalItem;
-    debtEquity:   SignalItem;
-    fcfYield:     SignalItem;
-  };
-  summary:    string;
-  keyRisks:   string[];
-  dataNote:   string;
-}
+import { SectionDivider, ErrorBox, LoadingSpinner, Footnote, CacheStatusBadge } from './MarketPage';
+import { CK, isCacheFresh } from '../../lib/cacheConfig';
+import { useTabStore } from '../../store/tabStore';
+import type { SignalItem, AnalysisData } from '../../types/stock';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -69,24 +39,44 @@ export function AnalysePage() {
   const navigate   = useNavigate();
   const routeState = location.state as { ticker?: string } | null;
 
-  const [inputValue, setInputValue] = useState(routeState?.ticker ?? '');
-  const [data,       setData]       = useState<AnalysisData | null>(null);
-  const [cachedAt,   setCachedAt]   = useState<string | null>(null);
+  const { inputValue, data, cachedAt } = useTabStore(s => s.analyser);
+  const setAnalyser = useTabStore(s => s.setAnalyser);
 
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const { callClaude, loading, error } = useClaude();
+  const { callClaude, loading, error, statusMessage } = useClaude();
   const { getCache, putCache }         = useApiCache();
+  const api                            = useApiClient();
   const { isLive }                     = useMode();
 
-  // If navigated to with a ticker (from recs/ETFs/metals), auto-analyse
+  // Drill-through: navigated to with a specific ticker (from Recs / ETFs / Metals /
+  // Portfolio / Watchlist). Run a fresh analysis — don't restore preserved state.
+  // Dep on routeState?.ticker so it fires even if the component is already mounted.
   useEffect(() => {
     if (routeState?.ticker) {
+      setAnalyser({ inputValue: routeState.ticker });
       navigate('/stock/analyse', { replace: true, state: null });
       void runAnalysis(routeState.ticker, false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [routeState?.ticker]);
+
+  // Mount hydration: if Zustand has no data (fresh page load), load the last
+  // analysed ticker from user preferences and show its DDB cache entry — even if stale.
+  useEffect(() => {
+    if (data || routeState?.ticker) return; // session already has data or drill-through pending
+    void api.getUserProfile()
+      .then(async profile => {
+        const last = profile.preferences.lastAnalysedTicker;
+        if (!last) return;
+        const cached = await getCache<AnalysisData>(CK.analysis(last));
+        if (cached?.data) {
+          setAnalyser({ inputValue: last, data: cached.data, cachedAt: cached.cachedAt });
+        }
+      })
+      .catch(() => {}); // silent — blank state is acceptable fallback
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Mount only
 
   const buildPrompt = useCallback((ticker: string, extraNote?: string): string => {
     const liveNote = isLive
@@ -138,20 +128,25 @@ cyclePosition.score is 0-100 where 0=early move, 50=mid trend, 80=late stage, 10
     if (!t) return;
 
     if (!forceRefresh && !extraNote) {
-      const cached = await getCache<AnalysisData>(t);
-      if (cached) {
-        setData(cached.data);
-        setCachedAt(cached.cachedAt);
+      const cached = await getCache<AnalysisData>(CK.analysis(t));
+      if (cached && isCacheFresh(cached.cachedAt, 'analyser')) {
+        setAnalyser({ inputValue: t, data: cached.data, cachedAt: cached.cachedAt });
         return;
       }
     }
 
     const prompt = buildPrompt(t, extraNote);
     const result = await callClaude<AnalysisData>({ prompt, webSearch: isLive });
-    setData(result);
-    setCachedAt(new Date().toISOString());
-    await putCache(t, result, isLive ? 'live' : 'fast', 'analyser');
-  }, [buildPrompt, callClaude, getCache, putCache, isLive]);
+    const now = new Date().toISOString();
+    setAnalyser({ inputValue: t, data: result, cachedAt: now });
+    const mode = isLive ? 'live' : 'fast';
+    await putCache(CK.analysis(t), result, mode, 'analyser');
+    if (result.cycleScore !== undefined) {
+      void putCache(CK.cycle(t), { cycleScore: result.cycleScore, cycleStage: result.cycleStage }, mode, 'cycle');
+    }
+    // Persist last-analysed ticker so the Analyser can restore it on next page load
+    void api.putUserPreferences({ lastAnalysedTicker: t }).catch(() => {});
+  }, [buildPrompt, callClaude, getCache, putCache, isLive, setAnalyser, api]);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -180,11 +175,11 @@ If no match found, return { "matches": [] }. Return ONLY the JSON.`;
       });
       const listed = (result.matches ?? []).filter(m => m.ticker);
       if (listed.length === 1) {
-        setInputValue(listed[0].ticker);
+        setAnalyser({ inputValue: listed[0].ticker });
         void runAnalysis(listed[0].ticker, false);
       } else if (listed.length > 1) {
         // Show picker — for now just use the first match
-        setInputValue(listed[0].ticker);
+        setAnalyser({ inputValue: listed[0].ticker });
         void runAnalysis(listed[0].ticker, false);
       }
     } catch { /* error already shown */ }
@@ -198,6 +193,12 @@ If no match found, return { "matches": [] }. Return ONLY the JSON.`;
 
   function handleAddToWatchlist() {
     if (!data) return;
+    // Ensure the cache is keyed under data.ticker (what the Watchlist will use),
+    // in case it differs from the input ticker that runAnalysis keyed the cache under.
+    // cachedAt is already written — this is a belt-and-suspenders re-write under the
+    // canonical key so enrichItem() always finds it on the first try.
+    void putCache(CK.analysis(data.ticker.toUpperCase()), data, isLive ? 'live' : 'fast', 'analyser');
+    console.log('[watchlist] Writing cache for', data.ticker, 'before navigating to watchlist');
     navigate('/stock/watchlist', { state: { addTicker: data.ticker, addName: data.companyName } });
   }
 
@@ -211,7 +212,7 @@ If no match found, return { "matches": [] }. Return ONLY the JSON.`;
         <input
           ref={inputRef}
           value={inputValue}
-          onChange={e => setInputValue(e.target.value)}
+          onChange={e => setAnalyser({ inputValue: e.target.value })}
           placeholder="Ticker (e.g. BHP.AX) or company name"
           style={{
             flex: 1,
@@ -246,14 +247,14 @@ If no match found, return { "matches": [] }. Return ONLY the JSON.`;
       </form>
 
       {error && <ErrorBox message={error} />}
-      {loading && <LoadingSpinner message={`Analysing ${inputValue.trim().toUpperCase() || '…'}`} />}
+      {loading && <LoadingSpinner message={`Analysing ${inputValue.trim().toUpperCase() || '…'}`} subMessage={statusMessage} />}
 
       {/* ── Analysis result ──────────────────────────────────────────── */}
       {data && !loading && (
         <div>
           {cachedAt && (
-            <div style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)', marginBottom: '0.75rem' }}>
-              Cached {new Date(cachedAt).toLocaleTimeString()}
+            <div style={{ marginBottom: '0.75rem' }}>
+              <CacheStatusBadge cachedAt={cachedAt} type="analyser" />
             </div>
           )}
 
@@ -300,7 +301,7 @@ If no match found, return { "matches": [] }. Return ONLY the JSON.`;
 
           {/* Chart placeholder — TradingView embed or external links */}
           <SectionDivider label="Price chart" />
-          <ChartPlaceholder ticker={data.ticker} exchange={data.exchange} />
+          <TradingViewChart ticker={data.ticker} exchange={data.exchange} />
 
           {/* Signals grid */}
           <SectionDivider label="Signals" />
@@ -364,35 +365,72 @@ If no match found, return { "matches": [] }. Return ONLY the JSON.`;
   );
 }
 
-// ── ChartPlaceholder ──────────────────────────────────────────────────────────
+// ── TradingView symbol mapper ─────────────────────────────────────────────────
 
-function ChartPlaceholder({ ticker, exchange }: { ticker: string; exchange: string }) {
-  const yahooTicker = exchange?.toUpperCase().includes('ASX')
-    ? ticker.replace(/\.AX$/, '') + '.AX'
-    : exchange?.toUpperCase().includes('LSE') || exchange?.toUpperCase().includes('LONDON')
-    ? ticker.replace(/\.L$/, '') + '.L'
-    : ticker;
+function toTradingViewSymbol(ticker: string, exchange: string): string {
+  const t = ticker.toUpperCase();
+  // Check ticker suffix first — avoids relying on exchange string which can vary
+  if (t.endsWith('.AX')) return 'ASX:' + t.replace('.AX', '');
+  if (t.endsWith('.L'))  return 'LSE:' + t.replace('.L', '');
+  const ex = (exchange || '').toUpperCase();
+  if (ex.includes('NASDAQ')) return 'NASDAQ:' + t;
+  if (ex.includes('NYSE'))   return 'NYSE:' + t;
+  if (ex.includes('ASX'))    return 'ASX:' + t;
+  if (ex.includes('LSE') || ex.includes('LONDON')) return 'LSE:' + t;
+  return t;
+}
 
-  const yahooUrl  = `https://finance.yahoo.com/chart/${encodeURIComponent(yahooTicker)}`;
-  const googleUrl = `https://www.google.com/finance/quote/${encodeURIComponent(yahooTicker.replace('.AX', ':ASX').replace('.L', ':LON'))}`;
+// Derive fallback links from the raw ticker (Yahoo accepts .AX suffix natively)
+function fallbackLinks(ticker: string, tvSymbol: string) {
+  const yahooUrl  = `https://finance.yahoo.com/quote/${encodeURIComponent(ticker.toUpperCase())}`;
+  // Google Finance uses TICKER:EXCHANGE format — flip the TradingView EXCHANGE:TICKER
+  const googleSymbol = tvSymbol.includes(':')
+    ? tvSymbol.split(':').reverse().join(':')
+    : tvSymbol;
+  const googleUrl = `https://www.google.com/finance/quote/${encodeURIComponent(googleSymbol)}`;
+  return { yahooUrl, googleUrl };
+}
+
+// ── TradingViewChart ──────────────────────────────────────────────────────────
+
+function TradingViewChart({ ticker, exchange }: { ticker: string; exchange: string }) {
+  const symbol = toTradingViewSymbol(ticker, exchange);
+  const src = [
+    'https://www.tradingview.com/widgetembed/',
+    `?symbol=${encodeURIComponent(symbol)}`,
+    '&interval=D',
+    '&style=6',
+    '&theme=dark',
+    '&locale=en',
+    '&hide_top_toolbar=0',
+    '&hide_legend=0',
+    '&save_image=0',
+  ].join('');
+
+  const { yahooUrl, googleUrl } = fallbackLinks(ticker, symbol);
 
   return (
-    <div style={{
-      height: 120,
-      background: 'var(--color-bg-surface)',
-      border: '1px solid var(--color-border)',
-      borderRadius: 10,
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: '0.75rem',
-      marginBottom: '1.5rem',
-    }}>
-      <div style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>View chart externally:</div>
-      <div style={{ display: 'flex', gap: '0.5rem' }}>
-        <a href={yahooUrl}  target="_blank" rel="noopener noreferrer" style={{ padding: '6px 16px', borderRadius: 8, border: '1px solid var(--color-border)', color: 'var(--color-accent)', fontSize: '0.8rem', textDecoration: 'none', background: 'var(--color-bg-surface2)' }}>Yahoo Finance ↗</a>
-        <a href={googleUrl} target="_blank" rel="noopener noreferrer" style={{ padding: '6px 16px', borderRadius: 8, border: '1px solid var(--color-border)', color: 'var(--color-accent)', fontSize: '0.8rem', textDecoration: 'none', background: 'var(--color-bg-surface2)' }}>Google Finance ↗</a>
+    <div style={{ marginBottom: '1.5rem' }}>
+      <div
+        className="tv-chart"
+        style={{ borderRadius: 10, overflow: 'hidden', border: '1px solid var(--color-border)' }}
+      >
+        <iframe
+          src={src}
+          style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
+          allow="fullscreen"
+          title={`${ticker} price chart`}
+        />
+      </div>
+      <div style={{ marginTop: '0.5rem', fontSize: '0.72rem', color: 'var(--color-text-muted)' }}>
+        Chart unavailable for this ticker? View on{' '}
+        <a href={yahooUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-steel)', textDecoration: 'underline' }}>
+          Yahoo Finance ↗
+        </a>
+        {' '}or{' '}
+        <a href={googleUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-steel)', textDecoration: 'underline' }}>
+          Google Finance ↗
+        </a>
       </div>
     </div>
   );

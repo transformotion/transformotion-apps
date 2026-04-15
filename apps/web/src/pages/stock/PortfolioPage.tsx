@@ -208,6 +208,9 @@ Use web search for current price.`;
         const analysis: HoldingAnalysis = { ...result, ticker: h.ticker };
         setAnalyses(prev => ({ ...prev, [h.ticker]: analysis }));
         await putCache(CK.analysis(h.ticker), analysis, 'live', 'analyser');
+        if (analysis.cycleScore !== undefined) {
+          void putCache(CK.cycle(h.ticker), { cycleScore: analysis.cycleScore, cycleStage: analysis.cycleStage }, 'live', 'cycle');
+        }
       } catch {
         // One ticker failing should not block the rest — leave it showing stale/no data
       }
