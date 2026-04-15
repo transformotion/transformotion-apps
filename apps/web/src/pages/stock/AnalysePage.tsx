@@ -141,8 +141,8 @@ cyclePosition.score is 0-100 where 0=early move, 50=mid trend, 80=late stage, 10
     setAnalyser({ inputValue: t, data: result, cachedAt: now });
     const mode = isLive ? 'live' : 'fast';
     await putCache(CK.analysis(t), result, mode, 'analyser');
-    if (result.cycleScore !== undefined) {
-      void putCache(CK.cycle(t), { cycleScore: result.cycleScore, cycleStage: result.cycleStage }, mode, 'cycle');
+    if (result.cyclePosition !== undefined) {
+      void putCache(CK.cycle(t), result.cyclePosition, mode, 'cycle');
     }
     // Persist last-analysed ticker so the Analyser can restore it on next page load
     void api.putUserPreferences({ lastAnalysedTicker: t }).catch(() => {});
