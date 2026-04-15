@@ -1,5 +1,10 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
+import {
+  DynamoDBDocumentClient,
+  QueryCommand,
+  PutCommand,
+  DeleteCommand,
+} from '@aws-sdk/lib-dynamodb';
 import {
   withAuth,
   parseBody,
@@ -17,16 +22,14 @@ export const handler = withAuth(async ({ auth, account, event }) => {
 
   // ── GET /watchlist ────────────────────────────────────────────────────────
   if (event.httpMethod === 'GET') {
-    const res = await ddb.send(new GetCommand({
+    const res = await ddb.send(new QueryCommand({
       TableName: TABLE,
-      Key: { accountId },
+      KeyConditionExpression: 'accountId = :aid',
+      ExpressionAttributeValues: { ':aid': accountId },
     }));
 
-    if (!res.Item) {
-      return ok({ items: [] });
-    }
-
-    return ok({ items: res.Item['items'] as WatchlistItem[] ?? [] });
+    const items = (res.Items ?? []) as WatchlistItem[];
+    return ok({ items });
   }
 
   // ── PUT /watchlist ────────────────────────────────────────────────────────
@@ -36,14 +39,36 @@ export const handler = withAuth(async ({ auth, account, event }) => {
     throw badRequest('items must be an array');
   }
 
-  await ddb.send(new PutCommand({
+  // Query existing tickers for this account
+  const existingRes = await ddb.send(new QueryCommand({
     TableName: TABLE,
-    Item: {
-      accountId,
-      items,
-      updatedAt: new Date().toISOString(),
-    },
+    KeyConditionExpression: 'accountId = :aid',
+    ExpressionAttributeValues: { ':aid': accountId },
   }));
+  const existing = (existingRes.Items ?? []) as WatchlistItem[];
+
+  // ── Delete removed tickers ────────────────────────────────────────────────
+  const incomingTickers = new Set(items.map(i => i.ticker));
+  const toDelete = existing.filter(i => !incomingTickers.has(i.ticker));
+  await Promise.all(toDelete.map(i =>
+    ddb.send(new DeleteCommand({
+      TableName: TABLE,
+      Key: { accountId, ticker: i.ticker },
+    }))
+  ));
+
+  // ── Put each incoming item ────────────────────────────────────────────────
+  await Promise.all(items.map(i =>
+    ddb.send(new PutCommand({
+      TableName: TABLE,
+      Item: {
+        accountId,
+        ticker:  i.ticker,
+        name:    i.name,
+        addedAt: i.addedAt,
+      },
+    }))
+  ));
 
   return ok({ ok: true });
 });

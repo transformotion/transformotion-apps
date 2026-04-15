@@ -1,20 +1,15 @@
 // ── Portfolio ─────────────────────────────────────────────────────────────────
 
-/**
- * A single portfolio holding — matches the shape used in the existing
- * localStorage store so S2.7 migration is a straight copy.
- */
+/** A single portfolio holding. */
 export interface PortfolioHolding {
-  ticker:                   string;
-  shares:                   number;
-  purchasePrice:            number;
+  ticker:   string;
+  shares:   number;
+  /** Average purchase cost per share. 0 for gifted holdings. */
+  avgCost:  number;
+  /** True when the holding was received as a gift (avgCost is 0 and P&L is not meaningful). */
+  isGifted: boolean;
   /** Unix ms timestamp when the holding was added. */
-  addedAt:                  number;
-  /**
-   * True when the user imported from CMC CSV but no purchase price was
-   * available — the current price was used as a placeholder.
-   */
-  priceIsCurrentNotPurchase?: boolean;
+  addedAt:  number;
 }
 
 export interface GetPortfolioResponse  { holdings: PortfolioHolding[] }
@@ -38,14 +33,27 @@ export interface PutWatchlistResponse  { ok: true }
 // ── Analysis cache ────────────────────────────────────────────────────────────
 
 export interface CacheEntry {
-  data:      unknown;
-  /** ISO 8601 timestamp when the entry was stored. */
-  cachedAt:  string;
+  data:       unknown;
+  /** Unix epoch seconds when the entry was stored (normalised from both old ISO and new epoch formats). */
+  cachedAt:   number;
   /** Unix epoch seconds — DynamoDB TTL attribute. */
-  expiresAt: number;
+  expiresAt:  number;
+  /** Cache type, e.g. 'markets', 'recommendations', 'analyser'. */
+  dataType?:  string;
+  /** 'fast' or 'live'. */
+  mode?:      string;
 }
 
-export interface PutCacheRequest  { data: unknown; ttlSeconds: number }
+export interface PutCacheRequest {
+  data:       unknown;
+  ttlSeconds: number;
+  /** 'fast' or 'live' — stored as top-level attribute. Default 'live'. */
+  mode?:      string;
+  /** Cache type e.g. 'markets', 'analyser'. Stored as top-level dataType attribute. */
+  type?:      string;
+  /** When true, write under accountId='SHARED' so all users share this entry. Default true. */
+  shared?:    boolean;
+}
 export interface PutCacheResponse { ok: true }
 
 // ── Accounts ──────────────────────────────────────────────────────────────────
@@ -74,6 +82,25 @@ export interface ListMembersResponse   { members: AccountMember[] }
 export interface CreateInvitationRequest  { email: string }
 export interface CreateInvitationResponse { invitationId: string }
 
+// ── User preferences ──────────────────────────────────────────────────────────
+
+export interface UserPreferences {
+  defaultMode:            'fast' | 'live';
+  notificationsEnabled:   boolean;
+  cycleAlertThreshold:    number;
+  lastAnalysedTicker?:    string;
+}
+
+export interface GetUserProfileResponse {
+  userId:      string;
+  email:       string;
+  preferences: UserPreferences;
+}
+
+/** Body is the partial preferences object directly (not wrapped). */
+export interface PutUserPreferencesRequest  extends Partial<UserPreferences> {}
+export interface PutUserPreferencesResponse { preferences: UserPreferences }
+
 // ── Claude proxy ──────────────────────────────────────────────────────────────
 
 export interface ClaudeProxyRequest {
@@ -83,6 +110,12 @@ export interface ClaudeProxyRequest {
   maxTokens?: number;
   /** When true, enables the web_search tool so Claude can use live data. */
   webSearch?: boolean;
+  /**
+   * When true, the Lambda starts the job asynchronously and returns {jobId}
+   * immediately — bypassing API Gateway's 29-second integration timeout.
+   * The frontend polls /analysis-cache/job:{jobId} for the result.
+   */
+  asyncMode?: boolean;
 }
 
 export interface ClaudeProxyResponse {

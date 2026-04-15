@@ -115,6 +115,30 @@ export class ApiStack extends cdk.Stack {
         methodResponses: [{ statusCode: '200' }],
       });
 
+    // ── /api/user — User profile + preferences Lambda ────────────────────────
+    const usersTable = dynamodb.Table.fromTableName(
+      this, 'UsersTable', `platform.users-${stage}`,
+    );
+
+    const userFn = new lambdaNodejs.NodejsFunction(this, 'UserFn', {
+      functionName: `transformotion-user-${stage}`,
+      entry:        path.join(__dirname, '../../functions/user/src/index.ts'),
+      handler:      'handler',
+      runtime:      lambda.Runtime.NODEJS_20_X,
+      timeout:      cdk.Duration.seconds(15),
+      memorySize:   256,
+      environment:  { USERS_TABLE: usersTable.tableName },
+      bundling:     { externalModules: ['@aws-sdk/*'], minify: true, sourceMap: false },
+    });
+
+    usersTable.grantReadWriteData(userFn);
+
+    const userIntegration = new apigateway.LambdaIntegration(userFn, { proxy: true });
+    const apiResource = this.api.root.addResource('api');
+    const userResource = apiResource.addResource('user');
+    userResource.addResource('profile').addMethod('GET', userIntegration, auth);
+    userResource.addResource('preferences').addMethod('PUT', userIntegration, auth);
+
     // ── S2.3: /api/claude — Anthropic proxy Lambda ────────────────────────────
     const anthropicSecret = secretsmanager.Secret.fromSecretNameV2(
       this, 'AnthropicApiKey', `${stage}/anthropic/api-key`,
@@ -125,10 +149,13 @@ export class ApiStack extends cdk.Stack {
       entry:        path.join(__dirname, '../../functions/claude-proxy/src/index.ts'),
       handler:      'handler',
       runtime:      lambda.Runtime.NODEJS_20_X,
-      timeout:      cdk.Duration.seconds(60),   // web_search can be slow
+      // 600 s: supports 3 rate-limit retries (20 s + 45 s + 90 s waits) plus
+      // the actual Anthropic API call time on each attempt.
+      timeout:      cdk.Duration.seconds(600),
       memorySize:   512,
       environment: {
         ANTHROPIC_SECRET_NAME: anthropicSecret.secretName,
+        // Populated after cacheTable is created (addEnvironment call below)
       },
       bundling: {
         externalModules: ['@aws-sdk/*'],
@@ -139,14 +166,13 @@ export class ApiStack extends cdk.Stack {
 
     anthropicSecret.grantRead(claudeProxyFn);
 
-    this.api.root
-      .addResource('api')
+    apiResource
       .addResource('claude')
       .addMethod('POST', new apigateway.LambdaIntegration(claudeProxyFn, { proxy: true }), auth);
 
     // ── S2.4: /portfolio — Portfolio Lambda ───────────────────────────────────
     const portfolioTable = dynamodb.Table.fromTableName(
-      this, 'PortfolioTable', `stock-analyser.portfolio-${stage}`,
+      this, 'PortfolioTable', `stock-analyser.portfolio-${stage}-v2`,
     );
 
     const portfolioFn = new lambdaNodejs.NodejsFunction(this, 'PortfolioFn', {
@@ -169,7 +195,7 @@ export class ApiStack extends cdk.Stack {
 
     // ── S2.5: /watchlist — Watchlist Lambda ───────────────────────────────────
     const watchlistTable = dynamodb.Table.fromTableName(
-      this, 'WatchlistTable', `stock-analyser.watchlist-${stage}`,
+      this, 'WatchlistTable', `stock-analyser.watchlist-${stage}-v2`,
     );
 
     const watchlistFn = new lambdaNodejs.NodejsFunction(this, 'WatchlistFn', {
@@ -207,6 +233,20 @@ export class ApiStack extends cdk.Stack {
     });
 
     cacheTable.grantReadWriteData(cacheFn);
+
+    // Claude proxy needs direct DynamoDB access to write async job results,
+    // and permission to invoke itself for the fire-and-forget job pattern.
+    cacheTable.grantReadWriteData(claudeProxyFn);
+    claudeProxyFn.addEnvironment('CACHE_TABLE', cacheTable.tableName);
+    // Self-invoke permission for async job pattern.
+    // Construct the ARN explicitly to avoid a circular CDK dependency
+    // (Lambda ARN → role policy → Lambda role → Lambda ARN).
+    claudeProxyFn.addToRolePolicy(new iam.PolicyStatement({
+      actions:   ['lambda:InvokeFunction'],
+      resources: [
+        `arn:aws:lambda:${this.region}:${this.account}:function:transformotion-claude-proxy-${stage}`,
+      ],
+    }));
 
     const cacheIntegration = new apigateway.LambdaIntegration(cacheFn, { proxy: true });
     const cacheKey = this.api.root
@@ -282,6 +322,26 @@ export class ApiStack extends cdk.Stack {
     account
       .addResource('invitations')
       .addMethod('POST', new apigateway.LambdaIntegration(invitationsFn, { proxy: true }), auth);
+
+    // ── Gateway Responses — CORS headers on all error responses ──────────────
+    // Without these, Cognito authorizer 401/403 responses have no CORS headers
+    // and the browser throws "Failed to fetch" (treated as a CORS failure).
+    const corsHeaders = {
+      'Access-Control-Allow-Origin':  "'*'",
+      'Access-Control-Allow-Headers': "'Content-Type,Authorization,X-Account-Id'",
+    };
+    [
+      apigateway.ResponseType.UNAUTHORIZED,
+      apigateway.ResponseType.ACCESS_DENIED,
+      apigateway.ResponseType.DEFAULT_4XX,
+      apigateway.ResponseType.DEFAULT_5XX,
+    ].forEach((type, i) => {
+      new apigateway.GatewayResponse(this, `GwResp${i}`, {
+        restApi:         this.api,
+        type,
+        responseHeaders: corsHeaders,
+      });
+    });
 
     // ── Outputs ───────────────────────────────────────────────────────────────
     new cdk.CfnOutput(this, 'ApiUrl', {
