@@ -5,6 +5,14 @@ on:
     branches:
       - develop   # deploys to dev
       - main      # deploys to prod
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Deploy target'
+        required: true
+        default: 'dev'
+        type: choice
+        options: [dev, prod]
 
 concurrency:
   group: cd-${{ github.ref_name }}
@@ -23,7 +31,7 @@ jobs:
   deploy-dev:
     name: Deploy → Dev
     runs-on: ubuntu-latest
-    if: github.ref_name == 'develop'
+    if: github.ref_name == 'develop' || (github.event_name == 'workflow_dispatch' && inputs.target == 'dev')
     environment: dev
     steps:
       - uses: actions/checkout@v4
@@ -49,7 +57,7 @@ jobs:
   web-deploy-dev:
     name: Web → S3 Dev
     runs-on: ubuntu-latest
-    if: github.ref_name == 'develop'
+    if: github.ref_name == 'develop' || (github.event_name == 'workflow_dispatch' && inputs.target == 'dev')
     environment: dev
     steps:
       - uses: actions/checkout@v4
@@ -89,7 +97,7 @@ jobs:
   deploy-prod:
     name: Deploy → Prod
     runs-on: ubuntu-latest
-    if: github.ref_name == 'main'
+    if: github.ref_name == 'main' || (github.event_name == 'workflow_dispatch' && inputs.target == 'prod')
     environment: prod
     steps:
       - uses: actions/checkout@v4
