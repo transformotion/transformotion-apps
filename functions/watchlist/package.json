@@ -9,7 +9,13 @@
     "lint": "echo \"lint: watchlist\"",
     "test": "vitest run"
   },
+  "dependencies": {
+    "@transformotion/lambda-middleware": "*"
+  },
   "devDependencies": {
+    "@aws-sdk/client-dynamodb": "^3",
+    "@aws-sdk/lib-dynamodb": "^3",
+    "@types/aws-lambda": "^8",
     "typescript": "*"
   }
 }

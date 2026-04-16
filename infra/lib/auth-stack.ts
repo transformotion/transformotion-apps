@@ -1,5 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
+import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import { Construct } from 'constructs';
 
 export interface AuthStackProps extends cdk.StackProps {
@@ -20,8 +21,9 @@ export interface AuthStackProps extends cdk.StackProps {
  *   custom:active_account — UUID of the user's currently active account
  *   custom:accounts       — comma-separated UUIDs of all accounts the user belongs to
  *
- * The User Pool Domain enables the Cognito Hosted UI for OAuth2/PKCE flows
- * (Sign Up, Sign In, Forgot Password). Custom auth UI is wired up in S1.3.
+ * Social IDPs (Google, Facebook, Microsoft) are wired here with Secrets Manager
+ * references. Secrets are created with generated placeholder values. Populate real
+ * credentials via CLI (see docs/social-idp-setup.md), then redeploy this stack.
  */
 export class AuthStack extends cdk.Stack {
   public readonly userPool: cognito.UserPool;
@@ -45,8 +47,8 @@ export class AuthStack extends cdk.Stack {
 
       // Standard attributes
       standardAttributes: {
-        email: { required: true, mutable: true },
-        givenName: { required: false, mutable: true },
+        email:      { required: true,  mutable: true },
+        givenName:  { required: false, mutable: true },
         familyName: { required: false, mutable: true },
       },
 
@@ -71,16 +73,13 @@ export class AuthStack extends cdk.Stack {
 
       // MFA — optional for v1 (users can enrol TOTP if they wish)
       mfa: cognito.Mfa.OPTIONAL,
-      mfaSecondFactor: {
-        sms: false,
-        otp: true,
-      },
+      mfaSecondFactor: { sms: false, otp: true },
 
       // Email verification message
       userVerification: {
         emailSubject: 'Verify your Transformotion Apps account',
-        emailBody: 'Your verification code is {####}',
-        emailStyle: cognito.VerificationEmailStyle.CODE,
+        emailBody:    'Your verification code is {####}',
+        emailStyle:   cognito.VerificationEmailStyle.CODE,
       },
 
       // Prod: retain User Pool on stack deletion (user data is permanent)
@@ -88,23 +87,65 @@ export class AuthStack extends cdk.Stack {
     });
 
     // ── User Pool Domain ───────────────────────────────────────────────────
-    // Provides the Cognito Hosted UI endpoint for OAuth2/PKCE login flows.
-    // Domain: transformotion-{account}-{stage}.auth.ap-southeast-2.amazoncognito.com
+    // Provides the Cognito Hosted UI endpoint for OAuth2/PKCE + social IDP flows.
     this.userPoolDomain = this.userPool.addDomain('UserPoolDomain', {
       cognitoDomain: {
         domainPrefix: `transformotion-${this.account}-${stage}`,
       },
     });
 
+    // ── Secrets Manager — Social IDP credentials (placeholder secrets) ─────
+    // Secrets are created with a generated placeholder value so CloudFormation
+    // dynamic references resolve on first deploy. After running the setup steps
+    // in docs/social-idp-setup.md, redeploy this stack to apply real credentials.
+    // Secrets are retained on stack deletion to protect live credentials.
+    const secretCfgOf = (key: string, hint: string) => ({
+      secretName:    `/${stage}/cognito/${key}`,
+      description:   `Transformotion ${stage} — ${hint} (see docs/social-idp-setup.md)`,
+      generateSecretString: {
+        excludePunctuation: true,
+        passwordLength:     40,
+      },
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
+    } as const);
+
+    new secretsmanager.Secret(this, 'SecretGoogleClientId',        secretCfgOf('google-client-id',        'Google OAuth 2.0 client ID (GCP Console)'));
+    new secretsmanager.Secret(this, 'SecretGoogleClientSecret',    secretCfgOf('google-client-secret',    'Google OAuth 2.0 client secret (GCP Console)'));
+    new secretsmanager.Secret(this, 'SecretFacebookAppId',         secretCfgOf('facebook-app-id',         'Facebook App ID (Meta Developer Portal)'));
+    new secretsmanager.Secret(this, 'SecretFacebookAppSecret',     secretCfgOf('facebook-app-secret',     'Facebook App secret (Meta Developer Portal)'));
+    new secretsmanager.Secret(this, 'SecretMicrosoftClientId',     secretCfgOf('microsoft-client-id',     'Microsoft OIDC client ID (Azure App Registrations)'));
+    new secretsmanager.Secret(this, 'SecretMicrosoftClientSecret', secretCfgOf('microsoft-client-secret', 'Microsoft OIDC client secret (Azure App Registrations)'));
+    new secretsmanager.Secret(this, 'SecretAppleTeamId',           secretCfgOf('apple-team-id',           'Apple Sign-In team ID (placeholder — not yet active)'));
+    new secretsmanager.Secret(this, 'SecretAppleClientId',         secretCfgOf('apple-client-id',         'Apple Sign-In service ID / client ID (placeholder)'));
+    new secretsmanager.Secret(this, 'SecretAppleKeyId',            secretCfgOf('apple-key-id',            'Apple Sign-In key ID (placeholder)'));
+    new secretsmanager.Secret(this, 'SecretApplePrivateKey',       secretCfgOf('apple-private-key',       'Apple Sign-In private key PEM (placeholder)'));
+
+    // ── Social Identity Providers ──────────────────────────────────────────
+    // Google, Facebook and Microsoft IDPs were registered manually in the
+    // Cognito console (the user had already configured them before CDK could
+    // create them, so they are NOT managed by CloudFormation).
+    // The Secrets Manager secrets above hold the credentials for reference.
+    // The client below lists the providers so Cognito Hosted UI and
+    // signInWithRedirect() work correctly.
+
     // ── Web App Client ─────────────────────────────────────────────────────
     // Public SPA client — no client secret (PKCE only).
+    // Dev allows both localhost (Vite dev server) and the custom CloudFront domain.
     const callbackUrls = isProd
-      ? ['https://apps.transformotion.com.au', 'https://apps.transformotion.com.au/auth/callback']
-      : ['http://localhost:3001', 'http://localhost:3001/auth/callback'];
+      ? [
+          'https://apps.transformotion.com.au',
+          'https://apps.transformotion.com.au/callback',
+        ]
+      : [
+          'http://localhost:3001',
+          'http://localhost:3001/callback',
+          'https://dev.apps.transformotion.com.au',
+          'https://dev.apps.transformotion.com.au/callback',
+        ];
 
     const logoutUrls = isProd
       ? ['https://apps.transformotion.com.au']
-      : ['http://localhost:3001'];
+      : ['http://localhost:3001', 'https://dev.apps.transformotion.com.au'];
 
     this.userPoolClient = this.userPool.addClient('WebAppClient', {
       userPoolClientName: `transformotion-web-${stage}`,
@@ -112,20 +153,24 @@ export class AuthStack extends cdk.Stack {
 
       // OAuth2 with PKCE — authorization code flow only
       oAuth: {
-        flows: { authorizationCodeGrant: true },
-        scopes: [
-          cognito.OAuthScope.OPENID,
-          cognito.OAuthScope.EMAIL,
-          cognito.OAuthScope.PROFILE,
-        ],
+        flows:    { authorizationCodeGrant: true },
+        scopes:   [cognito.OAuthScope.OPENID, cognito.OAuthScope.EMAIL, cognito.OAuthScope.PROFILE],
         callbackUrls,
         logoutUrls,
       },
 
-      // Auth flows for Amplify/custom auth UI (S1.3)
+      // Social IDPs available to this client
+      supportedIdentityProviders: [
+        cognito.UserPoolClientIdentityProvider.COGNITO,
+        cognito.UserPoolClientIdentityProvider.GOOGLE,
+        cognito.UserPoolClientIdentityProvider.FACEBOOK,
+        cognito.UserPoolClientIdentityProvider.custom('Microsoft'),
+      ],
+
+      // Auth flows for Amplify/custom auth UI
       authFlows: {
-        userSrp: true,
-        userPassword: false, // plain password flow disabled for security
+        userSrp:      true,
+        userPassword: false,
       },
 
       // Token validity
@@ -145,11 +190,10 @@ export class AuthStack extends cdk.Stack {
       preventUserExistenceErrors: true,
     });
 
+
     // ── Cognito Groups ─────────────────────────────────────────────────────
-    // Groups are added to the JWT as cognito:groups claim.
-    // Lambda authoriser and Launchpad both use this to gate access.
     const groups: Array<{ name: string; description: string; precedence: number }> = [
-      { name: 'admin',          description: 'Platform administrators — full access to all apps', precedence: 1 },
+      { name: 'admin',          description: 'Platform administrators — full access to all apps', precedence: 1  },
       { name: 'stock-app',      description: 'Stock Signal Analyser access',                       precedence: 10 },
       { name: 'budget-app',     description: 'Budget Tracker access',                              precedence: 20 },
       { name: 'transformotion', description: 'Transformotion Framework access',                    precedence: 30 },
@@ -158,34 +202,34 @@ export class AuthStack extends cdk.Stack {
 
     for (const group of groups) {
       new cognito.CfnUserPoolGroup(this, `Group-${group.name}`, {
-        userPoolId: this.userPool.userPoolId,
-        groupName: group.name,
+        userPoolId:  this.userPool.userPoolId,
+        groupName:   group.name,
         description: group.description,
-        precedence: group.precedence,
+        precedence:  group.precedence,
       });
     }
 
     // ── Outputs ────────────────────────────────────────────────────────────
     new cdk.CfnOutput(this, 'UserPoolId', {
-      value: this.userPool.userPoolId,
+      value:       this.userPool.userPoolId,
       description: `Cognito User Pool ID for ${stage}`,
-      exportName: `Transformotion-${stage}-UserPoolId`,
+      exportName:  `Transformotion-${stage}-UserPoolId`,
     });
 
     new cdk.CfnOutput(this, 'UserPoolClientId', {
-      value: this.userPoolClient.userPoolClientId,
+      value:       this.userPoolClient.userPoolClientId,
       description: `Cognito Web App Client ID for ${stage}`,
-      exportName: `Transformotion-${stage}-UserPoolClientId`,
+      exportName:  `Transformotion-${stage}-UserPoolClientId`,
     });
 
     new cdk.CfnOutput(this, 'UserPoolDomain', {
-      value: `${this.userPoolDomain.domainName}.auth.${this.region}.amazoncognito.com`,
+      value:       `${this.userPoolDomain.domainName}.auth.${this.region}.amazoncognito.com`,
       description: `Cognito Hosted UI domain for ${stage}`,
-      exportName: `Transformotion-${stage}-UserPoolDomain`,
+      exportName:  `Transformotion-${stage}-UserPoolDomain`,
     });
 
     new cdk.CfnOutput(this, 'UserPoolArn', {
-      value: this.userPool.userPoolArn,
+      value:      this.userPool.userPoolArn,
       exportName: `Transformotion-${stage}-UserPoolArn`,
     });
   }
