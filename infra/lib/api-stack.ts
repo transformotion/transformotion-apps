@@ -91,7 +91,7 @@ export class ApiStack extends cdk.Stack {
         ACCOUNT_MEMBERS_TABLE: accountMembersTable.tableName,
         USER_POOL_ID:          userPool.userPoolId,
       },
-      bundling: { externalModules: ['@aws-sdk/*'], minify: true, sourceMap: false },
+      bundling: { externalModules: ['@aws-sdk/*'], minify: true, sourceMap: false, forceDockerBundling: false },
     });
 
     accountsTable.grantReadWriteData(firstLoginFn);
@@ -161,6 +161,7 @@ export class ApiStack extends cdk.Stack {
         externalModules: ['@aws-sdk/*'],
         minify: true,
         sourceMap: false,
+        forceDockerBundling: false,
       },
     });
 
@@ -278,7 +279,7 @@ export class ApiStack extends cdk.Stack {
         ACCOUNTS_TABLE:        accountsTable2.tableName,
         ACCOUNT_MEMBERS_TABLE: accountMembersTable2.tableName,
       },
-      bundling: { externalModules: ['@aws-sdk/*'], minify: true, sourceMap: false },
+      bundling: { externalModules: ['@aws-sdk/*'], minify: true, sourceMap: false, forceDockerBundling: false },
     });
 
     accountsTable2.grantReadWriteData(accountsFn);
@@ -313,7 +314,7 @@ export class ApiStack extends cdk.Stack {
         ACCOUNTS_TABLE:    accountsTable2.tableName,
         INVITATIONS_TABLE: invitationsTable.tableName,
       },
-      bundling: { externalModules: ['@aws-sdk/*'], minify: true, sourceMap: false },
+      bundling: { externalModules: ['@aws-sdk/*'], minify: true, sourceMap: false, forceDockerBundling: false },
     });
 
     accountsTable2.grantReadData(invitationsFn);

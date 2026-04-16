@@ -39,10 +39,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+          cache: 'npm'
 
       - name: Install dependencies
-        working-directory: infra
-        run: npm install
+        run: npm ci
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
@@ -105,10 +105,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+          cache: 'npm'
 
       - name: Install dependencies
-        working-directory: infra
-        run: npm install
+        run: npm ci
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
