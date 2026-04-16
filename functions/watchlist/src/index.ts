@@ -63,9 +63,10 @@ export const handler = withAuth(async ({ auth, account, event }) => {
       TableName: TABLE,
       Item: {
         accountId,
-        ticker:  i.ticker,
-        name:    i.name,
-        addedAt: i.addedAt,
+        ticker:     i.ticker,
+        name:       i.name,
+        addedAt:    i.addedAt,
+        ...(i.addedPrice !== undefined && { addedPrice: i.addedPrice }),
       },
     }))
   ));

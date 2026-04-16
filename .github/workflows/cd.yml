@@ -46,6 +46,46 @@ jobs:
         working-directory: infra
         run: npx cdk deploy TransformotionDev-Network --require-approval never
 
+  web-deploy-dev:
+    name: Web → S3 Dev
+    runs-on: ubuntu-latest
+    if: github.ref_name == 'develop'
+    environment: dev
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install web dependencies
+        working-directory: apps/web
+        run: npm install
+
+      - name: Build Next.js (static export)
+        working-directory: apps/web
+        env:
+          NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
+          NEXT_PUBLIC_CLAUDE_API_URL: ${{ vars.NEXT_PUBLIC_CLAUDE_API_URL }}
+          NEXT_PUBLIC_CLAUDE_CACHE_URL: ${{ vars.NEXT_PUBLIC_CLAUDE_CACHE_URL }}
+          NEXT_PUBLIC_COGNITO_USER_POOL_ID: ${{ vars.NEXT_PUBLIC_COGNITO_USER_POOL_ID }}
+          NEXT_PUBLIC_COGNITO_CLIENT_ID: ${{ vars.NEXT_PUBLIC_COGNITO_CLIENT_ID }}
+          NEXT_PUBLIC_COGNITO_REGION: ${{ vars.NEXT_PUBLIC_COGNITO_REGION }}
+          NEXT_PUBLIC_USE_MOCK_DATA: ${{ vars.NEXT_PUBLIC_USE_MOCK_DATA }}
+        run: npm run build
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy to S3
+        run: aws s3 sync apps/web/out s3://transformotion-web-dev-959516291617 --delete
+
+      - name: Invalidate CloudFront
+        run: aws cloudfront create-invalidation --distribution-id E1128DYYBLMWYK --paths "/*"
+
   deploy-prod:
     name: Deploy → Prod
     runs-on: ubuntu-latest

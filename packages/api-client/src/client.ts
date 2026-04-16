@@ -19,6 +19,9 @@ import type {
   CreateInvitationResponse,
   ClaudeProxyRequest,
   ClaudeProxyResponse,
+  GetUserProfileResponse,
+  PutUserPreferencesRequest,
+  PutUserPreferencesResponse,
 } from './types';
 
 /**
@@ -43,6 +46,18 @@ export class ApiClient {
 
   constructor(opts: ApiClientOptions) {
     this.http = new HttpClient(opts);
+  }
+
+  // ── User profile + preferences ────────────────────────────────────────────
+
+  /** GET /api/user/profile — fetch the user's profile including preferences. */
+  async getUserProfile(): Promise<GetUserProfileResponse> {
+    return this.http.get<GetUserProfileResponse>('api/user/profile');
+  }
+
+  /** PUT /api/user/preferences — merge partial preferences for the current user. */
+  async putUserPreferences(req: PutUserPreferencesRequest): Promise<PutUserPreferencesResponse> {
+    return this.http.put<PutUserPreferencesResponse>('api/user/preferences', req);
   }
 
   // ── Claude proxy (S2.3) ────────────────────────────────────────────────────

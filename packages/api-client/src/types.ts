@@ -24,6 +24,8 @@ export interface WatchlistItem {
   name:    string;
   /** Unix ms timestamp when the item was added. */
   addedAt: number;
+  /** Numeric price at the time of first enrichment — used to compute P&L since added. */
+  addedPrice?: number;
 }
 
 export interface GetWatchlistResponse  { items: WatchlistItem[] }

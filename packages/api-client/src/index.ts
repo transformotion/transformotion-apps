@@ -52,4 +52,10 @@ export type {
   // Claude proxy
   ClaudeProxyRequest,
   ClaudeProxyResponse,
+
+  // User preferences
+  UserPreferences,
+  GetUserProfileResponse,
+  PutUserPreferencesRequest,
+  PutUserPreferencesResponse,
 } from './types';
