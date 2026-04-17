@@ -9,6 +9,8 @@
  */
 
 import { getAPIClient } from '@/lib/api/client'
+import { getConfig } from '@/lib/config'
+import { MemoryCacheService } from './memory-cache'
 import type { CacheService } from './index'
 
 // ── TTL table (seconds) ────────────────────────────────────────────────────────
@@ -116,6 +118,8 @@ export class DynamoTTLCacheService implements CacheService {
   }
 }
 
-// ── Singleton ──────────────────────────────────────────────────────────────────
+// ── Singleton — DynamoDB in production, in-memory in mock mode ────────────────
 
-export const dynamoCache = new DynamoTTLCacheService()
+export const dynamoCache: CacheService = getConfig().features.useMockData
+  ? new MemoryCacheService({ defaultTTL: 8 * 3600, prefix: '' })
+  : new DynamoTTLCacheService()

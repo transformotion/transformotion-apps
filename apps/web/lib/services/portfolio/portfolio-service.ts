@@ -6,9 +6,23 @@
  */
 
 import { getAPIClient } from '@/lib/api/client'
+import { getConfig } from '@/lib/config'
 import { dynamoCache } from '@/lib/services/cache/dynamo-ttl-cache'
 import { callClaudeAPI } from '@/lib/hooks/use-claude'
 import type { PortfolioHolding, StockAnalysisResult } from './types'
+
+// ── Mock holdings ─────────────────────────────────────────────────────────────
+
+const MOCK_HOLDINGS: PortfolioHolding[] = [
+  { ticker: 'CBA.AX',  shares: 150,  avgCost: 98.50,  isGifted: false, addedAt: Date.now() - 86400000 * 90 },
+  { ticker: 'BHP.AX',  shares: 200,  avgCost: 38.20,  isGifted: false, addedAt: Date.now() - 86400000 * 60 },
+  { ticker: 'CSL.AX',  shares: 25,   avgCost: 265.00, isGifted: false, addedAt: Date.now() - 86400000 * 45 },
+  { ticker: 'WDS.AX',  shares: 500,  avgCost: 31.40,  isGifted: false, addedAt: Date.now() - 86400000 * 30 },
+  { ticker: 'NVDA',    shares: 10,   avgCost: 620.00, isGifted: false, addedAt: Date.now() - 86400000 * 20 },
+  { ticker: 'A200.AX', shares: 100,  avgCost: 130.00, isGifted: false, addedAt: Date.now() - 86400000 * 10 },
+]
+
+let mockHoldingsStore: PortfolioHolding[] = [...MOCK_HOLDINGS]
 
 // ── Analysis prompt (must match analyser-tab.tsx so cache keys are reused) ───
 
@@ -37,16 +51,27 @@ Return ONLY valid JSON.`
 
 // ── Service ───────────────────────────────────────────────────────────────────
 
-export const portfolioService = {
-
+const realPortfolioService = {
   async getHoldings(): Promise<PortfolioHolding[]> {
     const res = await getAPIClient().get<{ holdings: PortfolioHolding[] }>('/portfolio')
     return res.holdings ?? []
   },
-
   async saveHoldings(holdings: PortfolioHolding[]): Promise<void> {
     await getAPIClient().put('/portfolio', { holdings })
   },
+}
+
+const mockPortfolioService = {
+  async getHoldings(): Promise<PortfolioHolding[]> {
+    return [...mockHoldingsStore]
+  },
+  async saveHoldings(holdings: PortfolioHolding[]): Promise<void> {
+    mockHoldingsStore = [...holdings]
+  },
+}
+
+export const portfolioService = {
+  ...(getConfig().features.useMockData ? mockPortfolioService : realPortfolioService),
 
   /**
    * Enrich each ticker with Claude analysis.
