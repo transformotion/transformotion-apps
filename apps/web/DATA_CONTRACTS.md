@@ -131,6 +131,77 @@ const result = await callClaude({
 | Stock Analysis  | `ANALYSIS#${ticker}`   | 8h      |
 | Market Cycle    | `CYCLE#${geography}`   | 8h      |
 
+### Prompt detection → return type mapping
+
+`mockClaudeCall` in `use-claude.ts` detects prompt content to return the correct shape.
+When writing prompts in tab components, include the correct detection string:
+
+| Tab                | Detection string in prompt                 | Return type              |
+|-------------------|--------------------------------------------|--------------------------|
+| Market Analysis   | `"comprehensive market analysis"`          | `MarketAnalysisResult`   |
+| Recommendations   | `"Provide stock recommendations"`          | `RecommendationsResult`  |
+| ETFs              | `"ETF recommendations"`                   | `ETFResult`              |
+| Precious Metals   | `"precious metals"`                        | `MetalsResult`           |
+| Analyser          | `"Analyse the stock"`                      | `StockAnalysisResult`    |
+
+---
+
+## MarketAnalysisResult — `components/stock-signal/tabs/market-analysis-tab.tsx`
+
+```typescript
+interface MarketAnalysisResult {
+  macro: {
+    cycleStage:    MacroIndicator
+    rateDirection: MacroIndicator
+    keyRisk:       MacroIndicator
+    currency:      MacroIndicator
+  }
+  briefing: string
+  sectors:  SectorSignal[]
+  actionSummary: {
+    enter: ActionItem[]   // top 3 sectors to buy/overweight
+    exit:  ActionItem[]   // top 3 sectors to sell/reduce
+  }
+}
+
+interface MacroIndicator {
+  label:       string              // e.g. "CYCLE STAGE"
+  title:       string              // e.g. "Late Cycle Expansion"
+  description: string
+  impact:      'Supportive' | 'Neutral' | 'Headwind'
+}
+
+interface SectorSignal {
+  sector:        string            // e.g. "Financials", "Materials"
+  signal:        'BUY' | 'HOLD' | 'EXIT'
+  cyclePosition: number            // 0–100 — rendered as CycleBar gradient+dot
+  valuation:     'Cheap' | 'Fair' | 'Expensive' | 'Extended'
+  opportunity:   'Attractive' | 'Neutral' | 'Unattractive'
+  change:        number            // weekly % change, e.g. 2.1 or -0.8
+  reason:        string            // 1–2 sentence explanation
+  bestExchange:  string            // e.g. "ASX", "NASDAQ"
+}
+
+interface ActionItem {
+  sector: string
+  reason: string
+}
+```
+
+**Sector card rendering:**
+- `cyclePosition` → `<CycleBar>` — 90px gradient track (green→amber→coral) + white dot marker. NOT a step graph.
+- `valuation` → `<SectorPill>` — color-coded pill badge
+- `opportunity` → `<SectorPill>` — color-coded pill badge
+- Both `CycleBar` and `SectorPill` are defined in `market-analysis-tab.tsx` (not the design system)
+
+**Pill color tokens:**
+```typescript
+green: { background: '#E1F5EE', color: '#085041' }  // Cheap / Attractive
+amber: { background: '#FAEEDA', color: '#633806' }  // Fair
+coral: { background: '#FAECE7', color: '#712B13' }  // Expensive / Extended / Unattractive
+gray:  { background: '#F1EFE8', color: '#444441' }  // Neutral
+```
+
 ---
 
 ## Cache Service — `lib/services/cache/`
