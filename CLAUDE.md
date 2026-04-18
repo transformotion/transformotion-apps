@@ -50,11 +50,13 @@ Before making ANY change that touches:
 
 ---
 
-## Stock Analyser (apps/web) data layer
+## Stock Analyser contracts — READ BEFORE ANY STOCK ANALYSER WORK
 
-For the Stock Analyser part of `apps/web/`, the data contracts live in:
+**`/stock-analyser/contracts/` is the single source of truth for Stock Analyser UI/backend contracts.**
 
-- `apps/web/DATA_CONTRACTS.md` — service interfaces, hook signatures, type definitions, cache key conventions
+Before making ANY change that touches the stock analyser data layer, read:
+
+- `stock-analyser/contracts/DATA_CONTRACTS.md` — service interfaces (`portfolioService`, `watchlistService`), hook signatures (`useClaude`, `useNavigation`), type definitions, cache key conventions, and the prompt-detection → return-type mapping
 
 The mock/real separation rule: components never check `useMockData` directly. Only service files and hooks do.
 

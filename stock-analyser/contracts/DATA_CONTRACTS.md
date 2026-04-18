@@ -1,7 +1,9 @@
-# Data Contracts — apps/web
+# Data Contracts — Stock Analyser
 
-This document is the canonical reference for interface contracts between the UI layer and the data/API layers.
-**v0 must read this file before doing any UI work that touches data.**
+**Canonical location: `stock-analyser/contracts/DATA_CONTRACTS.md`**
+
+This document is the single source of truth for interface contracts between the Stock Analyser UI and its data/API layers.
+**Read this before any Stock Analyser work that touches services, hooks, types, or cache keys.**
 
 ---
 
