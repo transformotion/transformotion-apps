@@ -175,7 +175,6 @@ Return ONLY valid JSON.`,
         <PrimaryButton
           onClick={() => runAnalysis(metalResults.length > 0)}
           disabled={isAnalyzing}
-          size="sm"
         >
           {isAnalyzing ? (
             <>

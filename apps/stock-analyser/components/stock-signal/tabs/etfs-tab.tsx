@@ -117,7 +117,6 @@ Provide 6 ETFs. Return ONLY valid JSON.`,
         <PrimaryButton
           onClick={() => runAnalysis(etfResults.length > 0)}
           disabled={isAnalyzing}
-          size="sm"
         >
           {isAnalyzing ? (
             <>
