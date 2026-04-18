@@ -1,6 +1,7 @@
+// @ts-nocheck
 /**
  * Example: Using the new architecture in Budget Tracker components
- * 
+ *
  * This file demonstrates the pattern for migrating existing components
  * to use Zustand stores, repositories, and domain logic.
  * 

@@ -1,10 +1,12 @@
-name: CD
+# cd.yml — Full-platform manual redeploy (workflow_dispatch only).
+# For normal pushes, use the path-filtered per-app workflows:
+#   deploy-platform.yml      — triggered by infrastructure/lib/platform/** changes
+#   deploy-stock-analyser.yml — triggered by apps/stock-analyser/** changes
+#   deploy-budget-tracker.yml — placeholder, activates when BT scaffolding exists
+
+name: CD — Full platform redeploy
 
 on:
-  push:
-    branches:
-      - develop   # deploys to dev
-      - main      # deploys to prod
   workflow_dispatch:
     inputs:
       target:
@@ -15,24 +17,22 @@ on:
         options: [dev, prod]
 
 concurrency:
-  group: cd-${{ github.ref_name }}
-  cancel-in-progress: false  # never cancel an in-flight deploy
+  group: cd-full-${{ github.event.inputs.target }}
+  cancel-in-progress: false
 
 permissions:
-  id-token: write   # required for OIDC token exchange
+  id-token: write
   contents: read
 
 env:
   AWS_REGION: ap-southeast-2
-  AWS_ACCOUNT_ID: '959516291617'
   ROLE_ARN: arn:aws:iam::959516291617:role/GitHubActionsDeployRole
 
 jobs:
-  deploy-dev:
-    name: Deploy → Dev
+  full-deploy:
+    name: Full deploy → ${{ github.event.inputs.target }}
     runs-on: ubuntu-latest
-    if: github.ref_name == 'develop' || (github.event_name == 'workflow_dispatch' && inputs.target == 'dev')
-    environment: dev
+    environment: ${{ github.event.inputs.target }}
     steps:
       - uses: actions/checkout@v4
 
@@ -53,30 +53,13 @@ jobs:
           role-to-assume: ${{ env.ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: CDK Deploy — dev
+      - name: CDK Deploy — all stacks
         working-directory: infrastructure
-        run: pnpm exec cdk deploy TransformotionDev-Network --require-approval never
+        run: |
+          STAGE=${{ github.event.inputs.target == 'dev' && 'Dev' || 'Prod' }}
+          pnpm exec cdk deploy "Transformotion${STAGE}-*" --require-approval never
 
-  web-deploy-dev:
-    name: Stock Analyser → S3 Dev
-    runs-on: ubuntu-latest
-    if: github.ref_name == 'develop' || (github.event_name == 'workflow_dispatch' && inputs.target == 'dev')
-    environment: dev
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      - uses: pnpm/action-setup@v4
-        with:
-          version: '10.33.0'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build Next.js (static export)
+      - name: Build Stock Analyser
         working-directory: apps/stock-analyser
         env:
           NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
@@ -88,43 +71,15 @@ jobs:
           NEXT_PUBLIC_USE_MOCK_DATA: ${{ vars.NEXT_PUBLIC_USE_MOCK_DATA }}
         run: pnpm build
 
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ env.ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Deploy to S3
-        run: aws s3 sync apps/stock-analyser/out s3://transformotion-web-dev-959516291617 --delete
-
-      - name: Invalidate CloudFront
-        run: aws cloudfront create-invalidation --distribution-id E1128DYYBLMWYK --paths "/*"
-
-  deploy-prod:
-    name: Deploy → Prod
-    runs-on: ubuntu-latest
-    if: github.ref_name == 'main' || (github.event_name == 'workflow_dispatch' && inputs.target == 'prod')
-    environment: prod
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      - uses: pnpm/action-setup@v4
-        with:
-          version: '10.33.0'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ env.ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: CDK Deploy — prod
-        working-directory: infrastructure
-        run: pnpm exec cdk deploy TransformotionProd-Network --require-approval never
+      - name: Deploy Stock Analyser to S3
+        env:
+          S3_BUCKET_DEV: transformotion-web-dev-959516291617
+          CF_DIST_DEV: E1128DYYBLMWYK
+        run: |
+          if [ "${{ github.event.inputs.target }}" = "dev" ]; then
+            aws s3 sync apps/stock-analyser/out s3://$S3_BUCKET_DEV --delete
+            aws cloudfront create-invalidation --distribution-id $CF_DIST_DEV --paths "/*"
+          else
+            aws s3 sync apps/stock-analyser/out s3://${{ vars.S3_BUCKET_PROD }} --delete
+            aws cloudfront create-invalidation --distribution-id ${{ vars.CLOUDFRONT_DISTRIBUTION_ID_PROD }} --paths "/*"
+          fi

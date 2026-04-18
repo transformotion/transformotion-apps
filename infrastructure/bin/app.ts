@@ -1,11 +1,17 @@
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
-import { NetworkStack }         from '../lib/network-stack';
-import { AuthStack }            from '../lib/auth-stack';
-import { AuthApiStack }         from '../lib/auth-api-stack';
-import { ApiStack }             from '../lib/api-stack';
-import { PlatformTablesStack }  from '../lib/platform-tables-stack';
+
+// ── Platform stacks ───────────────────────────────────────────────────────────
+import { NetworkStack }        from '../lib/platform/network-stack';
+import { AuthStack }           from '../lib/platform/auth-stack';
+import { AuthApiStack }        from '../lib/platform/auth-api-stack';
+import { PlatformApiStack }    from '../lib/platform/platform-api-stack';
+import { PlatformTablesStack } from '../lib/platform/platform-tables-stack';
+
+// ── Stock Analyser stacks ─────────────────────────────────────────────────────
+import { StockAnalyserApiStack }    from '../lib/stock-analyser/stock-analyser-api-stack';
+import { StockAnalyserTablesStack } from '../lib/stock-analyser/stock-analyser-tables-stack';
 
 const app = new cdk.App();
 
@@ -14,12 +20,12 @@ const env = {
   region: 'ap-southeast-2',
 };
 
-// ── Dev stacks ─────────────────────────────────────────────────────────────
+// ── Dev stacks ────────────────────────────────────────────────────────────────
+
 new NetworkStack(app, 'TransformotionDev-Network', {
   env,
   stage: 'dev',
   description: 'Transformotion Apps — Dev network stack (CloudFront + S3)',
-  // ACM cert issued in S1.7 — must be in us-east-1 for CloudFront
   certificateArn: 'arn:aws:acm:us-east-1:959516291617:certificate/de463b1f-a221-48ec-871e-65b72716d5e9',
   domainNames: ['dev.apps.transformotion.com.au'],
 });
@@ -39,25 +45,40 @@ new AuthApiStack(app, 'TransformotionDev-AuthApi', {
   appUrl:      'https://dev.apps.transformotion.com.au',
 });
 
-new ApiStack(app, 'TransformotionDev-Api', {
+const devPlatformTables = new PlatformTablesStack(app, 'TransformotionDev-PlatformTables', {
   env,
   stage:       'dev',
-  description: 'Transformotion Apps — Dev main API (REST API Gateway + Cognito JWT authoriser)',
-  userPool:    devAuth.userPool,
+  description: 'Transformotion Apps — Dev platform DynamoDB tables (users, accounts, invitations, analysis-cache)',
 });
 
-new PlatformTablesStack(app, 'TransformotionDev-PlatformTables', {
+const devPlatformApi = new PlatformApiStack(app, 'TransformotionDev-Api', {
+  env,
+  stage:              'dev',
+  description:        'Transformotion Apps — Dev platform API (shared routes for all apps)',
+  userPool:           devAuth.userPool,
+  analysisCacheTable: devPlatformTables.analysisCacheTable,
+});
+
+new StockAnalyserTablesStack(app, 'TransformotionDev-StockAnalyserTables', {
   env,
   stage:       'dev',
-  description: 'Transformotion Apps — Dev platform DynamoDB tables',
+  description: 'Transformotion Apps — Dev Stock Analyser DynamoDB tables',
 });
 
-// ── Prod stacks ────────────────────────────────────────────────────────────
+new StockAnalyserApiStack(app, 'TransformotionDev-StockAnalyserApi', {
+  env,
+  stage:       'dev',
+  description: 'Transformotion Apps — Dev Stock Analyser API routes',
+  api:         devPlatformApi.api,
+  authoriser:  devPlatformApi.authoriser,
+});
+
+// ── Prod stacks ────────────────────────────────────────────────────────────────
+
 new NetworkStack(app, 'TransformotionProd-Network', {
   env,
   stage: 'prod',
   description: 'Transformotion Apps — Prod network stack (CloudFront + S3)',
-  // Prod cert requested when apps.transformotion.com.au is ready to go live
 });
 
 const prodAuth = new AuthStack(app, 'TransformotionProd-Auth', {
@@ -75,15 +96,30 @@ new AuthApiStack(app, 'TransformotionProd-AuthApi', {
   appUrl:      'https://apps.transformotion.com.au',
 });
 
-new ApiStack(app, 'TransformotionProd-Api', {
-  env,
-  stage:       'prod',
-  description: 'Transformotion Apps — Prod main API (REST API Gateway + Cognito JWT authoriser)',
-  userPool:    prodAuth.userPool,
-});
-
-new PlatformTablesStack(app, 'TransformotionProd-PlatformTables', {
+const prodPlatformTables = new PlatformTablesStack(app, 'TransformotionProd-PlatformTables', {
   env,
   stage:       'prod',
   description: 'Transformotion Apps — Prod platform DynamoDB tables',
+});
+
+const prodPlatformApi = new PlatformApiStack(app, 'TransformotionProd-Api', {
+  env,
+  stage:              'prod',
+  description:        'Transformotion Apps — Prod platform API (shared routes for all apps)',
+  userPool:           prodAuth.userPool,
+  analysisCacheTable: prodPlatformTables.analysisCacheTable,
+});
+
+new StockAnalyserTablesStack(app, 'TransformotionProd-StockAnalyserTables', {
+  env,
+  stage:       'prod',
+  description: 'Transformotion Apps — Prod Stock Analyser DynamoDB tables',
+});
+
+new StockAnalyserApiStack(app, 'TransformotionProd-StockAnalyserApi', {
+  env,
+  stage:       'prod',
+  description: 'Transformotion Apps — Prod Stock Analyser API routes',
+  api:         prodPlatformApi.api,
+  authoriser:  prodPlatformApi.authoriser,
 });

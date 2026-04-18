@@ -75,11 +75,11 @@ export default function DesignSystemPage() {
             </Card>
             <Card>
               <p className="text-xs text-muted-foreground mb-3">Brand Mark - Initial</p>
-              <BrandMark variant="initial" size="md" />
+              <BrandMark variant="initial" />
             </Card>
             <Card>
               <p className="text-xs text-muted-foreground mb-3">Brand Mark - Dot</p>
-              <BrandMark variant="dot" size="md" />
+              <BrandMark variant="dot" />
             </Card>
           </div>
         </section>

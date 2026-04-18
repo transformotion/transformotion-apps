@@ -346,7 +346,7 @@ export function SignIn({ onSignIn }: { onSignIn?: () => void }) {
           {/* Logo */}
           <div className="text-center mb-6 sm:mb-8">
             <div className="flex justify-center mb-4 sm:mb-6">
-              <Wordmark size="xl" />
+              <Wordmark size="lg" />
             </div>
             <h1 className="text-2xl font-bold text-foreground mb-1">
               Welcome back

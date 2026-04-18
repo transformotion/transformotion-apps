@@ -1,0 +1,125 @@
+name: Deploy — Stock Analyser
+
+on:
+  push:
+    branches: [develop, main]
+    paths:
+      - 'apps/stock-analyser/**'
+      - 'infrastructure/lib/stock-analyser/**'
+      - 'packages/**'
+      - 'functions/**'
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Deploy target'
+        required: true
+        default: 'dev'
+        type: choice
+        options: [dev, prod]
+
+concurrency:
+  group: deploy-stock-analyser-${{ github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ap-southeast-2
+  ROLE_ARN: arn:aws:iam::959516291617:role/GitHubActionsDeployRole
+
+jobs:
+  deploy-dev:
+    name: Stock Analyser → Dev
+    runs-on: ubuntu-latest
+    if: github.ref_name == 'develop' || (github.event_name == 'workflow_dispatch' && inputs.target == 'dev')
+    environment: dev
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '10.33.0'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: CDK Deploy — Stock Analyser stacks (dev)
+        working-directory: infrastructure
+        run: pnpm exec cdk deploy 'TransformotionDev-StockAnalyserTables' 'TransformotionDev-StockAnalyserApi' --require-approval never
+
+      - name: Build Next.js (static export)
+        working-directory: apps/stock-analyser
+        env:
+          NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
+          NEXT_PUBLIC_CLAUDE_API_URL: ${{ vars.NEXT_PUBLIC_CLAUDE_API_URL }}
+          NEXT_PUBLIC_CLAUDE_CACHE_URL: ${{ vars.NEXT_PUBLIC_CLAUDE_CACHE_URL }}
+          NEXT_PUBLIC_COGNITO_USER_POOL_ID: ${{ vars.NEXT_PUBLIC_COGNITO_USER_POOL_ID }}
+          NEXT_PUBLIC_COGNITO_CLIENT_ID: ${{ vars.NEXT_PUBLIC_COGNITO_CLIENT_ID }}
+          NEXT_PUBLIC_COGNITO_REGION: ${{ vars.NEXT_PUBLIC_COGNITO_REGION }}
+          NEXT_PUBLIC_USE_MOCK_DATA: ${{ vars.NEXT_PUBLIC_USE_MOCK_DATA }}
+        run: pnpm build
+
+      - name: Deploy to S3
+        run: aws s3 sync apps/stock-analyser/out s3://transformotion-web-dev-959516291617 --delete
+
+      - name: Invalidate CloudFront
+        run: aws cloudfront create-invalidation --distribution-id E1128DYYBLMWYK --paths "/*"
+
+  deploy-prod:
+    name: Stock Analyser → Prod
+    runs-on: ubuntu-latest
+    if: github.ref_name == 'main' || (github.event_name == 'workflow_dispatch' && inputs.target == 'prod')
+    environment: prod
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '10.33.0'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: CDK Deploy — Stock Analyser stacks (prod)
+        working-directory: infrastructure
+        run: pnpm exec cdk deploy 'TransformotionProd-StockAnalyserTables' 'TransformotionProd-StockAnalyserApi' --require-approval never
+
+      - name: Build Next.js (static export)
+        working-directory: apps/stock-analyser
+        env:
+          NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
+          NEXT_PUBLIC_CLAUDE_API_URL: ${{ vars.NEXT_PUBLIC_CLAUDE_API_URL }}
+          NEXT_PUBLIC_CLAUDE_CACHE_URL: ${{ vars.NEXT_PUBLIC_CLAUDE_CACHE_URL }}
+          NEXT_PUBLIC_COGNITO_USER_POOL_ID: ${{ vars.NEXT_PUBLIC_COGNITO_USER_POOL_ID }}
+          NEXT_PUBLIC_COGNITO_CLIENT_ID: ${{ vars.NEXT_PUBLIC_COGNITO_CLIENT_ID }}
+          NEXT_PUBLIC_COGNITO_REGION: ${{ vars.NEXT_PUBLIC_COGNITO_REGION }}
+          NEXT_PUBLIC_USE_MOCK_DATA: ${{ vars.NEXT_PUBLIC_USE_MOCK_DATA }}
+        run: pnpm build
+
+      - name: Deploy to S3
+        run: aws s3 sync apps/stock-analyser/out s3://transformotion-prod-bucket --delete
+
+      - name: Invalidate CloudFront
+        run: aws cloudfront create-invalidation --distribution-id ${{ vars.CLOUDFRONT_DISTRIBUTION_ID_PROD }} --paths "/*"

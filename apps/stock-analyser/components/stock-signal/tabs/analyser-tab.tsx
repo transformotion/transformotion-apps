@@ -250,7 +250,7 @@ Return ONLY valid JSON.`,
                   <span className="text-sm font-semibold text-signal-green">+{result.change.toFixed(2)}%</span>
                 </div>
               </div>
-              <VerdictBadge verdict={result.verdict} size="lg" />
+              <VerdictBadge verdict={result.verdict} size="md" />
             </div>
           </div>
 

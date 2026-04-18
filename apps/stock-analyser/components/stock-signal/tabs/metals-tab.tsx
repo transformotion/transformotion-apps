@@ -175,7 +175,6 @@ Return ONLY valid JSON.`,
         <PrimaryButton
           onClick={() => runAnalysis(metalResults.length > 0)}
           disabled={isAnalyzing}
-          size="sm"
         >
           {isAnalyzing ? (
             <>
@@ -194,7 +193,6 @@ Return ONLY valid JSON.`,
           onToggle={() => setIsLive(!isLive)} 
           cacheAge="just now"
           freshness="recent"
-          size="sm"
         />
       </div>
 

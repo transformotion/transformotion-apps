@@ -1,0 +1,20 @@
+name: Deploy — Budget Tracker
+
+# Placeholder — activates when Budget Tracker app scaffolding exists.
+# Currently no-ops on budget-tracker changes to avoid CI failures.
+
+on:
+  push:
+    branches: [develop, main]
+    paths:
+      - 'apps/budget-tracker/**'
+      - 'infrastructure/lib/budget-tracker/**'
+  workflow_dispatch:
+
+jobs:
+  placeholder:
+    name: Budget Tracker (not yet deployed)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Placeholder
+        run: echo "Budget Tracker deployment workflow — not yet active. Add deploy steps when app scaffolding is complete."

@@ -69,4 +69,4 @@ export interface LoggerConfig {
 }
 
 // Re-export console implementation as default
-export { ConsoleLogger, createLogger } from './console-logger'
+export { ConsoleLogger, createLogger, getLogger } from './console-logger'
