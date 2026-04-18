@@ -30,6 +30,174 @@ importers:
         specifier: '*'
         version: 5.7.3
 
+  apps/budget-tracker/functions/budget-ai:
+    dependencies:
+      '@transformotion/budget-domain':
+        specifier: workspace:*
+        version: link:../../../../packages/budget-domain
+      '@transformotion/lambda-middleware':
+        specifier: workspace:*
+        version: link:../../../../packages/lambda-middleware
+    devDependencies:
+      '@aws-sdk/client-dynamodb':
+        specifier: ^3
+        version: 3.1032.0
+      '@aws-sdk/client-lambda':
+        specifier: ^3
+        version: 3.1032.0
+      '@aws-sdk/lib-dynamodb':
+        specifier: ^3
+        version: 3.1032.0(@aws-sdk/client-dynamodb@3.1032.0)
+      '@types/aws-lambda':
+        specifier: ^8
+        version: 8.10.161
+      '@types/node':
+        specifier: ^22
+        version: 22.19.17
+      typescript:
+        specifier: '*'
+        version: 5.7.3
+
+  apps/budget-tracker/functions/budget-export:
+    dependencies:
+      '@transformotion/budget-domain':
+        specifier: workspace:*
+        version: link:../../../../packages/budget-domain
+      '@transformotion/lambda-middleware':
+        specifier: workspace:*
+        version: link:../../../../packages/lambda-middleware
+    devDependencies:
+      '@aws-sdk/client-dynamodb':
+        specifier: ^3
+        version: 3.1032.0
+      '@aws-sdk/client-lambda':
+        specifier: ^3
+        version: 3.1032.0
+      '@aws-sdk/lib-dynamodb':
+        specifier: ^3
+        version: 3.1032.0(@aws-sdk/client-dynamodb@3.1032.0)
+      '@types/aws-lambda':
+        specifier: ^8
+        version: 8.10.161
+      '@types/node':
+        specifier: ^22
+        version: 22.19.17
+      typescript:
+        specifier: '*'
+        version: 5.7.3
+
+  apps/budget-tracker/functions/budget-migrate:
+    dependencies:
+      '@transformotion/budget-domain':
+        specifier: workspace:*
+        version: link:../../../../packages/budget-domain
+      '@transformotion/lambda-middleware':
+        specifier: workspace:*
+        version: link:../../../../packages/lambda-middleware
+    devDependencies:
+      '@aws-sdk/client-dynamodb':
+        specifier: ^3
+        version: 3.1032.0
+      '@aws-sdk/client-lambda':
+        specifier: ^3
+        version: 3.1032.0
+      '@aws-sdk/lib-dynamodb':
+        specifier: ^3
+        version: 3.1032.0(@aws-sdk/client-dynamodb@3.1032.0)
+      '@types/aws-lambda':
+        specifier: ^8
+        version: 8.10.161
+      '@types/node':
+        specifier: ^22
+        version: 22.19.17
+      typescript:
+        specifier: '*'
+        version: 5.7.3
+
+  apps/budget-tracker/functions/budget-rules:
+    dependencies:
+      '@transformotion/budget-domain':
+        specifier: workspace:*
+        version: link:../../../../packages/budget-domain
+      '@transformotion/lambda-middleware':
+        specifier: workspace:*
+        version: link:../../../../packages/lambda-middleware
+    devDependencies:
+      '@aws-sdk/client-dynamodb':
+        specifier: ^3
+        version: 3.1032.0
+      '@aws-sdk/client-lambda':
+        specifier: ^3
+        version: 3.1032.0
+      '@aws-sdk/lib-dynamodb':
+        specifier: ^3
+        version: 3.1032.0(@aws-sdk/client-dynamodb@3.1032.0)
+      '@types/aws-lambda':
+        specifier: ^8
+        version: 8.10.161
+      '@types/node':
+        specifier: ^22
+        version: 22.19.17
+      typescript:
+        specifier: '*'
+        version: 5.7.3
+
+  apps/budget-tracker/functions/budget-settings:
+    dependencies:
+      '@transformotion/budget-domain':
+        specifier: workspace:*
+        version: link:../../../../packages/budget-domain
+      '@transformotion/lambda-middleware':
+        specifier: workspace:*
+        version: link:../../../../packages/lambda-middleware
+    devDependencies:
+      '@aws-sdk/client-dynamodb':
+        specifier: ^3
+        version: 3.1032.0
+      '@aws-sdk/client-lambda':
+        specifier: ^3
+        version: 3.1032.0
+      '@aws-sdk/lib-dynamodb':
+        specifier: ^3
+        version: 3.1032.0(@aws-sdk/client-dynamodb@3.1032.0)
+      '@types/aws-lambda':
+        specifier: ^8
+        version: 8.10.161
+      '@types/node':
+        specifier: ^22
+        version: 22.19.17
+      typescript:
+        specifier: '*'
+        version: 5.7.3
+
+  apps/budget-tracker/functions/budget-transactions:
+    dependencies:
+      '@transformotion/budget-domain':
+        specifier: workspace:*
+        version: link:../../../../packages/budget-domain
+      '@transformotion/lambda-middleware':
+        specifier: workspace:*
+        version: link:../../../../packages/lambda-middleware
+    devDependencies:
+      '@aws-sdk/client-dynamodb':
+        specifier: ^3
+        version: 3.1032.0
+      '@aws-sdk/client-lambda':
+        specifier: ^3
+        version: 3.1032.0
+      '@aws-sdk/lib-dynamodb':
+        specifier: ^3
+        version: 3.1032.0(@aws-sdk/client-dynamodb@3.1032.0)
+      '@types/aws-lambda':
+        specifier: ^8
+        version: 8.10.161
+      '@types/node':
+        specifier: ^22
+        version: 22.19.17
+      typescript:
+        specifier: '*'
+        version: 5.7.3
+
   apps/stock-analyser:
     dependencies:
       '@hookform/resolvers':

@@ -13,6 +13,10 @@ import { PlatformTablesStack } from '../lib/platform/platform-tables-stack';
 import { StockAnalyserApiStack }    from '../lib/stock-analyser/stock-analyser-api-stack';
 import { StockAnalyserTablesStack } from '../lib/stock-analyser/stock-analyser-tables-stack';
 
+// ── Budget Tracker stacks ─────────────────────────────────────────────────────
+import { BudgetTrackerTablesStack } from '../lib/budget-tracker/budget-tracker-tables-stack';
+import { BudgetTrackerApiStack }    from '../lib/budget-tracker/budget-tracker-api-stack';
+
 const app = new cdk.App();
 
 const env = {
@@ -73,6 +77,22 @@ new StockAnalyserApiStack(app, 'TransformotionDev-StockAnalyserApi', {
   authoriser:  devPlatformApi.authoriser,
 });
 
+new BudgetTrackerTablesStack(app, 'TransformotionDev-BudgetTrackerTables', {
+  env,
+  stage:       'dev',
+  description: 'Transformotion Apps — Dev Budget Tracker DynamoDB tables + Cognito client',
+  userPool:    devAuth.userPool,
+});
+
+new BudgetTrackerApiStack(app, 'TransformotionDev-BudgetTrackerApi', {
+  env,
+  stage:       'dev',
+  description: 'Transformotion Apps — Dev Budget Tracker API routes',
+  api:         devPlatformApi.api,
+  authoriser:  devPlatformApi.authoriser,
+  apiResource: devPlatformApi.apiResource,
+});
+
 // ── Prod stacks ────────────────────────────────────────────────────────────────
 
 new NetworkStack(app, 'TransformotionProd-Network', {
@@ -122,4 +142,20 @@ new StockAnalyserApiStack(app, 'TransformotionProd-StockAnalyserApi', {
   description: 'Transformotion Apps — Prod Stock Analyser API routes',
   api:         prodPlatformApi.api,
   authoriser:  prodPlatformApi.authoriser,
+});
+
+new BudgetTrackerTablesStack(app, 'TransformotionProd-BudgetTrackerTables', {
+  env,
+  stage:       'prod',
+  description: 'Transformotion Apps — Prod Budget Tracker DynamoDB tables + Cognito client',
+  userPool:    prodAuth.userPool,
+});
+
+new BudgetTrackerApiStack(app, 'TransformotionProd-BudgetTrackerApi', {
+  env,
+  stage:       'prod',
+  description: 'Transformotion Apps — Prod Budget Tracker API routes',
+  api:         prodPlatformApi.api,
+  authoriser:  prodPlatformApi.authoriser,
+  apiResource: prodPlatformApi.apiResource,
 });
