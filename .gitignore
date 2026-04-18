@@ -36,7 +36,9 @@ desktop.ini
 *.swp
 *.swo
 
+# v0 design reference — never commit (populated by scripts/sync-v0.sh)
+v0-reference/
+
 # Logs
 *.log
 npm-debug.log*
-package-lock.json

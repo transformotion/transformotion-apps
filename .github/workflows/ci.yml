@@ -18,16 +18,19 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'npm'
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '10.33.0'
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Typecheck (all workspaces)
-        run: npx turbo typecheck
+        run: pnpm turbo typecheck
 
       - name: Lint (all workspaces)
-        run: npx turbo lint
+        run: pnpm turbo lint
 
   infra-synth:
     name: CDK Synth (validate templates)
@@ -38,15 +41,18 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'npm'
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '10.33.0'
 
       - name: Install dependencies
-        run: npm ci --workspace=infra
+        run: pnpm install --frozen-lockfile --filter infrastructure
 
       - name: CDK Synth — dev
-        working-directory: infra
-        run: npx cdk synth TransformotionDev-Network
+        working-directory: infrastructure
+        run: pnpm exec cdk synth TransformotionDev-Network
 
       - name: CDK Synth — prod
-        working-directory: infra
-        run: npx cdk synth TransformotionProd-Network
+        working-directory: infrastructure
+        run: pnpm exec cdk synth TransformotionProd-Network
