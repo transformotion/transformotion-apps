@@ -51,8 +51,8 @@ jobs:
 
       - name: CDK Synth — dev
         working-directory: infrastructure
-        run: npx cdk synth TransformotionDev-Network
+        run: pnpm exec cdk synth TransformotionDev-Network
 
       - name: CDK Synth — prod
         working-directory: infrastructure
-        run: npx cdk synth TransformotionProd-Network
+        run: pnpm exec cdk synth TransformotionProd-Network

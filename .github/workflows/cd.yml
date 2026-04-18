@@ -55,7 +55,7 @@ jobs:
 
       - name: CDK Deploy — dev
         working-directory: infrastructure
-        run: npx cdk deploy TransformotionDev-Network --require-approval never
+        run: pnpm exec cdk deploy TransformotionDev-Network --require-approval never
 
   web-deploy-dev:
     name: Stock Analyser → S3 Dev
@@ -127,4 +127,4 @@ jobs:
 
       - name: CDK Deploy — prod
         working-directory: infrastructure
-        run: npx cdk deploy TransformotionProd-Network --require-approval never
+        run: pnpm exec cdk deploy TransformotionProd-Network --require-approval never

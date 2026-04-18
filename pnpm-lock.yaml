@@ -432,6 +432,9 @@ importers:
       '@types/aws-lambda':
         specifier: ^8
         version: 8.10.161
+      '@types/node':
+        specifier: ^22
+        version: 22.19.17
       typescript:
         specifier: '*'
         version: 5.7.3

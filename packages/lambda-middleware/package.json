@@ -11,6 +11,7 @@
   },
   "devDependencies": {
     "@types/aws-lambda": "^8",
+    "@types/node": "^22",
     "typescript": "*",
     "vitest": "^1"
   }
