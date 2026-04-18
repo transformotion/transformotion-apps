@@ -1,0 +1,6 @@
+packages:
+  - 'apps/*'
+  - '!apps/web-vite-backup'
+  - 'packages/*'
+  - 'functions/*'
+  - 'infrastructure'

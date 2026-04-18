@@ -39,10 +39,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'npm'
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '10.33.0'
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
@@ -51,11 +54,11 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: CDK Deploy — dev
-        working-directory: infra
+        working-directory: infrastructure
         run: npx cdk deploy TransformotionDev-Network --require-approval never
 
   web-deploy-dev:
-    name: Web → S3 Dev
+    name: Stock Analyser → S3 Dev
     runs-on: ubuntu-latest
     if: github.ref_name == 'develop' || (github.event_name == 'workflow_dispatch' && inputs.target == 'dev')
     environment: dev
@@ -65,13 +68,16 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'npm'
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '10.33.0'
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Build Next.js (static export)
-        working-directory: apps/web
+        working-directory: apps/stock-analyser
         env:
           NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
           NEXT_PUBLIC_CLAUDE_API_URL: ${{ vars.NEXT_PUBLIC_CLAUDE_API_URL }}
@@ -80,7 +86,7 @@ jobs:
           NEXT_PUBLIC_COGNITO_CLIENT_ID: ${{ vars.NEXT_PUBLIC_COGNITO_CLIENT_ID }}
           NEXT_PUBLIC_COGNITO_REGION: ${{ vars.NEXT_PUBLIC_COGNITO_REGION }}
           NEXT_PUBLIC_USE_MOCK_DATA: ${{ vars.NEXT_PUBLIC_USE_MOCK_DATA }}
-        run: npm run build
+        run: pnpm build
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
@@ -89,7 +95,7 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Deploy to S3
-        run: aws s3 sync apps/web/out s3://transformotion-web-dev-959516291617 --delete
+        run: aws s3 sync apps/stock-analyser/out s3://transformotion-web-dev-959516291617 --delete
 
       - name: Invalidate CloudFront
         run: aws cloudfront create-invalidation --distribution-id E1128DYYBLMWYK --paths "/*"
@@ -105,10 +111,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'npm'
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '10.33.0'
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
@@ -117,5 +126,5 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: CDK Deploy — prod
-        working-directory: infra
+        working-directory: infrastructure
         run: npx cdk deploy TransformotionProd-Network --require-approval never

@@ -1,12 +1,6 @@
 {
   "name": "transformotion-apps",
   "private": true,
-  "workspaces": [
-    "apps/*",
-    "packages/*",
-    "functions/*",
-    "infra"
-  ],
   "scripts": {
     "build": "turbo build",
     "dev": "turbo dev",
@@ -19,7 +13,7 @@
     "turbo": "^2.0.0",
     "typescript": "^5.4.0"
   },
-  "packageManager": "npm@10.8.0",
+  "packageManager": "pnpm@10.33.0",
   "engines": {
     "node": ">=22.0.0"
   }
