@@ -30,3 +30,5 @@ Before modifying shared code or platform infrastructure, consider the impact on 
 | Shared packages | `packages/` |
 | Platform Lambda handlers | `functions/` |
 | AWS CDK infrastructure | `infrastructure/` |
+| App contracts (data models, API, state) | `contracts/<app>/` |
+| Migration data artifacts | `migration-artifacts/<app>/` |
