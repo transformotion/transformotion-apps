@@ -47,7 +47,7 @@ jobs:
           version: '10.33.0'
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile --filter infrastructure
+        run: pnpm install --frozen-lockfile
 
       - name: CDK Synth — dev
         working-directory: infrastructure
