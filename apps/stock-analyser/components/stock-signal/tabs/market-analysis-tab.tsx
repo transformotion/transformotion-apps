@@ -393,7 +393,7 @@ Return a JSON object with the following fields:
                         <h4 className="text-sm font-semibold text-foreground">{sector.sector}</h4>
                         <span className={cn(
                           "px-2 py-0.5 rounded text-[10px] font-semibold uppercase",
-                          sector.signal === "BUY" ? "bg-signal-green text-white" :
+                          sector.signal === "ENTER" ? "bg-signal-green text-white" :
                           sector.signal === "EXIT" ? "bg-signal-red text-white" :
                           "bg-signal-amber/80 text-background"
                         )}>

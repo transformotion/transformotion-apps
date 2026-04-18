@@ -194,7 +194,6 @@ Return ONLY valid JSON.`,
           onToggle={() => setIsLive(!isLive)} 
           cacheAge="just now"
           freshness="recent"
-          size="sm"
         />
       </div>
 

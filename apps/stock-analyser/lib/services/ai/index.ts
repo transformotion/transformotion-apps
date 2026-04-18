@@ -70,4 +70,4 @@ export interface AIService {
 }
 
 // Re-export mock implementation as default
-export { MockAIService, createMockAIService } from './mock-ai'
+export { MockAIService } from './mock-ai'
