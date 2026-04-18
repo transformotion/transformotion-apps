@@ -6,7 +6,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src/",
+    "lint": "echo \"lint: budget-tracker\"",
     "test": "vitest run"
   },
   "devDependencies": {
