@@ -1,0 +1,13 @@
+{
+  "name": "@transformotion/auth-client",
+  "version": "0.0.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "echo \"lint: auth-client\""
+  },
+  "devDependencies": {
+    "typescript": "*"
+  }
+}

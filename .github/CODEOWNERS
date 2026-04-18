@@ -1,0 +1,24 @@
+# CODEOWNERS — Transformotion Apps monorepo
+# All entries currently point to stevemoodie as solo owner.
+# Add team members here as the project grows.
+
+# Per-app ownership
+apps/stock-analyser/    @stevemoodie
+apps/budget-tracker/    @stevemoodie
+
+# Shared packages — changes affect all apps
+packages/               @stevemoodie
+
+# Cross-app contracts — changes require deliberate co-ordination
+contracts/              @stevemoodie
+
+# Platform infrastructure — changes affect every deployed environment
+infrastructure/         @stevemoodie
+functions/              @stevemoodie
+
+# Top-level workspace config
+/package.json           @stevemoodie
+/pnpm-workspace.yaml    @stevemoodie
+/CLAUDE.md              @stevemoodie
+/tsconfig.json          @stevemoodie
+/.eslintrc.cjs          @stevemoodie

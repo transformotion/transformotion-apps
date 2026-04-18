@@ -7,36 +7,24 @@ export interface PlatformTablesStackProps extends cdk.StackProps {
 }
 
 /**
- * PlatformTablesStack — all application DynamoDB tables.
+ * PlatformTablesStack — DynamoDB tables shared across all apps.
  *
- * Platform tables (multi-tenant core):
+ * Tables:
  *   platform.users           PK: userId
  *   platform.accounts        PK: accountId
  *   platform.account-members PK: accountId  SK: userId
  *   platform.invitations     PK: invitationId   TTL: expiresAt
+ *   platform.analysis-cache  PK: accountId  SK: cacheKey   TTL: expiresAt
+ *     (used by the shared claude-proxy Lambda — all apps share one cache)
  *
- * Stock Analyser tables (app-scoped, keyed by accountId):
- *   stock-analyser.portfolio  PK: accountId
- *   stock-analyser.watchlist  PK: accountId
- *   stock-analyser.cache      PK: accountId  SK: cacheKey   TTL: expiresAt
- *
- * All tables use on-demand (PAY_PER_REQUEST) billing.
- * Dev tables are destroyed on stack deletion; prod tables are retained.
- *
- * Table ARNs are exported so Lambda stacks can grant access without
- * cross-stack references requiring deployment ordering.
+ * Per-app tables live in their own app stacks (see apps/<app>/infrastructure/).
  */
 export class PlatformTablesStack extends cdk.Stack {
-  // ── Platform ──────────────────────────────────────────────────────────────
   public readonly usersTable:          dynamodb.Table;
   public readonly accountsTable:       dynamodb.Table;
   public readonly accountMembersTable: dynamodb.Table;
   public readonly invitationsTable:    dynamodb.Table;
-
-  // ── Stock Analyser ────────────────────────────────────────────────────────
-  public readonly portfolioTable:  dynamodb.Table;
-  public readonly watchlistTable:  dynamodb.Table;
-  public readonly cacheTable:      dynamodb.Table;
+  public readonly analysisCacheTable:  dynamodb.Table;
 
   constructor(scope: Construct, id: string, props: PlatformTablesStackProps) {
     super(scope, id, props);
@@ -95,26 +83,11 @@ export class PlatformTablesStack extends cdk.Stack {
       projectionType: dynamodb.ProjectionType.ALL,
     });
 
-    // ── stock-analyser.portfolio ──────────────────────────────────────────
-    this.portfolioTable = new dynamodb.Table(this, 'PortfolioTable', {
-      tableName:     `stock-analyser.portfolio-${stage}`,
-      partitionKey:  { name: 'accountId', type: dynamodb.AttributeType.STRING },
-      billingMode:   dynamodb.BillingMode.PAY_PER_REQUEST,
-      removalPolicy: removal,
-    });
-
-    // ── stock-analyser.watchlist ──────────────────────────────────────────
-    this.watchlistTable = new dynamodb.Table(this, 'WatchlistTable', {
-      tableName:     `stock-analyser.watchlist-${stage}`,
-      partitionKey:  { name: 'accountId', type: dynamodb.AttributeType.STRING },
-      billingMode:   dynamodb.BillingMode.PAY_PER_REQUEST,
-      removalPolicy: removal,
-    });
-
-    // ── stock-analyser.cache ──────────────────────────────────────────────
+    // ── platform.analysis-cache ───────────────────────────────────────────
+    // Shared by the claude-proxy Lambda across all apps.
     // PK: accountId  SK: cacheKey   TTL: expiresAt (epoch seconds)
-    this.cacheTable = new dynamodb.Table(this, 'CacheTable', {
-      tableName:     `stock-analyser.cache-${stage}`,
+    this.analysisCacheTable = new dynamodb.Table(this, 'AnalysisCacheTable', {
+      tableName:     `platform.analysis-cache-${stage}`,
       partitionKey:  { name: 'accountId', type: dynamodb.AttributeType.STRING },
       sortKey:       { name: 'cacheKey',  type: dynamodb.AttributeType.STRING },
       billingMode:   dynamodb.BillingMode.PAY_PER_REQUEST,
@@ -135,8 +108,6 @@ export class PlatformTablesStack extends cdk.Stack {
     out('AccountsTableArn',       this.accountsTable,       'platform.accounts table ARN');
     out('AccountMembersTableArn', this.accountMembersTable, 'platform.account-members table ARN');
     out('InvitationsTableArn',    this.invitationsTable,    'platform.invitations table ARN');
-    out('PortfolioTableArn',      this.portfolioTable,      'stock-analyser.portfolio table ARN');
-    out('WatchlistTableArn',      this.watchlistTable,      'stock-analyser.watchlist table ARN');
-    out('CacheTableArn',          this.cacheTable,          'stock-analyser.cache table ARN');
+    out('AnalysisCacheTableArn',  this.analysisCacheTable,  'platform.analysis-cache table ARN');
   }
 }

@@ -1,6 +1,7 @@
 packages:
   - 'apps/*'
   - '!apps/web-vite-backup'
+  - 'apps/stock-analyser/functions/*'
   - 'packages/*'
   - 'functions/*'
   - 'infrastructure'
