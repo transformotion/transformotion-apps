@@ -457,6 +457,15 @@ importers:
         specifier: '*'
         version: 5.7.3
 
+  packages/budget-domain:
+    devDependencies:
+      typescript:
+        specifier: '*'
+        version: 5.7.3
+      vitest:
+        specifier: ^1.0.0
+        version: 1.6.1(@types/node@22.19.17)(lightningcss@1.32.0)
+
   packages/cycle-engine:
     devDependencies:
       typescript:
