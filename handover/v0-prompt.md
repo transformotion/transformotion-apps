@@ -20,7 +20,7 @@ All specifications are committed to this repo. **Read before building.**
 
 | Document | Path | What it contains |
 |---|---|---|
-| **PRD** — start here | `docs/budget-tracker-prd.md` | Full product spec: colour palette, all 6 tab UX details, data model, category tree, 65+ built-in rules, CSV import logic, 10 critical tech gotchas |
+| **PRD** — start here | `docs/budget-tracker-prd.md` | Full product spec: all 6 tab UX details, data model, category tree, 65+ built-in rules, CSV import logic, 10 critical tech gotchas. §2 (design) is background context only — visual design is v0's creative domain. |
 | **Data models** | `contracts/budget-tracker/data-models.md` | Canonical TypeScript types — Transaction, CustomRule, BudgetSettings, CategoryTree, all AI response shapes |
 | **API endpoints** | `contracts/budget-tracker/api-endpoints.md` | Every backend endpoint, request/response shapes, error codes |
 | **State management** | `contracts/budget-tracker/state-management.md` | BudgetRepository adaptor interface; how stub → real AWS swap works |
@@ -39,15 +39,8 @@ All specifications are committed to this repo. **Read before building.**
 
 The PRD is your primary reference. Check the relevant section before touching any feature.
 
-**Colour palette (§2) — use exactly:**
-```
-Background:   #0D1B2A      Card/surface: #141720
-Accent teal:  #00C4B3      Gold:         #E8A838
-Success:      #22c87a      Danger:       #f05656
-Warning:      #f0a030      Primary text: #e8eaf0
-Muted text:   #6b7280
-```
-No other colours. Dark theme only.
+**Visual design (§2) — creative freedom:**
+Section 2 of the PRD documents the original prototype's colour scheme. It is background context, not a mandate. v0 has full creative freedom on: colour palette, light/dark themes, typography, font sizes, spacing, component style. The only requirement is that the Budget Tracker and Stock Signal Analyser feel like siblings — a consistent design language across both apps.
 
 **Tab specs (§8):**
 Each tab has a detailed spec. Read §8.1–8.6 before working on that tab:
@@ -160,7 +153,6 @@ The store must never know which implementation it's calling. Environment variabl
 - `window.confirm` — inline UI only
 - IIFEs inside JSX
 - `URL.createObjectURL` for CSV export
-- Colours not in the PRD §2 palette
 - Imports crossing from budget-tracker into stock-signal or vice versa
 
 ---

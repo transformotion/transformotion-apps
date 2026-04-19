@@ -7,31 +7,12 @@
 The Budget Tracker is one of several apps on the Transformotion platform. It shares:
 
 - The platform header and navigation
-- The dark fintech theme (see palette below)
 - The shared auth flow
 - The launchpad entry point at `apps.transformotion.com.au`
 
 The app itself lives at `apps.transformotion.com.au/budget`.
 
-## Colour palette
-
-Use exactly these values:
-
-| Purpose | Hex |
-|---|---|
-| Background | `#0D1B2A` |
-| Card / surface | `#141720` |
-| Accent teal | `#00C4B3` |
-| Secondary gold | `#E8A838` |
-| Success | `#22c87a` |
-| Danger | `#f05656` |
-| Warning | `#f0a030` |
-| Primary text | `#e8eaf0` |
-| Muted text | `#6b7280` |
-
-Dark theme only. Mobile-first (375px baseline) then desktop (1280px).
-
-The app should feel like a sibling to the Stock Analyser — consistent typography, spacing, button styles, card corners. A user moving between the two should feel they're in the same product family.
+The visual design — colour scheme, typography, theme (light/dark), component style — is v0's creative domain. The app should feel like a sibling to the Stock Analyser; the two apps sharing a consistent design language is desirable but left to v0's judgement.
 
 ## Tabs
 
@@ -136,11 +117,9 @@ Every component:
 
 ### Styling
 
-- Tailwind CSS with CSS variables for the colour palette
+- Tailwind CSS preferred
 - No inline styles except for dynamic values (e.g. progress bar width)
-- No shadow/gradient effects — flat dark theme
-- Rounded corners: `rounded-xl` for cards, `rounded-lg` for buttons, `rounded-full` for pills
-- Border: `border border-[#1e2530]` as the default card border
+- Use CSS variables or a design token system for theming (to support light/dark and other theme variants)
 
 ### Interactions
 
@@ -154,7 +133,6 @@ Every component:
 - Keyboard navigation throughout — every interactive element tabbable
 - All icons have aria-labels
 - Colour is never the sole indicator — amounts also have +/- prefix, not just green/red
-- Minimum font size 12px; body 14px+
 
 ## Mobile-first
 
@@ -173,5 +151,4 @@ v0 must not do any of the following. If one is required, update this contract fi
 - Hardcoded mock data in components (put it in the stub adaptor)
 - Global state outside Zustand (no module-level `let`)
 - Inline category/subcategory lists (always use the tree from settings)
-- Bespoke colour values (always use the palette)
 - Any assumption that AI calls are synchronous or free
