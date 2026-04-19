@@ -11,9 +11,17 @@ export function AppTile({ app, currentPhase = 1 }: AppTileProps) {
   const isBuilt  = app.phase <= currentPhase;
   const { Icon, accentColor } = app;
 
+  function handleClick() {
+    if (app.external) {
+      window.location.href = app.route;
+    } else {
+      navigate(app.route);
+    }
+  }
+
   return (
     <button
-      onClick={() => navigate(app.route)}
+      onClick={handleClick}
       disabled={!isBuilt}
       className="group w-full text-left rounded-2xl p-5 flex flex-col gap-4 transition-all focus:outline-none disabled:cursor-default"
       style={{

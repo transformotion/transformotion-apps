@@ -14,8 +14,10 @@ export interface AppDefinition {
   id: string;
   name: string;
   description: string;
-  /** Root route — React Router path prefix. */
+  /** Root route — React Router path prefix, or full URL for external apps. */
   route: string;
+  /** If true, clicking opens route in the current tab via window.location (not React Router). */
+  external?: boolean;
   /** Cognito groups (other than 'admin') that grant access. */
   groups: string[];
   /** SVG icon component rendered on tiles and nav. */
@@ -41,11 +43,12 @@ export const APP_REGISTRY: AppDefinition[] = [
     id:          'budget-tracker',
     name:        'Budget Tracker',
     description: 'Track income, expenses, and savings goals across accounts. Shared budgets for households and families.',
-    route:       '/budget',
+    route:       import.meta.env.VITE_BUDGET_URL ?? 'http://localhost:3002',
+    external:    true,
     groups:      ['budget-app'],
     Icon:        BudgetIcon,
     accentColor: '#E8A838',   // gold
-    phase:       5,
+    phase:       3,
   },
   {
     id:          'transformotion-framework',
