@@ -68,9 +68,15 @@ describe("buildBudgetVsActual — real export data", () => {
     budgetOverrides: exportData.budgetOverrides ?? {},
     budgetFreqs: exportData.budgetFreqs ?? {},
     customCategories: exportData.customCategories ?? {},
-    projectBudgets: exportData.projectBudgets ?? {},
     deletedSubs: exportData.deletedSubs ?? [],
-    csvFormatMappings: exportData.csvFormatMappings ?? {},
+    projectBudgets: exportData.projectBudgets ?? {},
+    projectTasks: exportData.projectTasks ?? {},
+    customTopCategories: exportData.customTopCategories ?? [],
+    customProjectCategories: exportData.customProjectCategories ?? [],
+    deletedCategories: exportData.deletedCategories ?? [],
+    deletedProjectCategories: exportData.deletedProjectCategories ?? [],
+    disabledProjectCategories: exportData.disabledProjectCategories ?? [],
+    csvFormatMappings: exportData.csvFormatMappings,
   };
 
   const effectiveCategories = buildEffectiveCategories(settings);

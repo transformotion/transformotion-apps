@@ -45,8 +45,8 @@ interface BudgetState {
   // Transaction actions
   loadTransactions: () => Promise<void>
   addTransactions: (transactions: Transaction[]) => Promise<void>
-  updateTransaction: (id: number, updates: Partial<Transaction>) => Promise<void>
-  deleteTransaction: (id: number) => Promise<void>
+  updateTransaction: (id: string, updates: Partial<Transaction>) => Promise<void>
+  deleteTransaction: (id: string) => Promise<void>
   setTransactions: (transactions: Transaction[]) => void
 
   // Rules actions
@@ -81,10 +81,16 @@ const DEFAULT_FILTERS: TransactionFilters = {
 }
 
 const DEFAULT_SETTINGS: BudgetSettings = {
-  budgetOverrides: {},
-  budgetFreqs: {},
-  customCategories: {},
-  projectBudgets: {},
+  budgetOverrides:          {},
+  budgetFreqs:              {},
+  customCategories:         {},
+  deletedCategories:        [],
+  customTopCategories:      [],
+  projectBudgets:           {},
+  projectTasks:             {},
+  customProjectCategories:  [],
+  deletedProjectCategories: [],
+  disabledProjectCategories:[],
 }
 
 export const useBudgetStore = create<BudgetState>()(

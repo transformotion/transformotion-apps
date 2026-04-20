@@ -4,10 +4,12 @@
 import { useState, useMemo, useRef } from "react"
 import { useBudgetNavigation } from "../app-shell"
 import { PageHeader, Card, PrimaryButton, SecondaryButton, EmptyState } from "@/components/ui/design-system"
-import { 
+import {
   Upload, Receipt, Filter, Download, Briefcase, X, ChevronDown, ChevronRight,
-  RotateCcw, Check, BookOpen, Calendar, Search, FileText, Sparkles, AlertCircle
+  RotateCcw, Check, BookOpen, Calendar, Search, FileText, Sparkles, AlertCircle,
+  Database,
 } from "lucide-react"
+import { getBudgetApiClient } from "@/lib/api/client"
 import { BUDGET_CATEGORIES, CATEGORY_LIST, getSubcategories } from "../data/categories"
 import { CATEGORY_COLORS } from "../data/category-colors"
 import { applyRules } from "../data/builtin-rules"
@@ -89,6 +91,78 @@ function exportToCSV(transactions: Transaction[], filename: string) {
   document.body.removeChild(link)
 }
 
+// ── One-time localStorage → DynamoDB migration ────────────────────────────────
+
+function EmptyStateWithMigration() {
+  const [status, setStatus] = useState<'idle' | 'migrating' | 'done' | 'error'>('idle')
+  const [result, setResult] = useState<string | null>(null)
+
+  const hasLocalData = typeof window !== 'undefined' &&
+    !!localStorage.getItem('budget-tracker-transactions') &&
+    JSON.parse(localStorage.getItem('budget-tracker-transactions') || '[]').length > 0
+
+  async function runMigration() {
+    setStatus('migrating')
+    try {
+      const transactions = JSON.parse(localStorage.getItem('budget-tracker-transactions') || '[]')
+      const settings     = JSON.parse(localStorage.getItem('budget-tracker-settings') || '{}')
+
+      const res = await getBudgetApiClient().post<{
+        migrated: { transactions: number; rules: number; settings: string[] }
+      }>('/migrate-from-localstorage', { transactions, rules: [], settings })
+
+      setResult(`Migrated ${res.migrated.transactions} transactions. Reloading…`)
+      setStatus('done')
+      setTimeout(() => window.location.reload(), 1500)
+    } catch (err) {
+      setStatus('error')
+      setResult(err instanceof Error ? err.message : 'Migration failed')
+    }
+  }
+
+  return (
+    <div className="py-16 flex flex-col items-center gap-6 text-center">
+      <div className="size-14 rounded-xl bg-surface2 flex items-center justify-center">
+        <Receipt className="size-7 text-muted-foreground" />
+      </div>
+      <div>
+        <p className="font-semibold text-foreground mb-1">No transactions yet</p>
+        <p className="text-sm text-muted-foreground">Import a CSV file from your bank to get started</p>
+      </div>
+
+      {status === 'idle' && (
+        <div className="border border-border rounded-xl p-4 max-w-sm text-left space-y-3">
+          <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+            <Database className="size-4 text-primary" />
+            {hasLocalData ? 'Local data found' : 'Migrate from local storage'}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {hasLocalData
+              ? 'Your transactions are stored locally in this browser. Migrate them to the cloud so they sync across devices.'
+              : 'If you previously used this app on a different device or browser, you can migrate that data to the cloud.'}
+          </p>
+          <button
+            onClick={runMigration}
+            className="w-full py-2 px-4 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"
+          >
+            Migrate to cloud
+          </button>
+        </div>
+      )}
+
+      {status === 'migrating' && (
+        <p className="text-sm text-muted-foreground animate-pulse">Migrating…</p>
+      )}
+
+      {(status === 'done' || status === 'error') && result && (
+        <p className={`text-sm ${status === 'done' ? 'text-signal-green' : 'text-signal-red'}`}>
+          {result}
+        </p>
+      )}
+    </div>
+  )
+}
+
 export function TransactionsTab() {
   const { transactions, setTransactions, settings, customRules, addCustomRule, builtinRules, uncategorizedCount, transactionFilters, setTransactionFilters } = useBudgetNavigation()
   const customRulesRef = useRef(customRules) // Fix stale closure
@@ -106,13 +180,13 @@ export function TransactionsTab() {
   const [showImport, setShowImport] = useState(false)
   const [showFilters, setShowFilters] = useState(false)
   const [showSource, setShowSource] = useState(false)
-  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [editCategory, setEditCategory] = useState("")
   const [editSubcategory, setEditSubcategory] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
   
   // Multi-select for bulk operations
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkCategory, setBulkCategory] = useState("")
   const [bulkSubcategory, setBulkSubcategory] = useState("")
   const [showBulkEdit, setShowBulkEdit] = useState(false)
@@ -201,15 +275,15 @@ export function TransactionsTab() {
   const businessCount = transactions.filter(t => t._business).length
 
   // Toggle business flag
-  const toggleBusiness = (id: number) => {
-    const updatedTransactions = transactions.map(t => 
+  const toggleBusiness = (id: string) => {
+    const updatedTransactions = transactions.map(t =>
       t._id === id ? { ...t, _business: !t._business } : t
     )
     setTransactions(updatedTransactions)
   }
 
   // Reset single transaction (re-apply rules)
-  const resetTransaction = (id: number) => {
+  const resetTransaction = (id: string) => {
     const updatedTransactions = transactions.map(t => {
       if (t._id !== id) return t
       
@@ -300,7 +374,7 @@ export function TransactionsTab() {
   }
 
   // Multi-select helpers
-  const toggleSelect = (id: number) => {
+  const toggleSelect = (id: string) => {
     setSelectedIds(prev => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
@@ -678,11 +752,7 @@ export function TransactionsTab() {
 
       {/* Empty State */}
       {!hasTransactions && (
-        <EmptyState
-          icon={Receipt}
-          title="No transactions yet"
-          description="Import a CSV file from your bank to get started"
-        />
+        <EmptyStateWithMigration />
       )}
 
       {/* Transaction List */}
@@ -1272,15 +1342,13 @@ Return ONLY valid JSON.`,
 
   const importTransactions = () => {
     const dataRows = csvData.slice(skipRows)
-    
+
     if (dataRows.length === 0) {
       onClose()
       return
     }
-    
-    const maxId = transactions.reduce((max, t) => Math.max(max, t._id), 0)
-    
-    const newTransactions: Transaction[] = dataRows.map((row, idx) => {
+
+    const newTransactions: Transaction[] = dataRows.map((row) => {
       let amount: number
       
       if (columnMapping.amount >= 0) {
@@ -1300,7 +1368,7 @@ Return ONLY valid JSON.`,
       const aiResult = !ruleResult ? aiCategorizations.get(description) : null
       
       return {
-        _id: maxId + idx + 1,
+        _id: crypto.randomUUID(),
         date: parseDate(row[columnMapping.date] || ""),
         amount: amount.toString(),
         description,
