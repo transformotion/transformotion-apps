@@ -34,7 +34,7 @@ interface AuthState {
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       // Initial state
       user:            null,
       isAuthenticated: false,
@@ -44,6 +44,8 @@ export const useAuthStore = create<AuthState>()(
 
       // Check existing Cognito session on app load
       initialize: async () => {
+        const state = get()
+        if (state.isInitialized || state.isLoading) return
         set({ isLoading: true })
         try {
           const cognitoUser = await cognitoAuth.getCurrentUser()
@@ -114,10 +116,10 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'auth-store',
+      version: 1,  // bumped to discard old persisted isAuthenticated
       partialize: (state) => ({
-        // Only persist the user display info — Amplify manages the real session
-        user:            state.user,
-        isAuthenticated: state.isAuthenticated,
+        // Only persist display info — Cognito is the source of truth for auth state
+        user: state.user,
       }),
     }
   )
