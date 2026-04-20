@@ -2,7 +2,7 @@
 
 **Status:** ACTIVE
 **Started:** 2026-04-20
-**Last updated:** 2026-04-21 (sub-phase 2a: env var inventory and .env.example files)
+**Last updated:** 2026-04-21 (sub-phase 2b: CI hard-fail env var enforcement wired)
 **Expected end:** Once Phase 1 (foundations) and Phase 2
 (executable contracts) are complete, the freeze on stabilisation
 work lifts. The Phase 4 stock analyser migration begins under
@@ -52,12 +52,19 @@ Sub-phases:
    `NEXT_PUBLIC_COGNITO_DOMAIN` and `NEXT_PUBLIC_APP_URL` (required by
    Amplify OAuth, absent from CI).
 
-   **2b enforcement note.** When sub-phase 2b lands, the CI env var
-   check is configured to hard-fail. This binds the env var fix (Phase
-   3.5) to a forcing function: no further deploys succeed until the
-   target environment's variables match the schema documented in each
-   app's `.env.example`. The "fix the dev environment's vars" task
-   becomes structurally unavoidable rather than schedulable.
+   **2b (complete):** `scripts/ci/check-required-env-vars.sh` added.
+   Parses each app's `.env.example` for `[REQUIRED]` tags and asserts
+   every required variable is set and non-empty in the target GitHub
+   Actions environment before any install, build, or deploy step runs.
+   Wired into `deploy-stock-analyser.yml` (dev + prod jobs) and
+   `deploy-budget-tracker.yml`. Exits 1 with an actionable error
+   listing missing vars and ready-to-paste `gh variable set` commands.
+   `deploy-platform.yml` excluded — CDK-only, no frontend env vars.
+
+   The forcing function is now active: the next deploy to dev will
+   fail because `NEXT_PUBLIC_COGNITO_DOMAIN` and `NEXT_PUBLIC_APP_URL`
+   are missing and the Claude URL vars are stale. Phase 3.5 (verified
+   redeploy) becomes the immediate next task after sub-phase 3.
 3. **Deploy verification** — every deploy workflow ends by confirming
    the deploy actually succeeded and the deployed version matches
    the commit that triggered it. CI says "deployed" only when it
