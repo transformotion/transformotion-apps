@@ -42,3 +42,12 @@ v0-reference/
 # Logs
 *.log
 npm-debug.log*
+
+# Auto-generated build artefacts
+tsconfig.tsbuildinfo
+**/tsconfig.tsbuildinfo
+next-env.d.ts
+**/next-env.d.ts
+
+# Claude Code local settings (per-machine, not committed)
+.claude/
