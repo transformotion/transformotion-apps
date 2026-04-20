@@ -46,6 +46,11 @@ export interface ClaudeConfig {
   maxPollTime: number
 }
 
+export interface BudgetConfig {
+  /** Base URL for Budget Tracker API Gateway */
+  apiUrl: string
+}
+
 export interface FeaturesConfig {
   /** Use mock data instead of real API calls */
   useMockData: boolean
@@ -60,6 +65,7 @@ export interface AppConfig {
   storage: StorageConfig
   logging: LoggingConfig
   claude: ClaudeConfig
+  budget: BudgetConfig
   features: FeaturesConfig
 }
 
@@ -98,6 +104,9 @@ export function loadConfig(): AppConfig {
       cacheUrl: process.env.NEXT_PUBLIC_CLAUDE_CACHE_URL || '/analysis-cache',
       pollInterval: parseInt(process.env.NEXT_PUBLIC_CLAUDE_POLL_INTERVAL || '2500', 10),
       maxPollTime: parseInt(process.env.NEXT_PUBLIC_CLAUDE_MAX_POLL_TIME || '500000', 10),
+    },
+    budget: {
+      apiUrl: process.env.NEXT_PUBLIC_BUDGET_API_URL || '',
     },
     features: {
       useMockData: process.env.NEXT_PUBLIC_USE_MOCK_DATA !== 'false', // Default to true for dev
