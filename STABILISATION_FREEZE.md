@@ -2,7 +2,7 @@
 
 **Status:** ACTIVE
 **Started:** 2026-04-20
-**Last updated:** 2026-04-21
+**Last updated:** 2026-04-21 (sub-phase 2a: env var inventory and .env.example files)
 **Expected end:** Once Phase 1 (foundations) and Phase 2
 (executable contracts) are complete, the freeze on stabilisation
 work lifts. The Phase 4 stock analyser migration begins under
@@ -44,6 +44,20 @@ Sub-phases:
    required env vars across all apps and environments. `.env.example`
    checked in. CI verifies all required vars exist before deploying.
    Drift between local, GitHub Actions, and AWS becomes impossible.
+
+   **2a (complete):** `.env.example` files added to all three app
+   workspaces (stock-analyser, budget-tracker, web), each listing every
+   required variable with descriptive comments and placeholder values.
+   Inventory also surfaced two previously undocumented missing vars:
+   `NEXT_PUBLIC_COGNITO_DOMAIN` and `NEXT_PUBLIC_APP_URL` (required by
+   Amplify OAuth, absent from CI).
+
+   **2b enforcement note.** When sub-phase 2b lands, the CI env var
+   check is configured to hard-fail. This binds the env var fix (Phase
+   3.5) to a forcing function: no further deploys succeed until the
+   target environment's variables match the schema documented in each
+   app's `.env.example`. The "fix the dev environment's vars" task
+   becomes structurally unavoidable rather than schedulable.
 3. **Deploy verification** — every deploy workflow ends by confirming
    the deploy actually succeeded and the deployed version matches
    the commit that triggered it. CI says "deployed" only when it
