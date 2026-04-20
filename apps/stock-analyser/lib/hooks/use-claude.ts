@@ -233,11 +233,18 @@ async function pollForResult<T>(
       }
 
       if (jobStatus.status === 'complete' && jobStatus.content) {
-        // Throws immediately if Claude returned malformed JSON — no point retrying
-        return JSON.parse(stripCodeFences(jobStatus.content)) as T
+        try {
+          return JSON.parse(stripCodeFences(jobStatus.content)) as T
+        } catch {
+          throw Object.assign(
+            new Error('Claude returned a non-JSON response. Check the prompt includes explicit JSON instructions.'),
+            { __jobError: true }
+          )
+        }
       }
       if (jobStatus.status === 'error') {
-        throw new Error(jobStatus.message || 'Job failed')
+        // Job failed — throw outside try so the catch block doesn't swallow it
+        throw Object.assign(new Error(jobStatus.message || 'Job failed'), { __jobError: true })
       }
       // 'pending' | 'processing' | 'retrying' — keep polling
 
@@ -245,6 +252,8 @@ async function pollForResult<T>(
       if (err instanceof Error && (err.name === 'AbortError' || err.message === 'Request aborted')) {
         throw err
       }
+      // Job terminal failure — propagate immediately, don't retry
+      if (err instanceof Error && (err as { __jobError?: boolean }).__jobError) throw err
       // SyntaxError from JSON.parse = malformed response — throw immediately
       if (err instanceof SyntaxError) throw err
       // 404 = job record not written yet; other transient errors — keep polling

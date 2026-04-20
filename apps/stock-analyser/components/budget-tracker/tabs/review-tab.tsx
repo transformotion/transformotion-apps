@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils"
 import { useClaude } from "@/lib/hooks"
 
 interface ReviewResult {
-  transactionId: number
+  transactionId: string
   suggestedCategory: string
   suggestedSubcategory: string
   reason: string
@@ -21,14 +21,14 @@ export function ReviewTab() {
   const { transactions, uncategorizedCount, updateTransaction } = useBudgetNavigation()
   const { callClaude, isLoading: loading, error } = useClaude<{
     suggestions: Array<{
-      transactionId: number
+      transactionId: string
       suggestedCategory: string
       suggestedSubcategory: string
       reason: string
     }>
   }>()
   
-  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [editCategory, setEditCategory] = useState("")
   const [editSubcategory, setEditSubcategory] = useState("")
   const [reviewResults, setReviewResults] = useState<ReviewResult[]>([])
@@ -71,7 +71,7 @@ Return ONLY valid JSON, no markdown.`,
     }
   }
 
-  const handleAccept = (transactionId: number) => {
+  const handleAccept = (transactionId: string) => {
     const result = reviewResults.find(r => r.transactionId === transactionId)
     if (result) {
       updateTransaction(transactionId, {
@@ -85,7 +85,7 @@ Return ONLY valid JSON, no markdown.`,
     }
   }
 
-  const handleReject = (transactionId: number) => {
+  const handleReject = (transactionId: string) => {
     setReviewResults(prev =>
       prev.map(r => r.transactionId === transactionId ? { ...r, status: "rejected" } : r)
     )
@@ -99,7 +99,7 @@ Return ONLY valid JSON, no markdown.`,
   }
 
   // Save edited suggestion
-  const saveEdit = (transactionId: number) => {
+  const saveEdit = (transactionId: string) => {
     if (!editCategory || !editSubcategory) return
     
     // Update the suggestion in review results
@@ -113,7 +113,7 @@ Return ONLY valid JSON, no markdown.`,
   }
 
   // Accept the edited version
-  const acceptEdited = (transactionId: number) => {
+  const acceptEdited = (transactionId: string) => {
     updateTransaction(transactionId, {
       category: editCategory,
       subcategory: editSubcategory,

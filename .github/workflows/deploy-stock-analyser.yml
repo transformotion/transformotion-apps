@@ -69,6 +69,7 @@ jobs:
           NEXT_PUBLIC_COGNITO_CLIENT_ID: ${{ vars.NEXT_PUBLIC_COGNITO_CLIENT_ID }}
           NEXT_PUBLIC_COGNITO_REGION: ${{ vars.NEXT_PUBLIC_COGNITO_REGION }}
           NEXT_PUBLIC_USE_MOCK_DATA: ${{ vars.NEXT_PUBLIC_USE_MOCK_DATA }}
+          NEXT_PUBLIC_BUDGET_API_URL: ${{ vars.NEXT_PUBLIC_BUDGET_API_URL }}
         run: pnpm build
 
       - name: Deploy to S3
@@ -116,6 +117,7 @@ jobs:
           NEXT_PUBLIC_COGNITO_CLIENT_ID: ${{ vars.NEXT_PUBLIC_COGNITO_CLIENT_ID }}
           NEXT_PUBLIC_COGNITO_REGION: ${{ vars.NEXT_PUBLIC_COGNITO_REGION }}
           NEXT_PUBLIC_USE_MOCK_DATA: ${{ vars.NEXT_PUBLIC_USE_MOCK_DATA }}
+          NEXT_PUBLIC_BUDGET_API_URL: ${{ vars.NEXT_PUBLIC_BUDGET_API_URL }}
         run: pnpm build
 
       - name: Deploy to S3

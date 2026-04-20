@@ -15,8 +15,10 @@ const RULES_TABLE        = process.env.RULES_TABLE!;
 const SETTINGS_TABLE     = process.env.SETTINGS_TABLE!;
 
 const SETTING_KEYS: Array<keyof Omit<BudgetSettings, 'accountId'>> = [
-  'budgetOverrides', 'budgetFreqs', 'customCategories',
-  'projectBudgets', 'deletedSubs', 'csvFormatMappings',
+  'budgetOverrides', 'budgetFreqs', 'customCategories', 'deletedSubs',
+  'projectBudgets', 'projectTasks', 'csvFormatMappings',
+  'customTopCategories', 'customProjectCategories',
+  'deletedCategories', 'deletedProjectCategories', 'disabledProjectCategories',
 ];
 
 function toIso(ddmmyyyy: string): string {
@@ -104,8 +106,11 @@ export const handler = withAuth(async ({ auth, account, event }) => {
     const transformed = transformTransaction(tx);
     const key = txNaturalKey(transformed);
     if (existingTxKeys.has(key)) { txAlreadyPresent++; continue; }
+    // Destructure out the legacy integer _id — DynamoDB uses transactionId (UUID) as the key.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { _id: _legacyId, ...txFields } = transformed as typeof transformed & { _id?: unknown };
     txItems.push({
-      ...transformed,
+      ...txFields,
       accountId,
       transactionId: randomUUID(),
       dateIso:       toIso(transformed.date),

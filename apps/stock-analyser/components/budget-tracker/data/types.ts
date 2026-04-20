@@ -6,7 +6,7 @@
  * Transaction record - exactly 9 fields as per spec
  */
 export interface Transaction {
-  _id: number           // auto-incremented integer
+  _id: string           // UUID (DynamoDB) or string-ified integer (localStorage)
   date: string          // DD/MM/YYYY — internal format always
   amount: string        // negative = expense, positive = income or refund
   description: string
@@ -15,6 +15,24 @@ export interface Transaction {
   file: string          // source CSV filename
   _manual: boolean      // user manually set — rules engine will NOT overwrite
   _business: boolean    // flagged as business expense — excluded from personal P&L
+}
+
+/**
+ * Built-in categorization rule (system-defined, user can disable)
+ */
+export interface BuiltinRule {
+  id: string
+  name: string
+  pattern: string
+  matchType: "contains" | "startsWith" | "regex"
+  category: string
+  subcategory: string
+  isBusiness: boolean
+  isIgnore?: boolean
+  overrideCategory?: string
+  overrideSubcategory?: string
+  disabled?: boolean
+  priority: number
 }
 
 /**

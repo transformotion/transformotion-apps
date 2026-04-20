@@ -10,7 +10,7 @@ The atomic unit of the Budget Tracker. Every imported line item becomes a Transa
 
 ```typescript
 interface Transaction {
-  _id: number;                    // Local sequential ID (v0 stub) or UUID (real impl)
+  _id: string;                    // UUID — assigned by DynamoDB on write; local imports use crypto.randomUUID()
   accountId: string;              // Household account ID (Cognito-derived)
   date: string;                   // DD/MM/YYYY — preserved for display
   amount: string;                 // String to preserve sign and decimals as imported
@@ -107,19 +107,43 @@ const DEFAULT_CATEGORIES: CategoryTree = {
 };
 ```
 
+### Built-in Rule
+
+System-compiled categorisation heuristics (not user-editable, but user can disable). Compiled into the codebase; never stored in DynamoDB.
+
+```typescript
+interface BuiltinRule {
+  match: RegExp;                  // Pattern tested against transaction description
+  category: string;
+  subcategory: string;
+}
+```
+
 ### Budget Settings
 
-Per-account configuration.
+Per-account configuration. Each field is stored as a separate DynamoDB item (`settingKey` → `value`), so adding new fields requires no schema migration — the settings Lambda accepts and returns any key present in this interface.
 
 ```typescript
 interface BudgetSettings {
   accountId: string;
-  budgetOverrides: { [subcategory: string]: number };    // -1 = tombstoned (deleted)
-  budgetFreqs: { [subcategory: string]: Frequency };
-  customCategories: { [category: string]: string[] };    // user-added subcategories
-  projectBudgets: { [category: string]: number };        // lump-sum, not monthly
-  deletedSubs: string[];                                  // subcategories hidden by user
-  csvFormatMappings: { [fingerprint: string]: CSVMapping };
+
+  // ── Budget configuration ───────────────────────────────────────────────────
+  budgetOverrides: { [subcategory: string]: number };    // -1 = tombstoned (subcategory deleted by user)
+  budgetFreqs: { [subcategory: string]: Frequency };     // per-subcategory spending frequency
+  customCategories: { [category: string]: string[] };    // user-added subcategories per category
+  deletedSubs: string[];                                  // subcategory names tombstoned by user
+
+  // ── Project / category management ─────────────────────────────────────────
+  projectBudgets: { [project: string]: number };         // lump-sum budget per project category
+  projectTasks: { [project: string]: string[] };         // custom task subcategory names per project
+  customTopCategories: string[];                          // user-created recurring top-level categories
+  customProjectCategories: string[];                      // user-created project categories
+  deletedCategories: string[];                            // top-level categories hidden from Budget view
+  deletedProjectCategories: string[];                     // project categories hidden (restorable in Budget tab)
+  disabledProjectCategories: string[];                    // completed projects — hidden from dropdowns, visible on Budget tab
+
+  // ── Import preferences ─────────────────────────────────────────────────────
+  csvFormatMappings?: { [fingerprint: string]: CSVMapping };  // remembered CSV column mappings per bank
 }
 
 type Frequency = "weekly" | "fortnightly" | "monthly" | "quarterly" | "annually";

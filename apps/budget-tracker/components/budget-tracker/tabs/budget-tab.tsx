@@ -118,6 +118,19 @@ export function BudgetTab() {
     return deleted
   }, [budgetSettings])
 
+  // Get budget amount for a subcategory
+  function getBudgetAmount(subcategory: string): number {
+    const override = budgetSettings.budgetOverrides?.[subcategory]
+    if (override === -1) return 0 // Deleted
+    if (override !== undefined) return override
+    return DEFAULT_BUDGETS[subcategory] ?? 0
+  }
+
+  // Get frequency for a subcategory
+  function getBudgetFrequency(subcategory: string): BudgetFrequency {
+    return budgetSettings.budgetFreqs?.[subcategory] ?? "monthly"
+  }
+
   // Calculate total budgeted income and expenses for surplus/deficit banner
   const budgetSummary = useMemo(() => {
     let totalIncome = 0
@@ -157,7 +170,7 @@ export function BudgetTab() {
   const customSubcategories = budgetSettings.customCategories || {}
 
   // Toggle category expansion
-  const toggleCategory = (category: string) => {
+  function toggleCategory(category: string) {
     setExpandedCategories(prev => {
       const next = new Set(prev)
       if (next.has(category)) {
@@ -169,26 +182,13 @@ export function BudgetTab() {
     })
   }
 
-  // Get budget amount for a subcategory
-  const getBudgetAmount = (subcategory: string): number => {
-    const override = budgetSettings.budgetOverrides?.[subcategory]
-    if (override === -1) return 0 // Deleted
-    if (override !== undefined) return override
-    return DEFAULT_BUDGETS[subcategory] ?? 0
-  }
-
-  // Get frequency for a subcategory
-  const getBudgetFrequency = (subcategory: string): BudgetFrequency => {
-    return budgetSettings.budgetFreqs?.[subcategory] ?? "monthly"
-  }
-
   // Check if subcategory is deleted
-  const isDeleted = (subcategory: string): boolean => {
+  function isDeleted(subcategory: string): boolean {
     return budgetSettings.budgetOverrides?.[subcategory] === -1
   }
 
   // Start editing a subcategory (unified: name, amount, frequency)
-  const startEdit = (subcategory: string) => {
+  function startEdit(subcategory: string) {
     setEditingSubcategory(subcategory)
     setEditName(subcategory)
     setEditBudget(getBudgetAmount(subcategory).toString())
@@ -196,7 +196,7 @@ export function BudgetTab() {
   }
 
   // Save budget edit (unified: handles name, amount, frequency)
-  const saveEdit = (category: string) => {
+  function saveEdit(category: string) {
     if (!editingSubcategory) return
     
     const amount = parseFloat(editBudget) || 0
@@ -237,21 +237,21 @@ export function BudgetTab() {
   }
 
   // Open delete modal for a subcategory
-  const openDeleteSubcategoryModal = (subcategory: string, category: string) => {
+  function openDeleteSubcategoryModal(subcategory: string, category: string) {
     const count = transactions.filter(t => t.subcategory === subcategory).length
     setDeleteModal({ kind: "subcategory", subcategory, category, count })
     setDeleteTransferTo("")
   }
 
   // Open delete modal for a top-level category
-  const openDeleteCategoryModal = (category: string, isProject: boolean) => {
+  function openDeleteCategoryModal(category: string, isProject: boolean) {
     const count = transactions.filter(t => t.category === category).length
     setDeleteModal({ kind: "category", category, isProject, count })
     setDeleteTransferTo("")
   }
 
   // Confirm delete - handles both subcategory and category
-  const confirmDelete = () => {
+  function confirmDelete() {
     if (!deleteModal) return
 
     if (deleteModal.kind === "subcategory") {
@@ -304,7 +304,7 @@ export function BudgetTab() {
   }
 
   // Add a new top-level category
-  const addCategory = (type: "recurring" | "project") => {
+  function addCategory(type: "recurring" | "project") {
     const name = newCategoryName.trim()
     if (!name) return
     if (type === "recurring") {
@@ -323,7 +323,7 @@ export function BudgetTab() {
   }
 
   // Save category rename (regular categories)
-  const saveCategoryRename = (oldName: string) => {
+  function saveCategoryRename(oldName: string) {
     const newName = editCategoryName.trim()
     if (!newName || newName === oldName) {
       setEditingCategory(null)
@@ -357,7 +357,7 @@ export function BudgetTab() {
   }
 
   // Restore a deleted top-level category
-  const restoreCategory = (category: string, isProject: boolean) => {
+  function restoreCategory(category: string, isProject: boolean) {
     if (isProject) {
       setBudgetSettings({
         deletedProjectCategories: (budgetSettings.deletedProjectCategories || []).filter(c => c !== category)
@@ -370,7 +370,7 @@ export function BudgetTab() {
   }
 
   // Restore deleted subcategory
-  const restoreSubcategory = (subcategory: string) => {
+  function restoreSubcategory(subcategory: string) {
     const newOverrides = { ...budgetSettings.budgetOverrides }
     delete newOverrides[subcategory] // Remove tombstone
     setBudgetSettings({
@@ -379,7 +379,7 @@ export function BudgetTab() {
   }
 
   // Add new subcategory
-  const addSubcategory = (category: string) => {
+  function addSubcategory(category: string) {
     if (!newSubcategoryName.trim()) return
     
     setBudgetSettings({
@@ -398,7 +398,7 @@ export function BudgetTab() {
   }
 
   // Update from actuals
-  const updateFromActuals = () => {
+  function updateFromActuals() {
     const updates: Record<string, number> = {}
     
     for (const [sub, avgSpend] of Object.entries(actualsBySubcategory.actuals)) {
@@ -452,7 +452,7 @@ export function BudgetTab() {
   const allTransferCategories = regularCategories
 
   // Get all subcategories for a category (built-in + custom, excluding deleted)
-  const getAllSubcategories = (category: string): string[] => {
+  function getAllSubcategories(category: string): string[] {
     const builtin = BUDGET_CATEGORIES[category] || []
     const custom = customSubcategories[category] || []
     return [...builtin, ...custom].filter(sub => !isDeleted(sub) && !isProjectSubcategory(sub))
@@ -838,7 +838,7 @@ export function BudgetTab() {
           const isEditingThisProject = editingProject === category
           const isDisabled = (budgetSettings.disabledProjectCategories || []).includes(category)
 
-          const toggleProjectDisabled = () => {
+          function toggleProjectDisabled() {
             const current = budgetSettings.disabledProjectCategories || []
             setBudgetSettings({
               disabledProjectCategories: isDisabled
@@ -1180,7 +1180,7 @@ export function BudgetTab() {
             const isEditingThis = editingProject === sub
             const isDisabled = (budgetSettings.disabledProjectCategories || []).includes(sub)
 
-            const toggleDisabled = () => {
+            function toggleDisabled() {
               const current = budgetSettings.disabledProjectCategories || []
               setBudgetSettings({
                 disabledProjectCategories: isDisabled

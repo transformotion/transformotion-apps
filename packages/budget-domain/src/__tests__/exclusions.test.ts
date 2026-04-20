@@ -4,7 +4,7 @@ import type { Transaction } from "../contracts.js";
 
 function tx(overrides: Partial<Transaction>): Transaction {
   return {
-    _id: 1,
+    _id: "1",
     accountId: "acc",
     date: "01/01/2026",
     amount: "-100",

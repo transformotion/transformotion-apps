@@ -21,9 +21,15 @@ const settings: BudgetSettings = {
   budgetOverrides: exportData.budgetOverrides ?? {},
   budgetFreqs: exportData.budgetFreqs ?? {},
   customCategories: exportData.customCategories ?? {},
-  projectBudgets: exportData.projectBudgets ?? {},
   deletedSubs: exportData.deletedSubs ?? [],
-  csvFormatMappings: exportData.csvFormatMappings ?? {},
+  projectBudgets: exportData.projectBudgets ?? {},
+  projectTasks: exportData.projectTasks ?? {},
+  customTopCategories: exportData.customTopCategories ?? [],
+  customProjectCategories: exportData.customProjectCategories ?? [],
+  deletedCategories: exportData.deletedCategories ?? [],
+  deletedProjectCategories: exportData.deletedProjectCategories ?? [],
+  disabledProjectCategories: exportData.disabledProjectCategories ?? [],
+  csvFormatMappings: exportData.csvFormatMappings,
 };
 
 const effectiveCategories = buildEffectiveCategories(settings);
@@ -58,7 +64,7 @@ describe("buildMonthlyTrend", () => {
     const withTransfer: Transaction[] = [
       ...transactions,
       {
-        _id: 9999, accountId: "acc-test", date: "15/01/2026",
+        _id: "9999", accountId: "acc-test", date: "15/01/2026",
         amount: "-1000000", description: "BIG TRANSFER",
         category: "Financial & Insurance", subcategory: "Transfer",
         file: "test.csv", _manual: false, _business: false,
