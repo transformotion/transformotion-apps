@@ -1,6 +1,7 @@
 import * as path from 'path';
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
+import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -9,12 +10,8 @@ import { Construct } from 'constructs';
 
 export interface BudgetTrackerApiStackProps extends cdk.StackProps {
   stage: 'dev' | 'prod';
-  /** Shared API Gateway from PlatformApiStack. */
-  api: apigateway.RestApi;
-  /** Shared JWT authoriser from PlatformApiStack. */
-  authoriser: apigateway.CognitoUserPoolsAuthorizer;
-  /** /api resource from PlatformApiStack — budget routes mount under /api/budget/v1. */
-  apiResource: apigateway.Resource;
+  /** Cognito User Pool — used to create the JWT authoriser for budget routes. */
+  userPool: cognito.IUserPool;
 }
 
 /**
@@ -41,8 +38,34 @@ export class BudgetTrackerApiStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: BudgetTrackerApiStackProps) {
     super(scope, id, props);
 
-    const { stage, api, authoriser, apiResource } = props;
+    const { stage, userPool } = props;
+
+    // ── Own REST API Gateway (avoids cross-stack CDK dependency cycle) ─────────
+    const api = new apigateway.RestApi(this, 'BudgetApi', {
+      restApiName:  `budget-tracker-api-${stage}`,
+      description:  `Budget Tracker ${stage} API`,
+      deployOptions: { stageName: stage },
+      defaultCorsPreflightOptions: {
+        allowOrigins: apigateway.Cors.ALL_ORIGINS,
+        allowMethods: apigateway.Cors.ALL_METHODS,
+        allowHeaders: ['Content-Type', 'Authorization', 'X-Account-Id'],
+        maxAge: cdk.Duration.hours(1),
+      },
+    });
+
+    const authoriser = new apigateway.CognitoUserPoolsAuthorizer(this, 'Authoriser', {
+      cognitoUserPools: [userPool],
+      authorizerName:   `budget-tracker-jwt-${stage}`,
+      resultsCacheTtl:  cdk.Duration.minutes(5),
+    });
+
     const auth = authMethodOptions(authoriser);
+
+    // /api/budget/v1
+    const apiResource = api.root
+      .addResource('api')
+      .addResource('budget')
+      .addResource('v1');
 
     // Apply per-app tags to every resource in this stack
     cdk.Tags.of(this).add('app',         'budget-tracker');
@@ -152,12 +175,8 @@ export class BudgetTrackerApiStack extends cdk.Stack {
     settingsTable.grantReadWriteData(migrateFn);
 
     // ── API routes ────────────────────────────────────────────────────────────
-    // Mount at /api/budget/v1/
-    const budget = apiResource.addResource('budget');
-    const v1     = budget.addResource('v1');
-
     // /transactions
-    const txRes     = v1.addResource('transactions');
+    const txRes     = apiResource.addResource('transactions');
     const txIdRes   = txRes.addResource('{id}');
     const txBulkRes = txRes.addResource('bulk');
     const txInt     = new apigateway.LambdaIntegration(txFn, { proxy: true });
@@ -167,7 +186,7 @@ export class BudgetTrackerApiStack extends cdk.Stack {
     txIdRes.addMethod('DELETE', txInt, auth);
 
     // /rules
-    const rulesRes   = v1.addResource('rules');
+    const rulesRes   = apiResource.addResource('rules');
     const ruleIdRes  = rulesRes.addResource('{id}');
     const rulesInt   = new apigateway.LambdaIntegration(rulesFn, { proxy: true });
     rulesRes.addMethod('GET',  rulesInt, auth);
@@ -176,25 +195,25 @@ export class BudgetTrackerApiStack extends cdk.Stack {
     ruleIdRes.addMethod('DELETE', rulesInt, auth);
 
     // /settings
-    const settingsRes = v1.addResource('settings');
+    const settingsRes = apiResource.addResource('settings');
     const settingsInt = new apigateway.LambdaIntegration(settingsFn, { proxy: true });
     settingsRes.addMethod('GET',   settingsInt, auth);
     settingsRes.addMethod('PATCH', settingsInt, auth);
 
     // /ai
-    const aiRes = v1.addResource('ai');
+    const aiRes = apiResource.addResource('ai');
     const aiInt = new apigateway.LambdaIntegration(aiFn, { proxy: true });
     aiRes.addResource('categorise').addMethod('POST',    aiInt, auth);
     aiRes.addResource('review').addMethod('POST',        aiInt, auth);
     aiRes.addResource('csv-analysis').addMethod('POST',  aiInt, auth);
 
     // /business-export
-    v1.addResource('business-export').addMethod(
+    apiResource.addResource('business-export').addMethod(
       'GET', new apigateway.LambdaIntegration(exportFn, { proxy: true }), auth
     );
 
     // /migrate-from-localstorage
-    v1.addResource('migrate-from-localstorage').addMethod(
+    apiResource.addResource('migrate-from-localstorage').addMethod(
       'POST', new apigateway.LambdaIntegration(migrateFn, { proxy: true }), auth
     );
 

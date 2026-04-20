@@ -88,9 +88,7 @@ new BudgetTrackerApiStack(app, 'TransformotionDev-BudgetTrackerApi', {
   env,
   stage:       'dev',
   description: 'Transformotion Apps — Dev Budget Tracker API routes',
-  api:         devPlatformApi.api,
-  authoriser:  devPlatformApi.authoriser,
-  apiResource: devPlatformApi.apiResource,
+  userPool:    devAuth.userPool,
 });
 
 // ── Prod stacks ────────────────────────────────────────────────────────────────
@@ -155,7 +153,5 @@ new BudgetTrackerApiStack(app, 'TransformotionProd-BudgetTrackerApi', {
   env,
   stage:       'prod',
   description: 'Transformotion Apps — Prod Budget Tracker API routes',
-  api:         prodPlatformApi.api,
-  authoriser:  prodPlatformApi.authoriser,
-  apiResource: prodPlatformApi.apiResource,
+  userPool:    prodAuth.userPool,
 });
