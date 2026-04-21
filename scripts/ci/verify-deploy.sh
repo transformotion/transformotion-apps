@@ -70,7 +70,11 @@ echo
 
 # ── Check 2: commit hash present in the deployed artefact ─────────────────────
 echo "[2/3] Checking commit hash presence..."
-if echo "${root_html}${all_chunks}" | grep -qF "$EXPECTED_HASH"; then
+# Run in a subshell with pipefail disabled: when grep -q finds a match early it
+# exits 0 and closes the pipe, causing echo/printf to receive SIGPIPE (exit 141).
+# With pipefail the pipeline would return 141 even on a successful match.
+# Disabling pipefail in a subshell makes the pipeline return grep's exit code.
+if (set +o pipefail; printf '%s%s' "${root_html}" "${all_chunks}" 2>/dev/null | grep -qF "$EXPECTED_HASH"); then
   echo "      OK: commit hash $EXPECTED_HASH found in deployed artefact"
 else
   cat >&2 <<EOF
@@ -125,7 +129,7 @@ for var in "${required_vars[@]}"; do
     skipped_vars+=("$var")
     continue
   fi
-  if echo "$all_chunks" | grep -qF "$value"; then
+  if (set +o pipefail; printf '%s' "${all_chunks}" 2>/dev/null | grep -qF "$value"); then
     :
   else
     missing_substitution+=("$var")
@@ -160,7 +164,8 @@ EOF
   exit 1
 fi
 
-echo "      OK: all checked [REQUIRED] var values found in bundle"
+checked=$((${#required_vars[@]} - ${#skipped_vars[@]}))
+echo "      OK: $checked var(s) checked, 0 missing substitution (${#skipped_vars[@]} skipped — not in env)"
 echo
 
 # ── Summary ───────────────────────────────────────────────────────────────────
