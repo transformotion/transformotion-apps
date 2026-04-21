@@ -35,21 +35,21 @@ jobs:
     runs-on: ubuntu-latest
     if: github.ref_name == 'develop' || (github.event_name == 'workflow_dispatch' && inputs.target == 'dev')
     environment: dev
+    env:
+      NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
+      NEXT_PUBLIC_CLAUDE_API_URL: ${{ vars.NEXT_PUBLIC_CLAUDE_API_URL }}
+      NEXT_PUBLIC_CLAUDE_CACHE_URL: ${{ vars.NEXT_PUBLIC_CLAUDE_CACHE_URL }}
+      NEXT_PUBLIC_COGNITO_USER_POOL_ID: ${{ vars.NEXT_PUBLIC_COGNITO_USER_POOL_ID }}
+      NEXT_PUBLIC_COGNITO_CLIENT_ID: ${{ vars.NEXT_PUBLIC_COGNITO_CLIENT_ID }}
+      NEXT_PUBLIC_COGNITO_REGION: ${{ vars.NEXT_PUBLIC_COGNITO_REGION }}
+      NEXT_PUBLIC_COGNITO_DOMAIN: ${{ vars.NEXT_PUBLIC_COGNITO_DOMAIN }}
+      NEXT_PUBLIC_APP_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}
+      NEXT_PUBLIC_BUDGET_API_URL: ${{ vars.NEXT_PUBLIC_BUDGET_API_URL }}
+      NEXT_PUBLIC_USE_MOCK_DATA: ${{ vars.NEXT_PUBLIC_USE_MOCK_DATA }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Check required env vars are set
-        env:
-          NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
-          NEXT_PUBLIC_CLAUDE_API_URL: ${{ vars.NEXT_PUBLIC_CLAUDE_API_URL }}
-          NEXT_PUBLIC_CLAUDE_CACHE_URL: ${{ vars.NEXT_PUBLIC_CLAUDE_CACHE_URL }}
-          NEXT_PUBLIC_COGNITO_USER_POOL_ID: ${{ vars.NEXT_PUBLIC_COGNITO_USER_POOL_ID }}
-          NEXT_PUBLIC_COGNITO_CLIENT_ID: ${{ vars.NEXT_PUBLIC_COGNITO_CLIENT_ID }}
-          NEXT_PUBLIC_COGNITO_REGION: ${{ vars.NEXT_PUBLIC_COGNITO_REGION }}
-          NEXT_PUBLIC_COGNITO_DOMAIN: ${{ vars.NEXT_PUBLIC_COGNITO_DOMAIN }}
-          NEXT_PUBLIC_APP_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}
-          NEXT_PUBLIC_BUDGET_API_URL: ${{ vars.NEXT_PUBLIC_BUDGET_API_URL }}
-          NEXT_PUBLIC_USE_MOCK_DATA: ${{ vars.NEXT_PUBLIC_USE_MOCK_DATA }}
         run: bash scripts/ci/check-required-env-vars.sh apps/stock-analyser/.env.example dev
 
       - uses: actions/setup-node@v4
@@ -75,17 +75,6 @@ jobs:
 
       - name: Build Next.js (static export)
         working-directory: apps/stock-analyser
-        env:
-          NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
-          NEXT_PUBLIC_CLAUDE_API_URL: ${{ vars.NEXT_PUBLIC_CLAUDE_API_URL }}
-          NEXT_PUBLIC_CLAUDE_CACHE_URL: ${{ vars.NEXT_PUBLIC_CLAUDE_CACHE_URL }}
-          NEXT_PUBLIC_COGNITO_USER_POOL_ID: ${{ vars.NEXT_PUBLIC_COGNITO_USER_POOL_ID }}
-          NEXT_PUBLIC_COGNITO_CLIENT_ID: ${{ vars.NEXT_PUBLIC_COGNITO_CLIENT_ID }}
-          NEXT_PUBLIC_COGNITO_REGION: ${{ vars.NEXT_PUBLIC_COGNITO_REGION }}
-          NEXT_PUBLIC_COGNITO_DOMAIN: ${{ vars.NEXT_PUBLIC_COGNITO_DOMAIN }}
-          NEXT_PUBLIC_APP_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}
-          NEXT_PUBLIC_USE_MOCK_DATA: ${{ vars.NEXT_PUBLIC_USE_MOCK_DATA }}
-          NEXT_PUBLIC_BUDGET_API_URL: ${{ vars.NEXT_PUBLIC_BUDGET_API_URL }}
         run: pnpm build
 
       - name: Deploy to S3
@@ -99,21 +88,21 @@ jobs:
     runs-on: ubuntu-latest
     if: github.ref_name == 'main' || (github.event_name == 'workflow_dispatch' && inputs.target == 'prod')
     environment: prod
+    env:
+      NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
+      NEXT_PUBLIC_CLAUDE_API_URL: ${{ vars.NEXT_PUBLIC_CLAUDE_API_URL }}
+      NEXT_PUBLIC_CLAUDE_CACHE_URL: ${{ vars.NEXT_PUBLIC_CLAUDE_CACHE_URL }}
+      NEXT_PUBLIC_COGNITO_USER_POOL_ID: ${{ vars.NEXT_PUBLIC_COGNITO_USER_POOL_ID }}
+      NEXT_PUBLIC_COGNITO_CLIENT_ID: ${{ vars.NEXT_PUBLIC_COGNITO_CLIENT_ID }}
+      NEXT_PUBLIC_COGNITO_REGION: ${{ vars.NEXT_PUBLIC_COGNITO_REGION }}
+      NEXT_PUBLIC_COGNITO_DOMAIN: ${{ vars.NEXT_PUBLIC_COGNITO_DOMAIN }}
+      NEXT_PUBLIC_APP_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}
+      NEXT_PUBLIC_BUDGET_API_URL: ${{ vars.NEXT_PUBLIC_BUDGET_API_URL }}
+      NEXT_PUBLIC_USE_MOCK_DATA: ${{ vars.NEXT_PUBLIC_USE_MOCK_DATA }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Check required env vars are set
-        env:
-          NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
-          NEXT_PUBLIC_CLAUDE_API_URL: ${{ vars.NEXT_PUBLIC_CLAUDE_API_URL }}
-          NEXT_PUBLIC_CLAUDE_CACHE_URL: ${{ vars.NEXT_PUBLIC_CLAUDE_CACHE_URL }}
-          NEXT_PUBLIC_COGNITO_USER_POOL_ID: ${{ vars.NEXT_PUBLIC_COGNITO_USER_POOL_ID }}
-          NEXT_PUBLIC_COGNITO_CLIENT_ID: ${{ vars.NEXT_PUBLIC_COGNITO_CLIENT_ID }}
-          NEXT_PUBLIC_COGNITO_REGION: ${{ vars.NEXT_PUBLIC_COGNITO_REGION }}
-          NEXT_PUBLIC_COGNITO_DOMAIN: ${{ vars.NEXT_PUBLIC_COGNITO_DOMAIN }}
-          NEXT_PUBLIC_APP_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}
-          NEXT_PUBLIC_BUDGET_API_URL: ${{ vars.NEXT_PUBLIC_BUDGET_API_URL }}
-          NEXT_PUBLIC_USE_MOCK_DATA: ${{ vars.NEXT_PUBLIC_USE_MOCK_DATA }}
         run: bash scripts/ci/check-required-env-vars.sh apps/stock-analyser/.env.example prod
 
       - uses: actions/setup-node@v4
@@ -139,17 +128,6 @@ jobs:
 
       - name: Build Next.js (static export)
         working-directory: apps/stock-analyser
-        env:
-          NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
-          NEXT_PUBLIC_CLAUDE_API_URL: ${{ vars.NEXT_PUBLIC_CLAUDE_API_URL }}
-          NEXT_PUBLIC_CLAUDE_CACHE_URL: ${{ vars.NEXT_PUBLIC_CLAUDE_CACHE_URL }}
-          NEXT_PUBLIC_COGNITO_USER_POOL_ID: ${{ vars.NEXT_PUBLIC_COGNITO_USER_POOL_ID }}
-          NEXT_PUBLIC_COGNITO_CLIENT_ID: ${{ vars.NEXT_PUBLIC_COGNITO_CLIENT_ID }}
-          NEXT_PUBLIC_COGNITO_REGION: ${{ vars.NEXT_PUBLIC_COGNITO_REGION }}
-          NEXT_PUBLIC_COGNITO_DOMAIN: ${{ vars.NEXT_PUBLIC_COGNITO_DOMAIN }}
-          NEXT_PUBLIC_APP_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}
-          NEXT_PUBLIC_USE_MOCK_DATA: ${{ vars.NEXT_PUBLIC_USE_MOCK_DATA }}
-          NEXT_PUBLIC_BUDGET_API_URL: ${{ vars.NEXT_PUBLIC_BUDGET_API_URL }}
         run: pnpm build
 
       - name: Deploy to S3
