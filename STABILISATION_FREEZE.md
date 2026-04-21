@@ -2,7 +2,7 @@
 
 **Status:** ACTIVE
 **Started:** 2026-04-20
-**Last updated:** 2026-04-21 (sub-phase 2b: CI hard-fail env var enforcement wired)
+**Last updated:** 2026-04-21 (sub-phase 3: deploy verification wired)
 **Expected end:** Once Phase 1 (foundations) and Phase 2
 (executable contracts) are complete, the freeze on stabilisation
 work lifts. The Phase 4 stock analyser migration begins under
@@ -61,14 +61,26 @@ Sub-phases:
    listing missing vars and ready-to-paste `gh variable set` commands.
    `deploy-platform.yml` excluded — CDK-only, no frontend env vars.
 
-   The forcing function is now active: the next deploy to dev will
-   fail because `NEXT_PUBLIC_COGNITO_DOMAIN` and `NEXT_PUBLIC_APP_URL`
-   are missing and the Claude URL vars are stale. Phase 3.5 (verified
-   redeploy) becomes the immediate next task after sub-phase 3.
-3. **Deploy verification** — every deploy workflow ends by confirming
-   the deploy actually succeeded and the deployed version matches
-   the commit that triggered it. CI says "deployed" only when it
-   can prove it.
+   **2c (complete):** Structural refactor — every deploy job now
+   declares its env block once at the job level. All steps inherit.
+   Divergence between the check step and the build step (the bug class
+   caught by PR #26) is structurally impossible. No variables added or
+   removed; purely a reorganisation.
+
+3. **Deploy verification** (complete) — `scripts/ci/verify-deploy.sh`
+   added. After S3 sync and CloudFront invalidation, the final step in
+   `deploy-stock-analyser.yml` (dev + prod) confirms:
+   (1) the deployed URL responds HTTP 200 and all JS chunks are
+   reachable; (2) the commit hash that triggered the deploy is present
+   in the deployed bundle (injected via `NEXT_PUBLIC_COMMIT_HASH`,
+   rendered as a `data-commit` attribute on the `<html>` element in
+   each app's root layout via `lib/build-info.ts`); (3) every
+   `[REQUIRED]` `NEXT_PUBLIC_*` variable's value appears as a string
+   literal in the deployed bundle. Hard-fails on any check failure.
+   A new `[BUILD-INJECTED]` tag was added to the `.env.example`
+   tagging convention for CI-injected values; `check-required-env-vars.sh`
+   does not match this tag (verified). When CI reports "deployed", it
+   now has cryptographic evidence.
 4. **Lint enforcement** — ESLint flat config migration, real
    workspace lint scripts, boundary rules enforced in CI.
    eslint-plugin-boundaries flat-config compatibility resolved.

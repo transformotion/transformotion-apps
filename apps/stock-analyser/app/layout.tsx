@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import { Inter, Geist_Mono, Bebas_Neue } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { AmplifyProvider } from '@/components/providers/amplify-provider'
+import { BUILD_COMMIT_HASH } from '@/lib/build-info'
 import './globals.css'
 
 const inter = Inter({ 
@@ -56,7 +57,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className={`${inter.variable} ${geistMono.variable} ${bebasNeue.variable} bg-background`}>
+    <html lang="en" data-commit={BUILD_COMMIT_HASH} className={`${inter.variable} ${geistMono.variable} ${bebasNeue.variable} bg-background`}>
       <body className="font-sans antialiased min-h-screen bg-background text-foreground">
         <AmplifyProvider>
           {children}

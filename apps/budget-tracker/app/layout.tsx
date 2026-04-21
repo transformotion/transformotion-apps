@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import { Inter, Geist_Mono } from 'next/font/google'
+import { BUILD_COMMIT_HASH } from '@/lib/build-info'
 import './globals.css'
 
 const inter = Inter({
@@ -36,7 +37,7 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${inter.variable} ${geistMono.variable} bg-background`}>
+    <html lang="en" data-commit={BUILD_COMMIT_HASH} className={`${inter.variable} ${geistMono.variable} bg-background`}>
       <body className="font-sans antialiased min-h-screen bg-background text-foreground">
         {children}
       </body>

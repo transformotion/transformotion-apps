@@ -46,6 +46,7 @@ jobs:
       NEXT_PUBLIC_APP_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}
       NEXT_PUBLIC_BUDGET_API_URL: ${{ vars.NEXT_PUBLIC_BUDGET_API_URL }}
       NEXT_PUBLIC_USE_MOCK_DATA: ${{ vars.NEXT_PUBLIC_USE_MOCK_DATA }}
+      NEXT_PUBLIC_COMMIT_HASH: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
 
@@ -83,6 +84,13 @@ jobs:
       - name: Invalidate CloudFront
         run: aws cloudfront create-invalidation --distribution-id E1128DYYBLMWYK --paths "/*"
 
+      - name: Verify deployment
+        run: |
+          bash scripts/ci/verify-deploy.sh \
+            "${{ vars.NEXT_PUBLIC_APP_URL }}" \
+            apps/stock-analyser/.env.example \
+            "${{ github.sha }}"
+
   deploy-prod:
     name: Stock Analyser → Prod
     runs-on: ubuntu-latest
@@ -99,6 +107,7 @@ jobs:
       NEXT_PUBLIC_APP_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}
       NEXT_PUBLIC_BUDGET_API_URL: ${{ vars.NEXT_PUBLIC_BUDGET_API_URL }}
       NEXT_PUBLIC_USE_MOCK_DATA: ${{ vars.NEXT_PUBLIC_USE_MOCK_DATA }}
+      NEXT_PUBLIC_COMMIT_HASH: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
 
@@ -135,3 +144,10 @@ jobs:
 
       - name: Invalidate CloudFront
         run: aws cloudfront create-invalidation --distribution-id ${{ vars.CLOUDFRONT_DISTRIBUTION_ID_PROD }} --paths "/*"
+
+      - name: Verify deployment
+        run: |
+          bash scripts/ci/verify-deploy.sh \
+            "${{ vars.NEXT_PUBLIC_APP_URL }}" \
+            apps/stock-analyser/.env.example \
+            "${{ github.sha }}"
