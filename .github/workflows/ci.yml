@@ -29,9 +29,6 @@ jobs:
       - name: Typecheck (all workspaces)
         run: pnpm turbo typecheck
 
-      - name: Lint (all workspaces)
-        run: pnpm turbo lint
-
       - name: Lint baseline check (no new violations)
         run: bash scripts/ci/check-lint-baseline.sh
 

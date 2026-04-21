@@ -93,8 +93,8 @@ Sub-phases:
    files, 36 pre-existing "rule not found" violations — all from
    inline disable comments for unloaded plugins). Ratchet script
    `scripts/ci/check-lint-baseline.sh` added; CI hard-fails on new
-   violations. Wired into `.github/workflows/ci.yml` as a new step
-   after `pnpm turbo lint`.
+   violations. `pnpm turbo lint` replaced in CI by the ratchet (turbo
+   task kept for local developer use).
 5. **Test enforcement** — Vitest tests in `packages/budget-domain`
    wired into CI as a required gate.
 6. **Pre-commit hooks** — Husky + lint-staged for typecheck and
