@@ -2,7 +2,7 @@
 
 **Status:** ACTIVE
 **Started:** 2026-04-20
-**Last updated:** 2026-04-22 (backlog milestone created; Phase 4 entry conditions added)
+**Last updated:** 2026-04-22 (backlog milestone; Phase 4 entry conditions; sub-phases 5–6 complete)
 **Expected end:** Once Phase 1 (foundations) and Phase 2
 (executable contracts) are complete, the freeze on stabilisation
 work lifts. The Phase 4 stock analyser migration begins under
@@ -112,8 +112,13 @@ Sub-phases:
    recommendations-tab.
 5. **Test enforcement** — Vitest tests in `packages/budget-domain`
    wired into CI as a required gate.
-6. **Pre-commit hooks** — Husky + lint-staged for typecheck and
-   lint on staged files.
+6. **Pre-commit hooks** (complete) — Husky v9 + lint-staged v16
+   installed at workspace root. Pre-commit hook runs ESLint on staged
+   `.ts/.tsx/.js/.jsx` files (respecting `.lint-baseline.json` from
+   sub-phase 4) and `tsc --noEmit` on each affected workspace.
+   Implemented as `scripts/ci/lint-staged-baseline-check.mjs` (Node.js,
+   cross-platform) and `scripts/ci/typecheck-staged-workspaces.sh`.
+   `git commit --no-verify` available as escape hatch.
 7. **Budget Tracker consolidation** — see Issue #17. Sub-PRs for
    cleanup, reconciliation, API Gateway rollback, deploy pipeline,
    launchpad fix, route cutover.

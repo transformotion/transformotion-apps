@@ -7,7 +7,8 @@
     "lint": "turbo lint",
     "typecheck": "turbo typecheck",
     "test": "turbo test",
-    "clean": "turbo clean && rm -rf node_modules"
+    "clean": "turbo clean && rm -rf node_modules",
+    "prepare": "husky"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.5",
@@ -17,8 +18,18 @@
     "eslint-import-resolver-typescript": "^4.4.4",
     "eslint-plugin-boundaries": "^6.0.2",
     "eslint-plugin-react-hooks": "^7.1.1",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
     "turbo": "^2.0.0",
     "typescript": "^5.4.0"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,jsx}": [
+      "node scripts/ci/lint-staged-baseline-check.mjs"
+    ],
+    "*.{ts,tsx}": [
+      "bash scripts/ci/typecheck-staged-workspaces.sh"
+    ]
   },
   "packageManager": "pnpm@10.33.0",
   "engines": {
