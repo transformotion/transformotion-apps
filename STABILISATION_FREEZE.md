@@ -2,7 +2,7 @@
 
 **Status:** ACTIVE
 **Started:** 2026-04-20
-**Last updated:** 2026-04-21 (sub-phase 4 baseline review: reasons assigned, mechanical fixes, real-bug issues opened)
+**Last updated:** 2026-04-22 (backlog milestone created; Phase 4 entry conditions added)
 **Expected end:** Once Phase 1 (foundations) and Phase 2
 (executable contracts) are complete, the freeze on stabilisation
 work lifts. The Phase 4 stock analyser migration begins under
@@ -144,6 +144,25 @@ are real bugs to fix on a trustworthy foundation.
 
 ### Phase 4 — Stock analyser migration
 
+#### Entry conditions for Phase 4
+
+Before Phase 4 begins:
+
+1. Every `#NN: investigated, deferred` entry in `.lint-baseline.json`
+   must be either resolved (entry removed because the bug is fixed)
+   or explicitly re-deferred with documented reasoning. Enumerate
+   with:
+
+       jq '.entries[] | select(.reason | test("^#[0-9]+: investigated"))' .lint-baseline.json
+
+2. Review the [Stabilisation backlog](https://github.com/transformotion/transformotion-apps/milestone/1)
+   milestone. Every Issue in it should be either resolved, explicitly
+   deferred past Phase 4, or moved to a different milestone with
+   its own tracking.
+
+3. The "Open follow-ups" section below refreshed to match the
+   milestone's current state.
+
 Migrate the monolithic `stock-signal-analyser.html` from the
 separate `transformotion/stock-analyser` repo into
 `apps/stock-analyser/` as proper Next.js components, with all 16
@@ -164,6 +183,38 @@ structured work, not freeze-period stabilisation.
 
 The freeze ends entirely when Phase 4 ships and the monolithic
 stock analyser repo is archived.
+
+## Open follow-ups from stabilisation work
+
+Issues raised during stabilisation that are deliberately deferred
+rather than fixed inline. All are attached to the
+[Stabilisation backlog](https://github.com/transformotion/transformotion-apps/milestone/1)
+GitHub milestone. The milestone is the canonical place to view
+current backlog status.
+
+Current snapshot (manually maintained — for live status see the
+milestone):
+
+| Issue | Title | Status |
+| ----- | ----- | ------ |
+| #16 | Add TabErrorBoundary around budget tracker tab content | Open |
+| #17 | Consolidate Budget Tracker into apps/budget-tracker/ as standalone deployed app | Open |
+| #18 | Deployment infrastructure: env var enforcement and deploy verification | Open |
+| #32 | Lint: track and plan removal of web-vite-backup and v0-reference | Open |
+| #33 | bug(recommendations): sector filter computed but never applied to rendered stock list | Open |
+
+## Backlog discipline
+
+Every Issue raised during stabilisation should be attached to the
+Stabilisation backlog milestone at the time it's raised. This is
+not enforced by tooling — it's a convention. To audit:
+
+    gh issue list --state all --json number,title,milestone \
+      --jq '.[] | select(.milestone == null and (.title | test("\\b(stabilisation|stabilization|phase|enforcement|consolidation|drift)\\b"; "i"))) | .number'
+
+Any Issue numbers returned that look stabilisation-related should
+be either attached to the milestone or explicitly excluded with
+reasoning.
 
 ## Living document
 
