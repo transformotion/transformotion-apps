@@ -6,8 +6,8 @@
   "scripts": {
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
-    "lint": "echo \"lint: lambda-middleware\"",
-    "test": "vitest run"
+    "lint": "eslint .",
+    "test": "vitest run --passWithNoTests"
   },
   "devDependencies": {
     "@types/aws-lambda": "^8",

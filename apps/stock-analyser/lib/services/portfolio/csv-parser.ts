@@ -48,7 +48,7 @@ function splitCSVRow(row: string): string[] {
 }
 
 function normaliseTicker(raw: string): string {
-  let t = raw.toUpperCase().replace(/['"]/g, '').trim()
+  const t = raw.toUpperCase().replace(/['"]/g, '').trim()
   if (t.includes(':')) {
     const [code, market] = t.split(':')
     if (market === 'US') return code
@@ -122,7 +122,7 @@ export function parseCMCCsv(text: string): ParseResult {
 
     const ticker  = normaliseTicker(rawTicker)
     const shares  = parseFloat(rawShares.replace(/[,$\s]/g, ''))
-    let   rawVal  = parseFloat(rawPrice.replace(/[,$\s]/g, ''))
+    const rawVal  = parseFloat(rawPrice.replace(/[,$\s]/g, ''))
     const currency = rawCurrency.toUpperCase().trim()
     const fx      = parseFloat(rawFx.replace(/[,$\s]/g, '')) || 1
 

@@ -1,0 +1,16 @@
+{
+  "name": "Transformotion - Stock Signal Analyser",
+  "short_name": "Transformotion",
+  "description": "Market Analysis, sector rotation signals, and enter/exit calls",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0D1B2A",
+  "theme_color": "#0D1B2A",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

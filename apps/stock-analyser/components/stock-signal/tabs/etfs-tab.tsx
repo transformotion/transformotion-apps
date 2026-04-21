@@ -25,7 +25,7 @@ interface ETF {
   category: Category
   price: number
   change: number
-  signal: Signal
+  signal: "BUY" | "HOLD" | "SELL"
   expenseRatio: number
   analysis: string
 }
@@ -117,7 +117,6 @@ Provide 6 ETFs. Return ONLY valid JSON.`,
         <PrimaryButton
           onClick={() => runAnalysis(etfResults.length > 0)}
           disabled={isAnalyzing}
-          size="sm"
         >
           {isAnalyzing ? (
             <>
@@ -133,7 +132,6 @@ Provide 6 ETFs. Return ONLY valid JSON.`,
           onToggle={() => setIsLive(!isLive)} 
           cacheAge="3m ago"
           freshness="recent"
-          size="sm"
         />
       </div>
 

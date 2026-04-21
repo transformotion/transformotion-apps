@@ -168,6 +168,7 @@ export function MarketAnalysisTab() {
     const data = await callClaude({
       cacheKey: `MARKET#${geography}`,
       forceRefresh,
+      webSearch: isLive,
       prompt: `Provide comprehensive market analysis for the ${geography} market.
 
 Return a JSON object with the following fields:
@@ -210,7 +211,9 @@ Return a JSON object with the following fields:
 
 "actionSummary" — top-3 trades:
   - enter: array of top 3 { sector, reason } to buy/overweight
-  - exit: array of top 3 { sector, reason } to sell/reduce`,
+  - exit: array of top 3 { sector, reason } to sell/reduce
+
+IMPORTANT: Your entire response must be a single valid JSON object. Begin your response with { and end with }. Do not include any text, preamble, explanation, or markdown outside the JSON.`,
       systemPrompt: "You are a senior market strategist. Provide institutional-quality sector rotation analysis. Respond with raw JSON only. Do not use markdown code fences.",
     })
 
@@ -393,7 +396,7 @@ Return a JSON object with the following fields:
                         <h4 className="text-sm font-semibold text-foreground">{sector.sector}</h4>
                         <span className={cn(
                           "px-2 py-0.5 rounded text-[10px] font-semibold uppercase",
-                          sector.signal === "BUY" ? "bg-signal-green text-white" :
+                          sector.signal === "ENTER" ? "bg-signal-green text-white" :
                           sector.signal === "EXIT" ? "bg-signal-red text-white" :
                           "bg-signal-amber/80 text-background"
                         )}>

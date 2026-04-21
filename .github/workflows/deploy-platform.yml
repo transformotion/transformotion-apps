@@ -1,0 +1,88 @@
+name: Deploy — Platform Infrastructure
+
+on:
+  push:
+    branches: [develop, main]
+    paths:
+      - 'infrastructure/lib/platform/**'
+      - 'infrastructure/bin/**'
+      - 'functions/**'
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Deploy target'
+        required: true
+        default: 'dev'
+        type: choice
+        options: [dev, prod]
+
+concurrency:
+  group: deploy-platform-${{ github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ap-southeast-2
+  ROLE_ARN: arn:aws:iam::959516291617:role/GitHubActionsDeployRole
+
+jobs:
+  deploy-dev:
+    name: Platform → Dev
+    runs-on: ubuntu-latest
+    if: github.ref_name == 'develop' || (github.event_name == 'workflow_dispatch' && inputs.target == 'dev')
+    environment: dev
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '10.33.0'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: CDK Deploy — Platform stacks (dev)
+        working-directory: infrastructure
+        run: pnpm exec cdk deploy 'TransformotionDev-Network' 'TransformotionDev-Auth' 'TransformotionDev-AuthApi' 'TransformotionDev-PlatformTables' 'TransformotionDev-Api' --require-approval never
+
+  deploy-prod:
+    name: Platform → Prod
+    runs-on: ubuntu-latest
+    if: github.ref_name == 'main' || (github.event_name == 'workflow_dispatch' && inputs.target == 'prod')
+    environment: prod
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '10.33.0'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: CDK Deploy — Platform stacks (prod)
+        working-directory: infrastructure
+        run: pnpm exec cdk deploy 'TransformotionProd-Network' 'TransformotionProd-Auth' 'TransformotionProd-AuthApi' 'TransformotionProd-PlatformTables' 'TransformotionProd-Api' --require-approval never

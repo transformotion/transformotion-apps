@@ -6,8 +6,8 @@
   "scripts": {
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
-    "lint": "echo \"lint: api-client\"",
-    "test": "vitest run"
+    "lint": "eslint .",
+    "test": "vitest run --passWithNoTests"
   },
   "devDependencies": {
     "typescript": "*",

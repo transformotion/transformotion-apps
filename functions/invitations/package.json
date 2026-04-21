@@ -7,7 +7,7 @@
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "lint": "echo \"lint: invitations\"",
-    "test": "vitest run"
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "@transformotion/lambda-middleware": "workspace:*"
@@ -17,6 +17,7 @@
     "@aws-sdk/lib-dynamodb": "^3",
     "@aws-sdk/client-sesv2": "^3",
     "@types/aws-lambda": "^8",
+    "@types/node": "^22",
     "typescript": "*"
   }
 }

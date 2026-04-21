@@ -162,3 +162,17 @@ export function getAPIClient(): APIClient {
   }
   return _defaultClient
 }
+
+let _budgetClient: APIClient | null = null
+
+export function getBudgetApiClient(): APIClient {
+  if (!_budgetClient) {
+    const config = getConfig()
+    _budgetClient = createAPIClient({
+      baseURL:      config.budget.apiUrl,
+      timeout:      30000,
+      getAuthToken: () => cognitoAuth.getIdToken(),
+    })
+  }
+  return _budgetClient
+}

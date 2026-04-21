@@ -1,0 +1,262 @@
+{
+  "entries": [
+    {
+      "file": "apps/budget-tracker/components/brand/wordmark.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1,
+      "reason": "PRE-FREEZE: legacy unused binding, no specific owner — eligible for cleanup when the file is next touched"
+    },
+    {
+      "file": "apps/budget-tracker/components/budget-tracker/tabs/budget-tab.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 3,
+      "reason": "#17: authoritative budget-tracker file will be reconciled during consolidation"
+    },
+    {
+      "file": "apps/budget-tracker/components/budget-tracker/tabs/cashflow-tab.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 3,
+      "reason": "#17: authoritative budget-tracker file will be reconciled during consolidation"
+    },
+    {
+      "file": "apps/budget-tracker/components/budget-tracker/tabs/review-tab.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1,
+      "reason": "#17: authoritative budget-tracker file will be reconciled during consolidation"
+    },
+    {
+      "file": "apps/budget-tracker/components/budget-tracker/tabs/rules-tab.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 3,
+      "reason": "#17: authoritative budget-tracker file will be reconciled during consolidation"
+    },
+    {
+      "file": "apps/budget-tracker/components/budget-tracker/tabs/rules-tab.tsx",
+      "rule": "react-hooks/exhaustive-deps",
+      "count": 1,
+      "reason": "#17: authoritative budget-tracker file will be reconciled during consolidation"
+    },
+    {
+      "file": "apps/budget-tracker/components/budget-tracker/tabs/summary-tab.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1,
+      "reason": "#17: authoritative budget-tracker file will be reconciled during consolidation"
+    },
+    {
+      "file": "apps/budget-tracker/components/budget-tracker/tabs/transactions-tab.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 5,
+      "reason": "#17: authoritative budget-tracker file will be reconciled during consolidation"
+    },
+    {
+      "file": "apps/budget-tracker/components/ui/use-toast.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1,
+      "reason": "PRE-FREEZE: legacy unused binding, no specific owner — eligible for cleanup when the file is next touched"
+    },
+    {
+      "file": "apps/budget-tracker/functions/budget-export/src/index.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1,
+      "reason": "PRE-FREEZE: legacy unused binding, no specific owner — eligible for cleanup when the file is next touched"
+    },
+    {
+      "file": "apps/budget-tracker/functions/budget-transactions/src/index.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1,
+      "reason": "PRE-FREEZE: legacy unused binding, no specific owner — eligible for cleanup when the file is next touched"
+    },
+    {
+      "file": "apps/budget-tracker/hooks/use-toast.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1,
+      "reason": "PRE-FREEZE: legacy unused binding, no specific owner — eligible for cleanup when the file is next touched"
+    },
+    {
+      "file": "apps/budget-tracker/lib/repositories/budget-tracker/rules-repository.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1,
+      "reason": "PRE-FREEZE: legacy unused binding, no specific owner — eligible for cleanup when the file is next touched"
+    },
+    {
+      "file": "apps/budget-tracker/lib/repositories/budget-tracker/transaction-repository.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1,
+      "reason": "PRE-FREEZE: legacy unused binding, no specific owner — eligible for cleanup when the file is next touched"
+    },
+    {
+      "file": "apps/budget-tracker/lib/services/cache/memory-cache.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1,
+      "reason": "PRE-FREEZE: legacy unused binding, no specific owner — eligible for cleanup when the file is next touched"
+    },
+    {
+      "file": "apps/budget-tracker/stores/auth/use-auth-store.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 2,
+      "reason": "PRE-FREEZE: legacy unused binding, no specific owner — eligible for cleanup when the file is next touched"
+    },
+    {
+      "file": "apps/stock-analyser/components/auth/sign-in.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1,
+      "reason": "PRE-FREEZE: legacy unused binding, no specific owner — eligible for cleanup when the file is next touched"
+    },
+    {
+      "file": "apps/stock-analyser/components/budget-tracker/tabs/budget-tab.tsx",
+      "rule": "@typescript-eslint/ban-ts-comment",
+      "count": 1,
+      "reason": "#17: stock-analyser-side budget-tracker copy will be deleted at consolidation cutover"
+    },
+    {
+      "file": "apps/stock-analyser/components/budget-tracker/tabs/budget-tab.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 3,
+      "reason": "#17: stock-analyser-side budget-tracker copy will be deleted at consolidation cutover"
+    },
+    {
+      "file": "apps/stock-analyser/components/budget-tracker/tabs/cashflow-tab.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 3,
+      "reason": "#17: stock-analyser-side budget-tracker copy will be deleted at consolidation cutover"
+    },
+    {
+      "file": "apps/stock-analyser/components/budget-tracker/tabs/review-tab.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1,
+      "reason": "#17: stock-analyser-side budget-tracker copy will be deleted at consolidation cutover"
+    },
+    {
+      "file": "apps/stock-analyser/components/budget-tracker/tabs/rules-tab.tsx",
+      "rule": "@typescript-eslint/ban-ts-comment",
+      "count": 1,
+      "reason": "#17: stock-analyser-side budget-tracker copy will be deleted at consolidation cutover"
+    },
+    {
+      "file": "apps/stock-analyser/components/budget-tracker/tabs/rules-tab.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 3,
+      "reason": "#17: stock-analyser-side budget-tracker copy will be deleted at consolidation cutover"
+    },
+    {
+      "file": "apps/stock-analyser/components/budget-tracker/tabs/rules-tab.tsx",
+      "rule": "react-hooks/exhaustive-deps",
+      "count": 1,
+      "reason": "#17: stock-analyser-side budget-tracker copy will be deleted at consolidation cutover"
+    },
+    {
+      "file": "apps/stock-analyser/components/budget-tracker/tabs/summary-tab.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1,
+      "reason": "#17: stock-analyser-side budget-tracker copy will be deleted at consolidation cutover"
+    },
+    {
+      "file": "apps/stock-analyser/components/budget-tracker/tabs/transactions-tab.tsx",
+      "rule": "@typescript-eslint/ban-ts-comment",
+      "count": 1,
+      "reason": "#17: stock-analyser-side budget-tracker copy will be deleted at consolidation cutover"
+    },
+    {
+      "file": "apps/stock-analyser/components/budget-tracker/tabs/transactions-tab.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 6,
+      "reason": "#17: stock-analyser-side budget-tracker copy will be deleted at consolidation cutover"
+    },
+    {
+      "file": "apps/stock-analyser/components/launchpad/launchpad.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1,
+      "reason": "PRE-FREEZE: legacy unused binding, no specific owner — eligible for cleanup when the file is next touched"
+    },
+    {
+      "file": "apps/stock-analyser/components/stock-signal/app-shell.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1,
+      "reason": "PRE-FREEZE: legacy unused binding, no specific owner — eligible for cleanup when the file is next touched"
+    },
+    {
+      "file": "apps/stock-analyser/components/stock-signal/tabs/analyser-tab.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 2,
+      "reason": "PRE-FREEZE: legacy unused binding, no specific owner — eligible for cleanup when the file is next touched"
+    },
+    {
+      "file": "apps/stock-analyser/components/stock-signal/tabs/etfs-tab.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1,
+      "reason": "PRE-FREEZE: legacy unused binding, no specific owner — eligible for cleanup when the file is next touched"
+    },
+    {
+      "file": "apps/stock-analyser/components/stock-signal/tabs/metals-tab.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 5,
+      "reason": "PRE-FREEZE: legacy unused binding, no specific owner — eligible for cleanup when the file is next touched"
+    },
+    {
+      "file": "apps/stock-analyser/components/stock-signal/tabs/portfolio-tab.tsx",
+      "rule": "@typescript-eslint/no-unused-expressions",
+      "count": 1,
+      "reason": "PRE-FREEZE: legacy unused binding, no specific owner — eligible for cleanup when the file is next touched"
+    },
+    {
+      "file": "apps/stock-analyser/components/stock-signal/tabs/recommendations-tab.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 5,
+      "reason": "#33: investigated, deferred to separate fix"
+    },
+    {
+      "file": "apps/stock-analyser/components/stock-signal/tabs/watchlist-tab.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 2,
+      "reason": "PRE-FREEZE: legacy unused binding, no specific owner — eligible for cleanup when the file is next touched"
+    },
+    {
+      "file": "apps/stock-analyser/components/ui/use-toast.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1,
+      "reason": "PRE-FREEZE: legacy unused binding, no specific owner — eligible for cleanup when the file is next touched"
+    },
+    {
+      "file": "apps/stock-analyser/hooks/use-toast.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1,
+      "reason": "PRE-FREEZE: legacy unused binding, no specific owner — eligible for cleanup when the file is next touched"
+    },
+    {
+      "file": "apps/stock-analyser/lib/api/client.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1,
+      "reason": "PRE-FREEZE: legacy unused binding, no specific owner — eligible for cleanup when the file is next touched"
+    },
+    {
+      "file": "apps/stock-analyser/lib/examples/budget-tracker-usage.tsx",
+      "rule": "@typescript-eslint/ban-ts-comment",
+      "count": 1,
+      "reason": "#17: orphaned scaffold file scheduled for deletion"
+    },
+    {
+      "file": "apps/stock-analyser/lib/repositories/budget-tracker/rules-repository.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1,
+      "reason": "PRE-FREEZE: legacy unused binding, no specific owner — eligible for cleanup when the file is next touched"
+    },
+    {
+      "file": "apps/stock-analyser/lib/services/cache/dynamo-ttl-cache.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1,
+      "reason": "PRE-FREEZE: legacy unused binding, no specific owner — eligible for cleanup when the file is next touched"
+    },
+    {
+      "file": "apps/stock-analyser/lib/services/cache/memory-cache.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1,
+      "reason": "PRE-FREEZE: legacy unused binding, no specific owner — eligible for cleanup when the file is next touched"
+    },
+    {
+      "file": "functions/accounts/src/index.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1,
+      "reason": "PRE-FREEZE: legacy unused binding, no specific owner — eligible for cleanup when the file is next touched"
+    }
+  ]
+}

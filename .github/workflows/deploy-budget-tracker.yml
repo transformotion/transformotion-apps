@@ -1,0 +1,45 @@
+name: Deploy — Budget Tracker
+
+# Placeholder — activates when Budget Tracker app scaffolding exists.
+# Currently no-ops on budget-tracker changes to avoid CI failures.
+
+on:
+  push:
+    branches: [develop, main]
+    paths:
+      - 'apps/budget-tracker/**'
+      - 'infrastructure/lib/budget-tracker/**'
+  workflow_dispatch:
+
+jobs:
+  placeholder:
+    name: Budget Tracker (not yet deployed)
+    runs-on: ubuntu-latest
+    environment: dev
+    env:
+      NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
+      NEXT_PUBLIC_CLAUDE_API_URL: ${{ vars.NEXT_PUBLIC_CLAUDE_API_URL }}
+      NEXT_PUBLIC_CLAUDE_CACHE_URL: ${{ vars.NEXT_PUBLIC_CLAUDE_CACHE_URL }}
+      NEXT_PUBLIC_COGNITO_USER_POOL_ID: ${{ vars.NEXT_PUBLIC_COGNITO_USER_POOL_ID }}
+      NEXT_PUBLIC_COGNITO_CLIENT_ID: ${{ vars.NEXT_PUBLIC_COGNITO_CLIENT_ID }}
+      NEXT_PUBLIC_COGNITO_REGION: ${{ vars.NEXT_PUBLIC_COGNITO_REGION }}
+      NEXT_PUBLIC_USE_MOCK_DATA: ${{ vars.NEXT_PUBLIC_USE_MOCK_DATA }}
+      NEXT_PUBLIC_COMMIT_HASH: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check required env vars are set
+        run: bash scripts/ci/check-required-env-vars.sh apps/budget-tracker/.env.example dev
+
+      - name: Placeholder
+        run: echo "Budget Tracker deployment workflow — not yet active. Add deploy steps when app scaffolding is complete."
+
+      # When Issue #17 wires up the real deploy, add this final step after S3 sync and
+      # CloudFront invalidation — the job-level env block already provides all vars:
+      #
+      # - name: Verify deployment
+      #   run: |
+      #     bash scripts/ci/verify-deploy.sh \
+      #       "${{ vars.NEXT_PUBLIC_BUDGET_TRACKER_APP_URL }}" \
+      #       apps/budget-tracker/.env.example \
+      #       "${{ github.sha }}"
