@@ -24,6 +24,7 @@ jobs:
       NEXT_PUBLIC_COGNITO_CLIENT_ID: ${{ vars.NEXT_PUBLIC_COGNITO_CLIENT_ID }}
       NEXT_PUBLIC_COGNITO_REGION: ${{ vars.NEXT_PUBLIC_COGNITO_REGION }}
       NEXT_PUBLIC_USE_MOCK_DATA: ${{ vars.NEXT_PUBLIC_USE_MOCK_DATA }}
+      NEXT_PUBLIC_COMMIT_HASH: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
 
@@ -32,3 +33,13 @@ jobs:
 
       - name: Placeholder
         run: echo "Budget Tracker deployment workflow — not yet active. Add deploy steps when app scaffolding is complete."
+
+      # When Issue #17 wires up the real deploy, add this final step after S3 sync and
+      # CloudFront invalidation — the job-level env block already provides all vars:
+      #
+      # - name: Verify deployment
+      #   run: |
+      #     bash scripts/ci/verify-deploy.sh \
+      #       "${{ vars.NEXT_PUBLIC_BUDGET_TRACKER_APP_URL }}" \
+      #       apps/budget-tracker/.env.example \
+      #       "${{ github.sha }}"
