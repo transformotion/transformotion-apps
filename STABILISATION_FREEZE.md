@@ -2,7 +2,7 @@
 
 **Status:** ACTIVE
 **Started:** 2026-04-20
-**Last updated:** 2026-04-21 (sub-phase 4 follow-up: plugins enabled, archived dirs excluded, baseline regenerated)
+**Last updated:** 2026-04-21 (sub-phase 4 baseline review: reasons assigned, mechanical fixes, real-bug issues opened)
 **Expected end:** Once Phase 1 (foundations) and Phase 2
 (executable contracts) are complete, the freeze on stabilisation
 work lifts. The Phase 4 stock analyser migration begins under
@@ -101,6 +101,15 @@ Sub-phases:
    Issue #32). Baseline regenerated: 43 files, 92 real violations.
    CI growth-check step added: baseline may not grow on a PR unless
    `eslint.config.mjs` was also changed.
+   Baseline review pass: `destructuredArrayIgnorePattern`/`argsIgnorePattern`/
+   `varsIgnorePattern` added for `^_` convention, eliminating 17 mechanical
+   entries. 4 `prefer-const` violations fixed mechanically. Format upgraded
+   to entries array with per-entry `reason` fields. Final baseline: 43
+   entries, 75 violations. All entries carry real reasons — 18 entries
+   reference Issue #17 (Budget Tracker consolidation), 1 entry references
+   Issue #33 (recommendations sector filter bug), 24 carry PRE-FREEZE
+   catch-all. Issue #33 opened for `filteredStocks` bypass bug in
+   recommendations-tab.
 5. **Test enforcement** — Vitest tests in `packages/budget-domain`
    wired into CI as a required gate.
 6. **Pre-commit hooks** — Husky + lint-staged for typecheck and

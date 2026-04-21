@@ -37,6 +37,14 @@ export default [
       '@typescript-eslint/no-empty-object-type': 'off',
       '@typescript-eslint/no-require-imports': 'off',
       '@typescript-eslint/no-namespace': 'off',
+      // Suppress underscore-prefixed unused bindings (_param, [_, rest], _var).
+      // Underscore prefix is the established convention for intentionally unused bindings.
+      '@typescript-eslint/no-unused-vars': ['error', {
+        argsIgnorePattern: '^_',
+        destructuredArrayIgnorePattern: '^_',
+        varsIgnorePattern: '^_',
+        caughtErrorsIgnorePattern: '^_',
+      }],
     },
   },
 
