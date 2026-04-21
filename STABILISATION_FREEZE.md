@@ -2,7 +2,7 @@
 
 **Status:** ACTIVE
 **Started:** 2026-04-20
-**Last updated:** 2026-04-22 (backlog milestone; Phase 4 entry conditions; sub-phases 5–6 complete)
+**Last updated:** 2026-04-22 (sub-phases 5–6 complete; sub-phase 7a diagnostic complete; sub-phase 7 plan anchored; Issue #37 opened)
 **Expected end:** Once Phase 1 (foundations) and Phase 2
 (executable contracts) are complete, the freeze on stabilisation
 work lifts. The Phase 4 stock analyser migration begins under
@@ -110,8 +110,10 @@ Sub-phases:
    Issue #33 (recommendations sector filter bug), 24 carry PRE-FREEZE
    catch-all. Issue #33 opened for `filteredStocks` bypass bug in
    recommendations-tab.
-5. **Test enforcement** — Vitest tests in `packages/budget-domain`
-   wired into CI as a required gate.
+5. **Test enforcement** (complete) — Vitest tests in `packages/budget-domain`
+   (56 tests, 6 files) wired into CI via `pnpm turbo test` as a required gate.
+   `--passWithNoTests` added to 13 workspace packages that have no test files.
+   `vitest` added to root devDependencies to fix Linux hoisting in CI.
 6. **Pre-commit hooks** (complete) — Husky v9 + lint-staged v16
    installed at workspace root. Pre-commit hook runs ESLint on staged
    `.ts/.tsx/.js/.jsx` files (respecting `.lint-baseline.json` from
@@ -119,9 +121,103 @@ Sub-phases:
    Implemented as `scripts/ci/lint-staged-baseline-check.mjs` (Node.js,
    cross-platform) and `scripts/ci/typecheck-staged-workspaces.sh`.
    `git commit --no-verify` available as escape hatch.
-7. **Budget Tracker consolidation** — see Issue #17. Sub-PRs for
-   cleanup, reconciliation, API Gateway rollback, deploy pipeline,
-   launchpad fix, route cutover.
+7. **Budget Tracker consolidation** — see Issue #17. Executed as sub-phases
+   7a–7h in order. See below for the full plan.
+
+   **Open design decisions (resolve before starting 7b)**:
+   - Root path (`/`) behaviour after cutover: redirect to `/launchpad/`?
+     Serve a static placeholder? Leave as `apps/web` root?
+   - Tile visibility during transition (while only stock-analyser is at
+     its new basePath): show Budget Tracker tile as "coming soon" or hide?
+   - Migration flow: keep `EmptyStateWithMigration` in `transactions-tab.tsx`
+     or replace with a link to the standalone `/migrate` page?
+   - API Gateway: keep Budget Tracker's own gateway (`3ndfaitweb`) or
+     restore to platform gateway (see 7f)? The separate gateway is currently
+     live and working; the rollback is optional polish.
+
+   **Sub-phase 7a — Diagnostic (complete).** Read-only investigation.
+   Key findings: S3 is already path-based (all routes served from
+   `apps/stock-analyser` today). BT tree has 7 of 14 files diverged from SA.
+   `rules-tab.tsx` `pattern` vs `pattern.source` bug logged as Issue #37.
+   Cognito callbacks still reference `/budget` not `/budget-tracker`.
+   Full findings in `docs/sub-phase-7a-diagnostic.md`.
+
+   **Sub-phase 7b — `apps/stock-analyser` basePath migration.**
+   Add `basePath: '/stock-signal'` to `apps/stock-analyser/next.config.mjs`.
+   Update `deploy-stock-analyser.yml` to path-scoped S3 sync
+   (`apps/stock-analyser/out/stock-signal → s3://.../stock-signal --delete`).
+   Update CloudFront 403/404 error-page to serve `/stock-signal/index.html`
+   (currently serves root `index.html`). **Risk:** breaks current prod URL
+   for stock-analyser. Coordinate with Steve before deploying.
+
+   **Sub-phase 7c — `apps/budget-tracker`: static export + basePath.**
+   Add `output: 'export'` and `basePath: '/budget-tracker'` to
+   `apps/budget-tracker/next.config.mjs`. Set `trailingSlash: true`.
+   Verify `pnpm build` produces `out/budget-tracker/index.html`.
+   Decide whether to fix TypeScript now or flip `ignoreBuildErrors: false`
+   after the reconciliation pass (7d).
+
+   **Sub-phase 7d — Component tree reconciliation (Issue #37).**
+   BT tree is the canonical destination. Before deleting the SA copy:
+   - Port `builtinRule.pattern.source` fix from SA `rules-tab.tsx` to BT
+     (fixes Issue #37).
+   - Port `EmptyStateWithMigration` from SA `transactions-tab.tsx` to BT
+     (or replace with link to standalone `/migrate` page — see design decision
+     above).
+   - Remove `@ts-nocheck` and fix TypeScript in BT's `budget-tab.tsx`,
+     `rules-tab.tsx`, `transactions-tab.tsx`.
+   - Confirm `id: string` UUID change in `app-shell.tsx` is end-to-end correct.
+   - Diff and reconcile remaining 4 diverged files (`builtin-rules.ts`,
+     `types.ts`, `review-tab.tsx`, one more).
+
+   **Sub-phase 7e — `apps/web`: real Cognito session + group-based tile hiding.**
+   Wire real Cognito auth into `apps/web` launchpad (replace `MOCK_USER`).
+   Add `getGroups(): Promise<string[]>` to `packages/auth-client` (reads
+   `cognito:groups` claim from ID token). Change tile navigation from
+   full-origin env-var URLs to path-relative (`/stock-signal/`,
+   `/budget-tracker/`). Declare `NEXT_PUBLIC_BUDGET_URL` / `NEXT_PUBLIC_STOCK_URL`
+   in `apps/web/.env.example`. Deploy `apps/web` to the S3 root (replacing
+   launchpad/sign-in routes that currently come from `apps/stock-analyser`).
+
+   **Sub-phase 7f — API Gateway rollback (optional).**
+   Refactor `BudgetTrackerApiStack` to consume the platform API Gateway via
+   string ARN/ID outputs (`Fn.importValue`) rather than L2 construct props.
+   This eliminates the separate `budget-tracker-api-dev` gateway (`3ndfaitweb`)
+   and routes Budget Tracker through `transformotion-api-dev` (`yqtrjzrnp3`),
+   consistent with all other apps. See `docs/sub-phase-7a-diagnostic.md` §5
+   for the fix pattern. **Optional** — the separate gateway is working.
+
+   **Sub-phase 7g — Budget Tracker deploy pipeline.**
+   Wire `deploy-budget-tracker.yml` with real steps matching
+   `deploy-stock-analyser.yml` as template: AWS OIDC credentials, CDK deploy
+   (`BudgetTrackerApiStack` only — tables already exist, skip
+   `BudgetTrackerTablesStack`), `pnpm build`, path-scoped S3 sync
+   (`/budget-tracker --delete`), path-scoped CloudFront invalidation
+   (`/budget-tracker/*`), `verify-deploy.sh`. Fix Cognito callback URLs
+   in CDK from `/budget` → `/budget-tracker` (currently live in
+   `BudgetTrackerTablesStack` — requires CDK deploy to take effect).
+   Fix `package.json` `name` field: `@transformotion/budget` →
+   `@transformotion/budget-tracker` (keeps turbo `--filter` consistent).
+
+   **Sub-phase 7h — Delete SA budget-tracker copy.**
+   With `apps/budget-tracker` live at `/budget-tracker/` and `apps/web`
+   serving launchpad + sign-in:
+   - Delete `apps/stock-analyser/components/budget-tracker/`
+   - Delete `apps/stock-analyser/app/budget-tracker/`
+   - Delete `apps/stock-analyser/lib/examples/budget-tracker-usage.tsx`
+     (orphaned scaffold, dead code — safe to delete; see §10 of diagnostic)
+   - Remove tsconfig path alias `"components/budget-tracker"` from
+     `apps/stock-analyser/tsconfig.json`
+   - Delete `apps/stock-analyser/app/launchpad/` and
+     `apps/stock-analyser/app/sign-in/` (now owned by `apps/web`)
+   - Remove the 18 `.lint-baseline.json` entries referencing Issue #17
+
+   **Ordering constraints:**
+   - 7b must deploy and verify before 7h removes the SA budget-tracker copy
+   - 7c + 7d must both be complete before 7g deploys budget-tracker
+   - 7e must deploy before 7h removes SA's launchpad/sign-in routes
+   - 7f is independent of ordering (CDK refactor only)
+   - 7g must verify before 7h
 
 ### Phase 2 — Executable contracts
 
@@ -207,6 +303,7 @@ milestone):
 | #18 | Deployment infrastructure: env var enforcement and deploy verification | Open |
 | #32 | Lint: track and plan removal of web-vite-backup and v0-reference | Open |
 | #33 | bug(recommendations): sector filter computed but never applied to rendered stock list | Open |
+| #37 | bug(budget-tracker): rules-tab.tsx passes regex object where .source string expected | Open |
 
 ## Backlog discipline
 
