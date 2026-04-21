@@ -1,75 +1,137 @@
 {
-  "apps/budget-tracker/components/budget-tracker/tabs/budget-tab.tsx": {
-    "react-hooks/exhaustive-deps": 1
-  },
-  "apps/budget-tracker/functions/budget-migrate/src/index.ts": {
+  "apps/budget-tracker/components/brand/wordmark.tsx": {
     "@typescript-eslint/no-unused-vars": 1
   },
-  "apps/stock-analyser/app/sign-in/page.tsx": {
+  "apps/budget-tracker/components/budget-tracker/tabs/budget-tab.tsx": {
+    "@typescript-eslint/no-unused-vars": 3
+  },
+  "apps/budget-tracker/components/budget-tracker/tabs/cashflow-tab.tsx": {
+    "@typescript-eslint/no-unused-vars": 6
+  },
+  "apps/budget-tracker/components/budget-tracker/tabs/review-tab.tsx": {
+    "@typescript-eslint/no-unused-vars": 1
+  },
+  "apps/budget-tracker/components/budget-tracker/tabs/rules-tab.tsx": {
+    "@typescript-eslint/no-unused-vars": 3,
     "react-hooks/exhaustive-deps": 1
+  },
+  "apps/budget-tracker/components/budget-tracker/tabs/summary-tab.tsx": {
+    "@typescript-eslint/no-unused-vars": 2
+  },
+  "apps/budget-tracker/components/budget-tracker/tabs/transactions-tab.tsx": {
+    "@typescript-eslint/no-unused-vars": 5
+  },
+  "apps/budget-tracker/components/ui/use-toast.ts": {
+    "@typescript-eslint/no-unused-vars": 1
+  },
+  "apps/budget-tracker/functions/budget-export/src/index.ts": {
+    "@typescript-eslint/no-unused-vars": 1
+  },
+  "apps/budget-tracker/functions/budget-transactions/src/index.ts": {
+    "@typescript-eslint/no-unused-vars": 1,
+    "prefer-const": 1
+  },
+  "apps/budget-tracker/hooks/use-toast.ts": {
+    "@typescript-eslint/no-unused-vars": 1
+  },
+  "apps/budget-tracker/lib/repositories/budget-tracker/rules-repository.ts": {
+    "@typescript-eslint/no-unused-vars": 1
+  },
+  "apps/budget-tracker/lib/repositories/budget-tracker/transaction-repository.ts": {
+    "@typescript-eslint/no-unused-vars": 1
+  },
+  "apps/budget-tracker/lib/services/auth/mock-auth.ts": {
+    "@typescript-eslint/no-unused-vars": 1
+  },
+  "apps/budget-tracker/lib/services/cache/memory-cache.ts": {
+    "@typescript-eslint/no-unused-vars": 1
+  },
+  "apps/budget-tracker/stores/auth/use-auth-store.ts": {
+    "@typescript-eslint/no-unused-vars": 2
+  },
+  "apps/stock-analyser/components/auth/sign-in.tsx": {
+    "@typescript-eslint/no-unused-vars": 1
   },
   "apps/stock-analyser/components/budget-tracker/tabs/budget-tab.tsx": {
+    "@typescript-eslint/ban-ts-comment": 1,
+    "@typescript-eslint/no-unused-vars": 3
+  },
+  "apps/stock-analyser/components/budget-tracker/tabs/cashflow-tab.tsx": {
+    "@typescript-eslint/no-unused-vars": 6
+  },
+  "apps/stock-analyser/components/budget-tracker/tabs/review-tab.tsx": {
+    "@typescript-eslint/no-unused-vars": 1
+  },
+  "apps/stock-analyser/components/budget-tracker/tabs/rules-tab.tsx": {
+    "@typescript-eslint/ban-ts-comment": 1,
+    "@typescript-eslint/no-unused-vars": 3,
     "react-hooks/exhaustive-deps": 1
   },
-  "apps/stock-analyser/components/providers/auth-guard.tsx": {
-    "react-hooks/exhaustive-deps": 1
+  "apps/stock-analyser/components/budget-tracker/tabs/summary-tab.tsx": {
+    "@typescript-eslint/no-unused-vars": 2
+  },
+  "apps/stock-analyser/components/budget-tracker/tabs/transactions-tab.tsx": {
+    "@typescript-eslint/ban-ts-comment": 1,
+    "@typescript-eslint/no-unused-vars": 6
+  },
+  "apps/stock-analyser/components/launchpad/launchpad.tsx": {
+    "@typescript-eslint/no-unused-vars": 1
   },
   "apps/stock-analyser/components/stock-signal/app-shell.tsx": {
-    "@typescript-eslint/no-explicit-any": 4
+    "@typescript-eslint/no-unused-vars": 1
   },
   "apps/stock-analyser/components/stock-signal/tabs/analyser-tab.tsx": {
-    "react-hooks/exhaustive-deps": 1
+    "@typescript-eslint/no-unused-vars": 2
+  },
+  "apps/stock-analyser/components/stock-signal/tabs/etfs-tab.tsx": {
+    "@typescript-eslint/no-unused-vars": 1
+  },
+  "apps/stock-analyser/components/stock-signal/tabs/metals-tab.tsx": {
+    "@typescript-eslint/no-unused-vars": 5
   },
   "apps/stock-analyser/components/stock-signal/tabs/portfolio-tab.tsx": {
-    "react-hooks/exhaustive-deps": 1
+    "@typescript-eslint/no-unused-expressions": 1
   },
   "apps/stock-analyser/components/stock-signal/tabs/recommendations-tab.tsx": {
-    "react-hooks/exhaustive-deps": 1
+    "@typescript-eslint/no-unused-vars": 5
   },
   "apps/stock-analyser/components/stock-signal/tabs/watchlist-tab.tsx": {
-    "react-hooks/exhaustive-deps": 1
+    "@typescript-eslint/no-unused-vars": 2
   },
-  "apps/web-vite-backup/src/components/shell/AccountSwitcher.tsx": {
-    "react-hooks/exhaustive-deps": 1
+  "apps/stock-analyser/components/ui/use-toast.ts": {
+    "@typescript-eslint/no-unused-vars": 1
   },
-  "apps/web-vite-backup/src/contexts/ModeContext.tsx": {
-    "react-hooks/exhaustive-deps": 1
+  "apps/stock-analyser/hooks/use-toast.ts": {
+    "@typescript-eslint/no-unused-vars": 1
   },
-  "apps/web-vite-backup/src/hooks/useApiClient.ts": {
-    "react-hooks/exhaustive-deps": 1
+  "apps/stock-analyser/lib/api/client.ts": {
+    "@typescript-eslint/no-unused-vars": 1
   },
-  "apps/web-vite-backup/src/pages/stock/AnalysePage.tsx": {
-    "react-hooks/exhaustive-deps": 2
+  "apps/stock-analyser/lib/examples/budget-tracker-usage.tsx": {
+    "@typescript-eslint/ban-ts-comment": 1
   },
-  "apps/web-vite-backup/src/pages/stock/EtfsPage.tsx": {
-    "react-hooks/exhaustive-deps": 1
+  "apps/stock-analyser/lib/repositories/budget-tracker/rules-repository.ts": {
+    "@typescript-eslint/no-unused-vars": 1
   },
-  "apps/web-vite-backup/src/pages/stock/MarketPage.tsx": {
-    "react-hooks/exhaustive-deps": 1
+  "apps/stock-analyser/lib/services/auth/mock-auth.ts": {
+    "@typescript-eslint/no-unused-vars": 1
   },
-  "apps/web-vite-backup/src/pages/stock/MetalsPage.tsx": {
-    "react-hooks/exhaustive-deps": 1
+  "apps/stock-analyser/lib/services/cache/dynamo-ttl-cache.ts": {
+    "@typescript-eslint/no-unused-vars": 1
   },
-  "apps/web-vite-backup/src/pages/stock/PortfolioPage.tsx": {
-    "react-hooks/exhaustive-deps": 2
+  "apps/stock-analyser/lib/services/cache/memory-cache.ts": {
+    "@typescript-eslint/no-unused-vars": 1
   },
-  "apps/web-vite-backup/src/pages/stock/RecsPage.tsx": {
-    "react-hooks/exhaustive-deps": 2
+  "apps/stock-analyser/lib/services/portfolio/csv-parser.ts": {
+    "prefer-const": 2
   },
-  "apps/web-vite-backup/src/pages/stock/WatchlistPage.tsx": {
-    "@typescript-eslint/no-explicit-any": 1,
-    "react-hooks/exhaustive-deps": 3
+  "apps/web/components/auth/sign-in.tsx": {
+    "@typescript-eslint/no-unused-vars": 3
   },
-  "v0-reference/components/budget-tracker/tabs/budget-tab.tsx": {
-    "react-hooks/exhaustive-deps": 1
+  "functions/accounts/src/index.ts": {
+    "@typescript-eslint/no-unused-vars": 1
   },
-  "v0-reference/components/stock-signal/app-shell.tsx": {
-    "@typescript-eslint/no-explicit-any": 4
-  },
-  "v0-reference/components/stock-signal/tabs/analyser-tab.tsx": {
-    "react-hooks/exhaustive-deps": 1
-  },
-  "v0-reference/components/stock-signal/tabs/recommendations-tab.tsx": {
-    "react-hooks/exhaustive-deps": 1
+  "packages/cycle-engine/src/index.ts": {
+    "prefer-const": 1
   }
 }

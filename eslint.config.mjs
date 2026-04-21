@@ -10,6 +10,8 @@
 
 import boundaries from 'eslint-plugin-boundaries';
 import tsParser from '@typescript-eslint/parser';
+import reactHooks from 'eslint-plugin-react-hooks';
+import tsPlugin from '@typescript-eslint/eslint-plugin';
 
 export default [
   {
@@ -19,8 +21,36 @@ export default [
       '**/.next/**',
       '**/out/**',
       '**/cdk.out/**',
+      'apps/web-vite-backup/**',
+      'v0-reference/**',
     ],
   },
+
+  // TypeScript recommended rules (scoped to ts/tsx by flat/recommended)
+  ...tsPlugin.configs['flat/recommended'],
+
+  {
+    files: ['**/*.ts', '**/*.tsx'],
+    // Noise-reduction overrides on top of flat/recommended
+    rules: {
+      '@typescript-eslint/no-empty-function': 'off',
+      '@typescript-eslint/no-empty-object-type': 'off',
+      '@typescript-eslint/no-require-imports': 'off',
+      '@typescript-eslint/no-namespace': 'off',
+    },
+  },
+
+  // React hooks rules (targeted — skip react-hooks v7 compiler rules)
+  {
+    files: ['**/*.ts', '**/*.tsx'],
+    plugins: { 'react-hooks': reactHooks },
+    rules: {
+      'react-hooks/rules-of-hooks': 'error',
+      'react-hooks/exhaustive-deps': 'warn',
+    },
+  },
+
+  // Import boundary rules
   {
     files: ['**/*.ts', '**/*.tsx'],
     plugins: { boundaries },

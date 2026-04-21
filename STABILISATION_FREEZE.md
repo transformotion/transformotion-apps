@@ -2,7 +2,7 @@
 
 **Status:** ACTIVE
 **Started:** 2026-04-20
-**Last updated:** 2026-04-21 (sub-phase 4: ESLint enforcement wired)
+**Last updated:** 2026-04-21 (sub-phase 4 follow-up: plugins enabled, archived dirs excluded, baseline regenerated)
 **Expected end:** Once Phase 1 (foundations) and Phase 2
 (executable contracts) are complete, the freeze on stabilisation
 work lifts. The Phase 4 stock analyser migration begins under
@@ -89,12 +89,18 @@ Sub-phases:
    `eslint .`. Boundary rules for all 6 element types enforced:
    apps cannot import from other apps; packages cannot import from apps;
    infrastructure cannot import from apps. `web` element added (was
-   missing from legacy config). `.lint-baseline.json` generated (24
-   files, 36 pre-existing "rule not found" violations — all from
-   inline disable comments for unloaded plugins). Ratchet script
-   `scripts/ci/check-lint-baseline.sh` added; CI hard-fails on new
-   violations. `pnpm turbo lint` replaced in CI by the ratchet (turbo
-   task kept for local developer use).
+   missing from legacy config). `.lint-baseline.json` generated and
+   maintained. Ratchet script `scripts/ci/check-lint-baseline.sh`
+   added; CI hard-fails on new violations. `pnpm turbo lint` replaced
+   in CI by the ratchet (turbo task kept for local developer use).
+   Follow-up: `eslint-plugin-react-hooks` and
+   `@typescript-eslint/eslint-plugin` enabled (plugins were referenced
+   in disable comments but not loaded — loading them makes the comments
+   valid and surfaces real violations). `apps/web-vite-backup/**` and
+   `v0-reference/**` excluded from ESLint (archived code; tracked in
+   Issue #32). Baseline regenerated: 43 files, 92 real violations.
+   CI growth-check step added: baseline may not grow on a PR unless
+   `eslint.config.mjs` was also changed.
 5. **Test enforcement** — Vitest tests in `packages/budget-domain`
    wired into CI as a required gate.
 6. **Pre-commit hooks** — Husky + lint-staged for typecheck and
