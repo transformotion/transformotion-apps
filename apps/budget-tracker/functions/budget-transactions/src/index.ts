@@ -97,7 +97,7 @@ async function bulkUpsert(event: APIGatewayProxyEvent, accountId: string) {
 
   const existingKeys = new Set(existing.map(naturalKey));
 
-  let created = 0; let updated = 0; let skipped = 0;
+  let created = 0; const updated = 0; let skipped = 0;
   const resultTxs: Transaction[] = [];
   const toWrite: Transaction[] = [];
 

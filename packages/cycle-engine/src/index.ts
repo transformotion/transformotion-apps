@@ -209,7 +209,7 @@ export function computeCyclePosition(inputs: CycleInputs): CyclePosition | null 
  *   "BHP.AX"  → "BHP.AX"   (already normalised)
  */
 export function normaliseTicker(raw: string): string {
-  let t = (raw || '').trim().toUpperCase();
+  const t = (raw || '').trim().toUpperCase();
 
   // Strip CMC Markets exchange suffixes
   if (t.endsWith(':US')) return t.slice(0, -3);

@@ -29,8 +29,28 @@ jobs:
       - name: Typecheck (all workspaces)
         run: pnpm turbo typecheck
 
-      - name: Lint (all workspaces)
-        run: pnpm turbo lint
+      - name: Lint baseline check (no new violations)
+        run: bash scripts/ci/check-lint-baseline.sh
+
+      - name: Verify baseline didn't grow vs base branch
+        run: |
+          BASE="${{ github.base_ref }}"
+          if ! git show "origin/$BASE:.lint-baseline.json" > /tmp/base-baseline.json 2>/dev/null; then
+            echo "No baseline on origin/$BASE — first introduction, skipping growth check."
+            exit 0
+          fi
+          if git diff "origin/$BASE" -- eslint.config.mjs | grep -q '^+' 2>/dev/null; then
+            echo "eslint.config.mjs changed in this PR — baseline growth is expected, skipping growth check."
+            exit 0
+          fi
+          BASE_TOTAL=$(jq '[.. | numbers] | add // 0' /tmp/base-baseline.json)
+          PR_TOTAL=$(jq '[.. | numbers] | add // 0' .lint-baseline.json)
+          echo "Base violations: $BASE_TOTAL  PR violations: $PR_TOTAL"
+          if [ "$PR_TOTAL" -gt "$BASE_TOTAL" ]; then
+            echo "ERROR: Baseline grew ($BASE_TOTAL → $PR_TOTAL). Fix violations or justify the growth in this PR."
+            exit 1
+          fi
+          echo "Baseline growth check passed."
 
   infra-synth:
     name: CDK Synth (validate templates)

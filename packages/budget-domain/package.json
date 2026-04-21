@@ -6,7 +6,7 @@
   "scripts": {
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
-    "lint": "echo \"lint: budget-domain\"",
+    "lint": "eslint .",
     "test": "vitest run"
   },
   "devDependencies": {
