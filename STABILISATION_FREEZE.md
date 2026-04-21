@@ -2,7 +2,7 @@
 
 **Status:** ACTIVE
 **Started:** 2026-04-20
-**Last updated:** 2026-04-22 (backlog milestone created; Phase 4 entry conditions added)
+**Last updated:** 2026-04-22 (backlog milestone; Phase 4 entry conditions; sub-phase 5 test enforcement complete)
 **Expected end:** Once Phase 1 (foundations) and Phase 2
 (executable contracts) are complete, the freeze on stabilisation
 work lifts. The Phase 4 stock analyser migration begins under
@@ -110,8 +110,11 @@ Sub-phases:
    Issue #33 (recommendations sector filter bug), 24 carry PRE-FREEZE
    catch-all. Issue #33 opened for `filteredStocks` bypass bug in
    recommendations-tab.
-5. **Test enforcement** — Vitest tests in `packages/budget-domain`
-   wired into CI as a required gate.
+5. **Test enforcement** (complete) — Vitest tests in `packages/budget-domain`
+   (56 tests across 6 files) wired into CI as a required gate via
+   `pnpm turbo test`. All other workspace packages updated to use
+   `vitest run --passWithNoTests` so the root turbo command exits
+   cleanly. CI hard-fails if any budget-domain test regresses.
 6. **Pre-commit hooks** — Husky + lint-staged for typecheck and
    lint on staged files.
 7. **Budget Tracker consolidation** — see Issue #17. Sub-PRs for
