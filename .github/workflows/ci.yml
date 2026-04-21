@@ -32,6 +32,9 @@ jobs:
       - name: Lint (all workspaces)
         run: pnpm turbo lint
 
+      - name: Lint baseline check (no new violations)
+        run: bash scripts/ci/check-lint-baseline.sh
+
   infra-synth:
     name: CDK Synth (validate templates)
     runs-on: ubuntu-latest

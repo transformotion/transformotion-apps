@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start --port 3002",
     "typecheck": "tsc --noEmit",
-    "lint": "echo \"lint: budget-tracker\""
+    "lint": "eslint ."
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",

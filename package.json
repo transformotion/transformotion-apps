@@ -10,8 +10,10 @@
     "clean": "turbo clean && rm -rf node_modules"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3.3.5",
     "@typescript-eslint/parser": "^8.58.2",
     "eslint": "^10.2.1",
+    "eslint-import-resolver-typescript": "^4.4.4",
     "eslint-plugin-boundaries": "^6.0.2",
     "turbo": "^2.0.0",
     "typescript": "^5.4.0"

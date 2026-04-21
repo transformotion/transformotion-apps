@@ -5,7 +5,7 @@
   "main": "./src/index.ts",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "lint": "echo \"lint: auth-client\""
+    "lint": "eslint ."
   },
   "devDependencies": {
     "typescript": "*"

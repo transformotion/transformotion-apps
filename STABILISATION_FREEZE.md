@@ -2,7 +2,7 @@
 
 **Status:** ACTIVE
 **Started:** 2026-04-20
-**Last updated:** 2026-04-21 (sub-phase 3: deploy verification wired)
+**Last updated:** 2026-04-21 (sub-phase 4: ESLint enforcement wired)
 **Expected end:** Once Phase 1 (foundations) and Phase 2
 (executable contracts) are complete, the freeze on stabilisation
 work lifts. The Phase 4 stock analyser migration begins under
@@ -81,9 +81,20 @@ Sub-phases:
    tagging convention for CI-injected values; `check-required-env-vars.sh`
    does not match this tag (verified). When CI reports "deployed", it
    now has cryptographic evidence.
-4. **Lint enforcement** — ESLint flat config migration, real
-   workspace lint scripts, boundary rules enforced in CI.
-   eslint-plugin-boundaries flat-config compatibility resolved.
+4. **Lint enforcement** (complete) — `.eslintrc.cjs` (legacy format)
+   replaced by `eslint.config.mjs` (ESLint 10 flat config).
+   `eslint-plugin-boundaries` v6 wired with native flat-config API and
+   `eslint-import-resolver-typescript` for module resolution. All 9
+   workspace stub lint scripts (`echo "lint: ..."`) replaced with
+   `eslint .`. Boundary rules for all 6 element types enforced:
+   apps cannot import from other apps; packages cannot import from apps;
+   infrastructure cannot import from apps. `web` element added (was
+   missing from legacy config). `.lint-baseline.json` generated (24
+   files, 36 pre-existing "rule not found" violations — all from
+   inline disable comments for unloaded plugins). Ratchet script
+   `scripts/ci/check-lint-baseline.sh` added; CI hard-fails on new
+   violations. Wired into `.github/workflows/ci.yml` as a new step
+   after `pnpm turbo lint`.
 5. **Test enforcement** — Vitest tests in `packages/budget-domain`
    wired into CI as a required gate.
 6. **Pre-commit hooks** — Husky + lint-staged for typecheck and

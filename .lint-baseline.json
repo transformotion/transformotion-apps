@@ -1,0 +1,75 @@
+{
+  "apps/budget-tracker/components/budget-tracker/tabs/budget-tab.tsx": {
+    "react-hooks/exhaustive-deps": 1
+  },
+  "apps/budget-tracker/functions/budget-migrate/src/index.ts": {
+    "@typescript-eslint/no-unused-vars": 1
+  },
+  "apps/stock-analyser/app/sign-in/page.tsx": {
+    "react-hooks/exhaustive-deps": 1
+  },
+  "apps/stock-analyser/components/budget-tracker/tabs/budget-tab.tsx": {
+    "react-hooks/exhaustive-deps": 1
+  },
+  "apps/stock-analyser/components/providers/auth-guard.tsx": {
+    "react-hooks/exhaustive-deps": 1
+  },
+  "apps/stock-analyser/components/stock-signal/app-shell.tsx": {
+    "@typescript-eslint/no-explicit-any": 4
+  },
+  "apps/stock-analyser/components/stock-signal/tabs/analyser-tab.tsx": {
+    "react-hooks/exhaustive-deps": 1
+  },
+  "apps/stock-analyser/components/stock-signal/tabs/portfolio-tab.tsx": {
+    "react-hooks/exhaustive-deps": 1
+  },
+  "apps/stock-analyser/components/stock-signal/tabs/recommendations-tab.tsx": {
+    "react-hooks/exhaustive-deps": 1
+  },
+  "apps/stock-analyser/components/stock-signal/tabs/watchlist-tab.tsx": {
+    "react-hooks/exhaustive-deps": 1
+  },
+  "apps/web-vite-backup/src/components/shell/AccountSwitcher.tsx": {
+    "react-hooks/exhaustive-deps": 1
+  },
+  "apps/web-vite-backup/src/contexts/ModeContext.tsx": {
+    "react-hooks/exhaustive-deps": 1
+  },
+  "apps/web-vite-backup/src/hooks/useApiClient.ts": {
+    "react-hooks/exhaustive-deps": 1
+  },
+  "apps/web-vite-backup/src/pages/stock/AnalysePage.tsx": {
+    "react-hooks/exhaustive-deps": 2
+  },
+  "apps/web-vite-backup/src/pages/stock/EtfsPage.tsx": {
+    "react-hooks/exhaustive-deps": 1
+  },
+  "apps/web-vite-backup/src/pages/stock/MarketPage.tsx": {
+    "react-hooks/exhaustive-deps": 1
+  },
+  "apps/web-vite-backup/src/pages/stock/MetalsPage.tsx": {
+    "react-hooks/exhaustive-deps": 1
+  },
+  "apps/web-vite-backup/src/pages/stock/PortfolioPage.tsx": {
+    "react-hooks/exhaustive-deps": 2
+  },
+  "apps/web-vite-backup/src/pages/stock/RecsPage.tsx": {
+    "react-hooks/exhaustive-deps": 2
+  },
+  "apps/web-vite-backup/src/pages/stock/WatchlistPage.tsx": {
+    "@typescript-eslint/no-explicit-any": 1,
+    "react-hooks/exhaustive-deps": 3
+  },
+  "v0-reference/components/budget-tracker/tabs/budget-tab.tsx": {
+    "react-hooks/exhaustive-deps": 1
+  },
+  "v0-reference/components/stock-signal/app-shell.tsx": {
+    "@typescript-eslint/no-explicit-any": 4
+  },
+  "v0-reference/components/stock-signal/tabs/analyser-tab.tsx": {
+    "react-hooks/exhaustive-deps": 1
+  },
+  "v0-reference/components/stock-signal/tabs/recommendations-tab.tsx": {
+    "react-hooks/exhaustive-deps": 1
+  }
+}
