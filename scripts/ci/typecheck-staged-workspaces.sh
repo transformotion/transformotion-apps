@@ -13,6 +13,26 @@ if [[ $# -eq 0 ]]; then
   exit 0
 fi
 
+# Normalise paths to be relative to CWD.
+# lint-staged v16 passes absolute paths on some platforms; the workspace-
+# detection loop below relies on relative paths and uses "." as the
+# loop-termination sentinel. Strip the CWD prefix from any absolute path
+# that falls inside the repo root; leave paths that are already relative
+# or that fall outside CWD unchanged.
+cwd="$(pwd)"
+normalised=()
+for f in "$@"; do
+  case "$f" in
+    /*) normalised+=("${f#"$cwd/"}") ;;
+    *)  normalised+=("$f") ;;
+  esac
+done
+set -- ${normalised[@]+"${normalised[@]}"}
+
+if [[ $# -eq 0 ]]; then
+  exit 0
+fi
+
 # Identify affected workspace directories by walking up from each staged
 # file until we find a package.json with a "name" field.
 declare -A SEEN_WORKSPACES

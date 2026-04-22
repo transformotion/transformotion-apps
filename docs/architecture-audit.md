@@ -50,7 +50,7 @@ transformotion-apps/
 - `./package.json` (root)
 - `apps/stock-analyser/package.json`
 - `apps/budget-tracker/package.json`
-- `apps/web/package.json`
+- `apps/launchpad/package.json`
 - `apps/stock-analyser/functions/portfolio/package.json`
 - `apps/stock-analyser/functions/watchlist/package.json`
 - `apps/stock-analyser/functions/analysis-cache/package.json`
@@ -141,8 +141,8 @@ packages:
 
 | From | Can Import | Cannot Import |
 |---|---|---|
-| apps/stock-analyser/ | packages/* | apps/budget-tracker/, apps/web/ |
-| apps/budget-tracker/ | packages/* | apps/stock-analyser/, apps/web/ |
+| apps/stock-analyser/ | packages/* | apps/budget-tracker/, apps/launchpad/ |
+| apps/budget-tracker/ | packages/* | apps/stock-analyser/, apps/launchpad/ |
 | packages/* | (nothing outside packages/) | apps/*, infrastructure/* |
 | infrastructure/* | functions/* (file paths) | apps/* directly |
 
@@ -254,7 +254,7 @@ infrastructure/
 **Zero test coverage for:**
 - `apps/stock-analyser/` (no test files)
 - `apps/budget-tracker/` (no test files)
-- `apps/web/` (no test files)
+- `apps/launchpad/` (no test files)
 - All Lambda functions (`functions/`, `apps/*/functions/`)
 - All shared packages except `budget-domain`
 
@@ -408,7 +408,7 @@ fdc1536 fix(infra): give BudgetTrackerApiStack its own API Gateway
 8df41ac chore: merge feat/incorporate-web-launchpad into develop
 fa5898e fix(budget): contract compliance + budget API URL in CI deploy
 2e120bb fix(budget): convert const arrow helpers to function declarations + add migration page
-9ca2f17 feat(web): incorporate v0 launchpad and sign-in into apps/web Next.js app
+9ca2f17 feat(web): incorporate v0 launchpad and sign-in into apps/launchpad Next.js app
 d779d4a fix(auth): resolve sign-in loop — navigate after React commits session state
 858954a feat(budget-tracker): incorporate v0 UI into apps/budget-tracker
 3bceb35 fix: skip eslint in budget-tracker (same ESLint 10 flat config issue)

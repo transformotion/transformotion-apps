@@ -2,6 +2,10 @@
 
 Generated 2026-04-22. Read-only investigation. No code changes.
 
+> **Post-diagnostic note (added 2026-04-22):** The `apps/launchpad` workspace referenced throughout this
+> document was renamed to `apps/launchpad` via PR #39. The content and findings of this diagnostic
+> remain accurate; only the path prefix changed.
+
 ---
 
 ## Executive summary
@@ -11,7 +15,7 @@ already deployed in production. `dev.apps.transformotion.com.au/stock-signal/`,
 `/budget-tracker/`, `/launchpad/`, and `/sign-in/` all exist and resolve today — but they are
 all routes inside a **single** Next.js application (`apps/stock-analyser`), synced to an S3 bucket root
 via `aws s3 sync --delete`. The "consolidation" work is therefore not about changing the URL model; it is
-about splitting the production monolith into the two standalone apps (`apps/web` and `apps/budget-tracker`)
+about splitting the production monolith into the two standalone apps (`apps/launchpad` and `apps/budget-tracker`)
 that already exist in the repo but are not yet deployed.
 
 The two component trees (`apps/stock-analyser/components/budget-tracker/` and
@@ -65,7 +69,7 @@ When `apps/budget-tracker` is deployed independently, this will destroy it unles
 |-----|--------|----------|---------------|-------------------|
 | apps/stock-analyser | `'export'` | none | `true` | `true` |
 | apps/budget-tracker | none (SSR/server) | none | none | `true` |
-| apps/web | none (SSR/server) | none | none | `false` |
+| apps/launchpad | none (SSR/server) | none | none | `false` |
 
 **Important**: `apps/budget-tracker` is NOT configured for static export. It will require
 a server runtime (Vercel, EC2, Lambda@Edge, or conversion to `output: 'export'`).
@@ -94,9 +98,9 @@ Target (after consolidation):
   dev.apps.transformotion.com.au
     └── CloudFront E1128DYYBLMWYK
           └── S3 bucket root (multi-app)
-                ├── /                 ← apps/web (launchpad + sign-in)
-                ├── /launchpad/       ← apps/web
-                ├── /sign-in/         ← apps/web
+                ├── /                 ← apps/launchpad (launchpad + sign-in)
+                ├── /launchpad/       ← apps/launchpad
+                ├── /sign-in/         ← apps/launchpad
                 ├── /stock-signal/    ← apps/stock-analyser (basePath='/stock-signal')
                 └── /budget-tracker/  ← apps/budget-tracker (basePath='/budget-tracker')
 ```
@@ -354,7 +358,7 @@ The BT tree is the intended canonical home. Before deleting the SA copy:
 
 ### How tiles work
 
-Tiles are hardcoded in `apps/web/components/launchpad/launchpad.tsx` as a `const APPS: App[]` array:
+Tiles are hardcoded in `apps/launchpad/components/launchpad/launchpad.tsx` as a `const APPS: App[]` array:
 
 ```typescript
 const APPS: App[] = [
@@ -364,7 +368,7 @@ const APPS: App[] = [
 ]
 ```
 
-Navigation uses **full-origin URL redirects** set by environment variables in `apps/web/app/launchpad/page.tsx`:
+Navigation uses **full-origin URL redirects** set by environment variables in `apps/launchpad/app/launchpad/page.tsx`:
 ```typescript
 const BUDGET_TRACKER_URL = process.env.NEXT_PUBLIC_BUDGET_URL ?? 'http://localhost:3002'
 const STOCK_SIGNAL_URL   = process.env.NEXT_PUBLIC_STOCK_URL  ?? 'http://localhost:3000'
@@ -373,7 +377,7 @@ const STOCK_SIGNAL_URL   = process.env.NEXT_PUBLIC_STOCK_URL  ?? 'http://localho
 When Budget Tracker shares the same CloudFront origin, these should become path-relative URLs
 (`/budget-tracker/`, `/stock-signal/`) rather than full origin URLs. The env vars
 `NEXT_PUBLIC_BUDGET_URL` and `NEXT_PUBLIC_STOCK_URL` are **not currently declared** in
-`apps/web/.env.example`.
+`apps/launchpad/.env.example`.
 
 ### Existing authorisation logic (partial)
 
@@ -405,7 +409,7 @@ To implement group-based tile hiding, `getGroups(): Promise<string[]>` or a `gro
 | Hide tile if user lacks group membership | No group check — tiles always shown based on `available` flag |
 | Real Cognito session | `MOCK_USER` hardcoded |
 | Path-relative navigation | Full-origin env var URLs |
-| apps/web deployed standalone | Not deployed; served from apps/stock-analyser as `/launchpad/` route |
+| apps/launchpad deployed standalone | Not deployed; served from apps/stock-analyser as `/launchpad/` route |
 
 ---
 
@@ -558,10 +562,10 @@ Port SA-only features to the BT tree:
 - Remove `@ts-nocheck` and fix TypeScript errors in all 3 BT tabs
 - Confirm `id: string` type change in `app-shell.tsx` is correct end-to-end
 
-### 7e — apps/web: real Cognito session + group-based tile hiding
-Wire real Cognito auth into `apps/web` launchpad. Add `getGroups()` to `packages/auth-client`.
+### 7e — apps/launchpad: real Cognito session + group-based tile hiding
+Wire real Cognito auth into `apps/launchpad` launchpad. Add `getGroups()` to `packages/auth-client`.
 Change tile navigation from full-origin env-var URLs to path-relative (`/stock-signal/`,
-`/budget-tracker/`). Deploy `apps/web` to the S3 root (replacing the launchpad routes that
+`/budget-tracker/`). Deploy `apps/launchpad` to the S3 root (replacing the launchpad routes that
 currently come from apps/stock-analyser).
 
 ### 7f — API Gateway rollback (restore Budget Tracker to platform gateway)
@@ -579,7 +583,7 @@ already exist), `pnpm build`, path-scoped S3 sync, path-scoped CloudFront invali
 Remove `apps/stock-analyser/components/budget-tracker/`, `apps/stock-analyser/app/budget-tracker/`,
 `apps/stock-analyser/lib/examples/budget-tracker-usage.tsx`. Remove tsconfig path alias.
 Delete `apps/stock-analyser/app/launchpad/` and `apps/stock-analyser/app/sign-in/` (now served
-by apps/web). Update S3 deploy to not sync launchpad/sign-in/budget-tracker paths.
+by apps/launchpad). Update S3 deploy to not sync launchpad/sign-in/budget-tracker paths.
 
 ---
 

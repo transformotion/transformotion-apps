@@ -9,7 +9,7 @@ Multi-tenant PWA platform — Stock Signal Analyser, Budget Tracker, and Transfo
 ## Monorepo structure
 
 ```
-apps/web/           React + Vite + TypeScript frontend (Stock Analyser + shell)
+apps/launchpad/     Platform shell — sign-in page, launchpad with group-based tile visibility
 apps/budget/        Budget Tracker (Phase 5)
 packages/api-client Typed API wrappers (shared)
 packages/cycle-engine  RSI/MACD/volume cycle scoring (extracted from HTML version)

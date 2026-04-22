@@ -1038,7 +1038,7 @@ Ordered by file path, then line number.
 11: const DEFAULT_TTL = 300 // 5 minutes
 ```
 
-#### apps/web/components/auth/sign-in.tsx:288 — `_email`
+#### apps/launchpad/components/auth/sign-in.tsx:288 — `_email`
 
 **Category:** `unused-parameter`
 **Variable:** `_email`
@@ -1051,7 +1051,7 @@ Ordered by file path, then line number.
 290:     setTimeout(() => {
 ```
 
-#### apps/web/components/auth/sign-in.tsx:288 — `_password`
+#### apps/launchpad/components/auth/sign-in.tsx:288 — `_password`
 
 **Category:** `unused-parameter`
 **Variable:** `_password`
@@ -1064,7 +1064,7 @@ Ordered by file path, then line number.
 290:     setTimeout(() => {
 ```
 
-#### apps/web/components/auth/sign-in.tsx:296
+#### apps/launchpad/components/auth/sign-in.tsx:296
 
 **Category:** `unused-parameter`
 **Variable:** `_provider`
