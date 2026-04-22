@@ -2,7 +2,7 @@
 
 **Status:** ACTIVE
 **Started:** 2026-04-20
-**Last updated:** 2026-04-22 (sub-phases 5–6 complete; sub-phase 7a diagnostic complete; sub-phase 7 plan anchored; Issue #37 opened)
+**Last updated:** 2026-04-22 (sub-phases 5–6 complete; sub-phase 7a diagnostic complete; sub-phase 7 plan anchored; Issue #37 opened; preamble.4 Cognito gating verified; three-client permission model anchored)
 **Expected end:** Once Phase 1 (foundations) and Phase 2
 (executable contracts) are complete, the freeze on stabilisation
 work lifts. The Phase 4 stock analyser migration begins under
@@ -150,6 +150,17 @@ Sub-phases:
    (currently serves root `index.html`). **Risk:** breaks current prod URL
    for stock-analyser. Coordinate with Steve before deploying.
 
+   **Sub-phase 7b.5 — Three-client Cognito permission model.**
+   Creates a dedicated `StockAnalyserAppClient` Cognito app client
+   gated to users in the `stock-app` or `admin` group via a
+   pre-token-generation Lambda. Stacked with PR #40 (WebAppClient →
+   LaunchpadAppClient rename); both merge together to collapse the
+   "shared-client" window where SA and Launchpad use the same client.
+   The pre-token Lambda also upgrades BudgetTrackerClient's gating
+   from Lambda-application-layer to Cognito-authentication-layer.
+   See Platform Permission Invariants section for the full model and
+   current state.
+
    **Sub-phase 7c — `apps/budget-tracker`: static export + basePath.**
    Add `output: 'export'` and `basePath: '/budget-tracker'` to
    `apps/budget-tracker/next.config.mjs`. Set `trailingSlash: true`.
@@ -213,6 +224,7 @@ Sub-phases:
    - Remove the 18 `.lint-baseline.json` entries referencing Issue #17
 
    **Ordering constraints:**
+   - 7b.5 must merge with PR #40 (deploy together — single client transition window)
    - 7b must deploy and verify before 7h removes the SA budget-tracker copy
    - 7c + 7d must both be complete before 7g deploys budget-tracker
    - 7e must deploy before 7h removes SA's launchpad/sign-in routes
@@ -275,6 +287,68 @@ Decommission the monolithic repo.
 With the foundation stable, decide and document how (or whether)
 v0 fits back into the development cycle. Decision deferred until
 Phase 4 completes.
+
+## Platform permission invariants (Cognito)
+
+These are platform-level architectural invariants. Changes to any of
+these require deliberate review — not a side-effect of other work.
+
+### Three-client model
+
+The platform targets three Cognito app clients, one per logical access
+boundary:
+
+1. **LaunchpadAppClient** — the platform shell client (PR #40). Any
+   user who can authenticate against the user pool can obtain a token
+   for this client. No group-scoped restrictions. Callback URLs on
+   launchpad paths (`/`, `/callback`, `/launchpad/*`).
+
+2. **StockAnalyserAppClient** — gated to users in the `stock-app` or
+   `admin` Cognito group. Users outside those groups cannot obtain a
+   valid token for this client, so the app is inaccessible to them at
+   the authentication layer. Callback URLs on `/stock-signal/*`.
+
+3. **BudgetTrackerAppClient** — gated to users in the `budget-app` or
+   `admin` group. Callback URLs on `/budget-tracker/*`.
+
+Gating is implemented via a pre-token-generation Lambda that rejects
+token requests for an app client if the user's `cognito:groups` claim
+does not include an allowed group for that client. This makes access
+control real at the Cognito authentication layer — not merely a
+frontend display rule that a technically-capable user could bypass.
+
+### Current state (verified 2026-04-22)
+
+| Client | Pre-token Lambda gating | API-layer gating | Frontend-layer gating |
+|---|---|---|---|
+| WebAppClient (→ LaunchpadAppClient, PR #40) | None | None | None (intentional — shell is open) |
+| BudgetTrackerClient | **None** | **Yes** — every Lambda handler calls `requireGroup('budget-app', 'admin')` from `packages/lambda-middleware` — throws 403 | UI reads `cognito:groups` for tile display |
+| StockAnalyserClient | **Does not exist yet** (piggybacks LaunchpadAppClient) | **None** — no `requireGroup` calls in stock analyser Lambdas | UI reads `cognito:groups` for display only |
+
+**Pre-token-generation Lambda:** Absent (`UserPool.LambdaConfig` is
+null). No Lambda triggers are configured. Anyone who can create a
+Cognito account can get a token for any client.
+
+**API Gateway authorizers:** Both gateways (`yqtrjzrnp3` platform,
+`3ndfaitweb` budget-tracker) use `COGNITO_USER_POOLS` type — validates
+JWT signature and expiry only; does not check `cognito:groups`.
+
+**Plain-language assessment:**
+- Budget Tracker API access is effectively gated (any valid Cognito
+  token can reach the API Gateway, but every Lambda returns 403 to
+  users outside `budget-app`/`admin`). The gating is real but at the
+  application layer, not the authentication layer.
+- Stock Analyser API access is **ungated** — any authenticated user
+  can call stock analyser APIs successfully. Only the Launchpad UI
+  hides the tile.
+
+### Path to the invariant
+
+**Sub-phase 7b.5** introduces `StockAnalyserAppClient` and a
+pre-token-generation Lambda with a per-client group allow-list.
+This makes SA gating real at the Cognito authentication layer and
+upgrades BT gating from Lambda-level to auth-level. Stacked with
+PR #40 and merged in the same deploy window.
 
 ## How to know the freeze is lifting
 
