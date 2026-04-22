@@ -59,7 +59,7 @@ These must be completed before Phase 0 begins. They are prerequisites, not part 
 
 | # | Task | Deliverable |
 |---|------|-------------|
-| 1.1 | Create React + Vite + TypeScript app in `apps/web/`. **Mobile-first is a hard constraint from this session onwards** — see mobile-first rules below. Tailwind v4 dark theme tokens matching current design palette. | ✓ Dev server runs; layout works at 375px |
+| 1.1 | Create React + Vite + TypeScript app in `apps/launchpad/`. **Mobile-first is a hard constraint from this session onwards** — see mobile-first rules below. Tailwind v4 dark theme tokens matching current design palette. | ✓ Dev server runs; layout works at 375px |
 | 1.2 | Provision Cognito User Pool via CDK with: **Groups** (`admin`, `stock-app`, `budget-app`, `transformotion`, `family`); **custom attributes** (`custom:active_account` — current active account UUID, `custom:accounts` — comma-separated account UUIDs). Launchpad renders app tiles based on `cognito:groups` claim in JWT. Users not in a group cannot see or access that app — enforced in both the UI and the Lambda authoriser. | ✓ Users can sign up; groups exist |
 | 1.3 | Auth flows: Sign Up, Confirm Email, Sign In, Forgot Password, Sign Out — custom styled components matching dark theme | ✓ All auth screens live |
 | 1.4 | Protected route wrapper — redirects unauthenticated users to sign-in; token refresh; sign out | ✓ Route guard works |
@@ -202,7 +202,7 @@ To be written in detail when Phase 4 is complete, following the same tab-by-tab 
 transformotion-apps/
 ├── apps/
 │   ├── web/                    # React + Vite + TypeScript (Stock Analyser + shell)
-│   └── budget/                 # Budget Tracker (Phase 5 — may share apps/web/)
+│   └── budget/                 # Budget Tracker (Phase 5 — may share apps/launchpad/)
 ├── packages/
 │   ├── api-client/             # Typed API wrappers (shared across apps)
 │   ├── cycle-engine/           # Cycle scoring logic (extracted from HTML, tested)

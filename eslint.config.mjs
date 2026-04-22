@@ -4,7 +4,7 @@
 //   ✅ apps/*/          → packages/
 //   ❌ apps/stock-analyser/ → apps/budget-tracker/  (lint error)
 //   ❌ apps/budget-tracker/ → apps/stock-analyser/  (lint error)
-//   ❌ apps/web/        → apps/stock-analyser/      (lint error)
+//   ❌ apps/launchpad/  → apps/stock-analyser/      (lint error)
 //   ❌ packages/        → apps/                     (lint error)
 //   ❌ infrastructure/  → apps/                     (lint error)
 
@@ -72,7 +72,7 @@ export default [
         },
       },
       'boundaries/elements': [
-        { type: 'web',            pattern: 'apps/web/**' },
+        { type: 'launchpad',      pattern: 'apps/launchpad/**' },
         { type: 'stock-analyser', pattern: 'apps/stock-analyser/**' },
         { type: 'budget-tracker', pattern: 'apps/budget-tracker/**' },
         { type: 'packages',       pattern: 'packages/**' },
@@ -85,24 +85,24 @@ export default [
         default: 'allow',
         rules: [
           {
-            from: { type: 'web' },
+            from: { type: 'launchpad' },
             disallow: { to: { type: ['stock-analyser', 'budget-tracker'] } },
           },
           {
             from: { type: 'stock-analyser' },
-            disallow: { to: { type: ['web', 'budget-tracker'] } },
+            disallow: { to: { type: ['launchpad', 'budget-tracker'] } },
           },
           {
             from: { type: 'budget-tracker' },
-            disallow: { to: { type: ['web', 'stock-analyser'] } },
+            disallow: { to: { type: ['launchpad', 'stock-analyser'] } },
           },
           {
             from: { type: 'packages' },
-            disallow: { to: { type: ['web', 'stock-analyser', 'budget-tracker'] } },
+            disallow: { to: { type: ['launchpad', 'stock-analyser', 'budget-tracker'] } },
           },
           {
             from: { type: 'infrastructure' },
-            disallow: { to: { type: ['web', 'stock-analyser', 'budget-tracker'] } },
+            disallow: { to: { type: ['launchpad', 'stock-analyser', 'budget-tracker'] } },
           },
         ],
       }],

@@ -126,7 +126,7 @@ Sub-phases:
 
    **Open design decisions (resolve before starting 7b)**:
    - Root path (`/`) behaviour after cutover: redirect to `/launchpad/`?
-     Serve a static placeholder? Leave as `apps/web` root?
+     Serve a static placeholder? Leave as `apps/launchpad` root?
    - Tile visibility during transition (while only stock-analyser is at
      its new basePath): show Budget Tracker tile as "coming soon" or hide?
    - Migration flow: keep `EmptyStateWithMigration` in `transactions-tab.tsx`
@@ -170,13 +170,13 @@ Sub-phases:
    - Diff and reconcile remaining 4 diverged files (`builtin-rules.ts`,
      `types.ts`, `review-tab.tsx`, one more).
 
-   **Sub-phase 7e — `apps/web`: real Cognito session + group-based tile hiding.**
-   Wire real Cognito auth into `apps/web` launchpad (replace `MOCK_USER`).
+   **Sub-phase 7e — `apps/launchpad`: real Cognito session + group-based tile hiding.**
+   Wire real Cognito auth into `apps/launchpad` launchpad (replace `MOCK_USER`).
    Add `getGroups(): Promise<string[]>` to `packages/auth-client` (reads
    `cognito:groups` claim from ID token). Change tile navigation from
    full-origin env-var URLs to path-relative (`/stock-signal/`,
    `/budget-tracker/`). Declare `NEXT_PUBLIC_BUDGET_URL` / `NEXT_PUBLIC_STOCK_URL`
-   in `apps/web/.env.example`. Deploy `apps/web` to the S3 root (replacing
+   in `apps/launchpad/.env.example`. Deploy `apps/launchpad` to the S3 root (replacing
    launchpad/sign-in routes that currently come from `apps/stock-analyser`).
 
    **Sub-phase 7f — API Gateway rollback (optional).**
@@ -200,7 +200,7 @@ Sub-phases:
    `@transformotion/budget-tracker` (keeps turbo `--filter` consistent).
 
    **Sub-phase 7h — Delete SA budget-tracker copy.**
-   With `apps/budget-tracker` live at `/budget-tracker/` and `apps/web`
+   With `apps/budget-tracker` live at `/budget-tracker/` and `apps/launchpad`
    serving launchpad + sign-in:
    - Delete `apps/stock-analyser/components/budget-tracker/`
    - Delete `apps/stock-analyser/app/budget-tracker/`
@@ -209,7 +209,7 @@ Sub-phases:
    - Remove tsconfig path alias `"components/budget-tracker"` from
      `apps/stock-analyser/tsconfig.json`
    - Delete `apps/stock-analyser/app/launchpad/` and
-     `apps/stock-analyser/app/sign-in/` (now owned by `apps/web`)
+     `apps/stock-analyser/app/sign-in/` (now owned by `apps/launchpad`)
    - Remove the 18 `.lint-baseline.json` entries referencing Issue #17
 
    **Ordering constraints:**
