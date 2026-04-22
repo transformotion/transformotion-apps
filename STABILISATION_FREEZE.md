@@ -2,7 +2,7 @@
 
 **Status:** ACTIVE
 **Started:** 2026-04-20
-**Last updated:** 2026-04-22 (sub-phases 5–6 complete; sub-phase 7a diagnostic complete; sub-phase 7 plan anchored; Issue #37 opened; preamble.4 Cognito gating verified; three-client permission model anchored; 7b.5-beta authz gap closed; Issue #42 opened)
+**Last updated:** 2026-04-22 (sub-phases 5–6 complete; sub-phase 7a diagnostic complete; sub-phase 7 plan anchored; Issue #37 opened; preamble.4 Cognito gating verified; three-client permission model anchored; 7b.5-beta authz gap closed; Issue #42 opened; sub-phase 6 follow-up: infra excluded from pre-commit typecheck)
 **Expected end:** Once Phase 1 (foundations) and Phase 2
 (executable contracts) are complete, the freeze on stabilisation
 work lifts. The Phase 4 stock analyser migration begins under
@@ -121,6 +121,14 @@ Sub-phases:
    Implemented as `scripts/ci/lint-staged-baseline-check.mjs` (Node.js,
    cross-platform) and `scripts/ci/typecheck-staged-workspaces.sh`.
    `git commit --no-verify` available as escape hatch.
+
+   **Sub-phase 6 follow-up (2026-04-22)** — `typecheck-staged-workspaces.sh`
+   updated to exclude `@transformotion/infra` (infrastructure/) from
+   pre-commit typecheck. CDK typecheck is too slow (60–120s) for the
+   "fast feedback" goal of pre-commit hooks, and has been observed
+   hanging entirely. CI's `pnpm turbo typecheck` still covers
+   infrastructure, so no verification coverage is lost. A 60s per-
+   workspace timeout also added as belt-and-braces defence.
 7. **Budget Tracker consolidation** — see Issue #17. Executed as sub-phases
    7a–7h in order. See below for the full plan.
 
