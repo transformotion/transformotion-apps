@@ -10,6 +10,7 @@ import {
   parseBody,
   ok,
   badRequest,
+  requireGroup,
 } from '@transformotion/lambda-middleware';
 import type { WatchlistItem } from './types';
 
@@ -17,7 +18,7 @@ const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const TABLE = process.env.WATCHLIST_TABLE!;
 
 export const handler = withAuth(async ({ auth, account, event }) => {
-  void auth;
+  requireGroup(auth, 'stock-app', 'admin');
   const { accountId } = account;
 
   // ── GET /watchlist ────────────────────────────────────────────────────────

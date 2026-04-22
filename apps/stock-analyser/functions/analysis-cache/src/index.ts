@@ -8,6 +8,7 @@ import {
   noContent,
   notFound,
   badRequest,
+  requireGroup,
 } from '@transformotion/lambda-middleware';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -76,7 +77,7 @@ function resolveWriteAccountId(cacheKey: string, fallbackAccountId: string, clie
 }
 
 export const handler = withAuth(async ({ auth, account, event }) => {
-  void auth;
+  requireGroup(auth, 'stock-app', 'admin');
   const { accountId } = account;
   // URL-decode the key so clients can send MARKET%23Global and the DDB key is MARKET#Global.
   const cacheKey = decodeURIComponent(getPathParam(event, 'key'));

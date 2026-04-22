@@ -2,7 +2,7 @@
 
 **Status:** ACTIVE
 **Started:** 2026-04-20
-**Last updated:** 2026-04-22 (sub-phases 5–6 complete; sub-phase 7a diagnostic complete; sub-phase 7 plan anchored; Issue #37 opened; preamble.4 Cognito gating verified; three-client permission model anchored)
+**Last updated:** 2026-04-22 (sub-phases 5–6 complete; sub-phase 7a diagnostic complete; sub-phase 7 plan anchored; Issue #37 opened; preamble.4 Cognito gating verified; three-client permission model anchored; 7b.5-beta authz gap closed; Issue #42 opened)
 **Expected end:** Once Phase 1 (foundations) and Phase 2
 (executable contracts) are complete, the freeze on stabilisation
 work lifts. The Phase 4 stock analyser migration begins under
@@ -150,7 +150,19 @@ Sub-phases:
    (currently serves root `index.html`). **Risk:** breaks current prod URL
    for stock-analyser. Coordinate with Steve before deploying.
 
-   **Sub-phase 7b.5 — Three-client Cognito permission model.**
+   **Sub-phase 7b.5-beta — Close Stock Analyser + claude-proxy authorization gap (this PR).**
+   Stock Analyser API Lambdas (portfolio, watchlist, analysis-cache) and
+   `functions/claude-proxy` had no group-based authorization checks —
+   any authenticated Cognito user could call them. Added `requireGroup`
+   calls matching Budget Tracker's existing pattern:
+   `requireGroup(auth, 'stock-app', 'admin')` on SA Lambdas,
+   `requireGroup(auth, 'stock-app', 'budget-app', 'admin')` on
+   claude-proxy (broader because either app may legitimately use it).
+   Note: `cycle-check` skipped — it is an EventBridge-scheduled stub with
+   no API Gateway auth context. Platform Lambdas (accounts, user,
+   invitations, first-login, forgot-provider) deferred to Issue #42.
+
+   **Sub-phase 7b.5-alpha — Three-client Cognito permission model (not started).**
    Creates a dedicated `StockAnalyserAppClient` Cognito app client
    gated to users in the `stock-app` or `admin` group via a
    pre-token-generation Lambda. Stacked with PR #40 (WebAppClient →
@@ -323,7 +335,7 @@ frontend display rule that a technically-capable user could bypass.
 |---|---|---|---|
 | WebAppClient (→ LaunchpadAppClient, PR #40) | None | None | None (intentional — shell is open) |
 | BudgetTrackerClient | **None** | **Yes** — every Lambda handler calls `requireGroup('budget-app', 'admin')` from `packages/lambda-middleware` — throws 403 | UI reads `cognito:groups` for tile display |
-| StockAnalyserClient | **Does not exist yet** (piggybacks LaunchpadAppClient) | **None** — no `requireGroup` calls in stock analyser Lambdas | UI reads `cognito:groups` for display only |
+| StockAnalyserClient | **Does not exist yet** (piggybacks LaunchpadAppClient) | **Gated** — `requireGroup('stock-app', 'admin')` added by sub-phase 7b.5-beta (portfolio, watchlist, analysis-cache). `claude-proxy` gated with `requireGroup('stock-app', 'budget-app', 'admin')` | UI reads `cognito:groups` for display only |
 
 **Pre-token-generation Lambda:** Absent (`UserPool.LambdaConfig` is
 null). No Lambda triggers are configured. Anyone who can create a
@@ -344,11 +356,32 @@ JWT signature and expiry only; does not check `cognito:groups`.
 
 ### Path to the invariant
 
-**Sub-phase 7b.5** introduces `StockAnalyserAppClient` and a
-pre-token-generation Lambda with a per-client group allow-list.
+**Sub-phase 7b.5-beta** (complete) — added Lambda-layer gating to
+SA Lambdas and claude-proxy, closing the authorization gap at the
+application layer.
+
+**Sub-phase 7b.5-alpha** (not started) introduces `StockAnalyserAppClient`
+and a pre-token-generation Lambda with a per-client group allow-list.
 This makes SA gating real at the Cognito authentication layer and
 upgrades BT gating from Lambda-level to auth-level. Stacked with
 PR #40 and merged in the same deploy window.
+
+### Permission model expansion (deferred)
+
+The current group-based model (`stock-app`, `budget-app`, `admin`)
+treats group membership as app access with `admin` as a bypass.
+A richer model will likely be needed:
+
+- **App access** dimension: stock-app, budget-app, future apps
+- **Capability level** dimension: admin, standard user, view-only
+- Possibly **OAuth scopes** on tokens as an alternative or
+  complement to group-based checks
+
+This will be designed once the set of features and actions needing
+permissioning is clear. Not sub-phase 7 scope.
+
+Tracked for platform Lambdas (accounts, user, invitations,
+first-login, forgot-provider) specifically as Issue #42.
 
 ## How to know the freeze is lifting
 
@@ -378,6 +411,7 @@ milestone):
 | #32 | Lint: track and plan removal of web-vite-backup and v0-reference | Open |
 | #33 | bug(recommendations): sector filter computed but never applied to rendered stock list | Open |
 | #37 | bug(budget-tracker): rules-tab.tsx passes regex object where .source string expected | Open |
+| #42 | authz: define permission model for platform Lambdas (accounts, user, onboarding handlers) | Open |
 
 ## Backlog discipline
 
