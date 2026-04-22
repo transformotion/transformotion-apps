@@ -147,8 +147,8 @@ export class AuthStack extends cdk.Stack {
       ? ['https://apps.transformotion.com.au']
       : ['http://localhost:3001', 'https://dev.apps.transformotion.com.au'];
 
-    this.userPoolClient = this.userPool.addClient('WebAppClient', {
-      userPoolClientName: `transformotion-web-${stage}`,
+    this.userPoolClient = this.userPool.addClient('LaunchpadAppClient', {
+      userPoolClientName: `transformotion-launchpad-${stage}`,
       generateSecret: false,
 
       // OAuth2 with PKCE — authorization code flow only

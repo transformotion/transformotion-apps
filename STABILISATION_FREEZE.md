@@ -2,7 +2,7 @@
 
 **Status:** ACTIVE
 **Started:** 2026-04-20
-**Last updated:** 2026-04-22 (sub-phases 5–6 complete; sub-phase 7a diagnostic complete; sub-phase 7 plan anchored; Issue #37 opened)
+**Last updated:** 2026-04-22 (sub-phases 5–6 complete; sub-phase 7a diagnostic complete; sub-phase 7 plan anchored; Issue #37 opened; preamble.3 CDK LaunchpadAppClient rename pending deploy)
 **Expected end:** Once Phase 1 (foundations) and Phase 2
 (executable contracts) are complete, the freeze on stabilisation
 work lifts. The Phase 4 stock analyser migration begins under
@@ -284,6 +284,14 @@ structured work, not freeze-period stabilisation.
 
 The freeze ends entirely when Phase 4 ships and the monolithic
 stock analyser repo is archived.
+
+## Pending post-deploy cleanups
+
+Actions that cannot be performed until a CDK deploy has completed. Listed here so they are not forgotten.
+
+| PR / task | Description | Blocker | Checklist doc |
+|---|---|---|---|
+| preamble.3 | Update `NEXT_PUBLIC_COGNITO_CLIENT_ID` GitHub variable to new Cognito client ID after `TransformotionDev-Auth` deploy | CDK deploy of `LaunchpadAppClient` rename | [post-deploy-launchpad-client-rename.md](docs/post-deploy-launchpad-client-rename.md) |
 
 ## Open follow-ups from stabilisation work
 
