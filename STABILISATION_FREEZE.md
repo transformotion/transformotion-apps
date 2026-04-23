@@ -2,7 +2,7 @@
 
 **Status:** ACTIVE
 **Started:** 2026-04-20
-**Last updated:** 2026-04-23 (sub-phases 5–6 complete; sub-phase 7a diagnostic complete; sub-phase 7 plan anchored; Issue #37 opened; preamble.4 Cognito gating verified; three-client permission model anchored; 7b.5-beta authz gap closed; Issue #42 opened; sub-phase 6 follow-up: infra excluded from pre-commit typecheck; sub-phase 7b.5-alpha three-client Cognito model in progress — PR open)
+**Last updated:** 2026-04-23 (sub-phases 5–6 complete; sub-phase 7a diagnostic complete; sub-phase 7 plan anchored; Issue #37 opened; preamble.4 Cognito gating verified; three-client permission model anchored; 7b.5-beta authz gap closed; Issue #42 opened; sub-phase 6 follow-up: infra excluded from pre-commit typecheck; sub-phase 7b.5-alpha three-client Cognito model complete — merged, deployed, verified)
 **Expected end:** Once Phase 1 (foundations) and Phase 2
 (executable contracts) are complete, the freeze on stabilisation
 work lifts. The Phase 4 stock analyser migration begins under
@@ -170,7 +170,7 @@ Sub-phases:
    no API Gateway auth context. Platform Lambdas (accounts, user,
    invitations, first-login, forgot-provider) deferred to Issue #42.
 
-   **Sub-phase 7b.5-alpha — Three-client Cognito permission model (IN PROGRESS — PR open).**
+   **Sub-phase 7b.5-alpha — Three-client Cognito permission model (COMPLETE).**
    Replaces the single shared `WebAppClient` with three distinct app
    clients: `LaunchpadAppClient` (renames WebAppClient; social IDPs),
    `StockAnalyserAppClient` (new; Cognito only), and
@@ -371,7 +371,7 @@ JWT signature and expiry only; does not check `cognito:groups`.
 SA Lambdas and claude-proxy, closing the authorization gap at the
 application layer.
 
-**Sub-phase 7b.5-alpha** (PR open) introduces the three-client model:
+**Sub-phase 7b.5-alpha** (complete — merged and deployed) introduces the three-client model:
 `LaunchpadAppClient`, `StockAnalyserAppClient`, `BudgetTrackerAppClient`.
 Separates authentication sessions per app; SSO via shared Hosted UI
 domain. Authorization model unchanged (still Lambda-layer `requireGroup`).
