@@ -2,11 +2,19 @@
 
 **Status:** ACTIVE
 **Started:** 2026-04-20
-**Last updated:** 2026-04-23 (sub-phases 5–6 complete; sub-phase 7a diagnostic complete; sub-phase 7 plan anchored; Issue #37 opened; preamble.4 Cognito gating verified; three-client permission model anchored; 7b.5-beta authz gap closed; Issue #42 opened; sub-phase 6 follow-up: infra excluded from pre-commit typecheck; sub-phase 7b.5-alpha three-client Cognito model complete — merged, deployed, verified)
+**Last updated:** 2026-04-24 (sub-phase 7e-docs: architecture document set created at docs/architecture/; per-app CLAUDE.md files added; discipline rule established)
 **Expected end:** Once Phase 1 (foundations) and Phase 2
 (executable contracts) are complete, the freeze on stabilisation
 work lifts. The Phase 4 stock analyser migration begins under
 normal feature-development cadence on the new foundation.
+
+## Architectural discipline
+
+All architectural invariants are documented in [docs/architecture/](./docs/architecture/). **Any PR changing what those documents describe must update the relevant document in the same PR.** Architecture documents are the source of truth; code conforms to them, not the other way around.
+
+The discipline rule applies from sub-phase 7e-docs forward. Pre-existing architectural decisions have been migrated to `docs/architecture/` as part of that sub-phase.
+
+---
 
 ## What this means
 
@@ -311,6 +319,8 @@ With the foundation stable, decide and document how (or whether)
 v0 fits back into the development cycle. Decision deferred until
 Phase 4 completes.
 
+> **Note on architectural content in this document.** Architectural decisions previously recorded inline (Cognito model, URL model, tile visibility, etc.) have been migrated to `docs/architecture/`. This document is now scoped to project plan, phase status, and process discipline. Historical decision context is preserved in git history and in the architecture documents.
+
 ## Platform permission invariants (Cognito)
 
 These are platform-level architectural invariants. Changes to any of
@@ -441,3 +451,5 @@ reasoning.
 
 This file is updated as scope evolves. Every update increments the
 "Last updated" date and records the change in the commit message.
+
+This document will be archived to `docs/history/` when stabilisation is complete.

@@ -7,11 +7,11 @@
 ```
 User browser
     ↓
-CloudFront (apps.transformotion.com.au/budget)
+CloudFront (apps.transformotion.com.au/budget-tracker)
     ↓
-S3 (React SPA — shared with other Transformotion apps)
+S3 (Next.js static export — shared bucket, budget-tracker/ prefix)
     ↓
-API Gateway (REST API — /api/budget/v1/*)
+API Gateway (budget-tracker-api-{stage} — /api/budget/v1/*)
     ↓
 Lambda Functions
     ↓
@@ -23,16 +23,27 @@ Lambda Functions
 
 ## Cognito
 
-**Uses the existing shared User Pool** (`transformotion-users`). Budget Tracker does not create its own.
+**Shares the platform Cognito User Pool** (`transformotion-{stage}`). Budget Tracker does not create its own user pool.
 
-- Required group for access: `budget-app`
-- App client: `budget-tracker-client` (new — scoped to this app's allowed OAuth flows)
-- JWT claims used by backend:
-  - `sub` — userId
-  - `cognito:username`
-  - `cognito:groups` — must include `budget-app`
-  - `email`
-- `accountId` is NOT in the JWT — it is looked up server-side in the `accounts` table (see below)
+Budget Tracker has a **dedicated app client**: `BudgetTrackerAppClient` — one of three distinct app clients in the three-client model introduced in sub-phase 7b.5-alpha.
+
+- **Dev client ID:** `291vbglkino4h7b9t39krg9c69`
+- **Env var:** `NEXT_PUBLIC_BUDGET_TRACKER_COGNITO_CLIENT_ID`
+- **Supported IDPs:** Cognito only (no social sign-in on this client — social sign-in happens at the launchpad and propagates via SSO)
+- **Callback URL:** `{host}/budget-tracker/callback`
+- **Logout URL:** `{host}/sign-in`
+
+Required group for access (target — sub-phase 7e): `budget-app-user` or `budget-app-admin` or `site-admin`  
+Current group (deployed): `budget-app` or `admin`
+
+JWT claims used by Lambda handlers:
+- `sub` — userId
+- `cognito:groups` — app access authorization (transitional; replaced by `apps` claim after 7e)
+- `email`
+- `apps` — structured app access claim (available after 7e pre-token Lambda is deployed)
+- `accounts` — per-app membership claim (available after 7e pre-token Lambda is deployed)
+
+For the complete auth model see [/docs/architecture/auth.md](/docs/architecture/auth.md).
 
 ## DynamoDB tables
 

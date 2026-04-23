@@ -5,7 +5,7 @@
 ```
 transformotion-apps/
 ├── apps/
-│   ├── stock-analyser/           # Stock Analyser Next.js app
+│   ├── stock-analyser/           # Stock Analyser Next.js app — basePath /stock-signal
 │   │   ├── app/                  # Next.js App Router pages
 │   │   ├── components/           # React components
 │   │   ├── contracts/            # Stock Analyser interface contracts
@@ -17,9 +17,11 @@ transformotion-apps/
 │   │   ├── lib/                  # Domain logic, services, adaptors
 │   │   ├── stores/               # Zustand stores
 │   │   └── package.json          # @transformotion/stock-analyser
-│   └── budget-tracker/           # Budget Tracker app (scaffolding TBD)
-│       ├── contracts/            # Budget Tracker interface contracts
-│       └── package.json          # @transformotion/budget-tracker
+│   ├── budget-tracker/           # Budget Tracker app — basePath /budget-tracker
+│   │   ├── functions/            # Budget Tracker Lambda source
+│   │   └── package.json          # @transformotion/budget-tracker
+│   └── launchpad/                # Launchpad shell app — serves /, /sign-in/, /launchpad/
+│       └── package.json          # @transformotion/launchpad (planned — not yet deployed)
 │
 ├── packages/                      # Shared code — imported by any app
 │   ├── auth-client/               # Auth interface types (@transformotion/auth-client)
@@ -30,15 +32,18 @@ transformotion-apps/
 │
 ├── infrastructure/                 # AWS CDK — all environments
 │   ├── lib/
-│   │   ├── platform/              # Shared platform stacks (Cognito, S3/CF, API GW, tables)
+│   │   ├── platform/              # Platform stacks (Cognito, S3/CF, API GW, tables)
 │   │   │   ├── auth-stack.ts
 │   │   │   ├── auth-api-stack.ts
 │   │   │   ├── network-stack.ts
 │   │   │   ├── platform-api-stack.ts
 │   │   │   └── platform-tables-stack.ts
-│   │   └── stock-analyser/        # Stock Analyser-specific stacks
-│   │       ├── stock-analyser-api-stack.ts
-│   │       └── stock-analyser-tables-stack.ts
+│   │   ├── stock-analyser/        # Stock Analyser-specific stacks
+│   │   │   ├── stock-analyser-api-stack.ts
+│   │   │   └── stock-analyser-tables-stack.ts
+│   │   └── budget-tracker/        # Budget Tracker-specific stacks
+│   │       ├── budget-tracker-api-stack.ts
+│   │       └── budget-tracker-tables-stack.ts
 │   └── bin/app.ts                 # CDK app entry — instantiates all stacks
 │
 ├── functions/                      # Platform Lambda source (shared across apps)
@@ -47,7 +52,8 @@ transformotion-apps/
 │   ├── accounts/
 │   ├── invitations/
 │   ├── forgot-provider/
-│   └── claude-proxy/
+│   ├── claude-proxy/
+│   └── pre-token-generation/      # Cognito pre-token trigger (added in sub-phase 7e)
 │
 ├── contracts/                      # Cross-app contracts only (auth, platform)
 ├── .github/
@@ -99,10 +105,12 @@ Push-triggered, path-filtered per app:
 |---|---|
 | `apps/stock-analyser/**` | `deploy-stock-analyser.yml` |
 | `infrastructure/lib/stock-analyser/**` | `deploy-stock-analyser.yml` |
-| `apps/budget-tracker/**` | `deploy-budget-tracker.yml` (placeholder) |
+| `apps/budget-tracker/**` | `deploy-budget-tracker.yml` |
+| `infrastructure/lib/budget-tracker/**` | `deploy-budget-tracker.yml` |
 | `infrastructure/lib/platform/**` | `deploy-platform.yml` |
+| `infrastructure/bin/**` | `deploy-platform.yml` |
 | `functions/**` | `deploy-platform.yml` |
-| `packages/**` | `deploy-stock-analyser.yml` (and BT when active) |
+| `packages/**` | `deploy-stock-analyser.yml` + `deploy-budget-tracker.yml` |
 
 Changes to one app never trigger the other app's deployment.
 
