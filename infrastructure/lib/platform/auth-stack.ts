@@ -10,6 +10,14 @@ export interface AuthStackProps extends cdk.StackProps {
 /**
  * AuthStack — Cognito User Pool for Transformotion Apps.
  *
+ * Three app clients (one per app):
+ *   LaunchpadAppClient    — shell; /, /sign-in/, /launchpad/. Social IDPs enabled.
+ *   StockAnalyserAppClient — /stock-signal/*. Cognito only.
+ *   BudgetTrackerAppClient — /budget-tracker/*. Cognito only.
+ *
+ * All three authenticate against the same user pool. SSO via the shared
+ * Hosted UI domain session cookie.
+ *
  * Groups (control Launchpad rendering and Lambda authoriser):
  *   admin          — platform administrators, access to all apps
  *   stock-app      — Stock Signal Analyser
@@ -27,13 +35,18 @@ export interface AuthStackProps extends cdk.StackProps {
  */
 export class AuthStack extends cdk.Stack {
   public readonly userPool: cognito.UserPool;
-  public readonly userPoolClient: cognito.UserPoolClient;
+  public readonly launchpadAppClient: cognito.UserPoolClient;
+  public readonly stockAnalyserAppClient: cognito.UserPoolClient;
+  public readonly budgetTrackerAppClient: cognito.UserPoolClient;
   public readonly userPoolDomain: cognito.UserPoolDomain;
+
+  private readonly stage: string;
 
   constructor(scope: Construct, id: string, props: AuthStackProps) {
     super(scope, id, props);
 
     const { stage } = props;
+    this.stage = stage;
     const isProd = stage === 'prod';
 
     // ── User Pool ──────────────────────────────────────────────────────────
@@ -125,71 +138,66 @@ export class AuthStack extends cdk.Stack {
     // Cognito console (the user had already configured them before CDK could
     // create them, so they are NOT managed by CloudFormation).
     // The Secrets Manager secrets above hold the credentials for reference.
-    // The client below lists the providers so Cognito Hosted UI and
-    // signInWithRedirect() work correctly.
+    // The LaunchpadAppClient lists these providers so the Hosted UI shows
+    // social sign-in buttons. Per-app clients are Cognito-only; social
+    // sign-in sessions propagate via the shared Hosted UI domain cookie.
 
-    // ── Web App Client ─────────────────────────────────────────────────────
-    // Public SPA client — no client secret (PKCE only).
-    // Dev allows both localhost (Vite dev server) and the custom CloudFront domain.
-    const callbackUrls = isProd
-      ? [
-          'https://apps.transformotion.com.au',
-          'https://apps.transformotion.com.au/callback',
-        ]
-      : [
-          'http://localhost:3001',
-          'http://localhost:3001/callback',
-          'https://dev.apps.transformotion.com.au',
-          'https://dev.apps.transformotion.com.au/callback',
-        ];
+    // ── App Clients ────────────────────────────────────────────────────────
 
-    const logoutUrls = isProd
-      ? ['https://apps.transformotion.com.au']
-      : ['http://localhost:3001', 'https://dev.apps.transformotion.com.au'];
-
-    this.userPoolClient = this.userPool.addClient('WebAppClient', {
-      userPoolClientName: `transformotion-web-${stage}`,
-      generateSecret: false,
-
-      // OAuth2 with PKCE — authorization code flow only
-      oAuth: {
-        flows:    { authorizationCodeGrant: true },
-        scopes:   [cognito.OAuthScope.OPENID, cognito.OAuthScope.EMAIL, cognito.OAuthScope.PROFILE],
-        callbackUrls,
-        logoutUrls,
-      },
-
-      // Social IDPs available to this client
+    // Launchpad — shell client; hosts sign-in and launchpad routes.
+    // Social IDPs enabled so users can sign in with Google/Facebook/Microsoft.
+    this.launchpadAppClient = this.createAppClient('LaunchpadAppClient', {
+      callbackUrls: isProd
+        ? [
+            'https://apps.transformotion.com.au/sign-in/callback',
+            'https://apps.transformotion.com.au/launchpad/callback',
+          ]
+        : [
+            'https://dev.apps.transformotion.com.au/sign-in/callback',
+            'https://dev.apps.transformotion.com.au/launchpad/callback',
+            'http://localhost:3000/sign-in/callback',
+            'http://localhost:3000/launchpad/callback',
+          ],
+      logoutUrls: isProd
+        ? ['https://apps.transformotion.com.au/sign-in']
+        : ['https://dev.apps.transformotion.com.au/sign-in', 'http://localhost:3000/sign-in'],
       supportedIdentityProviders: [
         cognito.UserPoolClientIdentityProvider.COGNITO,
         cognito.UserPoolClientIdentityProvider.GOOGLE,
         cognito.UserPoolClientIdentityProvider.FACEBOOK,
         cognito.UserPoolClientIdentityProvider.custom('Microsoft'),
       ],
-
-      // Auth flows for Amplify/custom auth UI
-      authFlows: {
-        userSrp:      true,
-        userPassword: false,
-      },
-
-      // Token validity
-      accessTokenValidity:  cdk.Duration.hours(1),
-      idTokenValidity:      cdk.Duration.hours(1),
-      refreshTokenValidity: cdk.Duration.days(30),
-
-      // Read/write attributes for the web client
-      readAttributes: new cognito.ClientAttributes()
-        .withStandardAttributes({ email: true, emailVerified: true, givenName: true, familyName: true })
-        .withCustomAttributes('active_account', 'accounts'),
-
-      writeAttributes: new cognito.ClientAttributes()
-        .withStandardAttributes({ email: true, givenName: true, familyName: true })
-        .withCustomAttributes('active_account', 'accounts'),
-
-      preventUserExistenceErrors: true,
     });
 
+    // Stock Analyser — dedicated client; Cognito only.
+    // Social sign-in sessions established at the launchpad propagate via SSO.
+    this.stockAnalyserAppClient = this.createAppClient('StockAnalyserAppClient', {
+      callbackUrls: isProd
+        ? ['https://apps.transformotion.com.au/stock-signal/callback']
+        : [
+            'https://dev.apps.transformotion.com.au/stock-signal/callback',
+            'http://localhost:3000/stock-signal/callback',
+          ],
+      logoutUrls: isProd
+        ? ['https://apps.transformotion.com.au/sign-in']
+        : ['https://dev.apps.transformotion.com.au/sign-in', 'http://localhost:3000/sign-in'],
+      supportedIdentityProviders: [cognito.UserPoolClientIdentityProvider.COGNITO],
+    });
+
+    // Budget Tracker — dedicated client; Cognito only. Local dev port 3002.
+    // Relocated from budget-tracker-tables-stack.ts for construct consistency.
+    this.budgetTrackerAppClient = this.createAppClient('BudgetTrackerAppClient', {
+      callbackUrls: isProd
+        ? ['https://apps.transformotion.com.au/budget-tracker/callback']
+        : [
+            'https://dev.apps.transformotion.com.au/budget-tracker/callback',
+            'http://localhost:3002/budget-tracker/callback',
+          ],
+      logoutUrls: isProd
+        ? ['https://apps.transformotion.com.au/sign-in']
+        : ['https://dev.apps.transformotion.com.au/sign-in', 'http://localhost:3002/sign-in'],
+      supportedIdentityProviders: [cognito.UserPoolClientIdentityProvider.COGNITO],
+    });
 
     // ── Cognito Groups ─────────────────────────────────────────────────────
     const groups: Array<{ name: string; description: string; precedence: number }> = [
@@ -216,10 +224,22 @@ export class AuthStack extends cdk.Stack {
       exportName:  `Transformotion-${stage}-UserPoolId`,
     });
 
-    new cdk.CfnOutput(this, 'UserPoolClientId', {
-      value:       this.userPoolClient.userPoolClientId,
-      description: `Cognito Web App Client ID for ${stage}`,
-      exportName:  `Transformotion-${stage}-UserPoolClientId`,
+    new cdk.CfnOutput(this, 'LaunchpadAppClientId', {
+      value:       this.launchpadAppClient.userPoolClientId,
+      description: 'Cognito app client ID for launchpad shell',
+      exportName:  `Transformotion-${stage}-LaunchpadAppClientId`,
+    });
+
+    new cdk.CfnOutput(this, 'StockAnalyserAppClientId', {
+      value:       this.stockAnalyserAppClient.userPoolClientId,
+      description: 'Cognito app client ID for Stock Analyser',
+      exportName:  `Transformotion-${stage}-StockAnalyserAppClientId`,
+    });
+
+    new cdk.CfnOutput(this, 'BudgetTrackerAppClientId', {
+      value:       this.budgetTrackerAppClient.userPoolClientId,
+      description: 'Cognito app client ID for Budget Tracker',
+      exportName:  `Transformotion-${stage}-BudgetTrackerAppClientId`,
     });
 
     new cdk.CfnOutput(this, 'UserPoolDomain', {
@@ -231,6 +251,50 @@ export class AuthStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'UserPoolArn', {
       value:      this.userPool.userPoolArn,
       exportName: `Transformotion-${stage}-UserPoolArn`,
+    });
+  }
+
+  /**
+   * Creates a public SPA app client (no secret, PKCE, authorization code flow).
+   * All clients share token validity, attribute access, and auth flow settings.
+   */
+  private createAppClient(
+    id: string,
+    options: {
+      callbackUrls:               string[];
+      logoutUrls:                 string[];
+      supportedIdentityProviders: cognito.UserPoolClientIdentityProvider[];
+    },
+  ): cognito.UserPoolClient {
+    // Derive a human-readable client name: PascalCase id → kebab-case, prefixed.
+    // e.g. 'StockAnalyserAppClient' → 'transformotion-stock-analyser-app-client-dev'
+    const clientName = `transformotion-${
+      id.replace(/([A-Z])/g, (m, letter, offset) =>
+        offset === 0 ? letter.toLowerCase() : `-${letter.toLowerCase()}`
+      )
+    }-${this.stage}`;
+
+    return this.userPool.addClient(id, {
+      userPoolClientName:   clientName,
+      generateSecret:       false,
+      preventUserExistenceErrors: true,
+      oAuth: {
+        flows:        { authorizationCodeGrant: true },
+        scopes:       [cognito.OAuthScope.EMAIL, cognito.OAuthScope.OPENID, cognito.OAuthScope.PROFILE],
+        callbackUrls: options.callbackUrls,
+        logoutUrls:   options.logoutUrls,
+      },
+      supportedIdentityProviders: options.supportedIdentityProviders,
+      authFlows:            { userSrp: true },
+      accessTokenValidity:  cdk.Duration.hours(1),
+      idTokenValidity:      cdk.Duration.hours(1),
+      refreshTokenValidity: cdk.Duration.days(30),
+      readAttributes: new cognito.ClientAttributes()
+        .withStandardAttributes({ email: true, emailVerified: true, givenName: true, familyName: true })
+        .withCustomAttributes('active_account', 'accounts'),
+      writeAttributes: new cognito.ClientAttributes()
+        .withStandardAttributes({ email: true, givenName: true, familyName: true })
+        .withCustomAttributes('active_account', 'accounts'),
     });
   }
 }
