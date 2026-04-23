@@ -80,8 +80,7 @@ new StockAnalyserApiStack(app, 'TransformotionDev-StockAnalyserApi', {
 new BudgetTrackerTablesStack(app, 'TransformotionDev-BudgetTrackerTables', {
   env,
   stage:       'dev',
-  description: 'Transformotion Apps — Dev Budget Tracker DynamoDB tables + Cognito client',
-  userPool:    devAuth.userPool,
+  description: 'Transformotion Apps — Dev Budget Tracker DynamoDB tables',
 });
 
 new BudgetTrackerApiStack(app, 'TransformotionDev-BudgetTrackerApi', {
@@ -145,8 +144,7 @@ new StockAnalyserApiStack(app, 'TransformotionProd-StockAnalyserApi', {
 new BudgetTrackerTablesStack(app, 'TransformotionProd-BudgetTrackerTables', {
   env,
   stage:       'prod',
-  description: 'Transformotion Apps — Prod Budget Tracker DynamoDB tables + Cognito client',
-  userPool:    prodAuth.userPool,
+  description: 'Transformotion Apps — Prod Budget Tracker DynamoDB tables',
 });
 
 new BudgetTrackerApiStack(app, 'TransformotionProd-BudgetTrackerApi', {
