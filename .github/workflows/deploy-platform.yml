@@ -56,7 +56,7 @@ jobs:
 
       - name: CDK Deploy — Platform stacks (dev)
         working-directory: infrastructure
-        run: pnpm exec cdk deploy 'TransformotionDev-Network' 'TransformotionDev-Auth' 'TransformotionDev-AuthApi' 'TransformotionDev-PlatformTables' 'TransformotionDev-Api' --require-approval never
+        run: pnpm exec cdk deploy 'TransformotionDev-BudgetTrackerTables' 'TransformotionDev-Network' 'TransformotionDev-Auth' 'TransformotionDev-AuthApi' 'TransformotionDev-PlatformTables' 'TransformotionDev-Api' --require-approval never
 
   deploy-prod:
     name: Platform → Prod
@@ -85,4 +85,4 @@ jobs:
 
       - name: CDK Deploy — Platform stacks (prod)
         working-directory: infrastructure
-        run: pnpm exec cdk deploy 'TransformotionProd-Network' 'TransformotionProd-Auth' 'TransformotionProd-AuthApi' 'TransformotionProd-PlatformTables' 'TransformotionProd-Api' --require-approval never
+        run: pnpm exec cdk deploy 'TransformotionProd-BudgetTrackerTables' 'TransformotionProd-Network' 'TransformotionProd-Auth' 'TransformotionProd-AuthApi' 'TransformotionProd-PlatformTables' 'TransformotionProd-Api' --require-approval never
