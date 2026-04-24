@@ -14,7 +14,7 @@ function toIso(ddmmyyyy: string): string {
 
 // GET /api/budget/v1/business-export
 export const handler = withAuth(async ({ auth, account, event }) => {
-  requireGroup(auth, 'budget-app', 'admin');
+  requireGroup(auth, 'budget-app', 'budget-app-access', 'admin', 'site-admin');
   const { accountId } = account;
 
   const from = getQueryParam(event, 'from', false);

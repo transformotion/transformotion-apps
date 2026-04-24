@@ -1,6 +1,6 @@
 # Sub-phase 7e — Auth and permissions migration plan
 
-**Status:** In progress — 7e-prep-1 merged (pending deploy)  
+**Status:** In progress — 7e-prep-2 dual-gate Lambda handlers (PR open, awaiting review)  
 **Target architecture:** [/docs/architecture/auth.md](/docs/architecture/auth.md)  
 **Ephemeral document:** deleted at 7e-cleanup once the migration is complete and `auth.md` is verified against deployed reality.
 
@@ -47,7 +47,7 @@
 
 ## Sub-sub-phases
 
-### 7e-prep-1 — CDK: new group structure (additive) ✓ merged — pending deploy + post-deploy step
+### 7e-prep-1 — CDK: new group structure (additive) ✓ complete
 
 Create new Cognito groups in `AuthStack` alongside existing groups:
 - `site-admin`, `stock-app-access`, `budget-app-access`
@@ -65,7 +65,7 @@ After deploy: manually add Steve to `site-admin`, `stock-app-access`, `budget-ap
 - Initial deploy attempt (PR #51 merge) failed: CDK attempted to delete the `custom:active_account` schema attribute, which Cognito rejected with "Existing schema attributes cannot be modified or deleted." The stack rolled back cleanly (`UPDATE_ROLLBACK_COMPLETE`); no production impact. New groups were also rolled back.
 - PR #52 corrected the approach: `active_account` is retained in the CDK schema as a deprecated no-op; only the app client attribute lists are changed (permitted). `admin` group precedence bumped 1 → 2 so `site-admin` takes 1.
 
-### 7e-prep-2 — Lambda-layer: dual-gate authorization
+### 7e-prep-2 — Lambda-layer: dual-gate authorization ⟳ in progress (PR open, awaiting review)
 
 Update `requireGroup` calls in Lambda handlers to accept both old and new group names. Transitional — allows the migration to proceed without locking out existing access.
 
@@ -80,6 +80,11 @@ Search codebase for `requireGroup` before starting; expect call sites in:
 Pattern for stock handlers: `requireGroup(auth, 'stock-app', 'admin', 'stock-app-access', 'site-admin')` — temporarily broad.  
 Pattern for budget handlers: `requireGroup(auth, 'budget-app', 'admin', 'budget-app-access', 'site-admin')`.  
 Pattern for claude-proxy: `requireGroup(auth, 'stock-app', 'budget-app', 'admin', 'stock-app-access', 'budget-app-access', 'site-admin')`.
+
+**Observations during execution:**
+- Pre-flight scanned for all `requireGroup` call sites. The string `'admin'` also appears in TypeScript type definitions (`role: 'owner' | 'admin' | 'member'`) in frontend/package files — these are account role types, not Cognito group checks; no dual-gating needed there.
+- 10 handlers updated: 3 Stock Analyser (`portfolio`, `watchlist`, `analysis-cache`), 6 Budget Tracker (`transactions`, `settings`, `rules`, `migrate`, `export`, `ai`), 1 shared (`claude-proxy`).
+- Pre-existing test failures on Windows (`vitest` not found) confirmed unrelated to this change.
 
 ### 7e-pretoken — Pre-token generation Lambda
 

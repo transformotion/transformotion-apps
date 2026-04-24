@@ -18,7 +18,7 @@ const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const TABLE = process.env.WATCHLIST_TABLE!;
 
 export const handler = withAuth(async ({ auth, account, event }) => {
-  requireGroup(auth, 'stock-app', 'admin');
+  requireGroup(auth, 'stock-app', 'stock-app-access', 'admin', 'site-admin');
   const { accountId } = account;
 
   // ── GET /watchlist ────────────────────────────────────────────────────────
