@@ -1,0 +1,142 @@
+# Stock Analyser — Claude Code operating guide
+
+Read this file before any Stock Analyser work. Read the root `CLAUDE.md` for branching strategy.
+
+## Overview
+
+Next.js app at `apps/stock-analyser/`. Static export deployed to S3/CloudFront.  
+Serves at `{host}/stock-signal/*`.  
+React + TypeScript + Tailwind CSS.
+
+## Quick reference
+
+| What | Value |
+|---|---|
+| basePath | `/stock-signal` |
+| Local dev port | `3000` |
+| Deploy workflow | `.github/workflows/deploy-stock-analyser.yml` |
+| Cognito client var | `NEXT_PUBLIC_STOCK_ANALYSER_COGNITO_CLIENT_ID` |
+| S3 prefix | `stock-signal/` in `transformotion-web-{stage}-959516291617` |
+
+## Architecture references
+
+| Topic | Document |
+|---|---|
+| Auth model, groups, tokens, middleware | [/docs/architecture/auth.md](/docs/architecture/auth.md) |
+| DynamoDB table schemas | [/docs/architecture/data.md](/docs/architecture/data.md) |
+| CDK stacks, Lambda names | [/docs/architecture/cdk.md](/docs/architecture/cdk.md) |
+| URL routing, CloudFront, deploy triggers | [/docs/architecture/urls-and-deploy.md](/docs/architecture/urls-and-deploy.md) |
+| Stock Analyser API contracts and types | [apps/stock-analyser/contracts/DATA_CONTRACTS.md](./contracts/DATA_CONTRACTS.md) |
+| Migration invariants from HTML version | [apps/stock-analyser/MIGRATION_INVARIANTS.md](./MIGRATION_INVARIANTS.md) |
+
+## CDK stacks owned
+
+| Stack | Contents |
+|---|---|
+| `Transformotion{Stage}-StockAnalyserTables` | `stock-analyser.portfolio-{stage}-v2`, `stock-analyser.watchlist-{stage}-v2` |
+| `Transformotion{Stage}-StockAnalyserApi` | All Stock Analyser Lambda functions + routes on the platform API Gateway |
+
+Source: `infrastructure/lib/stock-analyser/`
+
+## Lambda functions
+
+All Stock Analyser Lambdas share the platform API Gateway and Cognito JWT authoriser.
+
+| Lambda | Source | Routes |
+|---|---|---|
+| `transformotion-portfolio-{stage}` | `apps/stock-analyser/functions/portfolio` | `GET/POST/PATCH/DELETE /api/portfolio` |
+| `transformotion-watchlist-{stage}` | `apps/stock-analyser/functions/watchlist` | `GET/POST/PATCH/DELETE /api/watchlist` |
+| `transformotion-analysis-cache-{stage}` | `apps/stock-analyser/functions/analysis-cache` | `GET /api/analysis-cache/*` |
+| `transformotion-cycle-check-{stage}` | `apps/stock-analyser/functions/cycle-check` | EventBridge scheduled (no HTTP route) |
+
+## DynamoDB tables
+
+| Table | PK | SK | Purpose |
+|---|---|---|---|
+| `stock-analyser.portfolio-{stage}-v2` | `accountId` | — | Portfolio holdings per account |
+| `stock-analyser.watchlist-{stage}-v2` | `accountId` | — | Watchlist items per account |
+
+Analysis cache (`platform.analysis-cache-{stage}`) is a platform table shared with other apps — accessed via `transformotion-claude-proxy-{stage}`, not directly.
+
+## Authorization requirement
+
+All Lambda handlers use helpers from `packages/lambda-middleware`. The four available helpers and when to apply each:
+
+```typescript
+requireSiteAdmin(auth)                                           // platform admin ops only
+requireAppAccess(auth, 'stock-signal')                          // entry-point check (every handler)
+requireAccountAccess(auth, 'stock-signal', accountId)           // standard read/write ops
+requireAccountAccess(auth, 'stock-signal', accountId, 'manager') // elevated ops (bulk delete, etc.)
+requireAccountOwner(auth, 'stock-signal', accountId)            // ownership-transfer ops
+```
+
+Call `requireAppAccess` at the top of every handler, then `requireAccountAccess` (or `requireAccountOwner`) before each DynamoDB operation. Do not call `requireGroup` directly. See [auth.md](/docs/architecture/auth.md) for full middleware helper documentation.
+
+## Service layer and data contracts
+
+The app uses a service-adaptor pattern: components call service methods → service handles mock vs real internally. Components never check `NEXT_PUBLIC_USE_MOCK_DATA` directly.
+
+Key service methods defined in [contracts/DATA_CONTRACTS.md](./contracts/DATA_CONTRACTS.md):
+- `portfolioService.getHoldings()` / `saveHoldings()` / `enrichHoldings()`
+- `watchlistService.getItems()` / `saveItems()`
+- `useClaude()` hook — POST to `/api/claude` + async polling pattern
+
+### Claude AI pattern
+
+The `useClaude<T>()` hook handles the full async request/poll cycle:
+1. POST to `/api/claude` with prompt → returns `jobId`
+2. Poll `/analysis-cache/job-{jobId}` until complete
+3. Return typed result
+
+See `apps/stock-analyser/docs/claude-ai-pattern.md` for usage examples and configuration.
+
+### Cache key conventions
+
+| Data | Cache key format | TTL |
+|---|---|---|
+| Market Analysis | `MARKET#{geography}` | 24h |
+| Recommendations | `RECS#{market}` | 24h |
+| ETFs | `ETFS#{category}` | 48h |
+| Metals | `METALS#all` | 2h |
+| Stock Analysis | `ANALYSIS#{ticker}` | 8h |
+| Market Cycle | `CYCLE#{geography}` | 8h |
+
+## Migration invariants (Phase 4)
+
+When the monolithic `stock-signal-analyser.html` is migrated into this app (Phase 4), all 16 invariants in [MIGRATION_INVARIANTS.md](./MIGRATION_INVARIANTS.md) must be covered by automated tests. Do not declare Phase 4 complete until every invariant has a failing-then-passing test.
+
+Key invariants:
+1. Signal normalisation: `rawSig.trim().toUpperCase().startsWith('BUY')`
+2. `computeLiveCycle` works without a DOM container
+3. `isLive()` always exists and returns a boolean
+4. Watchlist refresh uses `Promise.all` (not serial awaits)
+5. Ticker matching by position before exact string equality
+6. JSON parsing uses depth-tracking parser (not `JSON.parse`)
+7. Prompts include "no emoji, JSON only"
+
+## Local development
+
+```bash
+pnpm --filter @transformotion/stock-analyser dev
+# Runs on http://localhost:3000
+```
+
+Environment: copy `apps/stock-analyser/.env.example` to `.env.local` and fill in values.
+
+Required env vars marked `[REQUIRED]` in `.env.example` must be set before the dev server will function correctly.
+
+## Environment variables (relevant subset)
+
+| Variable | Purpose |
+|---|---|
+| `NEXT_PUBLIC_STOCK_ANALYSER_COGNITO_CLIENT_ID` | Cognito app client for this app |
+| `NEXT_PUBLIC_COGNITO_USER_POOL_ID` | Shared Cognito user pool ID |
+| `NEXT_PUBLIC_COGNITO_DOMAIN` | Hosted UI domain |
+| `NEXT_PUBLIC_USE_MOCK_DATA` | `true` = mock services, `false` = real AWS |
+| `NEXT_PUBLIC_API_BASE_URL` | Platform API base URL |
+
+## Known constraints
+
+- The app currently contains Budget Tracker UI components at `components/budget-tracker/` and `app/budget-tracker/`. These are scheduled for deletion in sub-phase 7h, after `apps/budget-tracker` is live at `/budget-tracker/`.
+- The launchpad and sign-in routes (`app/launchpad/`, `app/sign-in/`) are also in this app pending sub-phase 7e deploying `apps/launchpad`.
+- `eslint-plugin-boundaries` enforces no cross-app imports — do not import from `apps/budget-tracker/`.

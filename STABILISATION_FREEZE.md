@@ -2,11 +2,19 @@
 
 **Status:** ACTIVE
 **Started:** 2026-04-20
-**Last updated:** 2026-04-23 (sub-phases 5–6 complete; sub-phase 7a diagnostic complete; sub-phase 7 plan anchored; Issue #37 opened; preamble.4 Cognito gating verified; three-client permission model anchored; 7b.5-beta authz gap closed; Issue #42 opened; sub-phase 6 follow-up: infra excluded from pre-commit typecheck; sub-phase 7b.5-alpha three-client Cognito model complete — merged, deployed, verified)
+**Last updated:** 2026-04-24 (sub-phase 7e-docs amendment: auth model revised — 3-group Dimension A, single-owner invariant, 4 auth helpers, detailed invitation and revocation flows; sub-phase-7e-plan.md updated to match)
 **Expected end:** Once Phase 1 (foundations) and Phase 2
 (executable contracts) are complete, the freeze on stabilisation
 work lifts. The Phase 4 stock analyser migration begins under
 normal feature-development cadence on the new foundation.
+
+## Architectural discipline
+
+All architectural invariants are documented in [docs/architecture/](./docs/architecture/). **Any PR changing what those documents describe must update the relevant document in the same PR.** Architecture documents are the source of truth; code conforms to them, not the other way around.
+
+The discipline rule applies from sub-phase 7e-docs forward. Pre-existing architectural decisions have been migrated to `docs/architecture/` as part of that sub-phase.
+
+---
 
 ## What this means
 
@@ -204,14 +212,18 @@ Sub-phases:
    - Diff and reconcile remaining 4 diverged files (`builtin-rules.ts`,
      `types.ts`, `review-tab.tsx`, one more).
 
-   **Sub-phase 7e — `apps/launchpad`: real Cognito session + group-based tile hiding.**
-   Wire real Cognito auth into `apps/launchpad` launchpad (replace `MOCK_USER`).
-   Add `getGroups(): Promise<string[]>` to `packages/auth-client` (reads
-   `cognito:groups` claim from ID token). Change tile navigation from
-   full-origin env-var URLs to path-relative (`/stock-signal/`,
-   `/budget-tracker/`). Declare `NEXT_PUBLIC_BUDGET_URL` / `NEXT_PUBLIC_STOCK_URL`
-   in `apps/launchpad/.env.example`. Deploy `apps/launchpad` to the S3 root (replacing
-   launchpad/sign-in routes that currently come from `apps/stock-analyser`).
+   **Sub-phase 7e — Auth and permissions migration.**
+   Full auth model migration — see [docs/sub-phase-7e-plan.md](./docs/sub-phase-7e-plan.md)
+   for the detailed execution plan. Named sub-sub-phases in order:
+   `7e-prep-1` (new Cognito groups), `7e-prep-2` (dual-gate handlers),
+   `7e-pretoken` (pre-token-generation Lambda with invariant reconciliation),
+   `7e-auth-middleware-extend` (4 new auth helpers), `7e-lambda-authorization-migration`
+   (migrate all call sites), `7e-invitation-api` (full invitation model with two
+   entry points and transactional redemption), `7e-invitation-ui` (launchpad admin
+   + in-app invite forms), `7e-signup-reconciliation` (reconcile-invitation Lambda),
+   `7e-launchpad-tiles` (wire real Cognito session, replace `MOCK_USER`),
+   `7e-forgot-provider-fix` (federated-user lookup via `ListUsersCommand`),
+   `7e-cleanup` (remove old groups, delete `requireGroup`).
 
    **Sub-phase 7f — API Gateway rollback (optional).**
    Refactor `BudgetTrackerApiStack` to consume the platform API Gateway via
@@ -310,6 +322,8 @@ Decommission the monolithic repo.
 With the foundation stable, decide and document how (or whether)
 v0 fits back into the development cycle. Decision deferred until
 Phase 4 completes.
+
+> **Note on architectural content in this document.** Architectural decisions previously recorded inline (Cognito model, URL model, tile visibility, etc.) have been migrated to `docs/architecture/`. This document is now scoped to project plan, phase status, and process discipline. Historical decision context is preserved in git history and in the architecture documents.
 
 ## Platform permission invariants (Cognito)
 
@@ -441,3 +455,5 @@ reasoning.
 
 This file is updated as scope evolves. Every update increments the
 "Last updated" date and records the change in the commit message.
+
+This document will be archived to `docs/history/` when stabilisation is complete.
