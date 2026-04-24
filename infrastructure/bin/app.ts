@@ -8,6 +8,7 @@ import { AuthStack }           from '../lib/platform/auth-stack';
 import { AuthApiStack }        from '../lib/platform/auth-api-stack';
 import { PlatformApiStack }    from '../lib/platform/platform-api-stack';
 import { PlatformTablesStack } from '../lib/platform/platform-tables-stack';
+import { StorageStack }        from '../lib/platform/storage-stack';
 
 // ── Stock Analyser stacks ─────────────────────────────────────────────────────
 import { StockAnalyserApiStack }    from '../lib/stock-analyser/stock-analyser-api-stack';
@@ -25,6 +26,12 @@ const env = {
 };
 
 // ── Dev stacks ────────────────────────────────────────────────────────────────
+
+new StorageStack(app, 'TransformotionDev-Storage', {
+  env,
+  stage:       'dev',
+  description: 'Transformotion Apps — Dev platform storage (S3 backups bucket)',
+});
 
 new NetworkStack(app, 'TransformotionDev-Network', {
   env,
@@ -91,6 +98,12 @@ new BudgetTrackerApiStack(app, 'TransformotionDev-BudgetTrackerApi', {
 });
 
 // ── Prod stacks ────────────────────────────────────────────────────────────────
+
+new StorageStack(app, 'TransformotionProd-Storage', {
+  env,
+  stage:       'prod',
+  description: 'Transformotion Apps — Prod platform storage (S3 backups bucket)',
+});
 
 new NetworkStack(app, 'TransformotionProd-Network', {
   env,

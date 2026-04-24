@@ -13,16 +13,27 @@ Stacks are deployed by GitHub Actions workflows — see [urls-and-deploy.md](./u
 
 ## Stack inventory
 
+### Storage stack
+
+`TransformotionDev-Storage` / `TransformotionProd-Storage`.
+
+Contains the platform-level S3 buckets that are not tied to a specific app. Currently holds:
+
+- `transformotion-backups-{account}` — dedicated bucket for one-shot backups (e.g., pre-migration data exports, configuration snapshots). Versioned, encrypted, with lifecycle rules on the `migration-backups/` prefix transitioning to Infrequent Access after 30 days and expiring after 365 days.
+
+The Storage stack is independent of other stacks (no cross-stack exports or imports).
+
 ### Platform stacks
 
 Deployed by `deploy-platform.yml`. Source in `infrastructure/lib/platform/`.
 
 | Stack name | Class | Contents |
 |---|---|---|
+| `Transformotion{Stage}-Storage` | `StorageStack` | S3 backups bucket `transformotion-backups-{account}` for platform migrations and one-shot backups |
 | `Transformotion{Stage}-Network` | `NetworkStack` | S3 bucket `transformotion-web-{stage}-959516291617`, CloudFront distribution, ACM cert wiring |
 | `Transformotion{Stage}-Auth` | `AuthStack` | Cognito user pool, three app clients, Cognito groups, Secrets Manager entries for social IDP credentials, Hosted UI domain |
 | `Transformotion{Stage}-AuthApi` | `AuthApiStack` | `transformotion-forgot-provider-{stage}` Lambda + its own API Gateway (public — no JWT required on `/auth/lookup-provider`) |
-| `Transformotion{Stage}-PlatformTables` | `PlatformTablesStack` | `platform.users`, `platform.accounts`, `platform.account-members`, `platform.invitations`, `platform.analysis-cache` DynamoDB tables |
+| `Transformotion{Stage}-PlatformTables` | `PlatformTablesStack` | `platform.users`, `platform.accounts`, `platform.account-members`, `platform.invitations` DynamoDB tables |
 | `Transformotion{Stage}-Api` | `PlatformApiStack` | Shared REST API Gateway (`transformotion-api-{stage}`), Cognito JWT authoriser, platform Lambda functions (see below) |
 
 ### Stock Analyser stacks
@@ -31,7 +42,7 @@ Deployed by `deploy-stock-analyser.yml`. Source in `infrastructure/lib/stock-ana
 
 | Stack name | Class | Contents |
 |---|---|---|
-| `Transformotion{Stage}-StockAnalyserTables` | `StockAnalyserTablesStack` | `stock-analyser.portfolio-{stage}-v2`, `stock-analyser.watchlist-{stage}-v2` |
+| `Transformotion{Stage}-StockAnalyserTables` | `StockAnalyserTablesStack` | `stock-analyser.portfolio-{stage}-v2`, `stock-analyser.watchlist-{stage}-v2`, `stock-analyser.analysis-cache-{stage}` |
 | `Transformotion{Stage}-StockAnalyserApi` | `StockAnalyserApiStack` | Stock Analyser Lambda functions + routes on the shared platform API Gateway |
 
 ### Budget Tracker stacks
@@ -145,7 +156,7 @@ Platform Lambda environment variables:
 | `ACCOUNT_MEMBERS_TABLE` | account-provisioning, accounts, pre-token-generation | `platform.account-members-{stage}` |
 | `INVITATIONS_TABLE` | invitations | `platform.invitations-{stage}` |
 | `USERS_TABLE` | user | `platform.users-{stage}` |
-| `CACHE_TABLE` | claude-proxy | `platform.analysis-cache-{stage}` |
+| `CACHE_TABLE` | claude-proxy | `stock-analyser.analysis-cache-{stage}` |
 | `ANTHROPIC_SECRET_NAME` | claude-proxy | `{stage}/anthropic/api-key` (Secrets Manager) |
 | `USER_POOL_ID` | account-provisioning, pre-token-generation | Cognito user pool ID |
 | `ACCOUNTS_TABLE` | pre-token-generation | `platform.accounts-{stage}` (read for appSlug resolution) |
