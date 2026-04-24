@@ -19,15 +19,19 @@ export interface AuthStackProps extends cdk.StackProps {
  * Hosted UI domain session cookie.
  *
  * Groups (control Launchpad rendering and Lambda authoriser):
- *   admin          — platform administrators, access to all apps
- *   stock-app      — Stock Signal Analyser
- *   budget-app     — Budget Tracker
- *   transformotion — Transformotion Framework
- *   family         — family members (basic access, assigned per invitation)
+ *   Target groups (7e-prep-1):
+ *     site-admin        — platform administrators
+ *     stock-app-access  — Stock Signal Analyser access
+ *     budget-app-access — Budget Tracker access
+ *   Legacy groups (removed at 7e-cleanup):
+ *     admin          — platform administrators, access to all apps
+ *     stock-app      — Stock Signal Analyser
+ *     budget-app     — Budget Tracker
+ *     transformotion — Transformotion Framework
+ *     family         — family members (basic access, assigned per invitation)
  *
  * Custom attributes (stored on the Cognito user object):
- *   custom:active_account — UUID of the user's currently active account
- *   custom:accounts       — comma-separated UUIDs of all accounts the user belongs to
+ *   custom:accounts — JSON-stringified map of appSlug → [{accountId, role}]
  *
  * Social IDPs (Google, Facebook, Microsoft) are wired here with Secrets Manager
  * references. Secrets are created with generated placeholder values. Populate real
@@ -65,10 +69,9 @@ export class AuthStack extends cdk.Stack {
         familyName: { required: false, mutable: true },
       },
 
-      // Custom attributes for account-based multi-tenancy (Section 9)
+      // Custom attributes for account-based multi-tenancy
       customAttributes: {
-        active_account: new cognito.StringAttribute({ mutable: true, maxLen: 36 }),
-        accounts:       new cognito.StringAttribute({ mutable: true, maxLen: 2048 }),
+        accounts: new cognito.StringAttribute({ mutable: true, maxLen: 2048 }),
       },
 
       // Password policy
@@ -201,7 +204,12 @@ export class AuthStack extends cdk.Stack {
 
     // ── Cognito Groups ─────────────────────────────────────────────────────
     const groups: Array<{ name: string; description: string; precedence: number }> = [
-      { name: 'admin',          description: 'Platform administrators — full access to all apps', precedence: 1  },
+      // Target groups (7e-prep-1) — accepted by handlers after 7e-prep-2 dual-gate
+      { name: 'site-admin',        description: 'Platform administrator',          precedence: 1  },
+      { name: 'stock-app-access',  description: 'User has access to Stock Signal', precedence: 50 },
+      { name: 'budget-app-access', description: 'User has access to Budget Tracker', precedence: 60 },
+      // Legacy groups — removed at 7e-cleanup
+      { name: 'admin',          description: 'Platform administrators — full access to all apps', precedence: 2  },
       { name: 'stock-app',      description: 'Stock Signal Analyser access',                       precedence: 10 },
       { name: 'budget-app',     description: 'Budget Tracker access',                              precedence: 20 },
       { name: 'transformotion', description: 'Transformotion Framework access',                    precedence: 30 },
@@ -291,10 +299,10 @@ export class AuthStack extends cdk.Stack {
       refreshTokenValidity: cdk.Duration.days(30),
       readAttributes: new cognito.ClientAttributes()
         .withStandardAttributes({ email: true, emailVerified: true, givenName: true, familyName: true })
-        .withCustomAttributes('active_account', 'accounts'),
+        .withCustomAttributes('accounts'),
       writeAttributes: new cognito.ClientAttributes()
         .withStandardAttributes({ email: true, givenName: true, familyName: true })
-        .withCustomAttributes('active_account', 'accounts'),
+        .withCustomAttributes('accounts'),
     });
   }
 }
