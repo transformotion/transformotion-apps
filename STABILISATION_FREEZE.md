@@ -2,7 +2,7 @@
 
 **Status:** ACTIVE
 **Started:** 2026-04-20
-**Last updated:** 2026-04-24 (sub-phase 7e-docs: architecture document set created at docs/architecture/; per-app CLAUDE.md files added; discipline rule established)
+**Last updated:** 2026-04-24 (sub-phase 7e-docs amendment: auth model revised — 3-group Dimension A, single-owner invariant, 4 auth helpers, detailed invitation and revocation flows; sub-phase-7e-plan.md updated to match)
 **Expected end:** Once Phase 1 (foundations) and Phase 2
 (executable contracts) are complete, the freeze on stabilisation
 work lifts. The Phase 4 stock analyser migration begins under
@@ -212,14 +212,18 @@ Sub-phases:
    - Diff and reconcile remaining 4 diverged files (`builtin-rules.ts`,
      `types.ts`, `review-tab.tsx`, one more).
 
-   **Sub-phase 7e — `apps/launchpad`: real Cognito session + group-based tile hiding.**
-   Wire real Cognito auth into `apps/launchpad` launchpad (replace `MOCK_USER`).
-   Add `getGroups(): Promise<string[]>` to `packages/auth-client` (reads
-   `cognito:groups` claim from ID token). Change tile navigation from
-   full-origin env-var URLs to path-relative (`/stock-signal/`,
-   `/budget-tracker/`). Declare `NEXT_PUBLIC_BUDGET_URL` / `NEXT_PUBLIC_STOCK_URL`
-   in `apps/launchpad/.env.example`. Deploy `apps/launchpad` to the S3 root (replacing
-   launchpad/sign-in routes that currently come from `apps/stock-analyser`).
+   **Sub-phase 7e — Auth and permissions migration.**
+   Full auth model migration — see [docs/sub-phase-7e-plan.md](./docs/sub-phase-7e-plan.md)
+   for the detailed execution plan. Named sub-sub-phases in order:
+   `7e-prep-1` (new Cognito groups), `7e-prep-2` (dual-gate handlers),
+   `7e-pretoken` (pre-token-generation Lambda with invariant reconciliation),
+   `7e-auth-middleware-extend` (4 new auth helpers), `7e-lambda-authorization-migration`
+   (migrate all call sites), `7e-invitation-api` (full invitation model with two
+   entry points and transactional redemption), `7e-invitation-ui` (launchpad admin
+   + in-app invite forms), `7e-signup-reconciliation` (reconcile-invitation Lambda),
+   `7e-launchpad-tiles` (wire real Cognito session, replace `MOCK_USER`),
+   `7e-forgot-provider-fix` (federated-user lookup via `ListUsersCommand`),
+   `7e-cleanup` (remove old groups, delete `requireGroup`).
 
    **Sub-phase 7f — API Gateway rollback (optional).**
    Refactor `BudgetTrackerApiStack` to consume the platform API Gateway via

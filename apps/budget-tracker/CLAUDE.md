@@ -66,14 +66,17 @@ Source: `infrastructure/lib/budget-tracker/`
 
 ## Authorization requirement
 
-All Lambda handlers must call:
+All Lambda handlers use helpers from `packages/lambda-middleware`. The four available helpers and when to apply each:
 
 ```typescript
-requireAppAccess(auth, 'budget-tracker')
-requireAccountAccess(auth, 'budget-tracker', accountId)
+requireSiteAdmin(auth)                                             // platform admin ops only
+requireAppAccess(auth, 'budget-tracker')                          // entry-point check (every handler)
+requireAccountAccess(auth, 'budget-tracker', accountId)           // standard read/write ops
+requireAccountAccess(auth, 'budget-tracker', accountId, 'manager') // elevated ops (bulk delete, settings wipe, etc.)
+requireAccountOwner(auth, 'budget-tracker', accountId)            // ownership-transfer ops
 ```
 
-Do not call `requireGroup` directly. See [auth.md](/docs/architecture/auth.md) for the middleware helpers.
+Call `requireAppAccess` at the top of every handler, then `requireAccountAccess` (or `requireAccountOwner`) before each DynamoDB operation. Do not call `requireGroup` directly. See [auth.md](/docs/architecture/auth.md) for full middleware helper documentation.
 
 ## Adaptor pattern — mandatory constraint
 

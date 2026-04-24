@@ -33,7 +33,7 @@ Budget Tracker has a **dedicated app client**: `BudgetTrackerAppClient` — one 
 - **Callback URL:** `{host}/budget-tracker/callback`
 - **Logout URL:** `{host}/sign-in`
 
-Required group for access (target — sub-phase 7e): `budget-app-user` or `budget-app-admin` or `site-admin`  
+Required group for access (target — sub-phase 7e): `budget-app-access` or `site-admin`  
 Current group (deployed): `budget-app` or `admin`
 
 JWT claims used by Lambda handlers:

@@ -60,14 +60,17 @@ Analysis cache (`platform.analysis-cache-{stage}`) is a platform table shared wi
 
 ## Authorization requirement
 
-All Lambda handlers must call:
+All Lambda handlers use helpers from `packages/lambda-middleware`. The four available helpers and when to apply each:
 
 ```typescript
-requireAppAccess(auth, 'stock-signal')
-requireAccountAccess(auth, 'stock-signal', accountId)
+requireSiteAdmin(auth)                                           // platform admin ops only
+requireAppAccess(auth, 'stock-signal')                          // entry-point check (every handler)
+requireAccountAccess(auth, 'stock-signal', accountId)           // standard read/write ops
+requireAccountAccess(auth, 'stock-signal', accountId, 'manager') // elevated ops (bulk delete, etc.)
+requireAccountOwner(auth, 'stock-signal', accountId)            // ownership-transfer ops
 ```
 
-Do not call `requireGroup` directly. See [auth.md](/docs/architecture/auth.md) for the middleware helpers.
+Call `requireAppAccess` at the top of every handler, then `requireAccountAccess` (or `requireAccountOwner`) before each DynamoDB operation. Do not call `requireGroup` directly. See [auth.md](/docs/architecture/auth.md) for full middleware helper documentation.
 
 ## Service layer and data contracts
 
