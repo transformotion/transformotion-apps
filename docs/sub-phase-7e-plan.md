@@ -1,6 +1,6 @@
 # Sub-phase 7e — Auth and permissions migration plan
 
-**Status:** Planning  
+**Status:** In progress — 7e-prep-1 merged (pending deploy)  
 **Target architecture:** [/docs/architecture/auth.md](/docs/architecture/auth.md)  
 **Ephemeral document:** deleted at 7e-cleanup once the migration is complete and `auth.md` is verified against deployed reality.
 
@@ -47,7 +47,7 @@
 
 ## Sub-sub-phases
 
-### 7e-prep-1 — CDK: new group structure (additive)
+### 7e-prep-1 — CDK: new group structure (additive) ✓ merged — pending deploy + post-deploy step
 
 Create new Cognito groups in `AuthStack` alongside existing groups:
 - `site-admin`, `stock-app-access`, `budget-app-access`
@@ -59,6 +59,11 @@ Remove the `custom:active_account` custom attribute from the user pool (it is no
 After deploy: manually add Steve to `site-admin`, `stock-app-access`, `budget-app-access`.
 
 **Verification:** Steve signs in; `cognito:groups` claim includes both `admin` (old) and `site-admin` (new).
+
+**Observations during execution:**
+- Pre-flight found Steve had `custom:active_account` set to `6f28aaa4-9393-40b0-ad14-fe3ed5e325d4`. Cleared via `AdminDeleteUserAttributes` before CDK removes the schema entry.
+- `admin` group precedence bumped from 1 → 2 so `site-admin` can take precedence 1. No functional impact.
+- `custom:active_account` was also listed in all three app client `readAttributes`/`writeAttributes` — removed from those too.
 
 ### 7e-prep-2 — Lambda-layer: dual-gate authorization
 
