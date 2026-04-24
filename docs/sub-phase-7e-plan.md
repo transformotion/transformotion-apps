@@ -36,7 +36,7 @@
 | Component | Current | Target |
 |---|---|---|
 | Cognito groups | `admin`, `stock-app`, `budget-app`, `transformotion`, `family` | `site-admin`, `stock-app-access`, `budget-app-access` |
-| Custom attributes | `custom:active_account` (UUID), `custom:accounts` | Remove `custom:active_account`; keep `custom:accounts` (now JSON-stringified map) |
+| Custom attributes | `custom:active_account` (UUID), `custom:accounts` | `custom:active_account` retained as deprecated no-op (Cognito does not permit schema attribute deletion); keep `custom:accounts` (now JSON-stringified map) |
 | Pre-token Lambda | None | Injects `apps`, `site_admin`, `accounts` claims + reconciles group membership |
 | Auth middleware | `requireGroup(auth, ...groups)` | + `requireSiteAdmin`, `requireAppAccess`, `requireAccountAccess`, `requireAccountOwner` helpers |
 | Lambda authorization | `requireGroup` call sites | `requireAppAccess` + `requireAccountAccess` (+ `requireAccountOwner` for ownership ops) |
@@ -61,9 +61,10 @@ After deploy: manually add Steve to `site-admin`, `stock-app-access`, `budget-ap
 **Verification:** Steve signs in; `cognito:groups` claim includes both `admin` (old) and `site-admin` (new).
 
 **Observations during execution:**
-- Pre-flight found Steve had `custom:active_account` set to `6f28aaa4-9393-40b0-ad14-fe3ed5e325d4`. Cleared via `AdminDeleteUserAttributes` before CDK removes the schema entry.
+- Pre-flight found Steve had `custom:active_account` set to `6f28aaa4-9393-40b0-ad14-fe3ed5e325d4`. Cleared via `AdminDeleteUserAttributes`.
+- Cognito does NOT allow deleting existing schema attributes from a live user pool ("Existing schema attributes cannot be modified or deleted."). First deploy attempt failed with `UPDATE_FAILED`. Fixed by retaining `active_account` in the CDK schema as a deprecated no-op declaration.
+- `custom:active_account` removed from all three app client `readAttributes`/`writeAttributes` — this change IS allowed and deployed successfully.
 - `admin` group precedence bumped from 1 → 2 so `site-admin` can take precedence 1. No functional impact.
-- `custom:active_account` was also listed in all three app client `readAttributes`/`writeAttributes` — removed from those too.
 
 ### 7e-prep-2 — Lambda-layer: dual-gate authorization
 

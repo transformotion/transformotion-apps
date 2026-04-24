@@ -31,7 +31,10 @@ export interface AuthStackProps extends cdk.StackProps {
  *     family         — family members (basic access, assigned per invitation)
  *
  * Custom attributes (stored on the Cognito user object):
- *   custom:accounts — JSON-stringified map of appSlug → [{accountId, role}]
+ *   custom:active_account — DEPRECATED. Retained because Cognito does not permit
+ *                           deleting existing schema attributes from a live user pool.
+ *                           Will never be set. Active account is client-side UI state.
+ *   custom:accounts       — JSON-stringified map of appSlug → [{accountId, role}]
  *
  * Social IDPs (Google, Facebook, Microsoft) are wired here with Secrets Manager
  * references. Secrets are created with generated placeholder values. Populate real
@@ -69,9 +72,14 @@ export class AuthStack extends cdk.Stack {
         familyName: { required: false, mutable: true },
       },
 
-      // Custom attributes for account-based multi-tenancy
+      // Custom attributes for account-based multi-tenancy.
+      // NOTE: active_account is deprecated (active account is now client-side UI state).
+      // Cognito does not permit deleting existing schema attributes from a live user pool
+      // ("Existing schema attributes cannot be modified or deleted."). Retained as a
+      // no-op declaration; will never be set again.
       customAttributes: {
-        accounts: new cognito.StringAttribute({ mutable: true, maxLen: 2048 }),
+        active_account: new cognito.StringAttribute({ mutable: true, maxLen: 36 }),
+        accounts:       new cognito.StringAttribute({ mutable: true, maxLen: 2048 }),
       },
 
       // Password policy
