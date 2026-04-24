@@ -39,7 +39,6 @@ const ACCOUNTS_TABLE = 'platform.accounts-test';
 
 process.env.ACCOUNT_MEMBERS_TABLE = MEMBERS_TABLE;
 process.env.ACCOUNTS_TABLE        = ACCOUNTS_TABLE;
-process.env.USER_POOL_ID          = 'us-east-1_test';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

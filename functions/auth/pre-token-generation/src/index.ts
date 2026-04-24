@@ -14,7 +14,6 @@ const ddb     = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
 const ACCOUNT_MEMBERS_TABLE = process.env.ACCOUNT_MEMBERS_TABLE!;
 const ACCOUNTS_TABLE        = process.env.ACCOUNTS_TABLE!;
-const USER_POOL_ID          = process.env.USER_POOL_ID!;
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -92,6 +91,7 @@ function groupByApp(
 
 async function reconcileInvariant(
   userId:        string,
+  userPoolId:    string,
   currentGroups: string[],
   accountsByApp: Record<string, Array<{ accountId: string; role: string }>>,
   isSiteAdmin:   boolean,
@@ -107,7 +107,7 @@ async function reconcileInvariant(
       console.log(`[pre-token] reconcile: adding ${userId} to ${accessGroup}`);
       try {
         await cognito.send(new AdminAddUserToGroupCommand({
-          UserPoolId: USER_POOL_ID,
+          UserPoolId: userPoolId,
           Username:   userId,
           GroupName:  accessGroup,
         }));
@@ -119,7 +119,7 @@ async function reconcileInvariant(
       console.log(`[pre-token] reconcile: removing ${userId} from ${accessGroup}`);
       try {
         await cognito.send(new AdminRemoveUserFromGroupCommand({
-          UserPoolId: USER_POOL_ID,
+          UserPoolId: userPoolId,
           Username:   userId,
           GroupName:  accessGroup,
         }));
@@ -145,19 +145,20 @@ export const handler = async (
   event: PreTokenGenerationTriggerEvent,
 ): Promise<PreTokenGenerationTriggerEvent> => {
   try {
-    const userId       = event.userName;
+    const userId        = event.userName;
+    const userPoolId    = event.userPoolId;
     const currentGroups = event.request.groupConfiguration.groupsToOverride ?? [];
-    const isSiteAdmin  = currentGroups.includes('site-admin');
+    const isSiteAdmin   = currentGroups.includes('site-admin');
 
     console.log('[pre-token] userId:', userId, 'groups:', currentGroups.join(','));
 
-    const memberships     = await queryMemberships(userId);
-    const accountIds      = memberships.map(m => m.accountId);
+    const memberships      = await queryMemberships(userId);
+    const accountIds       = memberships.map(m => m.accountId);
     const appSlugByAccount = await fetchAccountAppSlugs(accountIds);
-    const accountsByApp   = groupByApp(memberships, appSlugByAccount);
+    const accountsByApp    = groupByApp(memberships, appSlugByAccount);
 
     const reconciledGroups = await reconcileInvariant(
-      userId, currentGroups, accountsByApp, isSiteAdmin,
+      userId, userPoolId, currentGroups, accountsByApp, isSiteAdmin,
     );
 
     const apps = buildAppsList(reconciledGroups, isSiteAdmin);

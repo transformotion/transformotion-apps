@@ -243,16 +243,21 @@ export class AuthStack extends cdk.Stack {
       environment: {
         ACCOUNT_MEMBERS_TABLE: accountMembersTable.tableName,
         ACCOUNTS_TABLE:        accountsTable.tableName,
-        USER_POOL_ID:          this.userPool.userPoolId,
+        // USER_POOL_ID is NOT set here — it's read from event.userPoolId at runtime.
+        // Setting it via this.userPool.userPoolId would create a Lambda→UserPool CDK
+        // dependency that forms a cycle with the UserPool→Lambda trigger attachment.
       },
       bundling: { externalModules: ['@aws-sdk/*'], minify: true, sourceMap: false, forceDockerBundling: false },
     });
 
     accountMembersTable.grantReadData(preTokenFn);
     accountsTable.grantReadData(preTokenFn);
+    // Use region+account wildcard to avoid a circular CDK dependency:
+    // userPool.userPoolArn creates UserPool→Lambda AND Lambda→UserPool references
+    // simultaneously (trigger attachment + IAM policy), which CloudFormation rejects.
     preTokenFn.addToRolePolicy(new iam.PolicyStatement({
       actions:   ['cognito-idp:AdminAddUserToGroup', 'cognito-idp:AdminRemoveUserFromGroup'],
-      resources: [this.userPool.userPoolArn],
+      resources: [`arn:aws:cognito-idp:${this.region}:${this.account}:userpool/*`],
     }));
 
     this.userPool.addTrigger(
