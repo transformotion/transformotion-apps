@@ -52,7 +52,7 @@
 Create new Cognito groups in `AuthStack` alongside existing groups:
 - `site-admin`, `stock-app-access`, `budget-app-access`
 
-Remove the `custom:active_account` custom attribute from the user pool (it is not migrated to a plural form — active account selection moves to client-side localStorage).
+Deprecate `custom:active_account`: Cognito does not permit removing schema attributes once declared in a live user pool, so the attribute remains in the CDK schema as a no-op declaration. No code writes or reads it; Steve's user value has been cleared. The attribute is removed from all app client `readAttributes`/`writeAttributes` lists (this change IS permitted by Cognito).
 
 **Old groups are NOT removed in this step** — they coexist during migration.
 
@@ -61,10 +61,9 @@ After deploy: manually add Steve to `site-admin`, `stock-app-access`, `budget-ap
 **Verification:** Steve signs in; `cognito:groups` claim includes both `admin` (old) and `site-admin` (new).
 
 **Observations during execution:**
-- Pre-flight found Steve had `custom:active_account` set to `6f28aaa4-9393-40b0-ad14-fe3ed5e325d4`. Cleared via `AdminDeleteUserAttributes`.
-- Cognito does NOT allow deleting existing schema attributes from a live user pool ("Existing schema attributes cannot be modified or deleted."). First deploy attempt failed with `UPDATE_FAILED`. Fixed by retaining `active_account` in the CDK schema as a deprecated no-op declaration.
-- `custom:active_account` removed from all three app client `readAttributes`/`writeAttributes` — this change IS allowed and deployed successfully.
-- `admin` group precedence bumped from 1 → 2 so `site-admin` can take precedence 1. No functional impact.
+- Pre-flight found Steve had `custom:active_account` set to `6f28aaa4-9393-40b0-ad14-fe3ed5e325d4`. Cleared via `AdminDeleteUserAttributes` before deploy.
+- Initial deploy attempt (PR #51 merge) failed: CDK attempted to delete the `custom:active_account` schema attribute, which Cognito rejected with "Existing schema attributes cannot be modified or deleted." The stack rolled back cleanly (`UPDATE_ROLLBACK_COMPLETE`); no production impact. New groups were also rolled back.
+- PR #52 corrected the approach: `active_account` is retained in the CDK schema as a deprecated no-op; only the app client attribute lists are changed (permitted). `admin` group precedence bumped 1 → 2 so `site-admin` takes 1.
 
 ### 7e-prep-2 — Lambda-layer: dual-gate authorization
 

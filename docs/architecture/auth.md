@@ -30,15 +30,14 @@ See [cdk.md](./cdk.md) for CDK stack names. See [data.md](./data.md) for account
 
 ### Custom attributes
 
-Only one custom attribute is used on the Cognito user record:
+The Cognito user pool declares these custom attributes:
 
-| Attribute | Type | Purpose |
-|---|---|---|
-| `custom:accounts` | String (max 2048) | Comma-separated account IDs the user belongs to (all apps combined). Maintained by the Lambdas that modify account membership; read by the pre-token Lambda. Not consulted directly by frontend or API handlers. |
+| Attribute | Type | Status | Purpose |
+|---|---|---|---|
+| `custom:accounts` | String (max 2048) | Active | Comma-separated account IDs the user belongs to (all apps combined). Maintained by the Lambdas that modify account membership; read by the pre-token Lambda. Not consulted directly by frontend or API handlers. |
+| `custom:active_account` | String (max 36) | Declared but unused | Historical attribute; no longer written or read by any code. Cannot be removed from the schema — Cognito does not permit removal of existing user pool schema attributes. Remains declared but inert. |
 
 **Active account is not a Cognito attribute.** Which account a user is currently viewing in an app is browser-local UI state, persisted in localStorage per-app. API requests include the `accountId` as a request parameter. The auth middleware validates the parameter against the token's `accounts` claim and rejects requests where the caller is not a member of the stated account.
-
-> **Migration note:** The currently deployed user pool has `custom:active_account` (singular UUID). This attribute is removed entirely in sub-phase 7e-prep-1.
 
 ### Token lifetime
 
