@@ -1,5 +1,10 @@
+import * as path from 'path';
 import * as cdk from 'aws-cdk-lib';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as lambdaNodejs from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import { Construct } from 'constructs';
 
@@ -209,6 +214,44 @@ export class AuthStack extends cdk.Stack {
         : ['https://dev.apps.transformotion.com.au/sign-in', 'http://localhost:3002/sign-in'],
       supportedIdentityProviders: [cognito.UserPoolClientIdentityProvider.COGNITO],
     });
+
+    // ── Pre-token generation Lambda ────────────────────────────────────────
+    // Injects `apps`, `site_admin`, `accounts` claims on every token issuance.
+    // Enforces the app-access invariant by reconciling Cognito group membership
+    // against account memberships in platform.account-members-{stage}.
+    const accountMembersTable = dynamodb.Table.fromTableName(
+      this, 'PreTokenAccountMembersTable', `platform.account-members-${stage}`,
+    );
+    const accountsTable = dynamodb.Table.fromTableName(
+      this, 'PreTokenAccountsTable', `platform.accounts-${stage}`,
+    );
+
+    const preTokenFn = new lambdaNodejs.NodejsFunction(this, 'PreTokenGenerationFn', {
+      functionName: `transformotion-pre-token-generation-${stage}`,
+      entry:        path.join(__dirname, '../../../functions/auth/pre-token-generation/src/index.ts'),
+      handler:      'handler',
+      runtime:      lambda.Runtime.NODEJS_20_X,
+      timeout:      cdk.Duration.seconds(10),
+      memorySize:   256,
+      environment: {
+        ACCOUNT_MEMBERS_TABLE: accountMembersTable.tableName,
+        ACCOUNTS_TABLE:        accountsTable.tableName,
+        USER_POOL_ID:          this.userPool.userPoolId,
+      },
+      bundling: { externalModules: ['@aws-sdk/*'], minify: true, sourceMap: false, forceDockerBundling: false },
+    });
+
+    accountMembersTable.grantReadData(preTokenFn);
+    accountsTable.grantReadData(preTokenFn);
+    preTokenFn.addToRolePolicy(new iam.PolicyStatement({
+      actions:   ['cognito-idp:AdminAddUserToGroup', 'cognito-idp:AdminRemoveUserFromGroup'],
+      resources: [this.userPool.userPoolArn],
+    }));
+
+    this.userPool.addTrigger(
+      cognito.UserPoolOperation.PRE_TOKEN_GENERATION,
+      preTokenFn,
+    );
 
     // ── Cognito Groups ─────────────────────────────────────────────────────
     const groups: Array<{ name: string; description: string; precedence: number }> = [

@@ -5,4 +5,5 @@ packages:
   - 'apps/budget-tracker/functions/*'
   - 'packages/*'
   - 'functions/*'
+  - 'functions/auth/*'
   - 'infrastructure'

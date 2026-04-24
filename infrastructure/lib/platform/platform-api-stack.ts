@@ -87,9 +87,9 @@ export class PlatformApiStack extends cdk.Stack {
       this, 'AccountMembersTable', `platform.account-members-${stage}`,
     );
 
-    const firstLoginFn = new lambdaNodejs.NodejsFunction(this, 'FirstLoginFn', {
-      functionName: `transformotion-first-login-${stage}`,
-      entry:        path.join(__dirname, '../../../functions/first-login/src/index.ts'),
+    const firstLoginFn = new lambdaNodejs.NodejsFunction(this, 'AccountProvisioningFn', {
+      functionName: `transformotion-account-provisioning-${stage}`,
+      entry:        path.join(__dirname, '../../../functions/auth/account-provisioning/src/index.ts'),
       handler:      'handler',
       runtime:      lambda.Runtime.NODEJS_20_X,
       timeout:      cdk.Duration.seconds(15),
@@ -215,7 +215,7 @@ export class PlatformApiStack extends cdk.Stack {
 
     const invitationsFn = new lambdaNodejs.NodejsFunction(this, 'InvitationsFn', {
       functionName: `transformotion-invitations-${stage}`,
-      entry:        path.join(__dirname, '../../../functions/invitations/src/index.ts'),
+      entry:        path.join(__dirname, '../../../functions/auth/invitations/src/index.ts'),
       handler:      'handler',
       runtime:      lambda.Runtime.NODEJS_20_X,
       timeout:      cdk.Duration.seconds(15),
