@@ -115,6 +115,13 @@ export class AuthStack extends cdk.Stack {
       removalPolicy: isProd ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
     });
 
+    // Schema attributes cannot be modified or deleted once created in Cognito.
+    // CloudFormation's UpdateUserPool call includes Schema on every stack update,
+    // causing Cognito to reject with "Existing schema attributes cannot be modified
+    // or deleted." Removing Schema from the CloudFormation resource prevents this —
+    // the attributes remain live in Cognito from the initial deployment.
+    (this.userPool.node.defaultChild as cognito.CfnUserPool).addPropertyDeletionOverride('Schema');
+
     // ── User Pool Domain ───────────────────────────────────────────────────
     // Provides the Cognito Hosted UI endpoint for OAuth2/PKCE + social IDP flows.
     this.userPoolDomain = this.userPool.addDomain('UserPoolDomain', {
