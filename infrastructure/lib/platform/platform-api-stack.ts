@@ -13,8 +13,6 @@ export interface PlatformApiStackProps extends cdk.StackProps {
   stage: 'dev' | 'prod';
   /** Imported from AuthStack */
   userPool: cognito.IUserPool;
-  /** Imported from PlatformTablesStack */
-  analysisCacheTable: dynamodb.ITable;
 }
 
 /**
@@ -48,7 +46,7 @@ export class PlatformApiStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: PlatformApiStackProps) {
     super(scope, id, props);
 
-    const { stage, userPool, analysisCacheTable } = props;
+    const { stage, userPool } = props;
 
     // ── REST API ─────────────────────────────────────────────────────────────
     this.api = new apigateway.RestApi(this, 'Api', {
@@ -141,6 +139,16 @@ export class PlatformApiStack extends cdk.Stack {
     // ── /api/claude — Shared Anthropic proxy (used by all apps) ──────────────
     const anthropicSecret = secretsmanager.Secret.fromSecretNameV2(
       this, 'AnthropicApiKey', `${stage}/anthropic/api-key`,
+    );
+
+    // UNBLOCK-WORKAROUND: look up analysis-cache by name instead of receiving
+    // it as a cross-stack construct prop. This breaks the Fn::ImportValue chain
+    // that was blocking PlatformTables from dropping its old analysis-cache
+    // export (StockAnalyserTables is stuck in REVIEW_IN_PROGRESS and cannot be
+    // deployed as a CDK dependency). Revert to a prop when StockAnalyserTables
+    // is healthy (account bootstrap phase).
+    const analysisCacheTable = dynamodb.Table.fromTableName(
+      this, 'AnalysisCacheTable', `stock-analyser.analysis-cache-${stage}`,
     );
 
     const claudeProxyFn = new lambdaNodejs.NodejsFunction(this, 'ClaudeProxyFn', {
