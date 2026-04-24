@@ -194,7 +194,7 @@ async function csvAnalysis(
 
 // ── Handler ───────────────────────────────────────────────────────────────────
 export const handler = withAuth(async ({ auth, account, event }) => {
-  requireGroup(auth, 'budget-app', 'admin');
+  requireGroup(auth, 'budget-app', 'budget-app-access', 'admin', 'site-admin');
   const resource = event.resource ?? '';
 
   if (resource === '/api/budget/v1/ai/categorise')    return categorise(auth, account.accountId, event);

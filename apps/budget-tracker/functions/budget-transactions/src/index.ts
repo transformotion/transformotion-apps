@@ -175,7 +175,7 @@ async function deleteTransaction(accountId: string, transactionId: string) {
 
 // ── Handler ───────────────────────────────────────────────────────────────────
 export const handler = withAuth(async ({ auth, account, event }) => {
-  requireGroup(auth, 'budget-app', 'admin');
+  requireGroup(auth, 'budget-app', 'budget-app-access', 'admin', 'site-admin');
   const { accountId } = account;
   const method   = event.httpMethod;
   const resource = event.resource ?? '';

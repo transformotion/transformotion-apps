@@ -77,7 +77,7 @@ function resolveWriteAccountId(cacheKey: string, fallbackAccountId: string, clie
 }
 
 export const handler = withAuth(async ({ auth, account, event }) => {
-  requireGroup(auth, 'stock-app', 'admin');
+  requireGroup(auth, 'stock-app', 'stock-app-access', 'admin', 'site-admin');
   const { accountId } = account;
   // URL-decode the key so clients can send MARKET%23Global and the DDB key is MARKET#Global.
   const cacheKey = decodeURIComponent(getPathParam(event, 'key'));

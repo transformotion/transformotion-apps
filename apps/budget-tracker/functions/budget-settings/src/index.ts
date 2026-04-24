@@ -67,7 +67,7 @@ async function updateSettings(event: Parameters<typeof parseBody>[0], accountId:
 }
 
 export const handler = withAuth(async ({ auth, account, event }) => {
-  requireGroup(auth, 'budget-app', 'admin');
+  requireGroup(auth, 'budget-app', 'budget-app-access', 'admin', 'site-admin');
   const { accountId } = account;
   if (event.httpMethod === 'GET')   return getSettings(accountId);
   if (event.httpMethod === 'PATCH') return updateSettings(event, accountId);
