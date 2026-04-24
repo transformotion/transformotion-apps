@@ -10,7 +10,6 @@ export interface BudgetTrackerTablesStackProps extends cdk.StackProps {
  * BudgetTrackerTablesStack — DynamoDB tables for Budget Tracker.
  *
  * Tables (all prefixed budget-tracker.):
- *   budget-tracker.accounts      PK: accountId
  *   budget-tracker.transactions  PK: accountId  SK: transactionId
  *                                GSI: accountId-dateIso-index (PK: accountId, SK: dateIso)
  *   budget-tracker.rules         PK: accountId  SK: ruleId
@@ -24,7 +23,6 @@ export class BudgetTrackerTablesStack extends cdk.Stack {
   public readonly transactionsTable: dynamodb.Table;
   public readonly rulesTable:        dynamodb.Table;
   public readonly settingsTable:     dynamodb.Table;
-  public readonly accountsTable:     dynamodb.Table;
 
   constructor(scope: Construct, id: string, props: BudgetTrackerTablesStackProps) {
     super(scope, id, props);
@@ -36,14 +34,6 @@ export class BudgetTrackerTablesStack extends cdk.Stack {
     // Apply per-app tags to every resource in this stack
     cdk.Tags.of(this).add('app',         'budget-tracker');
     cdk.Tags.of(this).add('environment', stage);
-
-    // ── budget-tracker.accounts ───────────────────────────────────────────────
-    this.accountsTable = new dynamodb.Table(this, 'AccountsTable', {
-      tableName:     `budget-tracker.accounts-${stage}`,
-      partitionKey:  { name: 'accountId', type: dynamodb.AttributeType.STRING },
-      billingMode:   dynamodb.BillingMode.PAY_PER_REQUEST,
-      removalPolicy: removal,
-    });
 
     // ── budget-tracker.transactions ───────────────────────────────────────────
     this.transactionsTable = new dynamodb.Table(this, 'TransactionsTable', {
@@ -83,7 +73,6 @@ export class BudgetTrackerTablesStack extends cdk.Stack {
     const out = (id: string, value: string, description: string) =>
       new cdk.CfnOutput(this, id, { value, description, exportName: `Transformotion-${stage}-${id}` });
 
-    out('BTAccountsTableArn',     this.accountsTable.tableArn,     'budget-tracker.accounts table ARN');
     out('BTTransactionsTableArn', this.transactionsTable.tableArn, 'budget-tracker.transactions table ARN');
     out('BTRulesTableArn',        this.rulesTable.tableArn,        'budget-tracker.rules table ARN');
     out('BTSettingsTableArn',     this.settingsTable.tableArn,     'budget-tracker.settings table ARN');

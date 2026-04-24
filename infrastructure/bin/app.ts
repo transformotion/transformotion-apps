@@ -49,10 +49,16 @@ new AuthApiStack(app, 'TransformotionDev-AuthApi', {
   appUrl:      'https://dev.apps.transformotion.com.au',
 });
 
-const devPlatformTables = new PlatformTablesStack(app, 'TransformotionDev-PlatformTables', {
+new PlatformTablesStack(app, 'TransformotionDev-PlatformTables', {
   env,
   stage:       'dev',
-  description: 'Transformotion Apps — Dev platform DynamoDB tables (users, accounts, invitations, analysis-cache)',
+  description: 'Transformotion Apps — Dev platform DynamoDB tables (users, accounts, invitations)',
+});
+
+const devStockAnalyserTables = new StockAnalyserTablesStack(app, 'TransformotionDev-StockAnalyserTables', {
+  env,
+  stage:       'dev',
+  description: 'Transformotion Apps — Dev Stock Analyser DynamoDB tables',
 });
 
 const devPlatformApi = new PlatformApiStack(app, 'TransformotionDev-Api', {
@@ -60,13 +66,7 @@ const devPlatformApi = new PlatformApiStack(app, 'TransformotionDev-Api', {
   stage:              'dev',
   description:        'Transformotion Apps — Dev platform API (shared routes for all apps)',
   userPool:           devAuth.userPool,
-  analysisCacheTable: devPlatformTables.analysisCacheTable,
-});
-
-new StockAnalyserTablesStack(app, 'TransformotionDev-StockAnalyserTables', {
-  env,
-  stage:       'dev',
-  description: 'Transformotion Apps — Dev Stock Analyser DynamoDB tables',
+  analysisCacheTable: devStockAnalyserTables.analysisCacheTable,
 });
 
 new StockAnalyserApiStack(app, 'TransformotionDev-StockAnalyserApi', {
@@ -113,10 +113,16 @@ new AuthApiStack(app, 'TransformotionProd-AuthApi', {
   appUrl:      'https://apps.transformotion.com.au',
 });
 
-const prodPlatformTables = new PlatformTablesStack(app, 'TransformotionProd-PlatformTables', {
+new PlatformTablesStack(app, 'TransformotionProd-PlatformTables', {
   env,
   stage:       'prod',
-  description: 'Transformotion Apps — Prod platform DynamoDB tables',
+  description: 'Transformotion Apps — Prod platform DynamoDB tables (users, accounts, invitations)',
+});
+
+const prodStockAnalyserTables = new StockAnalyserTablesStack(app, 'TransformotionProd-StockAnalyserTables', {
+  env,
+  stage:       'prod',
+  description: 'Transformotion Apps — Prod Stock Analyser DynamoDB tables',
 });
 
 const prodPlatformApi = new PlatformApiStack(app, 'TransformotionProd-Api', {
@@ -124,13 +130,7 @@ const prodPlatformApi = new PlatformApiStack(app, 'TransformotionProd-Api', {
   stage:              'prod',
   description:        'Transformotion Apps — Prod platform API (shared routes for all apps)',
   userPool:           prodAuth.userPool,
-  analysisCacheTable: prodPlatformTables.analysisCacheTable,
-});
-
-new StockAnalyserTablesStack(app, 'TransformotionProd-StockAnalyserTables', {
-  env,
-  stage:       'prod',
-  description: 'Transformotion Apps — Prod Stock Analyser DynamoDB tables',
+  analysisCacheTable: prodStockAnalyserTables.analysisCacheTable,
 });
 
 new StockAnalyserApiStack(app, 'TransformotionProd-StockAnalyserApi', {

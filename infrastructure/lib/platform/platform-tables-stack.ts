@@ -14,8 +14,6 @@ export interface PlatformTablesStackProps extends cdk.StackProps {
  *   platform.accounts        PK: accountId
  *   platform.account-members PK: accountId  SK: userId
  *   platform.invitations     PK: invitationId   TTL: expiresAt
- *   platform.analysis-cache  PK: accountId  SK: cacheKey   TTL: expiresAt
- *     (used by the shared claude-proxy Lambda — all apps share one cache)
  *
  * Per-app tables live in their own app stacks (see apps/<app>/infrastructure/).
  */
@@ -24,7 +22,6 @@ export class PlatformTablesStack extends cdk.Stack {
   public readonly accountsTable:       dynamodb.Table;
   public readonly accountMembersTable: dynamodb.Table;
   public readonly invitationsTable:    dynamodb.Table;
-  public readonly analysisCacheTable:  dynamodb.Table;
 
   constructor(scope: Construct, id: string, props: PlatformTablesStackProps) {
     super(scope, id, props);
@@ -83,18 +80,6 @@ export class PlatformTablesStack extends cdk.Stack {
       projectionType: dynamodb.ProjectionType.ALL,
     });
 
-    // ── platform.analysis-cache ───────────────────────────────────────────
-    // Shared by the claude-proxy Lambda across all apps.
-    // PK: accountId  SK: cacheKey   TTL: expiresAt (epoch seconds)
-    this.analysisCacheTable = new dynamodb.Table(this, 'AnalysisCacheTable', {
-      tableName:     `platform.analysis-cache-${stage}`,
-      partitionKey:  { name: 'accountId', type: dynamodb.AttributeType.STRING },
-      sortKey:       { name: 'cacheKey',  type: dynamodb.AttributeType.STRING },
-      billingMode:   dynamodb.BillingMode.PAY_PER_REQUEST,
-      timeToLiveAttribute: 'expiresAt',
-      removalPolicy: removal,
-    });
-
     // ── Outputs ───────────────────────────────────────────────────────────
     const out = (id: string, table: dynamodb.Table, hint: string) => {
       new cdk.CfnOutput(this, id, {
@@ -108,6 +93,5 @@ export class PlatformTablesStack extends cdk.Stack {
     out('AccountsTableArn',       this.accountsTable,       'platform.accounts table ARN');
     out('AccountMembersTableArn', this.accountMembersTable, 'platform.account-members table ARN');
     out('InvitationsTableArn',    this.invitationsTable,    'platform.invitations table ARN');
-    out('AnalysisCacheTableArn',  this.analysisCacheTable,  'platform.analysis-cache table ARN');
   }
 }

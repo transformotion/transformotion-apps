@@ -24,6 +24,8 @@ See [auth.md](./auth.md) for the account membership model. See [cdk.md](./cdk.md
 
 Examples: `platform.accounts-dev`, `budget-tracker.transactions-prod`, `stock-analyser.portfolio-dev-v2`
 
+**Enforcement rule:** App-specific tables must never use the `platform.` prefix. If a table is only read or written by one app's Lambdas, it belongs in that app's scope (e.g. `stock-analyser.*`, `budget-tracker.*`) and in that app's `TablesStack`.
+
 ---
 
 ## Platform tables
@@ -92,17 +94,6 @@ Pending, redeemed, and expired invitations.
 
 Served by `transformotion-invitations-{stage}` Lambda.
 
-### `platform.analysis-cache-{stage}`
-
-Shared Claude AI response cache, used by the `transformotion-claude-proxy-{stage}` Lambda across all apps.
-
-| Attribute | Type | Notes |
-|---|---|---|
-| `accountId` (PK) | String | |
-| `cacheKey` (SK) | String | Namespaced cache key (e.g. `MARKET#ASX`, `ANALYSIS#CBA.AX`) |
-| `result` | Map | Cached response |
-| `expiresAt` | Number | Epoch-seconds (TTL attribute) |
-
 ---
 
 ## Per-app tables
@@ -125,24 +116,24 @@ Managed by `TransformotionDev-StockAnalyserTables` / `TransformotionProd-StockAn
 | `accountId` (PK) | String | |
 | `items` | List | Serialised `WatchlistItem[]` |
 
+#### `stock-analyser.analysis-cache-{stage}`
+
+Cache of Claude AI analysis results, keyed per account.
+
+| Attribute | Type | Notes |
+|---|---|---|
+| `accountId` (PK) | String | |
+| `cacheKey` (SK) | String | Namespaced cache key (e.g. `MARKET#ASX`, `ANALYSIS#CBA.AX`) |
+| `result` | Map | Cached response |
+| `expiresAt` | Number | Epoch-seconds (TTL attribute) |
+
+Served by `transformotion-analysis-cache-{stage}` Lambda (`GET/PUT/DELETE /analysis-cache/{key}`).
+
 For full type definitions see [apps/stock-analyser/contracts/DATA_CONTRACTS.md](/apps/stock-analyser/contracts/DATA_CONTRACTS.md).
 
 ### Budget Tracker
 
 Managed by `TransformotionDev-BudgetTrackerTables` / `TransformotionProd-BudgetTrackerTables`.
-
-#### `budget-tracker.accounts-{stage}`
-
-Budget-Tracker-specific account container. Stores account name and members list as a nested attribute.
-
-| Attribute | Type | Notes |
-|---|---|---|
-| `accountId` (PK) | String | UUID |
-| `name` | String | Household name |
-| `members` | List | `[{ userId, role, email, joinedAt }]` |
-| `createdAt` | String | ISO 8601 |
-
-> **Duplication note:** This table partially overlaps with `platform.accounts` and `platform.account-members`. Consolidation to the platform tables is deferred to a future cleanup phase.
 
 #### `budget-tracker.transactions-{stage}`
 
