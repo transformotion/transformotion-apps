@@ -89,13 +89,12 @@ export class StockAnalyserApiStack extends cdk.Stack {
       runtime:      lambda.Runtime.NODEJS_20_X,
       timeout:      cdk.Duration.seconds(15),
       memorySize:   256,
-      environment:  { CACHE_TABLE: `platform.analysis-cache-${stage}` },
+      environment:  { CACHE_TABLE: `stock-analyser.analysis-cache-${stage}` },
       bundling:     { externalModules: ['@aws-sdk/*'], minify: true, sourceMap: false, forceDockerBundling: false },
     });
 
-    // Grant cache Lambda access to the platform analysis-cache table
     const analysisCacheTable = dynamodb.Table.fromTableName(
-      this, 'AnalysisCacheTable', `platform.analysis-cache-${stage}`,
+      this, 'AnalysisCacheTable', `stock-analyser.analysis-cache-${stage}`,
     );
     analysisCacheTable.grantReadWriteData(cacheFn);
 
