@@ -220,8 +220,11 @@ export class AuthStack extends cdk.Stack {
     // Injects `apps`, `site_admin`, `accounts` claims on every token issuance.
     // Enforces the app-access invariant by reconciling Cognito group membership
     // against account memberships in platform.account-members-{stage}.
-    const accountMembersTable = dynamodb.Table.fromTableName(
-      this, 'PreTokenAccountMembersTable', `platform.account-members-${stage}`,
+    const accountMembersTable = dynamodb.Table.fromTableAttributes(
+      this, 'PreTokenAccountMembersTable', {
+        tableName:     `platform.account-members-${stage}`,
+        globalIndexes: ['userId-index'],
+      },
     );
     const accountsTable = dynamodb.Table.fromTableName(
       this, 'PreTokenAccountsTable', `platform.accounts-${stage}`,
