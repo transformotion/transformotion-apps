@@ -1,12 +1,12 @@
 {
-  "name": "@transformotion/fn-first-login",
+  "name": "@transformotion/fn-account-provisioning",
   "version": "0.0.0",
   "private": true,
   "main": "./src/index.ts",
   "scripts": {
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
-    "lint": "echo \"lint: first-login\"",
+    "lint": "echo \"lint: account-provisioning\"",
     "test": "vitest run"
   },
   "dependencies": {

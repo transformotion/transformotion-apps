@@ -690,67 +690,6 @@ importers:
         specifier: '*'
         version: 5.7.3
 
-  apps/web:
-    dependencies:
-      '@hookform/resolvers':
-        specifier: ^3.9.1
-        version: 3.10.0(react-hook-form@7.72.1(react@19.2.5))
-      '@radix-ui/react-slot':
-        specifier: 1.2.4
-        version: 1.2.4(@types/react@19.2.14)(react@19.2.5)
-      '@vercel/analytics':
-        specifier: 1.6.1
-        version: 1.6.1(next@16.2.0(@babel/core@7.29.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(react@19.2.5)
-      class-variance-authority:
-        specifier: ^0.7.1
-        version: 0.7.1
-      clsx:
-        specifier: ^2.1.1
-        version: 2.1.1
-      lucide-react:
-        specifier: ^0.564.0
-        version: 0.564.0(react@19.2.5)
-      next:
-        specifier: 16.2.0
-        version: 16.2.0(@babel/core@7.29.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
-      next-themes:
-        specifier: ^0.4.6
-        version: 0.4.6(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
-      react:
-        specifier: ^19
-        version: 19.2.5
-      react-dom:
-        specifier: ^19
-        version: 19.2.5(react@19.2.5)
-      tailwind-merge:
-        specifier: ^3.3.1
-        version: 3.5.0
-    devDependencies:
-      '@tailwindcss/postcss':
-        specifier: ^4.2.0
-        version: 4.2.2
-      '@types/node':
-        specifier: ^22
-        version: 22.19.17
-      '@types/react':
-        specifier: ^19
-        version: 19.2.14
-      '@types/react-dom':
-        specifier: ^19
-        version: 19.2.3(@types/react@19.2.14)
-      postcss:
-        specifier: ^8.5
-        version: 8.5.10
-      tailwindcss:
-        specifier: ^4.2.0
-        version: 4.2.2
-      tw-animate-css:
-        specifier: 1.3.3
-        version: 1.3.3
-      typescript:
-        specifier: 5.7.3
-        version: 5.7.3
-
   functions/accounts:
     dependencies:
       '@transformotion/lambda-middleware':
@@ -773,6 +712,98 @@ importers:
         specifier: '*'
         version: 5.7.3
 
+  functions/auth/account-provisioning:
+    dependencies:
+      '@transformotion/lambda-middleware':
+        specifier: workspace:*
+        version: link:../../../packages/lambda-middleware
+    devDependencies:
+      '@aws-sdk/client-cognito-identity-provider':
+        specifier: ^3
+        version: 3.1032.0
+      '@aws-sdk/client-dynamodb':
+        specifier: ^3
+        version: 3.1032.0
+      '@aws-sdk/lib-dynamodb':
+        specifier: ^3
+        version: 3.1032.0(@aws-sdk/client-dynamodb@3.1032.0)
+      '@types/aws-lambda':
+        specifier: ^8
+        version: 8.10.161
+      '@types/node':
+        specifier: ^22
+        version: 22.19.17
+      typescript:
+        specifier: '*'
+        version: 5.7.3
+
+  functions/auth/forgot-provider:
+    devDependencies:
+      '@aws-sdk/client-cognito-identity-provider':
+        specifier: ^3
+        version: 3.1032.0
+      '@aws-sdk/client-dynamodb':
+        specifier: ^3
+        version: 3.1032.0
+      '@aws-sdk/client-sesv2':
+        specifier: ^3
+        version: 3.1032.0
+      '@types/node':
+        specifier: ^22
+        version: 22.19.17
+      typescript:
+        specifier: '*'
+        version: 5.7.3
+
+  functions/auth/invitations:
+    dependencies:
+      '@transformotion/lambda-middleware':
+        specifier: workspace:*
+        version: link:../../../packages/lambda-middleware
+    devDependencies:
+      '@aws-sdk/client-dynamodb':
+        specifier: ^3
+        version: 3.1032.0
+      '@aws-sdk/client-sesv2':
+        specifier: ^3
+        version: 3.1032.0
+      '@aws-sdk/lib-dynamodb':
+        specifier: ^3
+        version: 3.1032.0(@aws-sdk/client-dynamodb@3.1032.0)
+      '@types/aws-lambda':
+        specifier: ^8
+        version: 8.10.161
+      '@types/node':
+        specifier: ^22
+        version: 22.19.17
+      typescript:
+        specifier: '*'
+        version: 5.7.3
+
+  functions/auth/pre-token-generation:
+    devDependencies:
+      '@aws-sdk/client-cognito-identity-provider':
+        specifier: ^3
+        version: 3.1032.0
+      '@aws-sdk/client-dynamodb':
+        specifier: ^3
+        version: 3.1032.0
+      '@aws-sdk/lib-dynamodb':
+        specifier: ^3
+        version: 3.1032.0(@aws-sdk/client-dynamodb@3.1032.0)
+      '@types/aws-lambda':
+        specifier: ^8
+        version: 8.10.161
+      '@types/node':
+        specifier: ^22
+        version: 22.19.17
+      typescript:
+        specifier: '*'
+        version: 5.7.3
+      vitest:
+        specifier: ^1.0.0
+        version: 1.6.1(@types/node@22.19.17)(lightningcss@1.32.0)
+
   functions/claude-proxy:
     dependencies:
       '@transformotion/lambda-middleware':
@@ -790,74 +821,6 @@ importers:
         version: 3.1032.0
       '@aws-sdk/lib-dynamodb':
         specifier: ^3.1030.0
-        version: 3.1032.0(@aws-sdk/client-dynamodb@3.1032.0)
-      '@types/aws-lambda':
-        specifier: ^8
-        version: 8.10.161
-      '@types/node':
-        specifier: ^22
-        version: 22.19.17
-      typescript:
-        specifier: '*'
-        version: 5.7.3
-
-  functions/first-login:
-    dependencies:
-      '@transformotion/lambda-middleware':
-        specifier: workspace:*
-        version: link:../../packages/lambda-middleware
-    devDependencies:
-      '@aws-sdk/client-cognito-identity-provider':
-        specifier: ^3
-        version: 3.1032.0
-      '@aws-sdk/client-dynamodb':
-        specifier: ^3
-        version: 3.1032.0
-      '@aws-sdk/lib-dynamodb':
-        specifier: ^3
-        version: 3.1032.0(@aws-sdk/client-dynamodb@3.1032.0)
-      '@types/aws-lambda':
-        specifier: ^8
-        version: 8.10.161
-      '@types/node':
-        specifier: ^22
-        version: 22.19.17
-      typescript:
-        specifier: '*'
-        version: 5.7.3
-
-  functions/forgot-provider:
-    devDependencies:
-      '@aws-sdk/client-cognito-identity-provider':
-        specifier: ^3
-        version: 3.1032.0
-      '@aws-sdk/client-dynamodb':
-        specifier: ^3
-        version: 3.1032.0
-      '@aws-sdk/client-sesv2':
-        specifier: ^3
-        version: 3.1032.0
-      '@types/node':
-        specifier: ^22
-        version: 22.19.17
-      typescript:
-        specifier: '*'
-        version: 5.7.3
-
-  functions/invitations:
-    dependencies:
-      '@transformotion/lambda-middleware':
-        specifier: workspace:*
-        version: link:../../packages/lambda-middleware
-    devDependencies:
-      '@aws-sdk/client-dynamodb':
-        specifier: ^3
-        version: 3.1032.0
-      '@aws-sdk/client-sesv2':
-        specifier: ^3
-        version: 3.1032.0
-      '@aws-sdk/lib-dynamodb':
-        specifier: ^3
         version: 3.1032.0(@aws-sdk/client-dynamodb@3.1032.0)
       '@types/aws-lambda':
         specifier: ^8

@@ -1,6 +1,6 @@
 # Sub-phase 7e — Auth and permissions migration plan
 
-**Status:** In progress — 7e-prep-2 dual-gate Lambda handlers (PR open, awaiting review)  
+**Status:** In progress — 7e-pretoken pre-token generation Lambda (PR open, awaiting review)  
 **Target architecture:** [/docs/architecture/auth.md](/docs/architecture/auth.md)  
 **Ephemeral document:** deleted at 7e-cleanup once the migration is complete and `auth.md` is verified against deployed reality.
 
@@ -65,7 +65,7 @@ After deploy: manually add Steve to `site-admin`, `stock-app-access`, `budget-ap
 - Initial deploy attempt (PR #51 merge) failed: CDK attempted to delete the `custom:active_account` schema attribute, which Cognito rejected with "Existing schema attributes cannot be modified or deleted." The stack rolled back cleanly (`UPDATE_ROLLBACK_COMPLETE`); no production impact. New groups were also rolled back.
 - PR #52 corrected the approach: `active_account` is retained in the CDK schema as a deprecated no-op; only the app client attribute lists are changed (permitted). `admin` group precedence bumped 1 → 2 so `site-admin` takes 1.
 
-### 7e-prep-2 — Lambda-layer: dual-gate authorization ⟳ in progress (PR open, awaiting review)
+### 7e-prep-2 — Lambda-layer: dual-gate authorization ✓ complete
 
 Update `requireGroup` calls in Lambda handlers to accept both old and new group names. Transitional — allows the migration to proceed without locking out existing access.
 
@@ -86,7 +86,7 @@ Pattern for claude-proxy: `requireGroup(auth, 'stock-app', 'budget-app', 'admin'
 - 10 handlers updated: 3 Stock Analyser (`portfolio`, `watchlist`, `analysis-cache`), 6 Budget Tracker (`transactions`, `settings`, `rules`, `migrate`, `export`, `ai`), 1 shared (`claude-proxy`).
 - Pre-existing test failures on Windows (`vitest` not found) confirmed unrelated to this change.
 
-### 7e-pretoken — Pre-token generation Lambda
+### 7e-pretoken — Pre-token generation Lambda ⟳ in progress (PR open, awaiting review)
 
 Write and deploy `functions/pre-token-generation`. Register as Cognito pre-token-generation trigger in `AuthStack`.
 
@@ -95,7 +95,14 @@ Responsibilities per [auth.md](/docs/architecture/auth.md#pre-token-generation-l
 - Calls `AdminAddUserToGroup` / `AdminRemoveUserFromGroup` to reconcile Cognito group membership with account membership (accounts are the authoritative source)
 - Injects claims: `apps` (JSON-stringified `string[]`), `site_admin` (string `"true"`/`"false"`), `accounts` (JSON-stringified map of appSlug → `[{accountId, role}]`)
 
-**Verification:** Steve signs in; ID token decoded at `jwt.io` shows `custom:apps`, `custom:site_admin`, `custom:accounts` with correct JSON values.
+**Verification:** Steve signs in; ID token decoded at `jwt.io` shows `apps`, `site_admin`, `accounts` claims with correct JSON values.
+
+**Observations during execution:**
+- The `functions/` directory was reorganised: `invitations`, `first-login`, and `forgot-provider` moved to `functions/auth/` subdirectory. `first-login` renamed to `account-provisioning` (the name was misleading — this Lambda provisions accounts on signup, it is not a Cognito first-login trigger). Lambda function name changes from `transformotion-first-login-{stage}` to `transformotion-account-provisioning-{stage}`, causing a CloudFormation Lambda replacement; brief `POST /auth/setup` unavailability during deploy is expected and acceptable.
+- `pnpm-workspace.yaml` updated to include `functions/auth/*`.
+- `platform.account-members` does not carry `appSlug`. The pre-token Lambda uses two DynamoDB calls: `QueryCommand` on `userId-index` to get memberships, then `BatchGetCommand` on `platform.accounts` to resolve `appSlug` per account. No schema change required.
+- Cognito admin calls (add/remove group) are wrapped in per-call try/catch so individual Cognito errors log and continue rather than crashing the entire claim construction.
+- 10 unit tests all pass.
 
 ### 7e-auth-middleware-extend
 

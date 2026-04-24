@@ -53,23 +53,23 @@ Deployed by `deploy-budget-tracker.yml`. Source in `infrastructure/lib/budget-tr
 
 | Function name | Handler | Routes |
 |---|---|---|
-| `transformotion-first-login-{stage}` | `functions/first-login` | `POST /auth/setup`, `POST /auth/switch` |
+| `transformotion-account-provisioning-{stage}` | `functions/auth/account-provisioning` | `POST /auth/setup`, `POST /auth/switch` |
 | `transformotion-user-{stage}` | `functions/user` | `GET /api/user/profile`, `PUT /api/user/preferences` |
 | `transformotion-claude-proxy-{stage}` | `functions/claude-proxy` | `POST /api/claude` |
 | `transformotion-accounts-{stage}` | `functions/accounts` | `POST /accounts`, `GET/PUT/DELETE /accounts/{id}`, `GET /accounts/{id}/members`, `DELETE /accounts/{id}/members/{userId}` |
-| `transformotion-invitations-{stage}` | `functions/invitations` | `POST /accounts/{id}/invitations` |
+| `transformotion-invitations-{stage}` | `functions/auth/invitations` | `POST /accounts/{id}/invitations` |
 
 ### Auth API Lambda functions (`Transformotion{Stage}-AuthApi`)
 
 | Function name | Handler | Routes |
 |---|---|---|
-| `transformotion-forgot-provider-{stage}` | `functions/forgot-provider` | `POST /auth/lookup-provider` (public) |
+| `transformotion-forgot-provider-{stage}` | `functions/auth/forgot-provider` | `POST /auth/lookup-provider` (public) |
 
 ### Pre-token generation Lambda (`Transformotion{Stage}-Auth`)
 
 | Function name | Handler | Trigger |
 |---|---|---|
-| `transformotion-pre-token-generation-{stage}` | `functions/pre-token-generation` | Cognito pre-token-generation trigger |
+| `transformotion-pre-token-generation-{stage}` | `functions/auth/pre-token-generation` | Cognito pre-token-generation trigger |
 
 ### Stock Analyser Lambda functions (`Transformotion{Stage}-StockAnalyserApi`)
 
@@ -141,13 +141,14 @@ Platform Lambda environment variables:
 
 | Variable | Lambda | Value |
 |---|---|---|
-| `ACCOUNTS_TABLE` | first-login, accounts, invitations | `platform.accounts-{stage}` |
-| `ACCOUNT_MEMBERS_TABLE` | first-login, accounts | `platform.account-members-{stage}` |
+| `ACCOUNTS_TABLE` | account-provisioning, accounts, invitations | `platform.accounts-{stage}` |
+| `ACCOUNT_MEMBERS_TABLE` | account-provisioning, accounts, pre-token-generation | `platform.account-members-{stage}` |
 | `INVITATIONS_TABLE` | invitations | `platform.invitations-{stage}` |
 | `USERS_TABLE` | user | `platform.users-{stage}` |
 | `CACHE_TABLE` | claude-proxy | `platform.analysis-cache-{stage}` |
 | `ANTHROPIC_SECRET_NAME` | claude-proxy | `{stage}/anthropic/api-key` (Secrets Manager) |
-| `USER_POOL_ID` | first-login | Cognito user pool ID |
+| `USER_POOL_ID` | account-provisioning, pre-token-generation | Cognito user pool ID |
+| `ACCOUNTS_TABLE` | pre-token-generation | `platform.accounts-{stage}` (read for appSlug resolution) |
 
 ---
 
