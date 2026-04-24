@@ -26,7 +26,6 @@ export class StorageStack extends cdk.Stack {
     super(scope, id, props);
 
     const { stage } = props;
-    const isProd = stage === 'prod';
 
     cdk.Tags.of(this).add('app',         'platform');
     cdk.Tags.of(this).add('environment', stage);
@@ -34,13 +33,19 @@ export class StorageStack extends cdk.Stack {
     // ── transformotion-backups-{account} ──────────────────────────────────
     // Bucket name uses account (not stage) — intentionally shared across
     // stages so dev and prod backups coexist under different key prefixes.
+    //
+    // BackupsBucket intentionally does NOT use autoDeleteObjects,
+    // even in dev. A backups bucket exists to survive destructive
+    // operations. If the stack is ever destroyed, the bucket and
+    // its contents must be retained; manual cleanup is a conscious
+    // decision. Contrast with NetworkStack's website bucket which
+    // uses autoDeleteObjects for dev-environment ephemerality.
     this.backupsBucket = new s3.Bucket(this, 'BackupsBucket', {
       bucketName:        `transformotion-backups-${this.account}`,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       versioned:         true,
       encryption:        s3.BucketEncryption.S3_MANAGED,
-      removalPolicy:     isProd ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
-      autoDeleteObjects: !isProd,
+      removalPolicy:     cdk.RemovalPolicy.RETAIN,
       lifecycleRules: [
         {
           id:     'migration-backups-lifecycle',
