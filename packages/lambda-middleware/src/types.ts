@@ -12,7 +12,7 @@ export interface AuthClaims {
   email: string;
   /** Legacy Cognito groups (space-separated, still present for fallback). */
   groups: string[];
-  /** Apps the user has been granted access to, e.g. ['budget-tracker', 'stock-analyser']. */
+  /** Apps the user has been granted access to, e.g. ['budget-tracker', 'stock-signal']. */
   apps: string[];
   /**
    * Account memberships keyed by appSlug, value is an array of membership records.
@@ -27,16 +27,13 @@ export interface AuthClaims {
 /** App identifiers used across all auth helpers. */
 export type AppName = 'budget-tracker' | 'stock-signal';
 
-/** Account role levels (ordered ascending). */
-export type AccountRole = 'member' | 'manager' | 'owner';
+/** Account role levels (ordered ascending by capability). */
+export type AccountRole = 'viewer' | 'member' | 'manager' | 'owner';
 
 /**
  * Resolved account context for the request.
- * The active account is determined by (in order of precedence):
- *   1. `X-Account-Id` request header (explicit override, e.g. admin impersonation)
- *   2. The `custom:active_account` Cognito attribute on the JWT
- *
- * If neither is present the Lambda should return 400.
+ * The active account is determined from the `X-Account-Id` request header.
+ * If the header is absent the middleware throws 400.
  */
 export interface AccountContext {
   accountId: string;

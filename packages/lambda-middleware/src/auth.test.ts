@@ -96,19 +96,19 @@ describe('extractAuthClaims', () => {
 // ── requireSiteAdmin ──────────────────────────────────────────────────────────
 
 describe('requireSiteAdmin', () => {
-  it('passes for siteAdmin flag', () => {
+  it('passes when siteAdmin claim is true', () => {
     expect(() => requireSiteAdmin(makeClaims({ siteAdmin: true }))).not.toThrow();
   });
 
-  it('passes for legacy admin group', () => {
-    expect(() => requireSiteAdmin(makeClaims({ groups: ['admin'] }))).not.toThrow();
+  it('throws 403 when only legacy admin group is present', () => {
+    expect(() => requireSiteAdmin(makeClaims({ groups: ['admin'] }))).toThrow(HttpError);
   });
 
-  it('passes for legacy site-admin group', () => {
-    expect(() => requireSiteAdmin(makeClaims({ groups: ['site-admin'] }))).not.toThrow();
+  it('throws 403 when only legacy site-admin group is present', () => {
+    expect(() => requireSiteAdmin(makeClaims({ groups: ['site-admin'] }))).toThrow(HttpError);
   });
 
-  it('throws 403 for regular user', () => {
+  it('throws 403 for regular user with no claims', () => {
     expect(() => requireSiteAdmin(makeClaims())).toThrow(HttpError);
   });
 });
@@ -122,33 +122,21 @@ describe('requireAppAccess', () => {
     )).not.toThrow();
   });
 
-  it('passes via legacy budget-app group', () => {
-    expect(() => requireAppAccess(
-      makeClaims({ groups: ['budget-app'] }), 'budget-tracker',
-    )).not.toThrow();
-  });
-
-  it('passes via legacy budget-app-access group', () => {
-    expect(() => requireAppAccess(
-      makeClaims({ groups: ['budget-app-access'] }), 'budget-tracker',
-    )).not.toThrow();
-  });
-
-  it('passes via legacy stock-app group', () => {
-    expect(() => requireAppAccess(
-      makeClaims({ groups: ['stock-app'] }), 'stock-signal',
-    )).not.toThrow();
-  });
-
-  it('passes for site admin regardless of apps', () => {
+  it('passes when siteAdmin is true regardless of apps claim', () => {
     expect(() => requireAppAccess(makeClaims({ siteAdmin: true }), 'budget-tracker')).not.toThrow();
   });
 
-  it('throws 403 when user lacks access', () => {
+  it('throws 403 when apps claim is empty (fail closed — no group fallback)', () => {
+    expect(() => requireAppAccess(
+      makeClaims({ groups: ['budget-app'] }), 'budget-tracker',
+    )).toThrow(HttpError);
+  });
+
+  it('throws 403 when apps claim is empty', () => {
     expect(() => requireAppAccess(makeClaims(), 'budget-tracker')).toThrow(HttpError);
   });
 
-  it('throws 403 when user has access to different app only', () => {
+  it('throws 403 when user has access to a different app only', () => {
     expect(() => requireAppAccess(
       makeClaims({ apps: ['stock-signal'] }), 'budget-tracker',
     )).toThrow(HttpError);
@@ -164,10 +152,16 @@ describe('requireAnyAppAccess', () => {
     )).not.toThrow();
   });
 
-  it('passes via legacy group for either app', () => {
+  it('passes when siteAdmin is true', () => {
+    expect(() => requireAnyAppAccess(
+      makeClaims({ siteAdmin: true }), ['budget-tracker', 'stock-signal'],
+    )).not.toThrow();
+  });
+
+  it('throws 403 when user has neither app in apps claim (fail closed — no group fallback)', () => {
     expect(() => requireAnyAppAccess(
       makeClaims({ groups: ['stock-app'] }), ['budget-tracker', 'stock-signal'],
-    )).not.toThrow();
+    )).toThrow(HttpError);
   });
 
   it('throws 403 when user has neither app', () => {
@@ -183,6 +177,20 @@ describe('requireAccountAccess', () => {
       makeClaims({ accounts: { 'budget-tracker': [{ accountId: 'acc-1', role: 'member' }] } }),
       'budget-tracker', 'acc-1',
     )).not.toThrow();
+  });
+
+  it('passes when user has viewer access and viewer is required', () => {
+    expect(() => requireAccountAccess(
+      makeClaims({ accounts: { 'budget-tracker': [{ accountId: 'acc-1', role: 'viewer' }] } }),
+      'budget-tracker', 'acc-1', 'viewer',
+    )).not.toThrow();
+  });
+
+  it('throws 403 when user has viewer but member is required', () => {
+    expect(() => requireAccountAccess(
+      makeClaims({ accounts: { 'budget-tracker': [{ accountId: 'acc-1', role: 'viewer' }] } }),
+      'budget-tracker', 'acc-1', 'member',
+    )).toThrow(HttpError);
   });
 
   it('passes when user has manager access and member is required', () => {
@@ -213,10 +221,14 @@ describe('requireAccountAccess', () => {
     )).toThrow(HttpError);
   });
 
-  it('falls back to legacy groups when accounts claim is empty', () => {
+  it('throws 403 when accounts claim is empty (fail closed — no group fallback)', () => {
     expect(() => requireAccountAccess(
       makeClaims({ groups: ['budget-app'] }), 'budget-tracker', 'acc-1',
-    )).not.toThrow();
+    )).toThrow(HttpError);
+  });
+
+  it('throws 403 when accounts claim is empty', () => {
+    expect(() => requireAccountAccess(makeClaims(), 'budget-tracker', 'acc-1')).toThrow(HttpError);
   });
 
   it('passes for site admin', () => {
@@ -241,6 +253,10 @@ describe('requireAccountOwner', () => {
       makeClaims({ accounts: { 'budget-tracker': [{ accountId: 'acc-1', role: 'manager' }] } }),
       'budget-tracker', 'acc-1',
     )).toThrow(HttpError);
+  });
+
+  it('throws 403 when accounts claim is empty', () => {
+    expect(() => requireAccountOwner(makeClaims(), 'budget-tracker', 'acc-1')).toThrow(HttpError);
   });
 
   it('passes for site admin', () => {

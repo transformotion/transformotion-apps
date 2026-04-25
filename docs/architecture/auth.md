@@ -320,12 +320,15 @@ requireAppAccess(auth, appSlug)
 // Throws 403 unless auth.apps includes appSlug OR auth.siteAdmin === true.
 // Use at the top of every handler scoped to a specific app.
 
+requireAnyAppAccess(auth, appSlugs)
+// Throws 403 unless auth.apps includes at least one of appSlugs OR auth.siteAdmin === true.
+// Use only in platform handlers that serve multiple apps (currently: claude-proxy).
+
 requireAccountAccess(auth, appSlug, accountId, minRole?)
 // Throws 403 unless the caller is a member of accountId for appSlug
 // with role >= minRole (or is site-admin).
-// Role hierarchy: owner > manager > member > viewer.
-// Without minRole, any membership role suffices.
-// Use before any DynamoDB query for account-scoped data.
+// Role hierarchy (ascending): viewer < member < manager < owner.
+// Default minRole is 'member'. Use before any DynamoDB query for account-scoped data.
 
 requireAccountOwner(auth, appSlug, accountId)
 // Throws 403 unless caller is the owner of accountId for appSlug
@@ -334,9 +337,48 @@ requireAccountOwner(auth, appSlug, accountId)
 // operations only the owner can perform.
 ```
 
-All helpers check site-admin first as an override. A site-admin caller passes all authorization checks regardless of explicit app-access group or account membership.
+All helpers check `auth.siteAdmin` first as an override. A site-admin caller passes all authorization checks regardless of app-access or account membership.
+
+**Fail-closed semantics.** When `auth.apps` or `auth.accounts` are absent or empty (e.g., due to a pre-token Lambda failure), helpers deny access rather than granting it. The pre-token Lambda documents this under "On failure" above.
 
 Handlers do NOT call `requireGroup` (the old pattern) for new work. `requireGroup` remains during the 7e migration for transitional purposes and is removed at 7e-cleanup.
+
+---
+
+## Handler authorization patterns
+
+Every Lambda handler follows this pattern. Deviations require a written justification in the handler's code.
+
+### Standard app-scoped handler
+
+```typescript
+export const handler = withAuth(async ({ auth, account, event }) => {
+  requireAppAccess(auth, 'app-slug');                         // (1) fail fast if user lacks app access
+  requireAccountAccess(auth, 'app-slug', account.accountId); // (2) verify account membership before any data access
+
+  // ... handler logic uses account.accountId for all DynamoDB keys
+});
+```
+
+### Multi-app platform handler (currently: claude-proxy only)
+
+```typescript
+export const handler = withAuth(async ({ auth, account, event }) => {
+  requireAnyAppAccess(auth, ['stock-signal', 'budget-tracker']); // user must have at least one app
+
+  // ... handler logic
+});
+```
+
+### Rules
+
+1. **`requireAppAccess` (or `requireAnyAppAccess`) is the first call in every handler**, before any business logic or DynamoDB access.
+2. **`requireAccountAccess` is called before every DynamoDB read or write** that operates on account-scoped data.
+3. **`accountId` always comes from request context** (`account.accountId`, which is sourced from the `X-Account-Id` request header). Never derive `accountId` from `auth.accounts` or any other JWT claim.
+4. **Elevated operations** (bulk delete, admin overrides) use `requireAccountAccess(auth, appSlug, accountId, 'manager')`.
+5. **Ownership-only operations** (account deletion, ownership transfer) use `requireAccountOwner`.
+6. **Platform-admin operations** (cross-app user management, user disable/delete) use `requireSiteAdmin`.
+7. **`requireGroup` must not appear in new handler code.** It is deprecated and will be removed at 7e-cleanup.
 
 ---
 
