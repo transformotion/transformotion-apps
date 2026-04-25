@@ -62,7 +62,7 @@ new PlatformTablesStack(app, 'TransformotionDev-PlatformTables', {
   description: 'Transformotion Apps — Dev platform DynamoDB tables (users, accounts, invitations)',
 });
 
-new StockAnalyserTablesStack(app, 'TransformotionDev-StockAnalyserTables', {
+const devStockAnalyserTables = new StockAnalyserTablesStack(app, 'TransformotionDev-StockAnalyserTables', {
   env,
   stage:       'dev',
   description: 'Transformotion Apps — Dev Stock Analyser DynamoDB tables',
@@ -70,9 +70,10 @@ new StockAnalyserTablesStack(app, 'TransformotionDev-StockAnalyserTables', {
 
 const devPlatformApi = new PlatformApiStack(app, 'TransformotionDev-Api', {
   env,
-  stage:       'dev',
-  description: 'Transformotion Apps — Dev platform API (shared routes for all apps)',
-  userPool:    devAuth.userPool,
+  stage:              'dev',
+  description:        'Transformotion Apps — Dev platform API (shared routes for all apps)',
+  userPool:           devAuth.userPool,
+  analysisCacheTable: devStockAnalyserTables.analysisCacheTable,
 });
 
 new StockAnalyserApiStack(app, 'TransformotionDev-StockAnalyserApi', {
@@ -131,7 +132,7 @@ new PlatformTablesStack(app, 'TransformotionProd-PlatformTables', {
   description: 'Transformotion Apps — Prod platform DynamoDB tables (users, accounts, invitations)',
 });
 
-new StockAnalyserTablesStack(app, 'TransformotionProd-StockAnalyserTables', {
+const prodStockAnalyserTables = new StockAnalyserTablesStack(app, 'TransformotionProd-StockAnalyserTables', {
   env,
   stage:       'prod',
   description: 'Transformotion Apps — Prod Stock Analyser DynamoDB tables',
@@ -139,9 +140,10 @@ new StockAnalyserTablesStack(app, 'TransformotionProd-StockAnalyserTables', {
 
 const prodPlatformApi = new PlatformApiStack(app, 'TransformotionProd-Api', {
   env,
-  stage:       'prod',
-  description: 'Transformotion Apps — Prod platform API (shared routes for all apps)',
-  userPool:    prodAuth.userPool,
+  stage:              'prod',
+  description:        'Transformotion Apps — Prod platform API (shared routes for all apps)',
+  userPool:           prodAuth.userPool,
+  analysisCacheTable: prodStockAnalyserTables.analysisCacheTable,
 });
 
 new StockAnalyserApiStack(app, 'TransformotionProd-StockAnalyserApi', {
