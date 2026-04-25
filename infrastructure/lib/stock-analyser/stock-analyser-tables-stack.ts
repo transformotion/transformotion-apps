@@ -15,10 +15,8 @@ export interface StockAnalyserTablesStackProps extends cdk.StackProps {
  *   stock-analyser.analysis-cache  PK: accountId  SK: cacheKey  TTL: expiresAt
  */
 export class StockAnalyserTablesStack extends cdk.Stack {
-  public readonly portfolioTable:    dynamodb.Table;
-  public readonly watchlistTable:    dynamodb.Table;
-  public readonly portfolioTableNew: dynamodb.Table;
-  public readonly watchlistTableNew: dynamodb.Table;
+  public readonly portfolioTableNew:  dynamodb.Table;
+  public readonly watchlistTableNew:  dynamodb.Table;
   public readonly analysisCacheTable: dynamodb.Table;
 
   constructor(scope: Construct, id: string, props: StockAnalyserTablesStackProps) {
@@ -29,24 +27,6 @@ export class StockAnalyserTablesStack extends cdk.Stack {
     const removal = isProd ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY;
 
     // ── stock-analyser.portfolio ──────────────────────────────────────────
-    this.portfolioTable = new dynamodb.Table(this, 'PortfolioTable', {
-      tableName:     `stock-analyser.portfolio-${stage}-v2`,
-      partitionKey:  { name: 'accountId', type: dynamodb.AttributeType.STRING },
-      sortKey:       { name: 'ticker',    type: dynamodb.AttributeType.STRING },
-      billingMode:   dynamodb.BillingMode.PAY_PER_REQUEST,
-      removalPolicy: removal,
-    });
-
-    // ── stock-analyser.watchlist ──────────────────────────────────────────
-    this.watchlistTable = new dynamodb.Table(this, 'WatchlistTable', {
-      tableName:     `stock-analyser.watchlist-${stage}-v2`,
-      partitionKey:  { name: 'accountId', type: dynamodb.AttributeType.STRING },
-      sortKey:       { name: 'ticker',    type: dynamodb.AttributeType.STRING },
-      billingMode:   dynamodb.BillingMode.PAY_PER_REQUEST,
-      removalPolicy: removal,
-    });
-
-    // ── stock-analyser.portfolio (no suffix) — migration target ──────────
     this.portfolioTableNew = new dynamodb.Table(this, 'PortfolioTableNew', {
       tableName:     `stock-analyser.portfolio-${stage}`,
       partitionKey:  { name: 'accountId', type: dynamodb.AttributeType.STRING },
@@ -55,7 +35,7 @@ export class StockAnalyserTablesStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
 
-    // ── stock-analyser.watchlist (no suffix) — migration target ──────────
+    // ── stock-analyser.watchlist ──────────────────────────────────────────
     this.watchlistTableNew = new dynamodb.Table(this, 'WatchlistTableNew', {
       tableName:     `stock-analyser.watchlist-${stage}`,
       partitionKey:  { name: 'accountId', type: dynamodb.AttributeType.STRING },
@@ -85,10 +65,8 @@ export class StockAnalyserTablesStack extends cdk.Stack {
       });
     };
 
-    out('SAPortfolioTableArn',    this.portfolioTable,    'stock-analyser.portfolio-v2 table ARN (legacy)');
-    out('SAWatchlistTableArn',    this.watchlistTable,    'stock-analyser.watchlist-v2 table ARN (legacy)');
-    out('SAPortfolioNewTableArn', this.portfolioTableNew, 'stock-analyser.portfolio table ARN');
-    out('SAWatchlistNewTableArn', this.watchlistTableNew, 'stock-analyser.watchlist table ARN');
+    out('SAPortfolioNewTableArn',  this.portfolioTableNew,  'stock-analyser.portfolio table ARN');
+    out('SAWatchlistNewTableArn',  this.watchlistTableNew,  'stock-analyser.watchlist table ARN');
     out('SAAnalysisCacheTableArn', this.analysisCacheTable, 'stock-analyser.analysis-cache table ARN');
   }
 }
