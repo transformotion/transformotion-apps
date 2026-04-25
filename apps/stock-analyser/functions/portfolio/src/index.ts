@@ -10,7 +10,8 @@ import {
   parseBody,
   ok,
   badRequest,
-  requireGroup,
+  requireAppAccess,
+  requireAccountAccess,
 } from '@transformotion/lambda-middleware';
 import type { PortfolioHolding } from './types';
 
@@ -18,7 +19,8 @@ const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const TABLE = process.env.PORTFOLIO_TABLE!;
 
 export const handler = withAuth(async ({ auth, account, event }) => {
-  requireGroup(auth, 'stock-app', 'stock-app-access', 'admin', 'site-admin');
+  requireAppAccess(auth, 'stock-signal');
+  requireAccountAccess(auth, 'stock-signal', account.accountId);
   const { accountId } = account;
 
   // ── GET /portfolio ────────────────────────────────────────────────────────

@@ -5,7 +5,7 @@ import {
   BatchWriteCommand,
   PutCommand,
 } from '@aws-sdk/lib-dynamodb';
-import { withAuth, parseBody, ok, requireGroup } from '@transformotion/lambda-middleware';
+import { withAuth, parseBody, ok, requireAppAccess, requireAccountAccess } from '@transformotion/lambda-middleware';
 import { randomUUID } from 'crypto';
 import type { Transaction, CustomRule, BudgetSettings } from '@transformotion/budget-domain';
 
@@ -68,7 +68,8 @@ async function batchWrite(table: string, items: Record<string, unknown>[]) {
 
 // POST /api/budget/v1/migrate-from-localstorage
 export const handler = withAuth(async ({ auth, account, event }) => {
-  requireGroup(auth, 'budget-app', 'budget-app-access', 'admin', 'site-admin');
+  requireAppAccess(auth, 'budget-tracker');
+  requireAccountAccess(auth, 'budget-tracker', account.accountId);
   const { accountId } = account;
 
   const { transactions, rules, settings } = parseBody<{

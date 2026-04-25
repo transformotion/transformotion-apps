@@ -1,6 +1,6 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
-import { withAuth, parseBody, ok, requireGroup } from '@transformotion/lambda-middleware';
+import { withAuth, parseBody, ok, requireAppAccess, requireAccountAccess } from '@transformotion/lambda-middleware';
 import type { BudgetSettings } from '@transformotion/budget-domain';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -67,7 +67,8 @@ async function updateSettings(event: Parameters<typeof parseBody>[0], accountId:
 }
 
 export const handler = withAuth(async ({ auth, account, event }) => {
-  requireGroup(auth, 'budget-app', 'budget-app-access', 'admin', 'site-admin');
+  requireAppAccess(auth, 'budget-tracker');
+  requireAccountAccess(auth, 'budget-tracker', account.accountId);
   const { accountId } = account;
   if (event.httpMethod === 'GET')   return getSettings(accountId);
   if (event.httpMethod === 'PATCH') return updateSettings(event, accountId);

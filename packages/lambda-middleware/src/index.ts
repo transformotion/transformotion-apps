@@ -26,14 +26,27 @@
 //   conflict(msg)          — 409
 //
 // Auth helpers:
-//   userInGroup(claims, group)       — boolean membership check
-//   requireGroup(claims, ...groups)  — throws 403 if user not in any of the groups
+//   userInGroup(claims, group)                          — boolean membership check
+//   requireGroup(claims, ...groups)                     — throws 403 if user not in any group (legacy)
+//   requireSiteAdmin(auth)                              — throws 403 unless site admin
+//   requireAppAccess(auth, app)                         — throws 403 unless user has app access
+//   requireAnyAppAccess(auth, apps)                     — throws 403 unless user has access to any of the apps
+//   requireAccountAccess(auth, app, accountId, minRole) — throws 403 unless user has account access
+//   requireAccountOwner(auth, app, accountId)           — throws 403 unless user owns account
 
 export { withAuth, withAuthOnly, withPublic }            from './middleware';
 export { ok, created, noContent, errorResponse }        from './response';
 export { HttpError, badRequest, unauthorised, forbidden, notFound, conflict } from './errors';
 export { parseBody, getPathParam, getQueryParam }        from './body';
-export { userInGroup, requireGroup }                    from './auth';
+export {
+  userInGroup,
+  requireGroup,
+  requireSiteAdmin,
+  requireAppAccess,
+  requireAnyAppAccess,
+  requireAccountAccess,
+  requireAccountOwner,
+}                                                       from './auth';
 export type {
   AuthClaims,
   AccountContext,
@@ -44,4 +57,6 @@ export type {
   AuthOnlyHandler,
   APIGatewayProxyEvent,
   APIGatewayProxyResult,
+  AppName,
+  AccountRole,
 } from './types';

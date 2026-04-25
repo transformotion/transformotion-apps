@@ -10,9 +10,25 @@ export interface AuthClaims {
   userId: string;
   /** Email address (from the `email` claim). */
   email: string;
-  /** Space-separated list of Cognito groups the user belongs to. */
+  /** Legacy Cognito groups (space-separated, still present for fallback). */
   groups: string[];
+  /** Apps the user has been granted access to, e.g. ['budget-tracker', 'stock-analyser']. */
+  apps: string[];
+  /**
+   * Account memberships keyed by appSlug, value is an array of membership records.
+   * e.g. { 'budget-tracker': [{ accountId: 'acc-uuid', role: 'member' }] }.
+   * Empty until pre-token Lambda is live.
+   */
+  accounts: Record<string, Array<{ accountId: string; role: string }>>;
+  /** True when the user has the platform-wide site_admin claim. */
+  siteAdmin: boolean;
 }
+
+/** App identifiers used across all auth helpers. */
+export type AppName = 'budget-tracker' | 'stock-signal';
+
+/** Account role levels (ordered ascending). */
+export type AccountRole = 'member' | 'manager' | 'owner';
 
 /**
  * Resolved account context for the request.
