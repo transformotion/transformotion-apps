@@ -30,6 +30,7 @@ export class StockAnalyserTablesStack extends cdk.Stack {
     this.portfolioTable = new dynamodb.Table(this, 'PortfolioTable', {
       tableName:     `stock-analyser.portfolio-${stage}-v2`,
       partitionKey:  { name: 'accountId', type: dynamodb.AttributeType.STRING },
+      sortKey:       { name: 'ticker',    type: dynamodb.AttributeType.STRING },
       billingMode:   dynamodb.BillingMode.PAY_PER_REQUEST,
       removalPolicy: removal,
     });
@@ -38,6 +39,7 @@ export class StockAnalyserTablesStack extends cdk.Stack {
     this.watchlistTable = new dynamodb.Table(this, 'WatchlistTable', {
       tableName:     `stock-analyser.watchlist-${stage}-v2`,
       partitionKey:  { name: 'accountId', type: dynamodb.AttributeType.STRING },
+      sortKey:       { name: 'ticker',    type: dynamodb.AttributeType.STRING },
       billingMode:   dynamodb.BillingMode.PAY_PER_REQUEST,
       removalPolicy: removal,
     });
