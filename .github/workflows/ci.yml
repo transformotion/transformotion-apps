@@ -32,6 +32,12 @@ jobs:
       - name: Lint baseline check (no new violations)
         run: bash scripts/ci/check-lint-baseline.sh
 
+      - name: No requireGroup in handlers (deprecated)
+        run: bash scripts/ci/check-no-new-require-group.sh
+
+      - name: Handler authorization pattern (DynamoDB → authz helper required)
+        run: bash scripts/ci/check-handler-authz-pattern.sh
+
       - name: Verify baseline didn't grow vs base branch
         run: |
           BASE="${{ github.base_ref }}"
