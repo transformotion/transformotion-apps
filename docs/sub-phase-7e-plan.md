@@ -108,7 +108,7 @@ Responsibilities per [auth.md](/docs/architecture/auth.md#pre-token-generation-l
 - Cognito admin calls (add/remove group) are wrapped in per-call try/catch so individual Cognito errors log and continue rather than crashing the entire claim construction.
 - 10 unit tests all pass.
 
-### 7e-auth-middleware-extend
+### 7e-auth-middleware-extend ✓ complete (2026-04-25)
 
 Extend `packages/lambda-middleware` to parse the new claims and expose authorization helpers:
 - `auth.apps` — from `apps` custom claim; parsed type is `string[]`
@@ -123,7 +123,14 @@ Keep existing `auth.groups` and `requireGroup` for the transitional period.
 
 This sub-sub-phase is independent of `7e-pretoken` and can run in parallel.
 
-### 7e-lambda-authorization-migration
+**Observations during execution:**
+- `AppName` union type is `'budget-tracker' | 'stock-signal'` (matches CLAUDE.md docs, not the infrastructure stack name `stock-analyser`).
+- `accounts` claim shape is `Record<appSlug, Array<{accountId, role}>>` — app-scoped per the pre-token Lambda design.
+- `requireGroup` retained and re-exported (marked `@deprecated`) for the transition period; will be deleted in `7e-cleanup`.
+- `requireAnyAppAccess` added for the shared Claude proxy which serves both apps.
+- 34 unit tests in `packages/lambda-middleware/src/auth.test.ts`.
+
+### 7e-lambda-authorization-migration ✓ complete (2026-04-25)
 
 Replace `requireGroup` calls with the appropriate helper across all Lambda handlers:
 - Entry-point check (app access): `requireAppAccess(auth, appSlug)` — no role parameter
@@ -135,6 +142,13 @@ Replace `requireGroup` calls with the appropriate helper across all Lambda handl
 For account-scoped handlers: call `requireAccountAccess` before every DynamoDB query, not just at the handler entry point.
 
 This sub-sub-phase depends on `7e-auth-middleware-extend` completing first.
+
+**Observations during execution:**
+- 10 handlers migrated: 3 Stock Analyser (`portfolio`, `watchlist`, `analysis-cache`), 6 Budget Tracker (`transactions`, `settings`, `rules`, `migrate`, `export`, `ai`), 1 platform (`claude-proxy`).
+- `claude-proxy` uses `requireAnyAppAccess(auth, ['stock-signal', 'budget-tracker'])` since it serves both apps.
+- `budget-ai`'s `invokeProxy` fake event updated to forward `apps`, `accounts`, `site_admin` claims alongside the existing `cognito:groups`, so the claude-proxy receives correct claims post-migration.
+- `budget-ai`'s `invokeProxy` now sends `x-account-id` header instead of deprecated `custom:active_account` JWT attribute.
+- All handlers call `requireAppAccess` first, then `requireAccountAccess` — matching CLAUDE.md spec.
 
 ### 7e-invitation-api
 

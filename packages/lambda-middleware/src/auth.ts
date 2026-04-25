@@ -1,14 +1,16 @@
 import type { APIGatewayProxyEvent } from './types';
-import type { AuthClaims, AccountContext } from './types';
-import { unauthorised, badRequest, HttpError } from './errors';
+import type { AuthClaims, AccountContext, AppName, AccountRole } from './types';
+import { unauthorised, badRequest, forbidden, HttpError } from './errors';
 
 /**
  * Extract and validate the Cognito JWT claims that API Gateway injects into
  * `requestContext.authorizer.claims` after a successful authoriser check.
  *
- * Throws HttpError(401) if the claims map is missing or incomplete — this
- * should never happen on a properly-configured protected route, but guards
- * against mis-wired integrations during development.
+ * Parses both legacy `cognito:groups` and the new `apps`, `accounts`, and
+ * `site_admin` claims injected by the pre-token generation Lambda. Falls back
+ * gracefully when the new claims are absent (transition period).
+ *
+ * Throws HttpError(401) if the claims map is missing or incomplete.
  */
 export function extractAuthClaims(event: APIGatewayProxyEvent): AuthClaims {
   const claims = event.requestContext?.authorizer?.claims as Record<string, string> | undefined;
@@ -23,11 +25,25 @@ export function extractAuthClaims(event: APIGatewayProxyEvent): AuthClaims {
   if (!userId) throw unauthorised('JWT claim `sub` missing');
   if (!email)  throw unauthorised('JWT claim `email` missing');
 
-  // `cognito:groups` is a space-separated string or absent for users in no groups
   const groupsRaw = claims['cognito:groups'] ?? '';
   const groups = groupsRaw ? groupsRaw.split(' ').filter(Boolean) : [];
 
-  return { userId, email, groups };
+  // New claims injected by pre-token Lambda — parse with fallbacks for transition period
+  let apps: string[] = [];
+  try {
+    const raw = claims['apps'];
+    if (raw) apps = JSON.parse(raw) as string[];
+  } catch { /* absent or malformed — fall back to groups */ }
+
+  let accounts: Record<string, Array<{ accountId: string; role: string }>> = {};
+  try {
+    const raw = claims['accounts'];
+    if (raw) accounts = JSON.parse(raw) as Record<string, Array<{ accountId: string; role: string }>>;
+  } catch { /* absent or malformed — fall back to groups */ }
+
+  const siteAdmin = claims['site_admin'] === 'true';
+
+  return { userId, email, groups, apps, accounts, siteAdmin };
 }
 
 /**
@@ -71,10 +87,121 @@ export function userInGroup(claims: AuthClaims, group: string): boolean {
 
 /**
  * Throws HttpError(403) if the user is not in at least one of the required groups.
+ * @deprecated Prefer requireAppAccess / requireAccountAccess for new code.
  */
 export function requireGroup(claims: AuthClaims, ...groups: string[]): void {
   const hasGroup = groups.some(g => claims.groups.includes(g));
   if (!hasGroup) {
     throw new HttpError(403, `Access requires one of: ${groups.join(', ')}`);
   }
+}
+
+// ── Legacy group names used for fallback while pre-token Lambda is not yet live ──
+
+const APP_LEGACY_GROUPS: Record<AppName, string[]> = {
+  'budget-tracker': ['budget-app', 'budget-app-access'],
+  'stock-signal':   ['stock-app', 'stock-app-access'],
+};
+
+const ROLE_HIERARCHY: AccountRole[] = ['member', 'manager', 'owner'];
+
+function isSuperUser(auth: AuthClaims): boolean {
+  return auth.siteAdmin
+    || auth.groups.includes('admin')
+    || auth.groups.includes('site-admin');
+}
+
+function hasRequiredRole(roles: string[], minRole: AccountRole): boolean {
+  const minIdx = ROLE_HIERARCHY.indexOf(minRole);
+  return roles.some(r => ROLE_HIERARCHY.indexOf(r as AccountRole) >= minIdx);
+}
+
+/**
+ * Throws HttpError(403) unless the user has the site_admin claim or is in the
+ * legacy 'admin' / 'site-admin' Cognito group.
+ */
+export function requireSiteAdmin(auth: AuthClaims): void {
+  if (!isSuperUser(auth)) throw forbidden('Site admin access required');
+}
+
+/**
+ * Throws HttpError(403) unless the user has been granted access to `app`.
+ *
+ * Checks (in order):
+ *   1. site_admin / admin group → always passes
+ *   2. `auth.apps` includes the app (new claims path)
+ *   3. Legacy Cognito groups for the app (fallback while pre-token Lambda is not live)
+ */
+export function requireAppAccess(auth: AuthClaims, app: AppName): void {
+  if (isSuperUser(auth)) return;
+  if (auth.apps.includes(app)) return;
+  const legacyGroups = APP_LEGACY_GROUPS[app];
+  if (legacyGroups.some(g => auth.groups.includes(g))) return;
+  throw forbidden(`Access to app '${app}' required`);
+}
+
+/**
+ * Like requireAppAccess but accepts multiple apps — passes if the user has
+ * access to ANY of them. Used by platform handlers that serve multiple apps
+ * (e.g. the shared Claude proxy).
+ */
+export function requireAnyAppAccess(auth: AuthClaims, apps: AppName[]): void {
+  if (isSuperUser(auth)) return;
+  for (const app of apps) {
+    if (auth.apps.includes(app)) return;
+    const legacyGroups = APP_LEGACY_GROUPS[app];
+    if (legacyGroups.some(g => auth.groups.includes(g))) return;
+  }
+  throw forbidden(`Access to one of [${apps.join(', ')}] required`);
+}
+
+/**
+ * Throws HttpError(403) unless the user has at least `minRole` access to
+ * `accountId` within `app`.
+ *
+ * Checks (in order):
+ *   1. site_admin / admin group → always passes
+ *   2. `auth.accounts[app]` has a membership for `accountId` with role ≥ minRole (new claims path)
+ *   3. Legacy: if accounts claim is entirely empty (pre-token Lambda not yet live),
+ *      fall back to app-level group membership
+ */
+export function requireAccountAccess(
+  auth: AuthClaims,
+  app: AppName,
+  accountId: string,
+  minRole: AccountRole = 'member',
+): void {
+  if (isSuperUser(auth)) return;
+
+  const preTokenLive = Object.keys(auth.accounts).length > 0;
+  if (preTokenLive) {
+    const appAccounts = auth.accounts[app] ?? [];
+    const membership = appAccounts.find(m => m.accountId === accountId);
+    if (membership && hasRequiredRole([membership.role], minRole)) return;
+    throw forbidden(`Account access required (accountId: ${accountId}, minRole: ${minRole})`);
+  }
+
+  // Fallback: pre-token Lambda not live yet — use app-level group membership
+  const legacyGroups = APP_LEGACY_GROUPS[app];
+  if (legacyGroups.some(g => auth.groups.includes(g))) return;
+  throw forbidden(`Account access required (accountId: ${accountId}, minRole: ${minRole})`);
+}
+
+/**
+ * Throws HttpError(403) unless the user is the owner of `accountId` within `app`.
+ *
+ * Checks (in order):
+ *   1. site_admin / admin group → always passes
+ *   2. `auth.accounts[app]` has a membership for `accountId` with role 'owner'
+ */
+export function requireAccountOwner(
+  auth: AuthClaims,
+  app: AppName,
+  accountId: string,
+): void {
+  if (isSuperUser(auth)) return;
+  const appAccounts = auth.accounts[app] ?? [];
+  const membership = appAccounts.find(m => m.accountId === accountId);
+  if (membership?.role === 'owner') return;
+  throw forbidden(`Account ownership required (accountId: ${accountId})`);
 }

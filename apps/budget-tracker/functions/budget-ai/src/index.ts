@@ -1,5 +1,5 @@
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
-import { withAuth, parseBody, ok, requireGroup } from '@transformotion/lambda-middleware';
+import { withAuth, parseBody, ok, requireAppAccess, requireAccountAccess } from '@transformotion/lambda-middleware';
 import type { AuthClaims } from '@transformotion/lambda-middleware';
 import type {
   CategoryTree,
@@ -25,16 +25,18 @@ async function invokeProxy(
   const fakeEvent = {
     httpMethod: 'POST',
     path: '/api/claude',
-    headers: {},
+    headers: { 'x-account-id': accountId },
     queryStringParameters: null,
     pathParameters: null,
     requestContext: {
       authorizer: {
         claims: {
-          sub:                     auth.userId,
-          email:                   auth.email,
-          'cognito:groups':        auth.groups.join(' '),
-          'custom:active_account': accountId,
+          sub:              auth.userId,
+          email:            auth.email,
+          'cognito:groups': auth.groups.join(' '),
+          apps:             JSON.stringify(auth.apps),
+          accounts:         JSON.stringify(auth.accounts),
+          site_admin:       String(auth.siteAdmin),
         },
       },
     },
@@ -194,7 +196,8 @@ async function csvAnalysis(
 
 // ── Handler ───────────────────────────────────────────────────────────────────
 export const handler = withAuth(async ({ auth, account, event }) => {
-  requireGroup(auth, 'budget-app', 'budget-app-access', 'admin', 'site-admin');
+  requireAppAccess(auth, 'budget-tracker');
+  requireAccountAccess(auth, 'budget-tracker', account.accountId);
   const resource = event.resource ?? '';
 
   if (resource === '/api/budget/v1/ai/categorise')    return categorise(auth, account.accountId, event);

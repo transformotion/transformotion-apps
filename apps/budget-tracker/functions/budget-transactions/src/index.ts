@@ -14,7 +14,8 @@ import {
   getQueryParam,
   ok,
   notFound,
-  requireGroup,
+  requireAppAccess,
+  requireAccountAccess,
   type APIGatewayProxyEvent,
 } from '@transformotion/lambda-middleware';
 import { randomUUID } from 'crypto';
@@ -175,7 +176,8 @@ async function deleteTransaction(accountId: string, transactionId: string) {
 
 // ── Handler ───────────────────────────────────────────────────────────────────
 export const handler = withAuth(async ({ auth, account, event }) => {
-  requireGroup(auth, 'budget-app', 'budget-app-access', 'admin', 'site-admin');
+  requireAppAccess(auth, 'budget-tracker');
+  requireAccountAccess(auth, 'budget-tracker', account.accountId);
   const { accountId } = account;
   const method   = event.httpMethod;
   const resource = event.resource ?? '';

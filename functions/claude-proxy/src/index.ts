@@ -8,7 +8,7 @@ import {
   parseBody,
   ok,
   badRequest,
-  requireGroup,
+  requireAnyAppAccess,
   HttpError,
   type APIGatewayProxyEvent,
 } from '@transformotion/lambda-middleware';
@@ -267,7 +267,7 @@ async function executeAsyncJob(job: AsyncJobEvent): Promise<void> {
 // ── API Gateway handler (Cognito-authenticated) ───────────────────────────────
 
 const apiGatewayHandler = withAuth(async ({ auth, account, event }) => {
-  requireGroup(auth, 'stock-app', 'stock-app-access', 'budget-app', 'budget-app-access', 'admin', 'site-admin');
+  requireAnyAppAccess(auth, ['stock-signal', 'budget-tracker']);
   const {
     prompt,
     system,
