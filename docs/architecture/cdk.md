@@ -175,6 +175,40 @@ Secrets Manager entries for social IDP credentials are always `RETAIN` in both e
 
 ---
 
+## CI checks
+
+Two grep-based checks run in the `Typecheck & Lint` CI job on every PR. They enforce the handler authorization patterns described in [auth.md](./auth.md).
+
+### `check-no-new-require-group.sh`
+
+Fails if any handler file calls `requireGroup`. `requireGroup` is deprecated — all handlers were migrated to `requireAppAccess` / `requireAccountAccess` in sub-phase 7e. Zero usages is the expected baseline.
+
+Removal: delete this script when 7e-cleanup removes `requireGroup` from the middleware package entirely.
+
+### `check-handler-authz-pattern.sh`
+
+Fails if any handler file performs a DynamoDB operation (`PutItemCommand`, `GetItemCommand`, `QueryCommand`, `ScanCommand`, `UpdateItemCommand`, `DeleteItemCommand`, `TransactWriteCommand`, `BatchGetCommand`, `BatchWriteCommand`) without also calling at least one of `requireAppAccess`, `requireAnyAppAccess`, `requireAccountAccess`, `requireAccountOwner`, or `requireSiteAdmin`.
+
+This is a coarse file-level check — it confirms authorization helpers are present; it does not verify call ordering.
+
+### Checked paths
+
+Both checks cover the same scope:
+
+- `apps/*/functions/` — app-specific handlers (Budget Tracker, Stock Analyser)
+- `functions/claude-proxy/` — platform multi-app handler
+
+### Exempt paths
+
+| Path | Category | Reason |
+|---|---|---|
+| `functions/auth/pre-token-generation/` | auth-infrastructure | Cognito trigger (`PreTokenGenerationTriggerEvent`), not API Gateway — reads DynamoDB to build JWT claims, cannot consume them |
+| `functions/auth/forgot-provider/` | auth-infrastructure | Public endpoint (`withPublic`); DynamoDB used for rate-limiting only, no JWT context |
+| `functions/auth/account-provisioning/` | auth-infrastructure | First-login route (`withAuthOnly`); user is authenticated but has no app claims yet — `requireAppAccess` is inapplicable by design |
+| `functions/accounts/` | platform-infrastructure | Platform accounts API — manages the accounts table that the pre-token Lambda reads; does inline DynamoDB membership checks rather than consuming JWT claims (it IS the accounts system) |
+
+---
+
 ## Adding a new app's CDK stacks
 
 When a new app is added to the platform:
