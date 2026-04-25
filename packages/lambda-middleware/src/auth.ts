@@ -47,35 +47,15 @@ export function extractAuthClaims(event: APIGatewayProxyEvent): AuthClaims {
 }
 
 /**
- * Resolve the active account for this request.
- *
- * Precedence:
- *   1. `X-Account-Id` header — explicit override (e.g. admin switching accounts)
- *   2. `custom:active_account` JWT claim — the user's last-selected account
- *
- * Throws HttpError(400) if no account context can be resolved.
- * The frontend must ensure `custom:active_account` is set after first login
- * (handled in S2.8 first-login migration flow).
+ * Resolve the active account for this request from the `X-Account-Id` header.
+ * Throws HttpError(400) if the header is absent.
  */
-export function resolveAccountContext(
-  event: APIGatewayProxyEvent,
-  claims: Record<string, string>,
-): AccountContext {
-  // Header override takes precedence (trimmed, lowercased for safety)
+export function resolveAccountContext(event: APIGatewayProxyEvent): AccountContext {
   const headerAccountId = event.headers?.['x-account-id']?.trim();
   if (headerAccountId) {
     return { accountId: headerAccountId };
   }
-
-  // Fall back to the active account stored in the JWT custom attribute
-  const jwtAccountId = claims['custom:active_account']?.trim();
-  if (jwtAccountId) {
-    return { accountId: jwtAccountId };
-  }
-
-  throw badRequest(
-    'No active account context. Set X-Account-Id header or update custom:active_account on the user.',
-  );
+  throw badRequest('No active account context. Set X-Account-Id header.');
 }
 
 /**
@@ -96,19 +76,10 @@ export function requireGroup(claims: AuthClaims, ...groups: string[]): void {
   }
 }
 
-// ── Legacy group names used for fallback while pre-token Lambda is not yet live ──
-
-const APP_LEGACY_GROUPS: Record<AppName, string[]> = {
-  'budget-tracker': ['budget-app', 'budget-app-access'],
-  'stock-signal':   ['stock-app', 'stock-app-access'],
-};
-
-const ROLE_HIERARCHY: AccountRole[] = ['member', 'manager', 'owner'];
+const ROLE_HIERARCHY: AccountRole[] = ['viewer', 'member', 'manager', 'owner'];
 
 function isSuperUser(auth: AuthClaims): boolean {
-  return auth.siteAdmin
-    || auth.groups.includes('admin')
-    || auth.groups.includes('site-admin');
+  return auth.siteAdmin;
 }
 
 function hasRequiredRole(roles: string[], minRole: AccountRole): boolean {
@@ -126,44 +97,31 @@ export function requireSiteAdmin(auth: AuthClaims): void {
 
 /**
  * Throws HttpError(403) unless the user has been granted access to `app`.
- *
- * Checks (in order):
- *   1. site_admin / admin group → always passes
- *   2. `auth.apps` includes the app (new claims path)
- *   3. Legacy Cognito groups for the app (fallback while pre-token Lambda is not live)
+ * Passes if `auth.siteAdmin === true` or `auth.apps` includes `app`.
  */
 export function requireAppAccess(auth: AuthClaims, app: AppName): void {
   if (isSuperUser(auth)) return;
   if (auth.apps.includes(app)) return;
-  const legacyGroups = APP_LEGACY_GROUPS[app];
-  if (legacyGroups.some(g => auth.groups.includes(g))) return;
   throw forbidden(`Access to app '${app}' required`);
 }
 
 /**
  * Like requireAppAccess but accepts multiple apps — passes if the user has
  * access to ANY of them. Used by platform handlers that serve multiple apps
- * (e.g. the shared Claude proxy).
+ * (currently only claude-proxy).
  */
 export function requireAnyAppAccess(auth: AuthClaims, apps: AppName[]): void {
   if (isSuperUser(auth)) return;
-  for (const app of apps) {
-    if (auth.apps.includes(app)) return;
-    const legacyGroups = APP_LEGACY_GROUPS[app];
-    if (legacyGroups.some(g => auth.groups.includes(g))) return;
-  }
+  if (apps.some(app => auth.apps.includes(app))) return;
   throw forbidden(`Access to one of [${apps.join(', ')}] required`);
 }
 
 /**
  * Throws HttpError(403) unless the user has at least `minRole` access to
  * `accountId` within `app`.
- *
- * Checks (in order):
- *   1. site_admin / admin group → always passes
- *   2. `auth.accounts[app]` has a membership for `accountId` with role ≥ minRole (new claims path)
- *   3. Legacy: if accounts claim is entirely empty (pre-token Lambda not yet live),
- *      fall back to app-level group membership
+ * Passes if `auth.siteAdmin === true`, or `auth.accounts[app]` contains a
+ * membership for `accountId` with role ≥ minRole.
+ * Role hierarchy (ascending): viewer < member < manager < owner.
  */
 export function requireAccountAccess(
   auth: AuthClaims,
@@ -172,18 +130,9 @@ export function requireAccountAccess(
   minRole: AccountRole = 'member',
 ): void {
   if (isSuperUser(auth)) return;
-
-  const preTokenLive = Object.keys(auth.accounts).length > 0;
-  if (preTokenLive) {
-    const appAccounts = auth.accounts[app] ?? [];
-    const membership = appAccounts.find(m => m.accountId === accountId);
-    if (membership && hasRequiredRole([membership.role], minRole)) return;
-    throw forbidden(`Account access required (accountId: ${accountId}, minRole: ${minRole})`);
-  }
-
-  // Fallback: pre-token Lambda not live yet — use app-level group membership
-  const legacyGroups = APP_LEGACY_GROUPS[app];
-  if (legacyGroups.some(g => auth.groups.includes(g))) return;
+  const appAccounts = auth.accounts[app] ?? [];
+  const membership = appAccounts.find(m => m.accountId === accountId);
+  if (membership && hasRequiredRole([membership.role], minRole)) return;
   throw forbidden(`Account access required (accountId: ${accountId}, minRole: ${minRole})`);
 }
 

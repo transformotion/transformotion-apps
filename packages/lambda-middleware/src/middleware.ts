@@ -8,7 +8,7 @@ import { errorResponse } from './response';
  * Wrap a protected Lambda handler with standard middleware:
  *
  *   1. Extract and validate Cognito JWT claims from the API Gateway event
- *   2. Resolve the active account (X-Account-Id header → JWT custom attribute)
+ *   2. Resolve the active account from the X-Account-Id request header
  *   3. Call the inner handler with the fully-typed LambdaContext
  *   4. Serialise LambdaResponse → APIGatewayProxyResult
  *   5. Catch HttpError throws → structured JSON error response
@@ -19,8 +19,8 @@ import { errorResponse } from './response';
  * import { withAuth } from '@transformotion/lambda-middleware';
  *
  * export const handler = withAuth(async ({ auth, account, event }) => {
- *   // auth.userId, auth.email, auth.groups
- *   // account.accountId
+ *   // auth.userId, auth.email, auth.apps, auth.accounts, auth.siteAdmin
+ *   // account.accountId — from X-Account-Id header
  *   return { statusCode: 200, body: { ok: true } };
  * });
  * ```
@@ -29,8 +29,7 @@ export function withAuth(inner: ProtectedHandler) {
   return async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     try {
       const auth    = extractAuthClaims(event);
-      const claims  = event.requestContext?.authorizer?.claims as Record<string, string>;
-      const account = resolveAccountContext(event, claims);
+      const account = resolveAccountContext(event);
 
       const result = await inner({ auth, account, event });
 
