@@ -22,7 +22,7 @@ See [auth.md](./auth.md) for the account membership model. See [cdk.md](./cdk.md
 - `scope` is either `platform` (cross-app) or an app slug (`stock-analyser`, `budget-tracker`)
 - `stage` is `dev` or `prod`
 
-Examples: `platform.accounts-dev`, `budget-tracker.transactions-prod`, `stock-analyser.portfolio-dev-v2`
+Examples: `platform.accounts-dev`, `budget-tracker.transactions-prod`, `stock-analyser.portfolio-dev`
 
 **Enforcement rule:** App-specific tables must never use the `platform.` prefix. If a table is only read or written by one app's Lambdas, it belongs in that app's scope (e.g. `stock-analyser.*`, `budget-tracker.*`) and in that app's `TablesStack`.
 
@@ -102,19 +102,23 @@ Served by `transformotion-invitations-{stage}` Lambda.
 
 Managed by `TransformotionDev-StockAnalyserTables` / `TransformotionProd-StockAnalyserTables`.
 
-#### `stock-analyser.portfolio-{stage}-v2`
+#### `stock-analyser.portfolio-{stage}`
 
 | Attribute | Type | Notes |
 |---|---|---|
 | `accountId` (PK) | String | |
-| `holdings` | List | Serialised `PortfolioHolding[]` |
+| `ticker` (SK) | String | |
+| `shares` | Number | |
+| `avgCost` | Number | |
+| `addedAt` | Number | Epoch ms |
+| `isGifted` | Boolean | |
 
-#### `stock-analyser.watchlist-{stage}-v2`
+#### `stock-analyser.watchlist-{stage}`
 
 | Attribute | Type | Notes |
 |---|---|---|
 | `accountId` (PK) | String | |
-| `items` | List | Serialised `WatchlistItem[]` |
+| `ticker` (SK) | String | |
 
 #### `stock-analyser.analysis-cache-{stage}`
 
@@ -224,3 +228,19 @@ When Liz signs in, the pre-token Lambda queries `userId-index` for `liz-sub`, fi
 ```
 
 Liz's active account (`custom:active_accounts["budget-tracker"]`) determines which data she sees by default. She can switch accounts via `POST /auth/switch`.
+
+---
+
+## CDK constraints to remember
+
+These CDK and CloudFormation constraints are not obvious and have cost real deploy failures. Noted here so future work doesn't rediscover them.
+
+**1. `Table.fromTableName()` doesn't know about GSIs.** When imported this way, `grantReadData()` only covers the table ARN, not the index ARN. For tables with GSIs that handlers query, use `Table.fromTableAttributes()` with explicit `globalIndexes` list. For tables without GSIs (or where the handler doesn't query the index), `fromTableName` is fine.
+
+**2. Cognito user pool schemas are append-only.** Custom attributes declared on a user pool cannot be removed. They can be abandoned (not written, not read) but remain declared forever. Plan custom attribute names and types carefully — they are permanent.
+
+**3. Removing CDK cross-stack dependencies doesn't reorder deploys.** If you move a resource between stacks or change how stacks reference each other, CDK no longer has a basis to sequence deploys. The workflow-level sequence (which stacks deploy first) may need explicit ordering, often via separate `cdk deploy` steps in CI. The `deploy-platform.yml` file has examples of this pattern (PlatformTables runs in its own step after Api releases its imports).
+
+**4. S3 buckets containing important data should NEVER have `autoDeleteObjects: true`.** This is a CDK convenience for ephemeral dev buckets. For backups buckets, use `removalPolicy: RETAIN` alone and allow manual deletion only.
+
+**5. `cdk import` requires CDK config to match deployed reality exactly.** If the deployed table has a sort key but the CDK construct doesn't declare it (or vice versa), the import changeset will fail. Run `aws dynamodb describe-table` before writing the CDK construct for any table being imported.

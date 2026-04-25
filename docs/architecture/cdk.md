@@ -42,7 +42,7 @@ Deployed by `deploy-stock-analyser.yml`. Source in `infrastructure/lib/stock-ana
 
 | Stack name | Class | Contents |
 |---|---|---|
-| `Transformotion{Stage}-StockAnalyserTables` | `StockAnalyserTablesStack` | `stock-analyser.portfolio-{stage}-v2`, `stock-analyser.watchlist-{stage}-v2`, `stock-analyser.analysis-cache-{stage}` |
+| `Transformotion{Stage}-StockAnalyserTables` | `StockAnalyserTablesStack` | `stock-analyser.portfolio-{stage}`, `stock-analyser.watchlist-{stage}`, `stock-analyser.analysis-cache-{stage}` |
 | `Transformotion{Stage}-StockAnalyserApi` | `StockAnalyserApiStack` | Stock Analyser Lambda functions + routes on the shared platform API Gateway |
 
 ### Budget Tracker stacks
@@ -108,13 +108,13 @@ Deployed by `deploy-budget-tracker.yml`. Source in `infrastructure/lib/budget-tr
 
 ## Cross-stack dependencies
 
-Stacks receive constructs via `props` in `bin/app.ts`. There are no `Fn::ImportValue` CloudFormation cross-stack references after the sub-phase 7b.5-alpha fix.
+Stacks receive constructs via `props` in `bin/app.ts`. Cross-stack references generate `Fn::ImportValue` in CloudFormation templates.
 
 | Consumer stack | Receives from | Props |
 |---|---|---|
 | `AuthApiStack` | `AuthStack` | `userPoolId` (string — avoids construct reference) |
 | `PlatformApiStack` | `AuthStack` | `userPool` (construct) |
-| `PlatformApiStack` | `PlatformTablesStack` | `analysisCacheTable` (construct) |
+| `PlatformApiStack` | `StockAnalyserTablesStack` | `analysisCacheTable` (construct) |
 | `StockAnalyserApiStack` | `PlatformApiStack` | `api` and `authoriser` (constructs) |
 | `BudgetTrackerApiStack` | `AuthStack` | `userPool` (construct — for its own authoriser) |
 
@@ -125,9 +125,10 @@ Stacks receive constructs via `props` in `bin/app.ts`. There are no `Fn::ImportV
 `deploy-platform.yml` sequences its CDK steps explicitly to avoid CloudFormation dependency conflicts:
 
 1. **Step 1 — BudgetTrackerTables first** — deploys `TransformotionDev-BudgetTrackerTables` in isolation. This must complete before Auth deploys, because BudgetTrackerTables previously imported an Auth export that needed to be released first.
-2. **Step 2 — Remaining platform stacks** — deploys `Network`, `Auth`, `AuthApi`, `PlatformTables`, `Api` together. CDK runs independent stacks in parallel within this step.
+2. **Step 2 — Main platform stacks** — deploys `Storage`, `Network`, `Auth`, `AuthApi`, `Api` together. CDK runs independent stacks in parallel within this step.
+3. **Step 3 — PlatformTables** — deploys `PlatformTables` alone, after `Api` has updated its template. This ordering ensures `Api` releases any `Fn::ImportValue` exports before `PlatformTables` attempts to drop them.
 
-This two-step ordering is preserved even now that the `Fn::ImportValue` is gone, as a guard against future cross-stack changes inadvertently re-introducing the dependency.
+The StockAnalyserTables deploy is triggered by `deploy-stock-analyser.yml`, not `deploy-platform.yml`. When a cross-stack prop flows from `StockAnalyserTables` → `PlatformApi`, that workflow must run first (or `PlatformApi` must use `fromTableName` as a temporary workaround — see data.md CDK constraints).
 
 ---
 

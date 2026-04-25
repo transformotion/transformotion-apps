@@ -86,6 +86,10 @@ Pattern for claude-proxy: `requireGroup(auth, 'stock-app', 'budget-app', 'admin'
 - 10 handlers updated: 3 Stock Analyser (`portfolio`, `watchlist`, `analysis-cache`), 6 Budget Tracker (`transactions`, `settings`, `rules`, `migrate`, `export`, `ai`), 1 shared (`claude-proxy`).
 - Pre-existing test failures on Windows (`vitest` not found) confirmed unrelated to this change.
 
+### 7e-account-bootstrap — Account bootstrap + -v2 table rename ✓ complete (2026-04-25)
+
+Brought orphan -v2 tables under CloudFormation management via `cdk import`. Created new per-app accounts (`stock-signal` accountId: `a03f9cd4`, `budget-tracker` accountId: `aed9dcdf`). Migrated 7 portfolio + 6 watchlist rows to new no-suffix tables with new accountIds. Rewrote 10 budget-tracker.settings rows. Deleted old shared account (6f28aaa4), debug account (fc2f6a09), cleared `custom:accounts`. Reverted UNBLOCK-WORKAROUND — PlatformApi now uses proper cross-stack prop for analysis-cache. -v2 tables destroyed.
+
 ### 7e-pretoken — Pre-token generation Lambda ⟳ in progress (PR open, awaiting review)
 
 Write and deploy `functions/pre-token-generation`. Register as Cognito pre-token-generation trigger in `AuthStack`.

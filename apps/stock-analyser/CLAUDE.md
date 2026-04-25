@@ -33,7 +33,7 @@ React + TypeScript + Tailwind CSS.
 
 | Stack | Contents |
 |---|---|
-| `Transformotion{Stage}-StockAnalyserTables` | `stock-analyser.portfolio-{stage}-v2`, `stock-analyser.watchlist-{stage}-v2` |
+| `Transformotion{Stage}-StockAnalyserTables` | `stock-analyser.portfolio-{stage}`, `stock-analyser.watchlist-{stage}`, `stock-analyser.analysis-cache-{stage}` |
 | `Transformotion{Stage}-StockAnalyserApi` | All Stock Analyser Lambda functions + routes on the platform API Gateway |
 
 Source: `infrastructure/lib/stock-analyser/`
@@ -53,10 +53,11 @@ All Stock Analyser Lambdas share the platform API Gateway and Cognito JWT author
 
 | Table | PK | SK | Purpose |
 |---|---|---|---|
-| `stock-analyser.portfolio-{stage}-v2` | `accountId` | — | Portfolio holdings per account |
-| `stock-analyser.watchlist-{stage}-v2` | `accountId` | — | Watchlist items per account |
+| `stock-analyser.portfolio-{stage}` | `accountId` | `ticker` | Portfolio holdings per account |
+| `stock-analyser.watchlist-{stage}` | `accountId` | `ticker` | Watchlist items per account |
+| `stock-analyser.analysis-cache-{stage}` | `accountId` | `cacheKey` | Claude analysis cache (TTL: expiresAt) |
 
-Analysis cache (`platform.analysis-cache-{stage}`) is a platform table shared with other apps — accessed via `transformotion-claude-proxy-{stage}`, not directly.
+Analysis cache is accessed via both `transformotion-claude-proxy-{stage}` (write, for the async job pattern) and `transformotion-analysis-cache-{stage}` (read/delete, for polling and cache management).
 
 ## Authorization requirement
 

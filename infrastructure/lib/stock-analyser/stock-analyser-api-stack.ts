@@ -37,7 +37,7 @@ export class StockAnalyserApiStack extends cdk.Stack {
 
     // ── /portfolio — Portfolio Lambda ─────────────────────────────────────
     const portfolioTable = dynamodb.Table.fromTableName(
-      this, 'PortfolioTable', `stock-analyser.portfolio-${stage}-v2`,
+      this, 'PortfolioTable', `stock-analyser.portfolio-${stage}`,
     );
 
     const portfolioFn = new lambdaNodejs.NodejsFunction(this, 'PortfolioFn', {
@@ -60,7 +60,7 @@ export class StockAnalyserApiStack extends cdk.Stack {
 
     // ── /watchlist — Watchlist Lambda ─────────────────────────────────────
     const watchlistTable = dynamodb.Table.fromTableName(
-      this, 'WatchlistTable', `stock-analyser.watchlist-${stage}-v2`,
+      this, 'WatchlistTable', `stock-analyser.watchlist-${stage}`,
     );
 
     const watchlistFn = new lambdaNodejs.NodejsFunction(this, 'WatchlistFn', {
