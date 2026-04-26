@@ -582,6 +582,38 @@ The Lambda `transformotion-forgot-provider-{stage}` (in `AuthApiStack`):
 
 ---
 
+## Account context resolution
+
+API requests carry the active account via the `X-Account-Id` request header. This section documents who produces that header and who consumes it.
+
+### Producer — frontend apps
+
+Each frontend app resolves `accountId` from the ID token's `accounts` claim, then passes it to every API call via the `@transformotion/api-client` package.
+
+**Stock Signal (`apps/stock-analyser`)**
+
+`cognitoAuth.getAccountIdForApp('stock-signal')` reads the `accounts` claim from the Amplify session ID token, parses the JSON, and returns `accounts['stock-signal'][0].accountId`. This is wired into the `ApiClient` singleton in `lib/api/index.ts` as the `getAccountId` callback. The `HttpClient` in `packages/api-client` awaits this callback and sets `X-Account-Id` on every request that produces a non-null result.
+
+> **Single-account assumption.** The `[0]` index is deliberate but temporary. When multi-account UI lands and the user can select an active account, update `getAccountIdForApp` to return the currently-selected account rather than always the first. A `TODO` comment in the source marks this.
+
+**Budget Tracker (`apps/budget-tracker`)** — same pattern, `'budget-tracker'` app slug. To be wired when the app migrates off its own API client.
+
+### Consumer — Lambda middleware
+
+`packages/lambda-middleware` reads `X-Account-Id` from the API Gateway event headers and exposes it as `account.accountId` to every handler. Handlers must not derive `accountId` from JWT claims (rule 3 in the handler authorization patterns above).
+
+### Interface contract
+
+| Item | Value |
+|---|---|
+| Header name | `X-Account-Id` (case-insensitive in API Gateway) |
+| When absent | `account.accountId` is `undefined`; `requireAccountAccess` throws 403 |
+| Format | UUID string matching the PK of `platform.accounts-{stage}` |
+
+Any change to this header name, source, or format must update this section and the consuming middleware in the same PR.
+
+---
+
 ## Out of scope (future)
 
 - OAuth resource server custom scopes as an alternative or complement to group-based checks — tracked as Issue #42.

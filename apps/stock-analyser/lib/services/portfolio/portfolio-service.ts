@@ -5,7 +5,7 @@
  * (checking ANALYSIS#ticker cache before calling the proxy).
  */
 
-import { getAPIClient } from '@/lib/api/client'
+import { getStockSignalClient } from '@/lib/api'
 import { getConfig } from '@/lib/config'
 import { dynamoCache } from '@/lib/services/cache/dynamo-ttl-cache'
 import { callClaudeAPI } from '@/lib/hooks/use-claude'
@@ -53,11 +53,11 @@ Return ONLY valid JSON.`
 
 const realPortfolioService = {
   async getHoldings(): Promise<PortfolioHolding[]> {
-    const res = await getAPIClient().get<{ holdings: PortfolioHolding[] }>('/portfolio')
+    const res = await getStockSignalClient().getPortfolio()
     return res.holdings ?? []
   },
   async saveHoldings(holdings: PortfolioHolding[]): Promise<void> {
-    await getAPIClient().put('/portfolio', { holdings })
+    await getStockSignalClient().putPortfolio({ holdings })
   },
 }
 

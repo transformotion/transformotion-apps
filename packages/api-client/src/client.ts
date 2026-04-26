@@ -19,6 +19,7 @@ import type {
   CreateInvitationResponse,
   ClaudeProxyRequest,
   ClaudeProxyResponse,
+  ClaudeAsyncResponse,
   GetUserProfileResponse,
   PutUserPreferencesRequest,
   PutUserPreferencesResponse,
@@ -62,9 +63,17 @@ export class ApiClient {
 
   // ── Claude proxy (S2.3) ────────────────────────────────────────────────────
 
-  /** POST /api/claude — proxy a prompt to the Anthropic API server-side. */
-  async claude(req: ClaudeProxyRequest): Promise<ClaudeProxyResponse> {
-    return this.http.post<ClaudeProxyResponse>('api/claude', req);
+  /** POST /api/claude — proxy a prompt synchronously, returns full content. */
+  async claude(req: ClaudeProxyRequest, signal?: AbortSignal): Promise<ClaudeProxyResponse> {
+    return this.http.post<ClaudeProxyResponse>('api/claude', req, signal);
+  }
+
+  /**
+   * POST /api/claude with asyncMode: true — starts the job and returns a jobId.
+   * Poll the result with getCache('job-' + jobId) until status === 'complete'.
+   */
+  async claudeAsync(req: Omit<ClaudeProxyRequest, 'asyncMode'>, signal?: AbortSignal): Promise<ClaudeAsyncResponse> {
+    return this.http.post<ClaudeAsyncResponse>('api/claude', { ...req, asyncMode: true }, signal);
   }
 
   // ── Portfolio (S2.4) ───────────────────────────────────────────────────────
@@ -94,8 +103,8 @@ export class ApiClient {
   // ── Analysis cache (S2.6) ─────────────────────────────────────────────────
 
   /** GET /analysis-cache/{key} — fetch a cached analysis entry. */
-  async getCache(key: string): Promise<CacheEntry> {
-    return this.http.get<CacheEntry>(`analysis-cache/${encodeURIComponent(key)}`);
+  async getCache(key: string, signal?: AbortSignal): Promise<CacheEntry> {
+    return this.http.get<CacheEntry>(`analysis-cache/${encodeURIComponent(key)}`, signal);
   }
 
   /** PUT /analysis-cache/{key} — store a cached analysis entry with TTL. */

@@ -35,7 +35,8 @@ export interface PutWatchlistResponse  { ok: true }
 // ── Analysis cache ────────────────────────────────────────────────────────────
 
 export interface CacheEntry {
-  data:       unknown;
+  /** JSON-stringified cached value as stored by the analysis-cache Lambda. */
+  data:       string;
   /** Unix epoch seconds when the entry was stored (normalised from both old ISO and new epoch formats). */
   cachedAt:   number;
   /** Unix epoch seconds — DynamoDB TTL attribute. */
@@ -127,4 +128,9 @@ export interface ClaudeProxyResponse {
     inputTokens:  number;
     outputTokens: number;
   };
+}
+
+/** Response from the async Claude proxy call — the frontend polls for the result via getCache. */
+export interface ClaudeAsyncResponse {
+  jobId: string;
 }

@@ -1,4 +1,4 @@
-import { getAPIClient } from '@/lib/api/client'
+import { getStockSignalClient } from '@/lib/api'
 import { getConfig } from '@/lib/config'
 
 export interface WatchlistItem {
@@ -23,11 +23,11 @@ let mockStore: WatchlistItem[] = [...MOCK_ITEMS]
 
 const realService = {
   async getItems(): Promise<WatchlistItem[]> {
-    const res = await getAPIClient().get<{ items: WatchlistItem[] }>('/watchlist')
+    const res = await getStockSignalClient().getWatchlist()
     return res.items ?? []
   },
   async saveItems(items: WatchlistItem[]): Promise<void> {
-    await getAPIClient().put('/watchlist', { items })
+    await getStockSignalClient().putWatchlist({ items })
   },
 }
 

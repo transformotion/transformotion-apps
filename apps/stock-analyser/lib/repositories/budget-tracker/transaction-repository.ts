@@ -5,8 +5,6 @@
  * Uses DynamoDB via Budget Tracker Lambda API.
  */
 
-import { getBudgetApiClient } from '@/lib/api/client'
-import { getConfig } from '@/lib/config'
 import { Repository } from '../base-repository'
 
 export interface Transaction {
@@ -132,102 +130,10 @@ class LocalTransactionRepository implements TransactionRepository {
   }
 }
 
-// ── DynamoDB implementation ───────────────────────────────────────────────────
-
-class DynamoTransactionRepository implements TransactionRepository {
-  private client() { return getBudgetApiClient() }
-
-  async findAll(): Promise<Transaction[]> {
-    const res = await this.client().get<{ transactions: Transaction[] }>('/transactions')
-    return (res.transactions ?? []).map(t => ({ ...t, _id: t._id ?? (t as unknown as Record<string, string>)['transactionId'] }))
-  }
-
-  async findById(id: string): Promise<Transaction | null> {
-    const all = await this.findAll()
-    return all.find(t => t._id === id) ?? null
-  }
-
-  async save(entity: Transaction): Promise<Transaction> {
-    await this.client().patch(`/transactions/${entity._id}`, {
-      category:    entity.category,
-      subcategory: entity.subcategory,
-      _manual:     entity._manual,
-      _business:   entity._business,
-    })
-    return entity
-  }
-
-  async saveMany(entities: Transaction[]): Promise<Transaction[]> {
-    // Parallel PATCH for all transactions that have a UUID _id (already in DynamoDB)
-    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-/i
-    const toUpdate = entities.filter(t => uuidPattern.test(String(t._id)))
-    if (toUpdate.length > 0) {
-      await Promise.all(toUpdate.map(tx =>
-        this.client().patch(`/transactions/${tx._id}`, {
-          category:    tx.category,
-          subcategory: tx.subcategory,
-          _manual:     tx._manual,
-          _business:   tx._business,
-        }).catch(() => {})
-      ))
-    }
-    return entities
-  }
-
-  async delete(id: string): Promise<void> {
-    await this.client().delete(`/transactions/${id}`)
-  }
-
-  async deleteMany(ids: string[]): Promise<void> {
-    await Promise.all(ids.map(id => this.delete(id).catch(() => {})))
-  }
-
-  async count(): Promise<number> {
-    return (await this.findAll()).length
-  }
-
-  async exists(id: string): Promise<boolean> {
-    return (await this.findAll()).some(t => t._id === id)
-  }
-
-  async findByDateRange(start: string, end: string): Promise<Transaction[]> {
-    return (await this.findAll()).filter(t => t.date >= start && t.date <= end)
-  }
-
-  async findByCategory(category: string, subcategory?: string): Promise<Transaction[]> {
-    return (await this.findAll()).filter(t => {
-      if (t.category !== category) return false
-      if (subcategory && t.subcategory !== subcategory) return false
-      return true
-    })
-  }
-
-  async findUncategorized(): Promise<Transaction[]> {
-    return (await this.findAll()).filter(t => !t.category)
-  }
-
-  async findBySource(filename: string): Promise<Transaction[]> {
-    return (await this.findAll()).filter(t => t.file === filename)
-  }
-
-  async getNextId(): Promise<string> {
-    return crypto.randomUUID()
-  }
-
-  async bulkImport(transactions: Omit<Transaction, '_id'>[]): Promise<Transaction[]> {
-    const res = await this.client().post<{ transactions: Transaction[] }>('/transactions/bulk', { transactions })
-    return (res.transactions ?? []).map(t => ({ ...t, _id: t._id ?? (t as unknown as Record<string, string>)['transactionId'] }))
-  }
-}
-
 // ── Factory ───────────────────────────────────────────────────────────────────
 
-function shouldUseDynamo(): boolean {
-  return !getConfig().features.useMockData && !!getConfig().budget.apiUrl
-}
-
 export function createTransactionRepository(): TransactionRepository {
-  return shouldUseDynamo() ? new DynamoTransactionRepository() : new LocalTransactionRepository()
+  return new LocalTransactionRepository()
 }
 
 let _repository: TransactionRepository | null = null

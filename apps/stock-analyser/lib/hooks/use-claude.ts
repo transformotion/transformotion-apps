@@ -14,8 +14,8 @@
 
 import { useState, useCallback, useRef } from 'react'
 import { getConfig } from '../config'
-import { getAPIClient } from '../api/client'
-import { APIException } from '../api/types'
+import { ApiError } from '@transformotion/api-client'
+import { getStockSignalClient } from '../api'
 import { dynamoCache } from '../services/cache/dynamo-ttl-cache'
 
 export interface ClaudeRequest {
@@ -137,16 +137,14 @@ export function useClaude<T = unknown>(options: UseClaudeOptions = {}): UseClaud
         result = await mockClaudeCall<T>(claudeRequest, abortControllerRef.current.signal)
       } else {
         // Real: POST to Claude proxy Lambda (auth injected by apiClient)
-        const { jobId: newJobId } = await getAPIClient().post<{ jobId: string }>(
-          '/api/claude',
+        const { jobId: newJobId } = await getStockSignalClient().claudeAsync(
           {
             prompt:    claudeRequest.prompt,
-            system:    claudeRequest.systemPrompt,  // Lambda expects "system", not "systemPrompt"
+            system:    claudeRequest.systemPrompt,
             webSearch: claudeRequest.webSearch,
             maxTokens: claudeRequest.maxTokens,
-            asyncMode: true,
           },
-          { signal: abortControllerRef.current.signal }
+          abortControllerRef.current.signal
         )
         setJobId(newJobId)
 
@@ -220,11 +218,7 @@ async function pollForResult<T>(
     if (signal.aborted) throw new Error('Request aborted')
 
     try {
-      const item = await getAPIClient().get<{ data: string }>(
-        `/analysis-cache/job-${jobId}`,
-        undefined,
-        { signal }
-      )
+      const item = await getStockSignalClient().getCache(`job-${jobId}`, signal)
 
       const jobStatus = JSON.parse(item.data) as {
         status:   string
@@ -257,7 +251,7 @@ async function pollForResult<T>(
       // SyntaxError from JSON.parse = malformed response — throw immediately
       if (err instanceof SyntaxError) throw err
       // 404 = job record not written yet; other transient errors — keep polling
-      const is404 = err instanceof APIException && err.status === 404
+      const is404 = err instanceof ApiError && err.status === 404
       if (!is404) {
         console.warn('[useClaude] poll error (retrying):', err instanceof Error ? err.message : err)
       }
@@ -465,16 +459,14 @@ export async function callClaudeAPI<T = unknown>(
     return mockClaudeCall<T>(request, options.signal || new AbortController().signal)
   }
 
-  const { jobId } = await getAPIClient().post<{ jobId: string }>(
-    '/api/claude',
+  const { jobId } = await getStockSignalClient().claudeAsync(
     {
       prompt:    request.prompt,
       system:    request.systemPrompt,
       webSearch: request.webSearch,
       maxTokens: request.maxTokens,
-      asyncMode: true,
     },
-    { signal: options.signal }
+    options.signal
   )
 
   return pollForResult<T>(

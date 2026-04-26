@@ -6,9 +6,9 @@
 //   import { fetchAuthSession } from 'aws-amplify/auth';
 //
 //   const client = new ApiClient({
-//     baseUrl:      import.meta.env.VITE_API_URL,
-//     getToken:     () => fetchAuthSession().then(s => s.tokens?.accessToken?.toString() ?? ''),
-//     getAccountId: () => activeAccountId,   // from auth context
+//     baseUrl:      process.env.NEXT_PUBLIC_API_URL,
+//     getToken:     () => fetchAuthSession().then(s => s.tokens?.idToken?.toString() ?? ''),
+//     getAccountId: () => cognitoAuth.getAccountIdForApp('stock-signal'),
 //   });
 //
 //   const { holdings } = await client.getPortfolio();
@@ -52,6 +52,7 @@ export type {
   // Claude proxy
   ClaudeProxyRequest,
   ClaudeProxyResponse,
+  ClaudeAsyncResponse,
 
   // User preferences
   UserPreferences,

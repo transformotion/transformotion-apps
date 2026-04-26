@@ -8,6 +8,14 @@ These documents describe the architectural invariants of the Transformotion plat
 
 If during implementation a document is discovered to be wrong or incomplete, work pauses and the document is corrected before proceeding. Architectural drift is prevented by this rule, not by individual vigilance.
 
+**Interface contract discipline.** When code in one layer (e.g., frontend) implicitly depends on code in another layer (e.g., Lambda middleware), that dependency is an interface contract. Document it here. Examples of interface contracts that must be documented:
+
+- Request headers passed from frontend to Lambda (e.g., `X-Account-Id`)
+- JWT claim names and shapes consumed by middleware or frontend
+- Response shapes relied on by more than one consumer
+
+For each such contract, the doc must name both producers (who sets it) and consumers (who reads it). A PR that adds, removes, or renames a contract item must update the relevant architecture doc in the same commit.
+
 ## Documents
 
 - **[auth.md](./auth.md)** — Authentication and permissions. Cognito pool, app clients, identity providers, token shape, two-dimensional permission model (app access + account membership), pre-token generation Lambda, invitation flow, revocation.
