@@ -137,28 +137,11 @@ export const cognitoAuth = {
   async getAccountIdForApp(appSlug: string): Promise<string | null> {
     try {
       const session = await fetchAuthSession()
-      const payload = session.tokens?.idToken?.payload
-      const raw = payload?.['accounts']
-      console.log('[getAccountIdForApp]', {
-        appSlug,
-        hasSession: !!session,
-        hasIdToken: !!session.tokens?.idToken,
-        payloadKeys: payload ? Object.keys(payload) : null,
-        rawType: typeof raw,
-        rawValue: raw,
-      })
-      if (!raw) {
-        console.log('[getAccountIdForApp] returning null — raw is falsy')
-        return null
-      }
-      const map = typeof raw === 'string'
-        ? JSON.parse(raw) as Record<string, Array<{ accountId: string }>>
-        : raw as Record<string, Array<{ accountId: string }>>
-      const result = map[appSlug]?.[0]?.accountId ?? null
-      console.log('[getAccountIdForApp] result:', result)
-      return result
-    } catch (err) {
-      console.error('[getAccountIdForApp] threw:', err)
+      const raw = session.tokens?.idToken?.payload?.['accounts'] as string | undefined
+      if (!raw) return null
+      const map = JSON.parse(raw) as Record<string, Array<{ accountId: string }>>
+      return map[appSlug]?.[0]?.accountId ?? null
+    } catch {
       return null
     }
   },
