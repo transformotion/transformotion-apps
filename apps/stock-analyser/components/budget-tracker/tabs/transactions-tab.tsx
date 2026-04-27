@@ -9,7 +9,7 @@ import {
   RotateCcw, Check, BookOpen, Calendar, Search, FileText, Sparkles, AlertCircle,
   Database,
 } from "lucide-react"
-import { getBudgetApiClient } from "@/lib/api/client"
+import { budgetClient } from "@/lib/api"
 import { BUDGET_CATEGORIES, CATEGORY_LIST, getSubcategories } from "../data/categories"
 import { CATEGORY_COLORS } from "../data/category-colors"
 import { applyRules } from "../data/builtin-rules"
@@ -107,9 +107,7 @@ function EmptyStateWithMigration() {
       const transactions = JSON.parse(localStorage.getItem('budget-tracker-transactions') || '[]')
       const settings     = JSON.parse(localStorage.getItem('budget-tracker-settings') || '{}')
 
-      const res = await getBudgetApiClient().post<{
-        migrated: { transactions: number; rules: number; settings: string[] }
-      }>('/migrate-from-localstorage', { transactions, rules: [], settings })
+      const res = await budgetClient.migrateFromLocalStorage({ transactions, rules: [], settings })
 
       setResult(`Migrated ${res.migrated.transactions} transactions. Reloading…`)
       setStatus('done')
