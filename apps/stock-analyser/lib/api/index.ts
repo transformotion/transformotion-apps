@@ -95,4 +95,7 @@ export const budgetClient = {
   bulkImportTransactions(body: { transactions: Omit<Transaction, '_id'>[] }): Promise<{ transactions: Transaction[] }> {
     return budgetHttp().post('transactions/bulk', body)
   },
+  migrateFromLocalStorage(body: { transactions: unknown[]; rules: unknown[]; settings: unknown }): Promise<{ migrated: { transactions: number; rules: number; settings: string[] } }> {
+    return budgetHttp().post('migrate-from-localstorage', body)
+  },
 }
