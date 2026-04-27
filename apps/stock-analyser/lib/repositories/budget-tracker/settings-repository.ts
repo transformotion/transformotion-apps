@@ -6,7 +6,7 @@
  * Filters remain in localStorage (UI-only state, not server-persisted).
  */
 
-import { getBudgetApiClient } from '@/lib/api/client'
+import { budgetClient } from '@/lib/api'
 import { getConfig } from '@/lib/config'
 
 export type BudgetFrequency = "weekly" | "fortnightly" | "monthly" | "quarterly" | "annually"
@@ -135,11 +135,9 @@ class LocalSettingsRepository implements SettingsRepository {
 // Filters are UI-only state and remain in localStorage regardless of mode.
 
 class DynamoSettingsRepository extends LocalSettingsRepository {
-  private client() { return getBudgetApiClient() }
-
   override async getSettings(): Promise<BudgetSettings> {
     try {
-      const res = await this.client().get<{ settings: BudgetSettings }>('/settings')
+      const res = await budgetClient.getSettings()
       return { ...DEFAULT_SETTINGS, ...res.settings }
     } catch {
       return DEFAULT_SETTINGS
@@ -148,7 +146,7 @@ class DynamoSettingsRepository extends LocalSettingsRepository {
 
   override async updateSettings(updates: Partial<BudgetSettings>): Promise<BudgetSettings> {
     try {
-      const res = await this.client().patch<{ settings: BudgetSettings }>('/settings', updates)
+      const res = await budgetClient.patchSettings(updates)
       return { ...DEFAULT_SETTINGS, ...res.settings }
     } catch {
       // Fallback: return merged result optimistically

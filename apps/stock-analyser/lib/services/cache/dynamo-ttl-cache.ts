@@ -8,7 +8,7 @@
  * AccountId:   SHARED for market/public data, user accountId for private data
  */
 
-import { getAPIClient } from '@/lib/api/client'
+import { getStockSignalClient, stockAnalyserClient } from '@/lib/api'
 import { getConfig } from '@/lib/config'
 import { MemoryCacheService } from './memory-cache'
 import type { CacheService } from './index'
@@ -33,34 +33,12 @@ function getTTL(cacheKey: string): number {
   return TTL_SECONDS[type] ?? DEFAULT_TTL
 }
 
-function getAccountId(cacheKey: string): string {
-  const type = cacheKey.split('#')[0]
-  return SHARED_TYPES.has(type) ? 'SHARED' : 'private'
-}
-
-// ── DynamoDB cache item shape ─────────────────────────────────────────────────
-
-// Shape returned by normaliseItem in the analysis-cache Lambda
-interface DynamoCacheItem {
-  data:      string   // JSON-stringified cached value
-  cachedAt:  number   // Unix seconds
-  expiresAt: number   // Unix seconds (DynamoDB TTL)
-  dataType?: string
-  mode?:     string
-}
-
 // ── Service implementation ─────────────────────────────────────────────────────
 
 export class DynamoTTLCacheService implements CacheService {
-  private get api() {
-    return getAPIClient()
-  }
-
   async get<T>(key: string): Promise<T | null> {
     try {
-      const item = await this.api.get<DynamoCacheItem>(
-        `/analysis-cache/${encodeURIComponent(key)}`
-      )
+      const item = await getStockSignalClient().getCache(key)
       return JSON.parse(item.data) as T
     } catch {
       // 404 = cache miss; any other error falls back to null
@@ -70,7 +48,7 @@ export class DynamoTTLCacheService implements CacheService {
 
   async set<T>(key: string, value: T, ttl?: number): Promise<void> {
     const ttlSeconds = ttl ?? getTTL(key)
-    await this.api.put<void>(`/analysis-cache/${encodeURIComponent(key)}`, {
+    await stockAnalyserClient.putCacheEntry(key, {
       data:       JSON.stringify(value),
       ttlSeconds,
       mode:       'live',
@@ -81,7 +59,7 @@ export class DynamoTTLCacheService implements CacheService {
   }
 
   async delete(key: string): Promise<void> {
-    await this.api.delete(`/analysis-cache/${encodeURIComponent(key)}`)
+    await stockAnalyserClient.deleteCacheEntry(key)
   }
 
   async deleteByPrefix(_prefix: string): Promise<void> {
@@ -95,9 +73,7 @@ export class DynamoTTLCacheService implements CacheService {
 
   async ttlRemaining(key: string): Promise<number> {
     try {
-      const item = await this.api.get<DynamoCacheItem>(
-        `/analysis-cache/${encodeURIComponent(key)}`
-      )
+      const item = await getStockSignalClient().getCache(key)
       const remaining = item.expiresAt - Math.floor(Date.now() / 1000)
       return Math.max(0, remaining)
     } catch {

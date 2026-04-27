@@ -4,17 +4,17 @@ export interface ApiClientOptions {
   /** Base URL of the main API Gateway, e.g. https://xxx.execute-api.ap-southeast-2.amazonaws.com/dev/ */
   baseUrl: string;
   /**
-   * Async function that returns a valid Cognito access token string.
+   * Async function that returns a valid Cognito ID token string.
    * Called before every request — Amplify handles refresh automatically.
-   * Example: () => fetchAuthSession().then(s => s.tokens?.accessToken?.toString() ?? '')
+   * Example: () => fetchAuthSession().then(s => s.tokens?.idToken?.toString() ?? '')
    */
   getToken: () => Promise<string>;
   /**
-   * Optional async/sync function that returns the active account ID.
+   * Optional function (sync or async) that returns the active account ID.
    * When provided the result is sent as X-Account-Id on every request.
-   * Wire this to the active account stored in your auth context.
+   * May be async when the account ID must be read from the Cognito session.
    */
-  getAccountId?: () => string | undefined;
+  getAccountId?: () => string | null | undefined | Promise<string | null | undefined>;
 }
 
 /**
@@ -25,7 +25,7 @@ export interface ApiClientOptions {
 export class HttpClient {
   private readonly baseUrl: string;
   private readonly getToken: () => Promise<string>;
-  private readonly getAccountId?: () => string | undefined;
+  private readonly getAccountId?: () => string | null | undefined | Promise<string | null | undefined>;
 
   constructor(opts: ApiClientOptions) {
     // Normalise: always ends with /
@@ -34,25 +34,29 @@ export class HttpClient {
     this.getAccountId = opts.getAccountId;
   }
 
-  async get<T>(path: string): Promise<T> {
-    return this.request<T>('GET', path);
+  async get<T>(path: string, signal?: AbortSignal): Promise<T> {
+    return this.request<T>('GET', path, undefined, signal);
   }
 
-  async put<T>(path: string, body: unknown): Promise<T> {
-    return this.request<T>('PUT', path, body);
+  async put<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
+    return this.request<T>('PUT', path, body, signal);
   }
 
-  async post<T>(path: string, body: unknown): Promise<T> {
-    return this.request<T>('POST', path, body);
+  async post<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
+    return this.request<T>('POST', path, body, signal);
   }
 
-  async delete(path: string): Promise<void> {
-    await this.request<void>('DELETE', path);
+  async patch<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
+    return this.request<T>('PATCH', path, body, signal);
   }
 
-  private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  async delete(path: string, signal?: AbortSignal): Promise<void> {
+    await this.request<void>('DELETE', path, undefined, signal);
+  }
+
+  private async request<T>(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
     const token     = await this.getToken();
-    const accountId = this.getAccountId?.();
+    const accountId = this.getAccountId ? await this.getAccountId() : undefined;
 
     const headers: Record<string, string> = {
       'Content-Type':  'application/json',
@@ -69,6 +73,7 @@ export class HttpClient {
     const res = await fetch(url, {
       method,
       headers,
+      signal,
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
     });
 

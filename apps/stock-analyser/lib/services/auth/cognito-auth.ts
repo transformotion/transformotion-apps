@@ -124,6 +124,28 @@ export const cognitoAuth = {
     }
   },
 
+  /**
+   * Returns the first accountId for the given appSlug from the `accounts` JWT
+   * claim injected by the pre-token generation Lambda.
+   *
+   * Returns null when the claim is absent, malformed, or the user has no account
+   * for this app yet — callers should handle the missing-account state gracefully.
+   *
+   * TODO: single-account assumption — picks accounts[appSlug][0]. Revisit when
+   * multi-account UI lands and the user can select an active account.
+   */
+  async getAccountIdForApp(appSlug: string): Promise<string | null> {
+    try {
+      const session = await fetchAuthSession()
+      const raw = session.tokens?.idToken?.payload?.['accounts'] as string | undefined
+      if (!raw) return null
+      const map = JSON.parse(raw) as Record<string, Array<{ accountId: string }>>
+      return map[appSlug]?.[0]?.accountId ?? null
+    } catch {
+      return null
+    }
+  },
+
   async resetPassword(email: string) {
     return resetPassword({ username: email })
   },

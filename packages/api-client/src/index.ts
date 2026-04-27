@@ -6,9 +6,9 @@
 //   import { fetchAuthSession } from 'aws-amplify/auth';
 //
 //   const client = new ApiClient({
-//     baseUrl:      import.meta.env.VITE_API_URL,
-//     getToken:     () => fetchAuthSession().then(s => s.tokens?.accessToken?.toString() ?? ''),
-//     getAccountId: () => activeAccountId,   // from auth context
+//     baseUrl:      process.env.NEXT_PUBLIC_API_URL,
+//     getToken:     () => fetchAuthSession().then(s => s.tokens?.idToken?.toString() ?? ''),
+//     getAccountId: () => cognitoAuth.getAccountIdForApp('stock-signal'),
 //   });
 //
 //   const { holdings } = await client.getPortfolio();
@@ -16,6 +16,7 @@
 //   const result = await client.claude({ prompt: '...' });
 
 export { ApiClient }                      from './client';
+export { HttpClient }                     from './http';
 export { ApiError }                       from './errors';
 export type { ApiClientOptions }          from './http';
 

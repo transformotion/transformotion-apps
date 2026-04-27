@@ -5,7 +5,7 @@
  * Uses DynamoDB via Budget Tracker Lambda API.
  */
 
-import { getBudgetApiClient } from '@/lib/api/client'
+import { budgetClient } from '@/lib/api'
 import { getConfig } from '@/lib/config'
 import { Repository } from '../base-repository'
 
@@ -135,10 +135,8 @@ class LocalTransactionRepository implements TransactionRepository {
 // ── DynamoDB implementation ───────────────────────────────────────────────────
 
 class DynamoTransactionRepository implements TransactionRepository {
-  private client() { return getBudgetApiClient() }
-
   async findAll(): Promise<Transaction[]> {
-    const res = await this.client().get<{ transactions: Transaction[] }>('/transactions')
+    const res = await budgetClient.listTransactions()
     return (res.transactions ?? []).map(t => ({ ...t, _id: t._id ?? (t as unknown as Record<string, string>)['transactionId'] }))
   }
 
@@ -148,7 +146,7 @@ class DynamoTransactionRepository implements TransactionRepository {
   }
 
   async save(entity: Transaction): Promise<Transaction> {
-    await this.client().patch(`/transactions/${entity._id}`, {
+    await budgetClient.patchTransaction(entity._id, {
       category:    entity.category,
       subcategory: entity.subcategory,
       _manual:     entity._manual,
@@ -163,7 +161,7 @@ class DynamoTransactionRepository implements TransactionRepository {
     const toUpdate = entities.filter(t => uuidPattern.test(String(t._id)))
     if (toUpdate.length > 0) {
       await Promise.all(toUpdate.map(tx =>
-        this.client().patch(`/transactions/${tx._id}`, {
+        budgetClient.patchTransaction(tx._id, {
           category:    tx.category,
           subcategory: tx.subcategory,
           _manual:     tx._manual,
@@ -175,7 +173,7 @@ class DynamoTransactionRepository implements TransactionRepository {
   }
 
   async delete(id: string): Promise<void> {
-    await this.client().delete(`/transactions/${id}`)
+    await budgetClient.deleteTransaction(id)
   }
 
   async deleteMany(ids: string[]): Promise<void> {
@@ -215,7 +213,7 @@ class DynamoTransactionRepository implements TransactionRepository {
   }
 
   async bulkImport(transactions: Omit<Transaction, '_id'>[]): Promise<Transaction[]> {
-    const res = await this.client().post<{ transactions: Transaction[] }>('/transactions/bulk', { transactions })
+    const res = await budgetClient.bulkImportTransactions({ transactions })
     return (res.transactions ?? []).map(t => ({ ...t, _id: t._id ?? (t as unknown as Record<string, string>)['transactionId'] }))
   }
 }
