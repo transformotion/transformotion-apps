@@ -1,3 +1,14 @@
+> **Archived 2026-04-28**
+>
+> This document was superseded jointly by /PLAN.md (the phase-plan
+> portions) and /CONTRIBUTING.md (the discipline rules and operating
+> substrate) on 2026-04-28. It is preserved for historical reference
+> and to keep conversational and git-history references valid. It
+> does not describe current state and must not be cited as
+> authoritative.
+
+---
+
 # Stabilisation Freeze
 
 **Status:** ACTIVE
