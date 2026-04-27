@@ -1,3 +1,12 @@
+> **Archived 2026-04-28**
+>
+> This document was superseded by /PLAN.md on 2026-04-28. It is
+> preserved for historical reference and to keep conversational
+> and git-history references valid. It does not describe current
+> state and must not be cited as authoritative.
+
+---
+
 # Transformotion Apps — Development Plan
 **Stock Signal Analyser → Cloud Platform Migration**
 *Prepared: April 2026 | Author: Steve Moodie*
