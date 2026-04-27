@@ -46,6 +46,10 @@ export class HttpClient {
     return this.request<T>('POST', path, body, signal);
   }
 
+  async patch<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
+    return this.request<T>('PATCH', path, body, signal);
+  }
+
   async delete(path: string, signal?: AbortSignal): Promise<void> {
     await this.request<void>('DELETE', path, undefined, signal);
   }

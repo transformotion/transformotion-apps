@@ -8,7 +8,7 @@
  * AccountId:   SHARED for market/public data, user accountId for private data
  */
 
-import { getStockSignalClient } from '@/lib/api'
+import { getStockSignalClient, stockAnalyserClient } from '@/lib/api'
 import { getConfig } from '@/lib/config'
 import { MemoryCacheService } from './memory-cache'
 import type { CacheService } from './index'
@@ -33,11 +33,6 @@ function getTTL(cacheKey: string): number {
   return TTL_SECONDS[type] ?? DEFAULT_TTL
 }
 
-function getAccountId(cacheKey: string): string {
-  const type = cacheKey.split('#')[0]
-  return SHARED_TYPES.has(type) ? 'SHARED' : 'private'
-}
-
 // ── Service implementation ─────────────────────────────────────────────────────
 
 export class DynamoTTLCacheService implements CacheService {
@@ -53,7 +48,7 @@ export class DynamoTTLCacheService implements CacheService {
 
   async set<T>(key: string, value: T, ttl?: number): Promise<void> {
     const ttlSeconds = ttl ?? getTTL(key)
-    await getStockSignalClient().putCache(key, {
+    await stockAnalyserClient.putCacheEntry(key, {
       data:       JSON.stringify(value),
       ttlSeconds,
       mode:       'live',
@@ -64,7 +59,7 @@ export class DynamoTTLCacheService implements CacheService {
   }
 
   async delete(key: string): Promise<void> {
-    await getStockSignalClient().deleteCache(key)
+    await stockAnalyserClient.deleteCacheEntry(key)
   }
 
   async deleteByPrefix(_prefix: string): Promise<void> {

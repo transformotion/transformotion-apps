@@ -130,7 +130,3 @@ export interface ClaudeProxyResponse {
   };
 }
 
-/** Response from the async Claude proxy call — the frontend polls for the result via getCache. */
-export interface ClaudeAsyncResponse {
-  jobId: string;
-}

@@ -15,7 +15,7 @@
 import { useState, useCallback, useRef } from 'react'
 import { getConfig } from '../config'
 import { ApiError } from '@transformotion/api-client'
-import { getStockSignalClient } from '../api'
+import { getStockSignalClient, stockAnalyserClient } from '../api'
 import { dynamoCache } from '../services/cache/dynamo-ttl-cache'
 
 export interface ClaudeRequest {
@@ -137,7 +137,7 @@ export function useClaude<T = unknown>(options: UseClaudeOptions = {}): UseClaud
         result = await mockClaudeCall<T>(claudeRequest, abortControllerRef.current.signal)
       } else {
         // Real: POST to Claude proxy Lambda (auth injected by apiClient)
-        const { jobId: newJobId } = await getStockSignalClient().claudeAsync(
+        const { jobId: newJobId } = await stockAnalyserClient.claudeAsyncStart(
           {
             prompt:    claudeRequest.prompt,
             system:    claudeRequest.systemPrompt,
@@ -218,7 +218,7 @@ async function pollForResult<T>(
     if (signal.aborted) throw new Error('Request aborted')
 
     try {
-      const item = await getStockSignalClient().getCache(`job-${jobId}`, signal)
+      const item = await getStockSignalClient().getCache(`job-${jobId}`)
 
       const jobStatus = JSON.parse(item.data) as {
         status:   string
@@ -459,7 +459,7 @@ export async function callClaudeAPI<T = unknown>(
     return mockClaudeCall<T>(request, options.signal || new AbortController().signal)
   }
 
-  const { jobId } = await getStockSignalClient().claudeAsync(
+  const { jobId } = await stockAnalyserClient.claudeAsyncStart(
     {
       prompt:    request.prompt,
       system:    request.systemPrompt,

@@ -16,6 +16,7 @@
 //   const result = await client.claude({ prompt: '...' });
 
 export { ApiClient }                      from './client';
+export { HttpClient }                     from './http';
 export { ApiError }                       from './errors';
 export type { ApiClientOptions }          from './http';
 
@@ -52,7 +53,6 @@ export type {
   // Claude proxy
   ClaudeProxyRequest,
   ClaudeProxyResponse,
-  ClaudeAsyncResponse,
 
   // User preferences
   UserPreferences,

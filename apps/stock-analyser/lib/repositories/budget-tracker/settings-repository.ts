@@ -6,6 +6,8 @@
  * Filters remain in localStorage (UI-only state, not server-persisted).
  */
 
+import { budgetClient } from '@/lib/api'
+import { getConfig } from '@/lib/config'
 
 export type BudgetFrequency = "weekly" | "fortnightly" | "monthly" | "quarterly" | "annually"
 
@@ -129,10 +131,43 @@ class LocalSettingsRepository implements SettingsRepository {
   }
 }
 
+// ── DynamoDB implementation ───────────────────────────────────────────────────
+// Filters are UI-only state and remain in localStorage regardless of mode.
+
+class DynamoSettingsRepository extends LocalSettingsRepository {
+  override async getSettings(): Promise<BudgetSettings> {
+    try {
+      const res = await budgetClient.getSettings()
+      return { ...DEFAULT_SETTINGS, ...res.settings }
+    } catch {
+      return DEFAULT_SETTINGS
+    }
+  }
+
+  override async updateSettings(updates: Partial<BudgetSettings>): Promise<BudgetSettings> {
+    try {
+      const res = await budgetClient.patchSettings(updates)
+      return { ...DEFAULT_SETTINGS, ...res.settings }
+    } catch {
+      // Fallback: return merged result optimistically
+      const current = await this.getSettings()
+      return { ...current, ...updates }
+    }
+  }
+
+  override async resetSettings(): Promise<BudgetSettings> {
+    return this.updateSettings(DEFAULT_SETTINGS)
+  }
+}
+
 // ── Factory ───────────────────────────────────────────────────────────────────
 
+function shouldUseDynamo(): boolean {
+  return !getConfig().features.useMockData && !!getConfig().budget.apiUrl
+}
+
 export function createSettingsRepository(): SettingsRepository {
-  return new LocalSettingsRepository()
+  return shouldUseDynamo() ? new DynamoSettingsRepository() : new LocalSettingsRepository()
 }
 
 let _repository: SettingsRepository | null = null
