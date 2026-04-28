@@ -65,7 +65,7 @@ export class AuthStack extends cdk.Stack {
     // ── User Pool ──────────────────────────────────────────────────────────
     this.userPool = new cognito.UserPool(this, 'UserPool', {
       userPoolName: `transformotion-${stage}`,
-      selfSignUpEnabled: true,
+      selfSignUpEnabled: false,
 
       // Sign-in via email address
       signInAliases: { email: true },
