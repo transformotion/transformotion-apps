@@ -136,12 +136,16 @@ gate sitting open.
 ### Outcome
 
 - `selfSignUpEnabled: false` set in `infrastructure/lib/platform/auth-stack.ts`.
-- Public Create Account screen removed from the launchpad if it exists.
 - Cognito hosted UI no longer accepts public signup. Account creation
   requires invitation (the invitation flow itself is M11).
 - The compound vulnerability (gap #1 + gap #2 from the inventory's Section
   3.4) reduces to a single vulnerability pending M10's app-access gate
   enforcement.
+
+The launchpad does not currently have a public Create Account screen
+(verified during M0 scoping; no `signUp`, `register`, or
+`createAccount` references in `apps/launchpad/`), so no frontend work
+is required.
 
 ### Goals served
 
@@ -150,8 +154,12 @@ hygiene by ensuring only invited users can reach platform resources).
 
 ### Gate to next
 
-Setting deployed to production via the platform stack. Hosted UI signup
-attempts return the expected "self-signup disabled" response.
+Setting deployed to dev via the platform stack (`TransformotionDev-Auth`).
+Hosted UI signup attempts return the expected "self-signup disabled"
+response. The platform has no prod environment yet; when prod is later
+established, the `selfSignUpEnabled: false` setting applies
+automatically as part of the standard prod deploy of the auth stack —
+no additional M0-specific work needed.
 
 ### Dependencies
 
