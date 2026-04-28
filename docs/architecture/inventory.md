@@ -580,16 +580,30 @@ Per Issue #49: `functions/auth/forgot-provider/` uses
 users but fails for federated users because Cognito indexes federated
 users by sub, not email. M12 fixes.
 
-#### 3.4.4 Three-client Cognito authoriser acceptance
+#### 3.4.4 Cognito authoriser accepts all three app clients
 
-**Status uncertain — verify (M1 issue #83)**
+**Status: Resolved by M1 #83 (verified clean)**
 
-The Cognito user pool has three app clients (stock-analyser, budget-
-tracker, launchpad). Whether the API Gateway authoriser accepts tokens
-from all three clients, or only specific ones, is uncertain. Cross-app
-navigation correctness depends on the answer.
+The API Gateway authoriser is constructed as
+`CognitoUserPoolsAuthorizer` taking the user pool reference (not
+specific app clients) at `infrastructure/lib/platform/platform-api-stack.ts`
+lines 67-68:
 
-**M1 #83 will populate verified findings.**
+`cognitoUserPools: [userPool]`
+
+The AWS `CognitoUserPoolsAuthorizer` accepts any valid JWT issued by
+the supplied user pool, regardless of which app client was used to
+obtain it. A user who signs in via the launchpad client receives a
+JWT that authenticates against stock-analyser, budget-tracker, and
+launchpad routes — exactly what cross-app navigation requires.
+
+A single shared authoriser (`JwtAuthoriser`) is defined in
+`platform-api-stack.ts` and reused across all platform routes. The
+auth-api-stack handles only the public lookup-provider Lambda; no
+authoriser config there. Aligns with `auth.md` line 277.
+
+The v4 inventory's uncertainty on this finding was well-founded;
+the answer is clean.
 
 ### 3.5 Platform Lambda permission model
 
