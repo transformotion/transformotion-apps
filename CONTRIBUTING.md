@@ -500,6 +500,30 @@ GitHub milestone in the same PR. The discipline rule (Section 2.1)
 applies — `PLAN.md` is a normative document and the GitHub state it
 references is part of what the document describes.
 
+**Milestone content pairing rule:** GitHub Milestone descriptions
+mirror `PLAN.md` milestone content (Purpose, Outcome, Goals served,
+Gate, Dependencies). When `PLAN.md` content for a milestone changes,
+the corresponding GitHub Milestone description is updated in the
+same PR. Descriptions don't auto-sync — they are part of what the
+PR landing the change is responsible for.
+
+**Milestone close convention:** Milestones close when their progress
+reaches 100% (all attached issues closed). Closure is a manual step
+(GitHub doesn't auto-close milestones). The PR landing the final
+issue's resolution may include the milestone closure as a follow-up
+step, or it may be done as a separate small action immediately
+after. Either is acceptable; what matters is that closed milestones
+disappear from the active list once their work is complete.
+
+**Bootstrap exception:** Milestones whose work establishes the
+issue-tracking infrastructure itself (notably M-setup) are exempt
+from the "every PR closes an issue" rule (Section 4.4). Such PRs
+land work *before* the issue infrastructure exists to track it. The
+milestone closes based on its `PLAN.md` outcomes being met, evidenced
+by merged PRs, rather than by issue closures. This exception applies
+only to bootstrap milestones; subsequent milestones follow the
+standard pattern.
+
 ### 4.5 When new problems are discovered mid-work
 
 If during a PR a new problem is discovered (a bug elsewhere, a
