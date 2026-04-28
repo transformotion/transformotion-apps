@@ -272,9 +272,15 @@ Three architectural decisions ratified and documented:
   take `appSlug` (or split into per-app variants).
 - UI invariant: the account switcher shows only accounts for the current
   app.
-- Helper interface documented: `requireAppAccess`, `requireAccountAccess`,
-  `requireSiteAdmin`, `requireAccountOwner`,
-  `requireSelfOrAccountManager`.
+- Helper interface documented as canonical. M1 #79 verified that all
+  five helpers (`requireSiteAdmin`, `requireAppAccess`,
+  `requireAnyAppAccess`, `requireAccountAccess`, `requireAccountOwner`)
+  already exist in `packages/lambda-middleware/` with signatures
+  matching `auth.md`, and are in active use across all nine consumer
+  Lambdas. M2.2's role here is to document this existing pattern as
+  canonical rather than ratifying a proposal. (`requireSelfOrAccountManager`
+  was listed in v4 inventory but is not a helper — see inventory
+  Section 2.5.)
 - JWT-claim consumer pattern documented: parse strings to objects/booleans
   on read (because Cognito V1 trigger forces string claims).
 - Position on `resolveAccountContext` JWT-claim fallback (currently dead
@@ -736,44 +742,49 @@ This milestone can run in parallel with M8 and M10.
 
 ### Purpose
 
-`auth.md` documents a helper interface (`requireAppAccess`,
-`requireAccountAccess`, `requireSiteAdmin`, `requireAccountOwner`,
-`requireSelfOrAccountManager`). Whether these helpers are implemented in
-`packages/lambda-middleware` is currently uncertain (M1 verifies). This
-milestone implements any missing helpers and migrates consumer Lambdas
-to use them.
+`auth.md` documents a helper interface and `packages/lambda-middleware/`
+implements it (verified by M1 #79 — see inventory Section 2.5). All
+nine consumer Lambdas already use the helpers. M10's remaining work
+is filling specific gaps in role enforcement and any legacy
+`requireGroup` callsites in budget-tracker that haven't migrated to
+the canonical pattern.
 
 ### Outcome
 
-- All five helpers implemented in `packages/lambda-middleware` per
-  `auth.md`.
-- Stock-analyser Lambdas (`portfolio`, `watchlist`, `analysis-cache`)
-  now enforce `requireAppAccess('stock-signal')`. This closes inventory
-  Section 3.4 finding #2 (the compound vulnerability with M0).
-- Budget-tracker Lambdas migrated from legacy `requireGroup('budget-app',
-  'admin')` calls to `requireAppAccess('budget-tracker')` and equivalent.
-- Member-role enforcement now possible at the Lambda layer:
-  `requireAccountAccess(auth, app, accountId, minRole)` rejects
-  insufficient-role calls with 403.
-- Site-admin paths use `requireSiteAdmin(auth)`.
-- Account-owner-only operations use `requireAccountOwner(auth, app,
-  accountId)`.
+- Budget-tracker Lambdas verified to use the canonical helpers
+  consistently. Any remaining legacy `requireGroup('budget-app',
+  'admin')` calls migrated to `requireAppAccess('budget-tracker')` +
+  `requireAccountAccess` per the documented pattern. (Scope depends
+  on M1 #80 verification; if no legacy calls remain, this outcome
+  reduces to verification only.)
+- Member-role enforcement audited at the Lambda layer. Where
+  write/destructive operations exist that don't currently call
+  `requireAccountAccess(..., minRole)`, the call is added.
+- Site-admin paths verified to use `requireSiteAdmin(auth)`.
+- Account-owner-only operations verified to use
+  `requireAccountOwner(auth, app, accountId)`.
+
+Note: Stock-analyser Lambda app-access enforcement was previously
+listed here as an outcome. M1 #79 verified this is already in place
+(see inventory Section 3.4.2) — M10 no longer needs to add it.
 
 ### Goals served
 
-Goal 4 primarily (role enforcement is now real, not decorative). Goal 3
+Goal 4 primarily (role enforcement is real and consistent). Goal 3
 (every Lambda's auth check uses the same helper interface).
 
 ### Gate to next
 
-All consumer Lambdas migrated. End-to-end test: a user with viewer role
-calls a write endpoint and receives 403; a user with member role calls
-the same endpoint and succeeds.
+All consumer Lambdas verified to use the canonical pattern with
+appropriate role enforcement. End-to-end test: a user with viewer
+role calls a write endpoint and receives 403; a user with member
+role calls the same endpoint and succeeds.
 
 ### Dependencies
 
-- M1 complete (helper-availability verification finding informs scope).
-- M2.2 complete (the helper interface is ratified).
+- M1 complete (helper-availability and budget-tracker group-name
+  verifications inform scope).
+- M2.2 complete (the helper interface is documented as canonical).
 - M4 complete (account context populates correctly so
   `requireAccountAccess` has something to validate).
 
