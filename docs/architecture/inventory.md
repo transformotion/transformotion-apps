@@ -366,12 +366,35 @@ Budget-tracker Lambdas (`apps/budget-tracker/functions/`):
 - `migrate/` (the `/api/budget/v1/migrate-from-localstorage` endpoint;
   M6 renames to `/import`)
 
-Whether budget-tracker Lambdas read the new Cognito group names
-(`stock-app-access`, `budget-app-access`, `site-admin`) or still
-reference the legacy ones (`stock-app`, `budget-app`, `admin`) is
-uncertain. M8 (legacy auth substrate cleanup) depends on knowing.
+**Status: Resolved by M1 #80 (verified clean)**
 
-**M1 #80 will populate the group-name read findings.**
+Budget-tracker Lambdas do not read Cognito group names directly —
+neither legacy nor new. The auth helpers in
+`packages/lambda-middleware/` are claim-based, not group-based:
+
+- `requireAppAccess` checks `auth.apps` (injected `apps` JWT claim)
+- `requireAccountAccess` checks `auth.accounts` (injected `accounts`
+  JWT claim)
+- `isSuperUser` / `requireSiteAdmin` check `auth.siteAdmin` (injected
+  `site_admin` JWT claim, line 82 of `auth.ts`)
+
+Tests in `packages/lambda-middleware/src/auth.test.ts` confirm:
+legacy group names like `budget-app` and `stock-app` cause helpers
+to throw 403 — the group name is irrelevant because helpers never
+read it. The `site-admin` *group* alone also throws 403 on
+`requireSiteAdmin`; only the `site_admin` *claim* passes.
+
+The only `cognito:groups` reference in any budget-tracker Lambda is
+`budget-ai/src/index.ts:36` — propagating the already-parsed
+`auth.groups` array into a synthetic event for the Claude proxy
+Lambda-to-Lambda call. This is claim propagation, not a group-name
+check.
+
+**M8 scope implication:** Handler-level callsite migration for group
+names is not needed and never was — the handlers never read group
+names. M8's substantive scope is Cognito group cleanup (deleting
+legacy groups from the user pool) and pre-token Lambda reconciliation
+logic. See PLAN.md Section 12 for the updated M8 scope.
 
 ### 2.7 Platform-cache misnomer
 
@@ -839,6 +862,28 @@ Approximately 22 environment variables are exposed to the client side
 There is no runtime feature-flag library; toggles are deployment-mode
 flags only (build-time, global). Adding runtime feature-flag support
 is a Stage 0b consideration if relevant.
+
+### 5.8 auth.md migration note is stale (M3 reconciles)
+
+**Status: Confirmed (documentation gap; addressed in M3)**
+
+`auth.md` line 144 states: "During migration both old and new groups
+coexist; handlers accept either."
+
+This is misleading. Handler-side authorization never reads raw group
+names — the helpers read `apps`, `accounts`, and `site_admin` claims
+at all points in the migration. The migration note conflates:
+
+- Cognito group management (where the pre-token Lambda's
+  reconciliation logic manages coexistence of old and new groups)
+- Handler-side authorization (where group names are never read)
+
+The auth.md note implies a handler-level concern that doesn't exist.
+M3 (documentation reconciliation) should clarify the migration note
+to distinguish between Cognito-level group state (where coexistence
+exists) and handler-level authorization (where it doesn't).
+
+Surfaced by M1 #80.
 
 ---
 
