@@ -150,7 +150,7 @@ ways of working change. Changes are themselves PRs.
 | Contracts policy | `/docs/architecture/contracts.md` (TBD by Stage 0b) | Normative | The policy for how contracts are organised: where they live, what is normative vs descriptive, single-source-of-truth rules. Location may shift to an extension of an existing document per Stage 0b ratification. | Steve |
 | Per-app contracts | `/contracts/<scope>/*.md` where `<scope>` is `platform` or an app slug | Normative | The actual contracts: data models, API endpoints, state management. Per-app mirrors at `apps/<app>/contracts/` are not allowed. | Per-app team |
 | Per-app guide | `/apps/<app>/CLAUDE.md` | Operational | Per-app guidance for Claude Code agents. Required for every app. Minimum content: app's purpose, key entry points, app-specific conventions, app-specific gotchas, sync flow if v0-driven. | Per-app team |
-| Architectural inventory | `/docs/architectural-inventory.md` | Normative (point-in-time snapshot) | Stage 0a output — read-only inventory of the platform's current state at the time of writing. Treated as a baseline for Stage 0b decisions. Does not get updated as state changes; superseded by future inventories. | Steve |
+| Architectural inventory | `/docs/architecture/inventory.md` | Normative (living document) | The current-state inventory of the platform — what is true about code, infrastructure, and operating state right now. Updated as state changes per the discipline rule (Section 2.1). Findings carry status tags including **Resolved by M*N* / PR #*N*** and **Superseded by [reference]** for living-document use. | Steve |
 
 Documents that have been superseded live in `/docs/archive/` with a header
 noting the supersession date and the document that replaced them.
@@ -518,7 +518,39 @@ normative document is wrong, the document update happens in the same PR
 or the PR pauses until resolved. Documentation problems are not deferred
 the way code problems can be.
 
-### 4.6 Commit messages
+### 4.6 Updating the architectural inventory
+
+The architectural inventory at `docs/architecture/inventory.md` is a
+living document — findings are updated as state changes, not appended
+as separate notes.
+
+When a PR addresses an inventory finding, the PR updates the finding
+in `inventory.md` in the same PR. The discipline rule (Section 2.1)
+applies. Specifically:
+
+- **Resolving a finding:** Change the finding's status tag to
+  **Resolved by M*N* / PR #*N***. Update the finding's text to
+  describe the new state. Preserve a brief note of what changed
+  (typically one sentence) so the resolution is auditable in the
+  document, not just in git history.
+- **Refining a finding:** If verification or investigation reveals a
+  finding was wrong or incomplete, update the text and the status
+  tag to match what was actually found. The git history preserves
+  the previous version.
+- **Superseding a finding:** When deeper investigation produces a
+  better-shaped finding that subsumes earlier ones, set the older
+  finding's status to **Superseded by [reference]** and keep its
+  description for context.
+
+PRs that introduce new findings (e.g., M1 verifications producing
+findings the inventory didn't have) add them to the relevant section
+with appropriate status tags.
+
+The inventory is one of the documents that PRs are most likely to
+touch over the platform's lifetime. Updates are normal — not a
+sign of drift.
+
+### 4.7 Commit messages
 
 Commit message style is freeform; the merge commit is the unit that
 matters in the long-term log. Conventional Commits style (`feat:`,
@@ -528,7 +560,7 @@ Commit messages reference issues where relevant ("Refs #42", "Closes
 #43"). The PR body is the canonical place for issue references; commit
 messages are convenience.
 
-### 4.7 The Backlog milestone
+### 4.8 The Backlog milestone
 
 `PLAN.md`'s "Beyond M14" section lists items scoped but not yet
 sequenced into numbered milestones. Each such item has a corresponding
@@ -597,6 +629,17 @@ If verification surfaces a discrepancy, that is itself a finding to
 record (open an issue, update PLAN.md or the relevant document) before
 proceeding with the original work.
 
+**Specific application: writing or rewriting normative documents.**
+When drafting or rewriting any normative document (architecture docs,
+`MONOREPO.md`, `README.md`, contracts policy), a ground-truth check
+of the relevant code, directories, and existing documents is a
+prerequisite, not a nice-to-have. Drafting against
+remembered-or-imagined state produces documents that contradict
+reality and need re-writing once the discrepancies surface. The
+pattern is: list the directories or files the document will describe,
+read them, then write. This applies whether the document is being
+created or rewritten, and whether the writer is human or Claude.
+
 ### 5.2 Audit cheerful PR-description framings before reading the rest
 
 PR descriptions that say "drift removed", "simplified to X-only", "cleaned
@@ -648,11 +691,15 @@ different resolution path.
 | **Stale-by-decision** | The divergence is the result of a deliberate choice to retire or replace something; cleanup is sequenced. |
 | **Aspirational-never-built** | Documented as intent, no implementation has caught up. |
 | **Deferred** | Scaffolded with intent to complete, paused for reasons orthogonal to whether it should exist. |
+| **Resolved by M*N* / PR #*N*** | Finding has been addressed; the finding's text is updated to describe the new state, with a note of what changed and the reference to the milestone or PR that resolved it. Used in living documents like the architectural inventory. |
+| **Superseded by [reference]** | Finding has been subsumed by another finding, usually after deeper investigation. Description preserved for context; reference points to the superseding finding. Used in living documents. |
 
 The tags exist to make divergence between code and documents visible
 rather than invisible. A finding without a status tag implicitly claims
-"Confirmed", which is often false. Future audits and inventories use this
-system; one-off documents may use it where helpful.
+"Confirmed", which is often false. Living documents (such as the
+architectural inventory) use the full set including **Resolved by** and
+**Superseded by**; one-off audit outputs typically use only the first
+six.
 
 ---
 

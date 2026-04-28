@@ -186,7 +186,8 @@ inspect.
 ### Outcome
 
 - All seven Blocking-0b verification items resolved with confirmed
-  findings:
+  findings, captured directly in the architectural inventory at
+  `docs/architecture/inventory.md`:
   - X-Account-Id post-PR-#67 deployed state (Section 2.3 of inventory).
   - Helper availability in `packages/lambda-middleware` (Sections 2.5,
     3.3 of inventory).
@@ -200,15 +201,18 @@ inspect.
     inventory).
   - Claude proxy authorization (Section 2.11 of inventory).
 - Direct contents of the existing architecture documents read and
-  catalogued: `docs/architecture/data.md`, `docs/architecture/cdk.md`,
-  `docs/architecture/urls-and-deploy.md`, `docs/architecture/README.md`,
-  `apps/<app>/CLAUDE.md` (per app).
-- Diff of inventory Section 2.10 schema view against `data.md`.
-- Diff of inventory Section 5.6 CDK topology against `cdk.md`.
-- Diff of inventory's auth substrate against `auth.md`.
-- Verification findings written up either as an appendix to the inventory
-  (v5) or as a standalone verification report at
-  `docs/verification-pass-M1.md`.
+  catalogued in the inventory: `docs/architecture/data.md`,
+  `docs/architecture/cdk.md`, `docs/architecture/urls-and-deploy.md`,
+  `docs/architecture/README.md`, `apps/<app>/CLAUDE.md` (per app).
+- Diff of inventory Section 2.10 schema view against `data.md`,
+  Section 5.6 CDK topology against `cdk.md`, auth substrate against
+  `auth.md` — discrepancies updated in the inventory or surfaced as
+  M3 / M2 inputs.
+- Each M1 issue closes with the relevant inventory section having a
+  status tag of **Confirmed**, **Resolved by [reference]**, or
+  **Superseded by [reference]** (per `CONTRIBUTING.md` Section 6).
+  No M1 verification leaves an inventory section at "Status uncertain
+  — verify".
 
 ### Goals served
 
