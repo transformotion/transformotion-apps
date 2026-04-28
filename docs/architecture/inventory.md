@@ -507,36 +507,60 @@ earlier design (Inferred). M3 may resolve.
 
 ### 2.11 Claude proxy
 
-**Status uncertain — verify (M1 issue #84, partial)**
+**Status: Confirmed (Resolved by M1 #84)**
 
-The `functions/claude-proxy/` Lambda proxies requests to the Anthropic
-API. It is invoked by Lambda-to-Lambda calls (e.g., from `budget-ai/`).
-The authorization on its invocation, the IAM scope of which Lambdas
-have permission to call it, and whether per-user attribution is
-possible from the current invocation pattern all need verification.
+`functions/claude-proxy/` proxies requests to the Anthropic API.
+It is a platform Lambda mounted at `POST /api/claude` on the shared
+API Gateway behind the JWT authoriser.
 
-Per-user / per-account observability of Claude consumption is M13
-scope; the input it needs from this verification is whether the
-current invocation pattern can support attribution at all.
+#### Invocation paths
 
-Forward-reference from M1 #78: `apps/budget-tracker/functions/budget-ai/`
-calls the Claude proxy via Lambda-to-Lambda invocation, constructing
-the invocation event payload directly. The constructed payload
-propagates the *full caller auth context* — `requestContext.authorizer.claims`
-including `sub`, `email`, `cognito:groups`, `apps`, `accounts`, and
-`site_admin` (lines 33-40). The X-Account-Id header is also included.
+The handler distinguishes two event shapes:
 
-This means the Claude proxy receives identifiable, fully-formed caller
-context — not an anonymous invocation. Per-user attribution is
-achievable, and authorization based on caller claims is possible. M1
-#84 verifies whether the proxy *uses* this propagated context
-appropriately (authorization check, attribution capture).
+1. **API Gateway path** — standard `APIGatewayProxyEvent`. Passes
+   through `withAuth` middleware then calls
+   `requireAnyAppAccess(auth, ['stock-signal', 'budget-tracker'])`.
+   This is the path taken for Lambda-to-Lambda calls from `budget-ai`
+   (which constructs a synthetic API Gateway event with full propagated
+   claims). The propagated `requestContext.authorizer.claims` — including
+   `sub`, `email`, `cognito:groups`, `apps`, `accounts`, `site_admin`,
+   and `X-Account-Id` — are used by `withAuth` for authorization.
+   Documented in auth.md lines 325 and 363–367.
 
-The X-Account-Id propagation specifically is part of the X-Account-Id
-chain verified by M1 #78. Whether the proxy applies authorization
-based on the broader propagated context is M1 #84.
+2. **Async job path** — event has `__asyncJob: true`. Routes to
+   `executeAsyncJob()`, which carries no auth check. This path is only
+   reachable via the proxy self-invoking itself (see IAM boundary below).
 
-**M1 #84 will populate verified findings.**
+#### IAM trust boundary
+
+Two callers have `lambda:InvokeFunction` on the proxy ARN:
+
+- `budget-ai` Lambda (`budget-tracker-api-stack.ts` lines 140–143) —
+  direct Lambda-to-Lambda invocation from Budget Tracker AI handlers.
+- The proxy itself (`platform-api-stack.ts` lines 163–168) — used for
+  async self-invocation (`InvocationType: 'Event'`, `__asyncJob: true`).
+
+No stock-analyser Lambda has direct IAM permission to invoke the proxy.
+Stock-analyser reaches the proxy only via the API Gateway path
+(if it has `stock-signal` app access).
+
+The lack of an auth check on the async path is safe given the IAM
+boundary: only the proxy itself can trigger that branch.
+
+#### Attribution
+
+`accountId` is logged in the async job path. User `sub` is not logged
+in any path. Per-user attribution is achievable — `sub` is present in
+the propagated claims on the API Gateway path — but not currently
+captured. M13 makes consumption observable; the propagated `sub` is
+available for attribution when that work runs.
+
+#### Rate limiting
+
+Client-side retry logic: 3 attempts on Anthropic 429 responses (delays
+20 s, 45 s, 90 s). No server-side per-user or per-account quota
+enforcement currently exists. M2.2 may add quotas; M13 adds
+observability.
 
 ---
 
