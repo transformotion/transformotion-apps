@@ -407,6 +407,15 @@ doubt, open the issue first.
 PR titles do not have a required format, but should be descriptive enough
 that the merge commit is meaningful in `git log`.
 
+**Important note on auto-close behaviour:** GitHub's automatic
+`Closes #N` issue-closing only fires when the PR merges into the
+default branch (`main`). PRs in this repository merge into `develop`
+first, then `develop` merges to `main` periodically. This means a PR
+landing on `develop` does *not* auto-close referenced issues, even
+with `Closes #N` syntax. Issues need to be closed manually after the
+PR merges to `develop`, with a comment indicating which PR closed
+them. Auto-close fires only when the change reaches `main`.
+
 PRs must pass all CI checks before merge. Current required checks:
 typecheck, lint baseline, CDK synth. Test execution becomes a required
 check when the test pyramid work lands (PLAN.md tracks).
@@ -434,31 +443,62 @@ applies.
 Every actionable unit of work is an issue. Bug, feature, refactor,
 documentation update — each gets an issue.
 
-Issues belong to a milestone. Milestones map to PLAN.md milestones (M0
-through M12 currently). The first issue of each milestone is a "kickoff"
-issue capturing the preconditions for the milestone to start; subsequent
-issues reference the kickoff issue as parent.
+Issues belong to a milestone. Milestones map to `PLAN.md` milestones
+(M-setup, M0–M14, plus the "Backlog — unsequenced items" milestone).
+The first issue of each milestone is a "kickoff" issue capturing the
+preconditions for the milestone to start; subsequent issues reference
+the kickoff issue as parent.
 
 Dependencies between issues are declared via GitHub's "blocked by" /
 "blocks" relationship. Dependencies between milestones are expressed at
 the issue level: the first issue of milestone Mn is "blocked by" the
 gating issues from milestone Mn-1.
 
-The GitHub Project provides views over issues and PRs:
+**The GitHub Project lives at the organisation level:**
+[github.com/orgs/transformotion/projects/1](https://github.com/orgs/transformotion/projects/1)
+— "Platform development".
 
-- A kanban board (Backlog / In Progress / In Review / Done) for day-to-day
-  work tracking.
+The Project provides views over issues and PRs:
+
+- A kanban board (Backlog / Todo / In Progress / In Review / Done)
+  for day-to-day work tracking.
 - A roadmap view grouped by milestone for trajectory visibility.
+
+The Status field has five options that drive the kanban columns:
+
+| Status | Meaning |
+|---|---|
+| **Backlog** | Issue raised but not yet prioritised. Typical state for items in the "Backlog — unsequenced items" milestone. |
+| **Todo** | Prioritised (in a numbered milestone), not yet started. |
+| **In Progress** | Actively being worked. |
+| **In Review** | A PR linked to the issue is open, awaiting review or CI. |
+| **Done** | Issue is closed. |
+
+The Backlog/Todo distinction matters: an issue in a numbered milestone
+has been prioritised by the act of being placed in that milestone, so
+it sits at Todo; an issue in the "Backlog — unsequenced items"
+milestone has not been prioritised yet, so it sits at Backlog. An
+unsequenced issue can be triaged into Todo state without yet being
+promoted to a numbered milestone — that signals "next backlog item to
+pick up" without committing to a specific milestone.
 
 Project automation rules are configured to:
 
-- Add new issues to the Project automatically when added to a milestone.
-- Move cards to In Progress when an issue is assigned to someone.
-- Move cards to In Review when a PR linked to the issue is opened.
+- Add new issues to the Project automatically when attached to a
+  milestone.
+- Set Status to Backlog when an item is first added.
 - Move cards to Done when the issue is closed.
+- Move cards to Done when a linked PR is merged.
 
-Milestone completion percentage updates automatically as issues close. A
-milestone is "complete" when 100% of its issues are closed.
+Milestone completion percentage updates automatically as issues close.
+A milestone is "complete" when 100% of its issues are closed.
+
+**Milestone pairing rule:** Numbered milestones in `PLAN.md` and
+GitHub Milestones are paired. Creating or removing a numbered
+milestone in `PLAN.md` requires creating or closing the corresponding
+GitHub milestone in the same PR. The discipline rule (Section 2.1)
+applies — `PLAN.md` is a normative document and the GitHub state it
+references is part of what the document describes.
 
 ### 4.5 When new problems are discovered mid-work
 
@@ -515,6 +555,16 @@ a corresponding GitHub Issue is a documentation gap — the `PLAN.md`
 text references a thing that isn't tracked anywhere actionable. Either
 the item gets a tracked issue in the Backlog milestone, or the
 `PLAN.md` reference gets removed.
+
+**Status field interaction:** Issues in the Backlog milestone usually
+have Status = Backlog (raised but not prioritised). When an issue in
+the Backlog milestone is triaged as "next backlog item to pick up
+soon" but not yet promoted to a numbered milestone, its Status can be
+moved to Todo while remaining in the Backlog milestone. This signals
+prioritisation without committing to a specific milestone's
+sequencing. When the item is later promoted to a numbered milestone,
+both the milestone and the Status (if not already Todo) get updated
+together.
 
 ---
 

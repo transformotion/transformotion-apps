@@ -79,19 +79,28 @@ supporting all subsequent milestones.
 
 - `/PLAN.md` (this document) merged.
 - `/CONTRIBUTING.md` merged.
+- `/README.md` updated to reflect actual current state and reference
+  the canonical operating documents.
 - `/MONOREPO.md` updated to reference branch-naming convention from
   `CONTRIBUTING.md`.
 - `/SECURITY.md` exists (minimum-viable; expanded later as needed).
 - `docs/archive/` exists with `DEVELOPMENT_PLAN.md` and
   `STABILISATION_FREEZE.md` archived.
-- GitHub Milestones M0–M12 created with names, descriptions, and "gate to
-  next" conditions in their descriptions.
-- GitHub Issues created under each milestone, including a "kickoff" issue
-  per milestone.
-- GitHub Project (Projects v2) created with kanban and roadmap views,
-  filtered/grouped by milestone.
-- Project automation rules configured: new issues added to milestone
-  auto-add to Project; cards move on assignment, PR-open, issue-close.
+- GitHub Milestones M0–M14 (and the "Backlog — unsequenced items"
+  milestone) created with names, descriptions, and "gate to next"
+  conditions in their descriptions.
+- GitHub Issues created under each milestone, including a "kickoff"
+  issue per milestone where appropriate.
+- GitHub Project (Projects v2) created at the organisation level with
+  kanban and roadmap views, grouped by milestone:
+  [github.com/orgs/transformotion/projects/1](https://github.com/orgs/transformotion/projects/1)
+  — "Platform development".
+- Project Status field configured with five options matching
+  `CONTRIBUTING.md` Section 4.4: Backlog, Todo, In Progress, In
+  Review, Done.
+- Project automation rules configured: new issues attached to a
+  milestone auto-add to Project; new items default to Backlog status;
+  cards move to Done when issue closes or linked PR merges.
 
 ### Goals served
 
@@ -342,7 +351,26 @@ rewrites them so the documentation set reflects the post-M2 state.
   gitignored.
 - `MONOREPO.md` extended to document the actual `claude-code/<n>` /
   `v0/<n>` / `<author>/<n>` branch-naming convention (per
-  `CONTRIBUTING.md` Section 4.1).
+  `CONTRIBUTING.md` Section 4.1). Already done in current `MONOREPO.md`
+  via the cross-reference; if the root `CLAUDE.md` is retired (see
+  below) any branch-naming content there moves to `CONTRIBUTING.md` or
+  `MONOREPO.md`.
+- Missing `apps/launchpad/CLAUDE.md` created per `CONTRIBUTING.md`
+  Section 2.3 (per-app CLAUDE.md is required). Stock Analyser and
+  Budget Tracker already have theirs.
+- Root `CLAUDE.md` reconciled. Currently exists but is not described
+  in `CONTRIBUTING.md` Section 2.3. Decision: either archive (if its
+  content duplicates `CONTRIBUTING.md`/`MONOREPO.md`) or formalise
+  the root-level CLAUDE.md role with `CONTRIBUTING.md` Section 2.3
+  updated to cover it. The root file currently has stale content
+  (branch-naming convention out of date with `CONTRIBUTING.md`
+  Section 4.1, and assumes `contracts/<app>/` mirrors that don't
+  exist for all apps).
+- `MONOREPO.md` updated to reflect any structural changes landed in
+  this milestone (e.g., `apps/web/` removal, `apps/web-vite-backup/`
+  removal, `v0-reference/` formalisation). Per `CONTRIBUTING.md`
+  Section 2.1 discipline rule, structural changes touch this document
+  in the same PR.
 
 ### Goals served
 
@@ -568,6 +596,18 @@ work.
   per-app stacks moved to `apps/<app>/infrastructure/`, platform stacks
   moved to `platform/infrastructure/`, root `infrastructure/` reduced to
   CDK app entrypoint only.
+- `platform/` top-level directory created. Platform Lambdas moved
+  from root `functions/` to `platform/functions/` (with `auth/`,
+  `accounts/`, `claude-proxy/`, `user/` substructure preserved).
+  Platform infrastructure moved to `platform/infrastructure/` per
+  the line above. CDK path constants and `pnpm-workspace.yaml` globs
+  updated.
+- `MONOREPO.md` updated to reflect the new structure: `platform/`
+  documented as a top-level directory, `apps/<app>/infrastructure/`
+  documented in per-app structure, root `infrastructure/` reduced
+  scope documented, deploy workflow path filters updated. Per
+  `CONTRIBUTING.md` Section 2.1 discipline rule, structural
+  migrations touch this document in the same PR.
 - The `apps/web/` 0-LOC shell cleanup (if not done in M3) folded in
   here.
 
