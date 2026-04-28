@@ -453,11 +453,11 @@ removing the dependency-cycle workaround.
 
 | Table | PK | SK | Notes |
 |---|---|---|---|
-| `platform.accounts-{stage}` | accountId | — | Currently lacks `appSlug` field; see Section 3.2. |
+| `platform.accounts-{stage}` | accountId | — | Schema has `appSlug` field; not written at runtime — see Section 3.2. |
 | `platform.account-members-{stage}` | accountId | userId | Has `userId-index` GSI for reverse lookup. |
 | `platform.invitations-{stage}` | invitationId | — | Used by invitation flow (M11). |
 | `platform.users-{stage}` | userId | — | |
-| `platform.rate-limits-{stage}` | (cf. claude-proxy) | | |
+| `platform-rate-limits-{stage}` | pk | — | Owned by `AuthApiStack` (not PlatformTablesStack). PK: `lookup-provider#<ip>`. Used for rate-limiting by `forgot-provider` Lambda. Note: uses hyphen not dot — does NOT follow `{scope}.{entity}` convention. |
 | `platform.analysis-cache-{stage}` | accountId | cacheKey | Misnamed — see Section 2.7. |
 
 #### 2.10.2 Stock-analyser tables
@@ -562,6 +562,43 @@ Client-side retry logic: 3 attempts on Anthropic 429 responses (delays
 enforcement currently exists. M2.2 may add quotas; M13 adds
 observability.
 
+#### Trust path duality
+
+The two invocation paths use the same authorization layer
+(`withAuth` + `requireAnyAppAccess`) but reach it via different trust
+paths:
+
+- **Through API Gateway** — JWT signature validation happens at the
+  API Gateway Cognito authoriser before the Lambda runs.
+  `requestContext.authorizer.claims` is populated by API Gateway with
+  cryptographically vouched-for claims. `withAuth` then reads
+  validated claims; `requireAnyAppAccess` enforces authorization on
+  trusted input.
+- **Through direct Lambda invoke** — `budget-ai` constructs a
+  synthetic API Gateway event with claims set by code, not by API
+  Gateway. JWT signature validation never happens because API Gateway
+  isn't in the path. `withAuth` reads the claims as if validated;
+  `requireAnyAppAccess` enforces authorization on caller-controlled
+  input.
+
+The second path is safe given the IAM trust boundary: only
+`budget-ai` and the proxy's own self-invoke have
+`lambda:InvokeFunction`. A compromised or buggy caller could
+otherwise synthesize claims for any user. The architectural choice
+is "Pattern B with tight IAM scope" rather than per-hop JWT
+re-validation. Stock-analyser deliberately has no invoke permission
+on the proxy — it must reach the proxy via the API Gateway path,
+where claims are signature-validated.
+
+This pattern (constructing synthetic API Gateway events for
+Lambda-to-Lambda invocations) is currently in use only between
+`budget-ai` and `claude-proxy`. M2.2 ratifies the canonical pattern
+for cross-Lambda trust — whether to:
+- formalise the synthetic-event + IAM-scope approach as canonical,
+- require per-hop JWT validation (move to Pattern A consistently), or
+- keep the synthetic-event approach but with explicit constraints on
+  when it can be used.
+
 ---
 
 ## 3. Auth, accounts, and permissions
@@ -607,7 +644,7 @@ update lands.
 
 ### 3.3 Frontend auth store and JWT claims
 
-**Status uncertain — verify (M1 issue #85, partial — overlaps with auth.md read)**
+**Status uncertain — code verification still needed (M9 scope)**
 
 The frontend auth store needs to retain `apps`, `accounts`, and
 `site_admin` claims atomically with rendering decisions. If claim
@@ -615,11 +652,13 @@ state is updated piecemeal (e.g., during token refresh), there's a
 window where rendering uses stale values from one claim and fresh
 from another.
 
-The current shape of the store, and whether it preserves claims
-atomically, needs verification. M9 (launchpad tile rendering migration)
-specifically requires this invariant to hold.
-
-**M1 #85's architecture document read will surface this.**
+M1 #85 read `auth.md` in full. auth.md describes general token storage
+("Access and ID tokens: in-memory (application state)") but does not
+address atomic update semantics for the three custom claims. The concern
+is not resolvable from the architecture document — it requires reading
+the frontend auth store code (`apps/launchpad/`, or whichever app owns
+the store). M9 (launchpad tile rendering migration) needs this verified
+before it begins.
 
 ### 3.4 Security gaps with material impact
 
@@ -926,6 +965,62 @@ to distinguish between Cognito-level group state (where coexistence
 exists) and handler-level authorization (where it doesn't).
 
 Surfaced by M1 #80.
+
+### 5.9 Architecture document gaps found in M1 #85
+
+**Status: Confirmed (Resolved by M1 #85 — gaps flagged for M3)**
+
+M1 #85 read all five `docs/architecture/` files (`README.md`, `auth.md`,
+`data.md`, `urls-and-deploy.md`, `cdk.md`) and both app CLAUDE.md files
+(`apps/stock-analyser/CLAUDE.md`, `apps/budget-tracker/CLAUDE.md`).
+The documents are broadly accurate. Gaps and inconsistencies found:
+
+**data.md gaps:**
+
+1. `platform.invitations` status values listed as `pending | redeemed |
+   expired` — omits `cancelled`. auth.md documents `cancelled` as a
+   valid state. M3 reconciles.
+
+2. Account-relationships example (data.md lines 230–231) references
+   `custom:active_accounts["budget-tracker"]` as if it is an active
+   Cognito attribute. auth.md states "active account is not a Cognito
+   attribute" and that `custom:active_account` (singular) is "Declared
+   but unused." The data.md example is stale. M3 reconciles.
+
+3. data.md references analysis-cache type definitions at
+   `apps/stock-analyser/contracts/DATA_CONTRACTS.md` — an app-level
+   path, not `contracts/stock-analyser/`. M2.3 ratifies the contracts
+   policy; subsequent work determines the canonical location.
+
+**urls-and-deploy.md gaps:**
+
+4. Deploy trigger table for `deploy-stock-analyser.yml` lists three
+   path filters but omits `functions/**`. The actual workflow (confirmed
+   by M1 #81) includes `functions/**`. Table is incomplete. M3 reconciles.
+
+5. Deploy trigger table describes `deploy-budget-tracker.yml` as doing
+   real CDK + S3 deployment. The workflow is currently a no-op
+   placeholder (pending Issue #17/M5). Table doesn't note this. M3
+   reconciles (or M5 activates the real deployment first).
+
+**cdk.md notes:**
+
+6. `auth.md` documents an `invitations-reconcile` Lambda
+   (`POST /auth/reconcile-invitation`) in detail. This Lambda does not
+   exist in `functions/auth/` or in any CDK stack — it is part of the
+   M11 forward-scope. auth.md describes future design; cdk.md correctly
+   omits it. No action until M11.
+
+7. `StorageStack` appears both as a standalone section and within the
+   Platform stacks table in cdk.md. Minor duplication; M3 may tighten.
+
+**auth.md notes:**
+
+8. auth.md line 344 states: "`requireGroup` remains during the 7e
+   migration for transitional purposes and is removed at 7e-cleanup."
+   M1 #79 and #80 verified no handler calls `requireGroup`. Handler-side
+   migration is complete; only the helper's removal from the middleware
+   package remains. M8 (or M10 cleanup) removes it.
 
 ---
 
