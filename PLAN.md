@@ -977,10 +977,20 @@ ceremonial.
 - Prod GitHub Actions environment populated with all `[REQUIRED]`
   env vars per the documentation set in PRs #19–24. First prod deploy
   passes the env-var check.
-- Deploy workflow path filters extended to cover `.github/workflows/**`
-  and `scripts/ci/**` for both `deploy-stock-analyser.yml` and
-  `deploy-budget-tracker.yml`. Changes to CI machinery trigger the
-  workflows they modify.
+- Deploy workflow path filters extended for completeness, covering:
+  - `.github/workflows/**` and `scripts/ci/**` for both
+    `deploy-stock-analyser.yml` and `deploy-budget-tracker.yml`.
+    Changes to CI machinery trigger the workflows they modify.
+  - `packages/**` for `deploy-budget-tracker.yml` (per M1 #81
+    finding — currently in stock-analyser's workflow but missing
+    from budget-tracker's). Once #17/M5 activates the real
+    budget-tracker deployment, this gap becomes a live bug.
+  - `functions/**` asymmetry investigated for
+    `deploy-budget-tracker.yml`. Stock-analyser triggers on
+    `functions/**`; budget-tracker does not. Whether
+    budget-tracker Lambdas have dependencies on `functions/**`
+    changes determines whether the asymmetry is intentional or
+    a gap.
 - Post-deploy smoke testing: a known-good request hits each app's
   primary endpoint after deploy, asserts a 2xx response or expected
   redirect. Failure rolls back or alerts. Existing PR #28 verification
