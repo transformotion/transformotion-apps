@@ -241,37 +241,65 @@ verification before M2 decisions reference it.
 
 **M1 #78 will populate this section with verified findings.**
 
-### 2.4 Stock-analyser Lambdas don't enforce app access
+### 2.4 Stock-analyser Lambdas enforce app access (corrected finding)
 
-**Status: Confirmed (verified during initial inventory)**
+**Status: Resolved by M1 #79 (v4 finding was stale)**
 
-Stock-analyser Lambdas (portfolio, watchlist, analysis-cache) do not
-currently call `requireAppAccess('stock-signal')` or equivalent. They
-authenticate (via API Gateway authoriser checking the JWT) but do not
-authorize at the app level — any authenticated user can call them
-regardless of whether they have access to the stock-signal app.
+All three stock-analyser Lambdas (portfolio, watchlist, analysis-cache)
+call the documented helper pair:
 
-M10 (Auth middleware extension) closes this. Until then, this is the
-"second half" of the compound vulnerability that M0 reduced — M0
-closed signup, but a hypothetical bypass of signup (via M11's
-invitation flow eventually) followed by a user without stock-signal
-group access could still call stock-analyser endpoints directly.
+- `requireAppAccess(auth, 'stock-signal')` — fail-fast app gate
+- `requireAccountAccess(auth, 'stock-signal', account.accountId)` —
+  account-membership check before data access
 
-### 2.5 Auth helpers documented in auth.md
+This matches the pattern prescribed in `auth.md` lines 356-357.
+Verified during M1 #79 by inspection of
+`apps/stock-analyser/functions/{portfolio,watchlist,analysis-cache}/src/index.ts`.
 
-**Status uncertain — verify (M1 issue #79)**
+The v4 inventory finding "Stock-analyser Lambdas don't enforce app
+access" was stale — likely true at some earlier point but the
+helper-call pattern landed in code before the inventory was last
+updated. The finding was carried forward without re-verification
+during v4 inventory production.
 
-`auth.md` documents a five-helper interface for Lambda authorization:
+**Implication for M0 framing:** The "compound vulnerability"
+description used during M0 scoping was based on this stale Section
+2.4 finding. In retrospect, the compound never existed at deploy time
+— stock-analyser Lambdas were already gated by `requireAppAccess`
+when M0 ran. M0's value was real (closing the public signup gate),
+but the framing overstated the exposure.
 
-- `requireAppAccess(auth, appSlug)`
-- `requireAccountAccess(auth, app, accountId, minRole?)`
-- `requireSiteAdmin(auth)`
-- `requireAccountOwner(auth, app, accountId)`
-- `requireSelfOrAccountManager(auth, app, accountId, targetUserId)`
+### 2.5 Auth helpers in packages/lambda-middleware
 
-Whether each helper is implemented in `packages/lambda-middleware/`
-is uncertain. M2.2 ratifies the interface; M10 implements them.
-M1 needs to know which exist before M2.2 can be written confidently.
+**Status: Resolved by M1 #79 (verified)**
+
+`auth.md` documents the helper interface for Lambda authorization, and
+`packages/lambda-middleware/` implements it. Five helpers are exported,
+all matching `auth.md`'s documented signatures exactly:
+
+- `requireSiteAdmin(auth)` — line 94
+- `requireAppAccess(auth, app)` — line 102
+- `requireAnyAppAccess(auth, apps)` — line 113
+- `requireAccountAccess(auth, app, accountId, minRole?)` — line 126
+- `requireAccountOwner(auth, app, accountId)` — line 146
+
+The v4 inventory listed `requireSelfOrAccountManager` as a sixth
+helper. This was incorrect — `auth.md` describes the
+self-or-account-manager *policy pattern* but does not define a helper
+of that name. The pattern is covered by
+`requireAccountAccess(..., minRole: 'manager')` plus a self-id check
+in the handler.
+
+**Adoption.** All nine consumer Lambdas use these helpers:
+
+- Stock-analyser (3/3): analysis-cache, portfolio, watchlist
+- Budget-tracker (6/6): budget-ai, budget-export, budget-migrate,
+  budget-rules, budget-settings, budget-transactions
+
+The helper interface is not theoretical — it is the actual pattern in
+production code across all consumer Lambdas. M2.2's role is to
+document this existing pattern as canonical rather than ratifying a
+proposal.
 
 **M1 #79 will populate this section with verified findings.**
 
@@ -510,18 +538,38 @@ This subsection lists security/integrity findings that affect Goal 4.
 
 Pre-M0: `selfSignUpEnabled: true` in `auth-stack.ts` allowed anyone to
 create a Cognito account via the hosted UI without invitation.
-Compounded with finding 3.4.2 to create a real exposure.
 
 M0 set `selfSignUpEnabled: false`. Cognito hosted UI no longer offers
 public signup. Verified post-deploy: hosted UI shows no Sign Up link;
 account creation now requires invitation flow (M11).
 
-#### 3.4.2 Stock-analyser Lambdas don't enforce app access
+The "compound vulnerability" framing used during M0 scoping (Sections
+3.4.1 + 3.4.2 combining to create exposure) was based on the v4
+inventory's stale Section 2.4 finding. M1 #79 verification revealed
+stock-analyser Lambdas were already gated by `requireAppAccess` —
+there was no compound. M0's value was real (closing the public signup
+gate); the framing overstated the exposure. See Section 2.4 for
+detail.
 
-**Status: Confirmed (open; addressed in M10)**
+#### 3.4.2 Stock-analyser Lambdas — verified to enforce app access
 
-See Section 2.4. M10 closes by migrating stock-analyser handlers to
-use `requireAppAccess('stock-signal')`.
+**Status: Resolved by M1 #79 (v4 finding was stale — see Section 2.4)**
+
+The v4 inventory recorded this as an open security gap. M1 #79
+verification revealed stock-analyser Lambdas (portfolio, watchlist,
+analysis-cache) all enforce `requireAppAccess(auth, 'stock-signal')`
+plus `requireAccountAccess(auth, 'stock-signal', accountId)` per the
+documented pattern. The v4 finding was carried forward without
+re-verification.
+
+**Implication for M10 scope:** PLAN.md M10's outcomes previously
+listed "Stock-analyser Lambdas now enforce
+`requireAppAccess('stock-signal')`" as in-scope. That work is already
+done. M10's remaining substance is migrating budget-tracker Lambdas
+from any legacy `requireGroup` calls to the new helpers (Section 2.6
+territory; pending M1 #80 verification) and adding role-based
+enforcement via `requireAccountAccess(..., minRole)` where it isn't
+already in use.
 
 #### 3.4.3 forgot-provider Lambda fails on federated users
 
