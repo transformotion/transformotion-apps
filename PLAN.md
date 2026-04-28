@@ -669,9 +669,14 @@ both states. This milestone retires the legacy.
   `transformotion`, `family`.
 - `custom:active_account` Cognito attribute removed (now dead code with
   no writers under the new model).
-- Old group names removed from any remaining `requireGroup` calls.
-- `requireGroup` helper itself removed if unused after the call-site
-  migrations.
+- Per M1 #80: Lambda handlers do not read group names directly, so
+  no handler-level callsite migration is needed. The
+  "callsite migration" outcome originally framed in M8 turned out
+  unnecessary — all 9 consumer Lambdas use claim-based helpers that
+  never read group names.
+- `requireGroup` helper removed from `packages/lambda-middleware/` if
+  it exists and is unused (verify before removing — M1 #79 confirmed
+  it is exported but its call-sites must be checked).
 - `resolveAccountContext` JWT-claim fallback to `custom:active_account`
   removed (per M2.2 decision on the fallback's fate).
 
