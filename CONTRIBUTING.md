@@ -488,6 +488,34 @@ Commit messages reference issues where relevant ("Refs #42", "Closes
 #43"). The PR body is the canonical place for issue references; commit
 messages are convenience.
 
+### 4.7 The Backlog milestone
+
+`PLAN.md`'s "Beyond M14" section lists items scoped but not yet
+sequenced into numbered milestones. Each such item has a corresponding
+GitHub Issue, and those issues belong to a milestone called "Backlog
+— unsequenced items" so they remain visible in the GitHub Project
+rather than disappearing into "no milestone."
+
+The Backlog milestone is a holding area, not a deliverable. It has no
+gate condition and never closes. Issues enter it when raised but not
+yet sequenced; they leave it when:
+
+- **Promoted to a numbered milestone**, in which case `PLAN.md`'s
+  "Beyond M*N*" section is updated (the item moves to a numbered
+  milestone description) in the same PR, and the issue's milestone
+  is reassigned.
+- **Folded into an existing numbered milestone's outcomes** during
+  work on that milestone, in which case `PLAN.md` is updated and the
+  issue's milestone is reassigned.
+- **Closed as obsolete or won't-do**, with explanatory comment.
+
+The bidirectional rule: `PLAN.md` references and GitHub issues are
+paired. Items being added to `PLAN.md`'s "Beyond M*N*" section without
+a corresponding GitHub Issue is a documentation gap — the `PLAN.md`
+text references a thing that isn't tracked anywhere actionable. Either
+the item gets a tracked issue in the Backlog milestone, or the
+`PLAN.md` reference gets removed.
+
 ---
 
 ## 5. Operating principles
