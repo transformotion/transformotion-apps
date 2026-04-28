@@ -231,15 +231,44 @@ watchlist (`watchlist-service.ts` → `getStockSignalClient().getWatchlist()`
 
 ### 2.3 X-Account-Id contract
 
-**Status uncertain — verify (M1 issue #78)**
+**Status: Resolved by M1 #78 (verified clean)**
 
-PR #67 narrowed scope to X-Account-Id work and merged. The deployed
-state of the X-Account-Id chain — whether the header is being produced
-by the client, whether handlers are reading it correctly, whether
-`auth.md`'s documented contract matches what's running — needs
-verification before M2 decisions reference it.
+The full X-Account-Id chain is implemented and matches `auth.md`'s
+documented contract exactly:
 
-**M1 #78 will populate this section with verified findings.**
+**Client side** (`packages/api-client/src/http.ts` lines 58-68): The
+`getAccountId` callback is optionally injected at construction. When
+present, its return value is sent as `X-Account-Id` on every outbound
+request. When absent (routes that don't need account context), the
+header is omitted.
+
+**Server middleware** (`packages/lambda-middleware/src/auth.ts` lines
+50-59): `resolveAccountContext` reads `x-account-id` from the request
+headers and populates `account.accountId` for the handler. Throws
+400 if absent. Called by `withAuth` as step 2 of the middleware
+chain.
+
+**Handler authorization layer**: Account-scoped handlers call
+`requireAccountAccess(auth, app, account.accountId)` which looks up
+`auth.accounts[app]` from the JWT for a matching accountId and
+throws 403 if the user doesn't have access to the supplied account.
+M1 #79 verified all 9 consumer Lambdas implement this pattern.
+
+The middleware deliberately does *not* validate the header against
+the JWT's `accounts` claim at middleware level. This is by design,
+documented in `auth.md`:
+- Rule 3: separation of intent (header) from authorization
+  (`requireAccountAccess`)
+- Rule 2: `requireAccountAccess` always follows `resolveAccountContext`
+- Line 377: "accountId always comes from request context
+  (`account.accountId`, which is sourced from the X-Account-Id
+  request header). Never derive accountId from `auth.accounts`."
+
+The header is the *intent*; `requireAccountAccess` makes the intent
+safe. A handler reading `account.accountId` without calling
+`requireAccountAccess` would be a real gap — but per M1 #79's
+adoption check, all 9 consumer Lambdas use `requireAccountAccess`,
+so the obligation is met everywhere.
 
 ### 2.4 Stock-analyser Lambdas enforce app access (corrected finding)
 
@@ -466,6 +495,23 @@ possible from the current invocation pattern all need verification.
 Per-user / per-account observability of Claude consumption is M13
 scope; the input it needs from this verification is whether the
 current invocation pattern can support attribution at all.
+
+Forward-reference from M1 #78: `apps/budget-tracker/functions/budget-ai/`
+calls the Claude proxy via Lambda-to-Lambda invocation, constructing
+the invocation event payload directly. The constructed payload
+propagates the *full caller auth context* — `requestContext.authorizer.claims`
+including `sub`, `email`, `cognito:groups`, `apps`, `accounts`, and
+`site_admin` (lines 33-40). The X-Account-Id header is also included.
+
+This means the Claude proxy receives identifiable, fully-formed caller
+context — not an anonymous invocation. Per-user attribution is
+achievable, and authorization based on caller claims is possible. M1
+#84 verifies whether the proxy *uses* this propagated context
+appropriately (authorization check, attribution capture).
+
+The X-Account-Id propagation specifically is part of the X-Account-Id
+chain verified by M1 #78. Whether the proxy applies authorization
+based on the broader propagated context is M1 #84.
 
 **M1 #84 will populate verified findings.**
 
