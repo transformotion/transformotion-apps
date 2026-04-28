@@ -380,24 +380,31 @@ removing the dependency-cycle workaround.
 | `platform.rate-limits-{stage}` | (cf. claude-proxy) | | |
 | `platform.analysis-cache-{stage}` | accountId | cacheKey | Misnamed — see Section 2.7. |
 
-#### 2.10.2 Stock-analyser tables — SK schema mismatch
+#### 2.10.2 Stock-analyser tables
 
-**Status uncertain — verify (M1 issue #82) — potential production data integrity issue**
+**Status: Confirmed (verified by M1 #82)**
 
-The CDK source for `stock-analyser.portfolio-{stage}-v2` and
-`stock-analyser.watchlist-{stage}-v2` declares them as PK-only tables
-(PK: accountId). However, runtime handler code uses
-`Key: { accountId, ticker }` for Delete operations, implying an SK of
-`ticker`.
+| Table | PK | SK |
+|---|---|---|
+| `stock-analyser.portfolio-{stage}` | accountId | ticker |
+| `stock-analyser.watchlist-{stage}` | accountId | ticker |
+| `stock-analyser.analysis-cache-{stage}` | accountId | cacheKey |
 
-Either:
-- CDK source is wrong — the deployed table really has the SK; a future
-  redeploy could destroy the SK definition, or
-- Runtime code is wrong — there's no SK; Delete operations are failing
-  silently or via undocumented behaviour
+CDK source declares all three tables with composite keys
+(`infrastructure/lib/stock-analyser/stock-analyser-tables-stack.ts`
+lines 32-33, 41-42, 52-53). Deployed schemas in dev confirm: portfolio
+and watchlist both have HASH `accountId` + RANGE `ticker`. Runtime
+handler code using `Key: { accountId, ticker }` for Delete operations
+is consistent with the schema. No data-integrity risk.
 
-**M1 #82 will resolve this.** If production data integrity is at risk,
-findings escalate to a pre-M2 fix milestone.
+**v4 inventory finding was stale.** The previous entry recorded a
+schema mismatch and -v2 table naming variant. Neither was current:
+the CDK source uses plain `-${stage}` suffix (no `-v2`), deployed
+table names match (`stock-analyser.portfolio-dev`,
+`stock-analyser.watchlist-dev`), and the composite keys are present
+in both source and deployment. The mismatch concern likely originated
+before a CDK fix landed and was carried forward without re-verification
+during v4 inventory production.
 
 #### 2.10.3 Budget-tracker tables
 
