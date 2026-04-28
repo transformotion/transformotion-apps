@@ -757,7 +757,7 @@ incompatibility. M7 re-enables once the upstream fix lands.
 
 ### 5.2 CI/CD workflows and path filters
 
-**Status: Confirmed in part (deploy paths verified during initial inventory; packages/** trigger pending)**
+**Status: Resolved by M1 #81 (gaps confirmed, fix scoped to M14)**
 
 GitHub Actions workflows in `.github/workflows/`:
 
@@ -766,20 +766,38 @@ GitHub Actions workflows in `.github/workflows/`:
 - `deploy-platform.yml` — triggers on `infrastructure/lib/platform/**`,
   `infrastructure/bin/**`, `functions/**`
 - `deploy-stock-analyser.yml` — triggers on `apps/stock-analyser/**`,
-  `infrastructure/lib/stock-analyser/**`
+  `infrastructure/lib/stock-analyser/**`, `packages/**`, `functions/**`
 - `deploy-budget-tracker.yml` — triggers on `apps/budget-tracker/**`,
-  `infrastructure/lib/budget-tracker/**`
+  `infrastructure/lib/budget-tracker/**`. **Currently a no-op
+  placeholder** (the job echoes a message); active deployment is
+  pending Issue #17 / M5.
 
-Path filter completeness is incomplete:
+Verified gaps (M1 #81):
 
-- `.github/workflows/**` and `scripts/ci/**` are not covered by any
-  app's deploy workflow trigger; changes to CI machinery don't
-  auto-trigger the workflows they modify. M14 covers.
-- Whether `packages/**` triggers both `deploy-stock-analyser.yml` and
-  `deploy-budget-tracker.yml` (as `MONOREPO.md` declares) needs
-  verification.
+1. **`packages/**` missing from `deploy-budget-tracker.yml`.**
+   `MONOREPO.md` documents `packages/**` triggering both workflows;
+   only stock-analyser does. Once #17/M5 activates the real
+   budget-tracker deployment, a shared package change would not
+   trigger budget-tracker redeploy. Currently latent (no-op
+   workflow); becomes live bug at activation.
+2. **`functions/**` asymmetry.** Stock-analyser deploy triggers on
+   `functions/**` (platform Lambda changes); budget-tracker does
+   not. Whether budget-tracker Lambdas depend on `functions/**`
+   changes is worth investigating in M14 — could be intentional
+   asymmetry or a gap.
+3. **`.github/workflows/**` not in any deploy workflow.** Changes
+   to a deploy workflow don't trigger that workflow itself.
+   Changes to CI machinery (`ci.yml` etc.) don't propagate to
+   downstream deploy workflows. Already in M14 scope.
+4. **`scripts/ci/**` similarly uncovered.** Already in M14 scope.
 
-**M1 #81 will resolve the packages/** trigger verification.**
+Fix work belongs to M14 (deployment verification). New tracking
+issue created under M14 captures gaps 1 and 2 specifically; gaps
+3 and 4 are already in M14's outcome list.
+
+`MONOREPO.md`'s deploy-table claim that `packages/**` triggers both
+workflows is corrected in this PR (single-line change to reflect
+actual state).
 
 ### 5.3 Production environment state
 

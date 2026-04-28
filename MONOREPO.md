@@ -195,7 +195,7 @@ the other app's deployment.
 | `infrastructure/lib/platform/**` | `deploy-platform.yml` |
 | `infrastructure/bin/**` | `deploy-platform.yml` |
 | `functions/**` | `deploy-platform.yml` |
-| `packages/**` | `deploy-stock-analyser.yml` + `deploy-budget-tracker.yml` |
+| `packages/**` | `deploy-stock-analyser.yml` only (gap: `deploy-budget-tracker.yml` missing this filter — tracked for M14 fix; currently latent because budget-tracker workflow is a no-op placeholder pending Issue #17/M5) |
 
 Path filter completeness is not yet verified for `.github/workflows/**`
 and `scripts/ci/**` — changes to CI machinery may not auto-trigger the
