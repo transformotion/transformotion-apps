@@ -258,6 +258,12 @@ Three architectural decisions ratified and documented:
   on read (because Cognito V1 trigger forces string claims).
 - Position on `resolveAccountContext` JWT-claim fallback (currently dead
   code): remove or leave.
+- Permission model for the five platform Lambdas deliberately not gated
+  during sub-phase 7b.5-beta (per the deferred decisions in Issue #42):
+  `accounts`, `user`, `auth/invitations`, `auth/account-provisioning`,
+  `auth/forgot-provider`. Each needs a documented decision on its
+  authorisation model, including how onboarding-stage users (no app
+  groups yet) interact with them.
 
 **Decision M2.3 — Contracts policy.**
 
@@ -324,6 +330,16 @@ rewrites them so the documentation set reflects the post-M2 state.
   from the rename to `account-provisioning`: identified and fixed.
 - `apps/web/` 0-LOC shell directory cleanup: directory deleted or removed
   from `pnpm-workspace.yaml`'s `apps/*` glob.
+- `apps/web-vite-backup/` directory deletion. Contributes 18 of the
+  original 36 lint baseline entries (per Issue #32). Backup is no
+  longer referenced; removal eliminates the lint-baseline noise.
+- `v0-reference/` directory formalised as part of the v0 sync workflow
+  rather than treated as legacy artefact (per Issue #32 reframe). The
+  directory should be `.gitignore`d (it is the sync target for the
+  v0-pushed repository); its role in the v0 development workflow is
+  documented in `MONOREPO.md` and/or `CONTRIBUTING.md`. Lint baseline
+  entries from it removed since the directory itself becomes
+  gitignored.
 - `MONOREPO.md` extended to document the actual `claude-code/<n>` /
   `v0/<n>` / `<author>/<n>` branch-naming convention (per
   `CONTRIBUTING.md` Section 4.1).
@@ -479,6 +495,13 @@ and makes Budget Tracker usable end-to-end with real users.
   auth.
 - localStorage repositories removed; replaced with real
   DynamoDB-via-Lambda implementations through the canonical pattern.
+- Tab-level error-boundary support: new `packages/ui/error-boundaries/`
+  package implementing a generic `TabErrorBoundary` component that
+  wraps tab content so a crash in one tab does not unmount the whole
+  app. Both budget-tracker tabs and stock-analyser tabs wrapped using
+  the same package (per Issue #16; bilateral application avoids leaving
+  stock-analyser shipping without boundaries while waiting for a later
+  milestone).
 - Budget Tracker functional end-to-end with the live user account.
 
 ### Goals served
@@ -796,12 +819,137 @@ it's small and isolated.
 
 ---
 
-## 17. Beyond M12
+## 17. M13 — Observability
+
+### Purpose
+
+The platform currently has fragmented observability. To understand
+whether Stock Signal or Budget Tracker is healthy, you have to visit
+multiple AWS consoles (CloudWatch Logs per Lambda) with no aggregated
+view. There is no per-app health dashboard, no cross-app monitoring at
+the platform level, and no per-user or per-account Claude API
+consumption visibility. The architectural inventory's Section 5.6
+flagged that `infrastructure/lib/README.md` declares a `MonitoringStack`
+that does not exist in the deployed CDK app.
+
+This milestone delivers the observability substrate the platform needs
+to operate at multi-app, multi-user scale. Goal 3's "monitor as a
+platform" requires this.
+
+### Outcome
+
+- `MonitoringStack` CDK stack created at `platform/infrastructure/`
+  per `CONTRIBUTING.md` Section 3.7. Deployed alongside other platform
+  stacks.
+- Per-app CloudWatch dashboards: one per app (stock-analyser,
+  budget-tracker, launchpad), each surfacing the Lambda-invocation
+  counts, error rates, latency percentiles, and downstream-call
+  patterns for its app's Lambdas.
+- Cross-app platform dashboard: one dashboard at the platform level
+  surfacing aggregate health across all apps (total invocations, total
+  errors, gateway-level metrics).
+- Per-user and per-account Claude API consumption observability:
+  CloudWatch metrics or logs that allow attributing Claude proxy
+  invocations to a specific user and account, addressing inventory
+  finding 2.11 #4.
+- Health-check endpoints surfaced through the platform gateway for
+  external uptime monitoring.
+- Documentation in `infrastructure/lib/README.md` updated to describe
+  `MonitoringStack` as it actually exists (per M3's documentation
+  reconciliation expectations).
+
+### Goals served
+
+Goal 3 primarily ("monitor as a platform" is the third clause of the
+goal statement). Goal 1 indirectly (per-app dashboards make working on
+one app without affecting another visible — regressions surface in the
+relevant app's dashboard rather than being invisible).
+
+### Gate to next
+
+`MonitoringStack` deployed. Per-app dashboards visible in the AWS
+console. Platform dashboard visible. A test invocation of the Claude
+proxy is attributable to the originating user and account in
+observability output.
+
+### Dependencies
+
+- M12 complete (this milestone follows the substantive M0–M12 sequence
+  and runs strictly after, per the linear-execution preference).
+
+---
+
+## 18. M14 — Deployment verification
+
+### Purpose
+
+Issue #18 tracked deployment infrastructure work through sub-phases
+2a–3, with most of its substance landed in PRs #19–28. Three
+deferred items from #18's comments remain unresolved and constitute
+this milestone's scope:
+
+1. The prod GitHub Actions environment has zero variables. First prod
+   deploy will hard-fail at the env-var check.
+2. Deploy workflows have incomplete path filters
+   (`deploy-stock-analyser.yml` doesn't cover `.github/workflows/**`
+   or `scripts/ci/**`; same likely for `deploy-budget-tracker.yml`).
+   Changes to CI machinery don't auto-trigger the workflow they
+   modify.
+3. PR #28 added "verify deployed artefact after deploy" but the
+   verification's depth is unclear. Smoke testing — the artefact
+   responds correctly to a known request — may or may not be in
+   place.
+
+This milestone resolves all three. Goal 2's "deploy a new app without
+affecting existing ones" requires deploy verification be real, not
+ceremonial.
+
+### Outcome
+
+- Prod GitHub Actions environment populated with all `[REQUIRED]`
+  env vars per the documentation set in PRs #19–24. First prod deploy
+  passes the env-var check.
+- Deploy workflow path filters extended to cover `.github/workflows/**`
+  and `scripts/ci/**` for both `deploy-stock-analyser.yml` and
+  `deploy-budget-tracker.yml`. Changes to CI machinery trigger the
+  workflows they modify.
+- Post-deploy smoke testing: a known-good request hits each app's
+  primary endpoint after deploy, asserts a 2xx response or expected
+  redirect. Failure rolls back or alerts. Existing PR #28 verification
+  reviewed and extended if it doesn't already do this.
+- A first prod deploy executed against the populated environment as
+  the milestone's verification — confirms the pipeline works
+  end-to-end against prod.
+
+### Goals served
+
+Goal 2 primarily (deploy hygiene). Goal 1 (deploy verification catches
+regressions before they affect users). Goal 3 (post-deploy smoke
+testing surfaces in observability — links to M13's monitoring
+substrate).
+
+### Gate to next
+
+First successful prod deploy with all env vars populated, all path
+filters covering CI changes, and post-deploy smoke testing passing. A
+deliberately-broken deploy detected by the smoke testing as a
+verification of the verification.
+
+### Dependencies
+
+- M13 complete (per the linear-execution preference; deploy
+  verification benefits from being able to surface in observability).
+
+---
+
+## 19. Beyond M14
 
 The following items are scoped but not yet sequenced into milestones.
-They are tracked in the GitHub Project's backlog rather than the
-milestone roadmap. Sequencing happens when prerequisite work completes
-and the items become actionable.
+They live in the "Backlog" GitHub milestone (a holding area, not a
+deliverable). Sequencing happens when prerequisite work completes and
+the items become actionable — at which point an item gets promoted to
+a numbered milestone, this section gets updated, and the issue moves
+out of the Backlog milestone.
 
 - **Admin UI screens.** Account settings (member list, invite, manage
   member app permissions, remove member, rename, transfer ownership)
@@ -830,14 +978,21 @@ and the items become actionable.
   pre-token-generation. CI test gating once tests exist.
   Coverage thresholds.
 
-- **Observability and platform monitoring.** `MonitoringStack` (named in
-  `infrastructure/lib/README.md` as planned but doesn't exist).
-  Aggregation layer over CloudWatch logs. Cross-app dashboards.
-  Per-user / per-account Claude consumption observability (inventory
-  finding 2.11 #4).
+- **401 recovery path UX.** Expired refresh tokens currently result
+  in a dead error state with no redirect to sign-in. Raised in
+  Issue #18's comments and deferred to Phase 4 UX work.
 
-- **Stabilisation backlog items.** Issues #16, #18 (NEXT_PUBLIC_USE_MOCK_DATA
-  default-flip), #32, #33, #37 (rules-tab.tsx pattern.source bug).
+- **NEXT_PUBLIC_USE_MOCK_DATA default-flip.** Long-term flip of code
+  defaults to production values. Issue #18 short-term fix
+  reclassified as `[REQUIRED]`; this is the long-term fix.
+
+- **Recommendations sector filter bug.** Issue #33 — the Stock Signal
+  Recommendations tab computes a sector-filtered list but renders the
+  unfiltered one.
+
+- **rules-tab.tsx pattern.source bug.** Issue #37 — the budget-tracker
+  rules tab passes a `RegExp` object where a `.source` string is
+  expected.
 
 - **Transformotion Framework app.** Entirely unscoped beyond placeholder.
   Detailed scoping deferred until Budget Tracker activation completes
@@ -846,9 +1001,9 @@ and the items become actionable.
 
 ---
 
-## 18. Discipline and update rules
+## 20. Discipline and update rules
 
-### 18.1 Updating this document
+### 20.1 Updating this document
 
 When a milestone's scope changes mid-execution, this document is updated
 in the same PR that lands the change. The plan does not get retrofitted
@@ -859,7 +1014,7 @@ When a new milestone is added, sequencing it requires deciding which
 existing milestones it depends on and which depend on it. The dependency
 graph is what the GitHub Project's roadmap view renders.
 
-### 18.2 Milestone gates
+### 20.2 Milestone gates
 
 Each milestone has a "gate to next" condition. The gate is the specific
 observable that says the milestone is complete. Gates are not vibes —
@@ -870,13 +1025,13 @@ When a milestone reaches its gate, the next dependent milestone is
 unblocked. The GitHub Project's blocked-by relationships make this
 visible at the issue level.
 
-### 18.3 Beyond-M12 promotion
+### 20.3 Beyond-M14 promotion
 
-Items in Section 17 are promoted to numbered milestones when they become
+Items in Section 19 are promoted to numbered milestones when they become
 actionable. Promotion is a PR that updates this document and creates the
 corresponding GitHub Milestone with issues.
 
-### 18.4 Operating principles apply
+### 20.4 Operating principles apply
 
 The operating principles in `CONTRIBUTING.md` Section 5 apply throughout:
 verify before acting, audit cheerful framings, evaluate against the
@@ -886,7 +1041,7 @@ document in the same PR.
 
 ---
 
-## 19. Reference — milestone summary table
+## 21. Reference — milestone summary table
 
 For quick visual reference. The full text above is the canonical source.
 
@@ -906,6 +1061,9 @@ For quick visual reference. The full text above is the canonical source.
 | M10 | Auth middleware extension | 3, 4 | M1, M2.2, M4 |
 | M11 | Invitation API and UI | 3, 4 | M0, M4, M10 |
 | M12 | Forgot-provider fix | 4 | (none hard) |
+| M13 | Observability | 3, 1 | M12 |
+| M14 | Deployment verification | 2, 1, 3 | M13 |
 
 M8, M9, M10 can run in parallel. M11 follows M10. M7 can run in parallel
-with M6 once M2 and M3 complete.
+with M6 once M2 and M3 complete. M13 and M14 are sequenced strictly
+linear after M12, per the user preference for focused execution.
