@@ -389,6 +389,12 @@ rewrites them so the documentation set reflects the post-M2 state.
   removal, `v0-reference/` formalisation). Per `CONTRIBUTING.md`
   Section 2.1 discipline rule, structural changes touch this document
   in the same PR.
+- v0 workflow documentation reconciliation — fixing existing references
+  to v0 setup in CONTRIBUTING.md Section 1.2 and related docs. The
+  canonical v0 workflow document (covering both sync directions,
+  mock-mode mechanics, and the contracts-as-v0-interface principle) is
+  created in M15, not here. M3's scope is alignment of existing
+  references with verified state.
 
 ### Goals served
 
@@ -567,6 +573,10 @@ changes. All paths go through real Cognito and real DynamoDB.
 - M4 complete (auth substrate functional).
 - M5 complete (single gateway).
 - M2.1 complete (canonical persistence pattern ratified).
+
+Note: M6's Budget Tracker activation provides the first real-world
+test of v0→app sync, exercised by M15 (v0 development workflow
+infrastructure). M15 can begin once M6 is in progress or complete.
 
 ---
 
@@ -1020,7 +1030,47 @@ verification of the verification.
 
 ---
 
-## 19. Beyond M14
+## 19. M15 — v0 development workflow infrastructure
+
+**Purpose**
+
+The v0 development workflow is foundational to how the platform's frontend is built (CONTRIBUTING.md Section 1.2). v0 generates UI against documented data shapes with mocked persistence; the same components run against real persistence in production. This requires bidirectional sync infrastructure plus mock-mode that toggles correctly across the swap.
+
+The current state has gaps:
+
+- v0→app sync uses `scripts/sync-v0.sh` to pull v0's separate repo into a gitignored `v0-reference/` directory, after which Claude Code adapts components into the main repo. **The sync flow has not been validated end-to-end with a real component** — it may not work as documented.
+- app→v0 sync (taking UI changes made in the codebase back to v0's separate repo) does not currently exist as tooling.
+- Mock-mode infrastructure exists per M0; correct behaviour during a real swap has not been validated.
+
+M15 validates the existing pieces, builds the missing pieces, and operationalises the bidirectional workflow as canonical.
+
+**Key outcomes**
+
+- v0→app sync flow validated end-to-end with a real component round-trip. Gaps identified and closed.
+- app→v0 sync mechanism designed and implemented (script or process for taking UI changes back to v0's separate repo)
+- Mock-mode toggle behaviour validated across both v0 development and production-build contexts
+- v0 workflow documentation written as a dedicated doc (`docs/architecture/v0-workflow.md` or similar) covering both directions, mock-mode mechanics, and the contracts-as-v0-interface principle
+- CONTRIBUTING.md Section 1.2 cross-references the new doc
+
+**Goals served**
+
+Goal 2 (clean v0 development workflow). Cross-cutting since the v0 constraint is foundational and affects Goals 1, 3, and 4 indirectly.
+
+**Gate**
+
+Bidirectional sync demonstrated working with at least one full component round-trip — v0 component pulled into app, modified in app, pushed back to v0, re-pulled. Mock-mode toggle behaviour observable and documented.
+
+**Dependencies**
+
+- M2.1 complete (canonical persistence pattern with v0 swap point established)
+- M2.3 complete (contracts policy ratified — contracts are the v0 interface)
+- M6 in progress or complete (real-world test of v0→app sync via Budget Tracker activation)
+
+Can run in parallel with M7 once M2.1 lands.
+
+---
+
+## 20. Beyond M14
 
 The following items are scoped but not yet sequenced into milestones.
 They live in the "Backlog" GitHub milestone (a holding area, not a
@@ -1079,7 +1129,7 @@ out of the Backlog milestone.
 
 ---
 
-## 20. Discipline and update rules
+## 21. Discipline and update rules
 
 ### 20.1 Updating this document
 
@@ -1119,7 +1169,7 @@ document in the same PR.
 
 ---
 
-## 21. Reference — milestone summary table
+## 22. Reference — milestone summary table
 
 For quick visual reference. The full text above is the canonical source.
 
