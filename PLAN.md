@@ -473,41 +473,40 @@ that `requireAccountAccess` succeeds against deployed Lambdas.
 
 ### Purpose
 
-`BudgetTrackerApi` currently has its own API Gateway, separate from the
-platform API Gateway. This is documented in code as a "workaround for
-cross-stack CDK dependency cycle." `MONOREPO.md` declares that apps share
-the platform API Gateway — currently true for stock-analyser, false for
-budget-tracker. New apps onboarding will hit the same dependency cycle
-unless the structural problem is resolved.
+`BudgetTrackerApi` currently has its own API Gateway, separate from the platform API Gateway. This is documented in code as a "workaround for cross-stack CDK dependency cycle." `MONOREPO.md` declares that apps share the platform API Gateway — currently true for stock-analyser, false for budget-tracker. New apps onboarding will hit the same dependency cycle unless the structural problem is resolved.
 
-This milestone retires `BudgetTrackerApi`'s separate gateway and moves its
-handlers onto the platform gateway. The CDK dependency-cycle workaround
-goes away.
+This milestone retires `BudgetTrackerApi`'s separate gateway and moves its handlers onto the platform gateway. The CDK dependency-cycle workaround goes away.
+
+The milestone also resolves a related location problem: Budget Tracker code currently lives in two places. A duplicate component tree under `apps/stock-analyser/components/budget-tracker/` (which `apps/stock-analyser/` deploys at the `/budget-tracker` route) and a proper workspace at `apps/budget-tracker/` (which has a no-op echo placeholder for its deploy workflow and is not deployed). M5 deletes the duplicate and activates the proper workspace's deploy workflow, so Budget Tracker becomes a deployed standalone app at its own URL.
+
+Note: M5 does not restructure Budget Tracker's internal code architecture. The code stays as-is (still non-conforming to the canonical layered architecture from M2.1); architectural migration is M7's scope. M5 only changes where the code lives and how it deploys.
 
 ### Outcome
 
-- Budget-tracker Lambda routes (transactions, rules, settings, ai,
-  export, migrate) mounted on the platform API Gateway.
+**Gateway consolidation:**
+
+- Budget-tracker Lambda routes (transactions, rules, settings, ai, export, migrate) mounted on the platform API Gateway.
 - `BudgetTrackerApi` stack retired.
 - `NEXT_PUBLIC_BUDGET_API_URL` and equivalent env vars removed.
-- CDK dependency-cycle workaround code removed; structural fix
-  documented in `cdk.md`.
-- CORS verification: platform gateway covers Budget Tracker frontend
-  needs.
-- Single platform gateway serves all apps. The "shared API gateway" rule
-  in `MONOREPO.md` is fully honoured.
+- CDK dependency-cycle workaround code removed; structural fix documented in `cdk.md`.
+- CORS verification: platform gateway covers Budget Tracker frontend needs.
+- Single platform gateway serves all apps. The "shared API gateway" rule in `MONOREPO.md` is fully honoured.
+
+**Code location untangling:**
+
+- Duplicate component tree under `apps/stock-analyser/components/budget-tracker/` deleted; `apps/stock-analyser/` no longer contains any Budget Tracker code or routes.
+- `apps/budget-tracker/` deploy workflow activated (currently a no-op echo placeholder). Workflow patterns match `deploy-stock-analyser.yml`.
+- Launchpad's Budget Tracker tile updated to navigate to the deployed Budget Tracker URL.
+- Budget Tracker available at its own URL as a deployed standalone app (running against mocks; backend wiring in M6, architectural migration in M7).
+- `@ts-nocheck` no longer present in Budget Tracker code (consequence of deleting the duplicate tree, which carried the suppressions).
 
 ### Goals served
 
-Goal 2 primarily (platform deployment substrate now supports shared
-gateway across all apps cleanly). Goal 3 (one gateway, one place to
-configure CORS, one place to monitor traffic).
+Goal 2 primarily (platform deployment substrate now supports shared gateway across all apps cleanly). Goal 3 (one gateway, one place to configure CORS, one place to monitor traffic). Goal 1 partially (Budget Tracker is no longer deployed from `apps/stock-analyser/`; work on stock-analyser no longer accidentally affects Budget Tracker's UI through the duplicate tree).
 
 ### Gate to next
 
-`BudgetTrackerApi` stack absent from CDK output. All budget-tracker
-routes responding from platform gateway. End-to-end test confirms
-budget-tracker app functions with the consolidated gateway.
+`BudgetTrackerApi` stack absent from CDK output. All budget-tracker routes responding from platform gateway. `apps/stock-analyser/` no longer contains any Budget Tracker code or routes. Budget Tracker deploys to its own URL via its own activated workflow. End-to-end test confirms Budget Tracker app functions with the consolidated gateway and from its own deploy.
 
 ### Dependencies
 
