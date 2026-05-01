@@ -243,25 +243,21 @@ subsequent implementation work — Stage 0b in the prior nomenclature.
 
 Three architectural decisions ratified and documented:
 
-**Decision M2.1 — Data-access content placement and substance.**
+**Decision M2.1 — Data-access patterns and table-naming policy.**
 
-- Whether to fold data-access content into the existing
-  `docs/architecture/data.md` or write a sibling
-  `docs/architecture/data-access.md`. (User-expressed preference: fold
-  into `data.md`. To be ratified.)
-- The canonical persistence pattern for the frontend, given the v0 swap
-  point requirement. (User-expressed preference: repository-or-equivalent
-  above ApiClient. To be ratified.)
-- Where the swap point lives — interface in a domain package,
-  implementations selected by config.
-- Cache reclassification: `platform.analysis-cache` as stock-analyser
-  data (currently misnamed); pattern-vs-data separation for future apps.
-- The `/migrate-from-localstorage` → `/import` rename target documented
-  (implementation in M6).
-- DynamoDB table-naming policy and ownership (per-app vs platform vs
-  shared).
-- Account-scoping invariant: every account-scoped Lambda must read
-  `account.accountId` from `withAuth`.
+Documented in `CONTRIBUTING.md` Section 5 (Architectural patterns) and Section 6 (Utility categories and conventions). Specific outcomes:
+
+- Layered architecture ratified as the canonical pattern: business logic, data-access layer, physical store. Strict separation — business logic never references physical implementations directly.
+- Domain interfaces live in `contracts/<scope>/`. Names are store-agnostic.
+- Implementations of domain interfaces are named for their physical store (e.g., `DynamoTransactionRepository`, `LocalStorageTransactionRepository`).
+- Naming conventions for domain interfaces: Repository pattern for collection-of-entities access; Service pattern for capability-style operations.
+- Implementation selection is an environment concern — build-time config client-side, deployment-time config via CDK server-side. Nothing flips at runtime.
+- Canonical table-naming policy: `{scope}.{entity}-{stage}`. Scope is either `platform` or an app slug; categorical, not stylistic. Applies to all logical tables regardless of physical storage backend.
+- Cache reclassification: `platform.analysis-cache-{stage}` reclassifies to `stock-analyser.analysis-cache-{stage}`; the `platform.` prefix is reserved for tables used by multiple apps or platform infrastructure.
+- Account-scoping invariant: every account-scoped Lambda reads `account.accountId` from `withAuth` via the `requireAccountAccess` helper. Already in compliance per M1 #79's verification of all nine consumer Lambdas.
+- New utility category established: data migration utilities at `migration-utilities/` (peer to `apps/`, `packages/`, `platform/`). One Lambda per migration, hierarchical structure by app namespace and data type. URL namespace `/api/migrations/<app>/<data-type>/<operation>` (no version segment).
+- The `/migrate-from-localstorage` endpoint is recategorised as a data migration utility. Renames to `POST /api/migrations/budget-tracker/transactions/import`; relocates to `migration-utilities/budget-tracker/transactions/`. Implementation in M6.
+- All non-conforming code migrates to the canonical patterns. New code conforms from inception. Migration scope is M7.
 
 **Decision M2.2 — `auth.md` extension.**
 
@@ -532,35 +528,31 @@ and makes Budget Tracker usable end-to-end with real users.
 
 ### Outcome
 
-- Budget Tracker frontend wired to real backend through the canonical
-  persistence pattern ratified in M2.1.
-- `/api/budget/v1/migrate-from-localstorage` renamed to
-  `/api/budget/v1/import` (Issue #17 from the stabilisation backlog).
-- The localStorage middleman removed: client posts file contents
-  directly to the import endpoint without an intermediate localStorage
-  hop.
-- 726-transaction historical fixture
-  (`migration-artifacts/budget-tracker/budget-tracker-export-2026-04-18.json`)
-  backfilled.
+- Budget Tracker frontend wired to real backend through the canonical layered architecture ratified in M2.1 (`CONTRIBUTING.md` Section 5).
+- `/api/budget/v1/migrate-from-localstorage` recategorised as a data migration utility per M2.1's #107 decision. Specifically:
+  - URL path renamed to `POST /api/migrations/budget-tracker/transactions/import` (no version segment, per the utility namespace convention in `CONTRIBUTING.md` Section 6.3).
+  - Lambda code relocated from `apps/budget-tracker/functions/budget-migrate/` to `migration-utilities/budget-tracker/transactions/`.
+  - Old Lambda directory and old endpoint deleted cleanly (no production consumers).
+  - AWS function renamed to follow the `migration-<app>-<data-type>-<stage>` naming convention.
+- New repository categories created at repo root (per `CONTRIBUTING.md` Section 6):
+  - `migration-utilities/` — peer to `apps/`, `packages/`, `platform/`. Houses migration utility code organised by app namespace and data type.
+  - `migration-utilities/infrastructure/` — peer to `platform/infrastructure/`. Houses CDK stacks for the utilities namespace.
+- `MigrationsApiStack` (or similar) created in `migration-utilities/infrastructure/`. Owns the `/api/migrations/...` API namespace. Route registration for `budget-tracker/transactions/import` lives here, not in `budget-tracker-api-stack.ts`.
+- New deploy workflow `deploy-migration-utilities.yml` created. Triggers on `migration-utilities/**` and `migration-utilities/infrastructure/**` path changes. Deploys the `MigrationsApiStack` and the Lambda functions within `migration-utilities/`. Workflow follows the same patterns as existing app deploys (authentication, pipeline stages, post-deploy verification).
+- `ci.yml` updated to include `migration-utilities/**` in CI scope (typecheck, lint, test).
+- Contract files updated to reflect the new endpoint path. `/v1/` documentation drift fixed in the same change (contracts previously omitted the `v1` segment that exists in the actual route).
+- `MONOREPO.md` updated to document `migration-utilities/` as a peer category alongside `apps/`, `packages/`, `platform/`. The new `deploy-migration-utilities.yml` workflow documented alongside existing app and platform deploy workflows.
+- The localStorage middleman removed: client posts file contents directly to the import endpoint without an intermediate localStorage hop.
+- 726-transaction historical fixture (`migration-artifacts/budget-tracker/budget-tracker-export-2026-04-18.json`) backfilled.
 - CSV import UI for ANZ and Macquarie statements implemented.
-- Mock auth removed from Budget Tracker; replaced with real Cognito
-  auth.
-- localStorage repositories removed; replaced with real
-  DynamoDB-via-Lambda implementations through the canonical pattern.
-- Tab-level error-boundary support: new `packages/ui/error-boundaries/`
-  package implementing a generic `TabErrorBoundary` component that
-  wraps tab content so a crash in one tab does not unmount the whole
-  app. Both budget-tracker tabs and stock-analyser tabs wrapped using
-  the same package (per Issue #16; bilateral application avoids leaving
-  stock-analyser shipping without boundaries while waiting for a later
-  milestone).
+- Mock auth removed from Budget Tracker; replaced with real Cognito auth.
+- localStorage repositories removed; replaced with real DynamoDB-via-Lambda implementations through the canonical layered architecture pattern.
+- Tab-level error-boundary support: new `packages/ui/error-boundaries/` package implementing a generic `TabErrorBoundary` component that wraps tab content so a crash in one tab does not unmount the whole app. Both budget-tracker tabs and stock-analyser tabs wrapped using the same package (per Issue #16; bilateral application avoids leaving stock-analyser shipping without boundaries while waiting for a later milestone).
 - Budget Tracker functional end-to-end with the live user account.
 
 ### Goals served
 
-Goal 4 (the budget-tracker permissions model is now exercised by real
-use). Goal 1 (Budget Tracker is now genuinely an app, not a mock; it
-exercises the platform substrate the same way stock-analyser does).
+Goal 4 (the budget-tracker permissions model is now exercised by real use). Goal 1 (Budget Tracker is now genuinely an app, not a mock; it exercises the platform substrate the same way stock-analyser does). Goal 3 indirectly (the data migration utilities category is established as a worked example of the utility-categories pattern in `CONTRIBUTING.md` Section 6).
 
 ### Gate to next
 
@@ -598,8 +590,31 @@ This milestone is comparable in scope to M5 — substantial enough that it
 gets its own sub-phase rather than being folded into smaller cleanup
 work.
 
+M2.1's architectural decisions (#103, #105, #106) add additional
+pattern-conformance work to M7. The layered-architecture migration
+(#103) — all non-conforming code restructured to go through domain
+interfaces in contracts — naturally pairs with the deduplication scope,
+since extracting domain interfaces from duplicated shapes simultaneously
+deduplicates AND migrates code to Position A. Two table renames (#105,
+#106) bring exception cases into canonical form.
+
 ### Outcome
 
+- Cache reclassification: rename `platform.analysis-cache-{stage}` to
+  `stock-analyser.analysis-cache-{stage}` and tighten IAM scope to
+  stock-analyser Lambdas only. Per M2.1 #105.
+- Rate-limits rename: rename `platform-rate-limits-{stage}` to
+  `platform.rate-limits-{stage}` to match the canonical separator rule
+  (`{scope}.{entity}-{stage}`). Rate-limit data loss acceptable
+  (counters self-heal). Per M2.1 #106.
+- Layered-architecture migration: all non-conforming code restructured
+  to go through domain interfaces in contracts (per M2.1 #103). Existing
+  service-layer code (stock-analyser portfolio/watchlist) migrates to
+  repository pattern. Existing direct-DynamoDB Lambda code migrates
+  behind domain interfaces. Implementations named for their physical
+  store (e.g., `DynamoTransactionRepository`,
+  `LocalStorageTransactionRepository`). Selection by build-time config
+  client-side, deployment-time config server-side.
 - Drift refinement of the 60/40 split: within the drifted 40%,
   *semantic* drift (real behavioural differences, e.g., `Transaction._id`
   string-vs-number) distinguished from *cosmetic* drift (1-line deltas,
@@ -651,15 +666,21 @@ irrelevant code).
 
 Bilateral duplication reduced to whatever the canonical pattern dictates.
 Lint re-enabled and passing. Cross-app file copies caught at CI. Per-app
-infrastructure split into the canonical structure.
+infrastructure split into the canonical structure. All non-conforming
+data-access code migrated to layered architecture (Position A). Domain
+interfaces in contracts; implementations named for physical store. Two
+table renames complete (analysis-cache, rate-limits).
 
 ### Dependencies
 
-- M2 complete (canonical pattern ratified).
+- M2.1 complete (canonical pattern ratified) — strictly required for the
+  layered-architecture migration and table renames.
+- M2.3 complete (contracts policy ratified) — strictly required for
+  domain interfaces in contracts. M2.2 not strictly required for M7 work.
 - M3 complete (documentation set accurate so the migration is against
   documented targets).
 - M6 useful but not blocking (Budget Tracker activation is its own
-  trajectory; deduplication can run in parallel with M6 once M2 is done).
+  trajectory; deduplication can run in parallel with M6 once M2.1 is done).
 
 ---
 
@@ -984,30 +1005,14 @@ ceremonial.
 
 ### Outcome
 
-- Prod GitHub Actions environment populated with all `[REQUIRED]`
-  env vars per the documentation set in PRs #19–24. First prod deploy
-  passes the env-var check.
+- Prod GitHub Actions environment populated with all `[REQUIRED]` env vars per the documentation set in PRs #19–24. First prod deploy passes the env-var check.
 - Deploy workflow path filters extended for completeness, covering:
-  - `.github/workflows/**` and `scripts/ci/**` for both
-    `deploy-stock-analyser.yml` and `deploy-budget-tracker.yml`.
-    Changes to CI machinery trigger the workflows they modify.
-  - `packages/**` for `deploy-budget-tracker.yml` (per M1 #81
-    finding — currently in stock-analyser's workflow but missing
-    from budget-tracker's). Once #17/M5 activates the real
-    budget-tracker deployment, this gap becomes a live bug.
-  - `functions/**` asymmetry investigated for
-    `deploy-budget-tracker.yml`. Stock-analyser triggers on
-    `functions/**`; budget-tracker does not. Whether
-    budget-tracker Lambdas have dependencies on `functions/**`
-    changes determines whether the asymmetry is intentional or
-    a gap.
-- Post-deploy smoke testing: a known-good request hits each app's
-  primary endpoint after deploy, asserts a 2xx response or expected
-  redirect. Failure rolls back or alerts. Existing PR #28 verification
-  reviewed and extended if it doesn't already do this.
-- A first prod deploy executed against the populated environment as
-  the milestone's verification — confirms the pipeline works
-  end-to-end against prod.
+  - `.github/workflows/**` and `scripts/ci/**` for `deploy-stock-analyser.yml`, `deploy-budget-tracker.yml`, and `deploy-migration-utilities.yml` (per M6's creation). Changes to CI machinery trigger the workflows they modify.
+  - `packages/**` for `deploy-budget-tracker.yml` (per M1 #81 finding — currently in stock-analyser's workflow but missing from budget-tracker's). Once #17/M5 activates the real budget-tracker deployment, this gap becomes a live bug.
+  - `functions/**` asymmetry investigated for `deploy-budget-tracker.yml`. Stock-analyser triggers on `functions/**`; budget-tracker does not. Whether budget-tracker Lambdas have dependencies on `functions/**` changes determines whether the asymmetry is intentional or a gap.
+  - `deploy-migration-utilities.yml` path filters verified for completeness — triggers on `migration-utilities/**` and `migration-utilities/infrastructure/**` plus the same CI machinery paths (`.github/workflows/**`, `scripts/ci/**`).
+- Post-deploy smoke testing: a known-good request hits each app's primary endpoint after deploy, asserts a 2xx response or expected redirect. Failure rolls back or alerts. Existing PR #28 verification reviewed and extended if it doesn't already do this. Smoke testing extends to migration-utilities deployments — a known-good request hits a deployed migration utility's endpoint after deploy.
+- A first prod deploy executed against the populated environment as the milestone's verification — confirms the pipeline works end-to-end against prod.
 
 ### Goals served
 
