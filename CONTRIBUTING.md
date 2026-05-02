@@ -739,6 +739,35 @@ budget-tracker.rules-{stage}           # app-scoped to budget-tracker
 
 Existing tables that don't conform are migrated to canonical form. No grandfathering — the rule is universal.
 
+### 5.6 Auth model
+
+Auth follows the same layered architecture as data access. The platform's auth concerns — JWT claim consumption, authorization decisions, cross-Lambda trust — apply the patterns documented in 5.1 through 5.4 to a different domain.
+
+**Helper interface in `packages/lambda-middleware/`.** All Lambda handlers use the canonical helper interface for auth concerns. The interface has two layers:
+
+- **Middleware wrappers** (`middleware.ts`) — `withAuth(handler)` provides JWT plus account context; `withAuthOnly(handler)` provides JWT without account context (for routes that operate on the user themselves rather than account-scoped data). Both internally call `extractAuthClaims` to read raw claims; consumers do not import `extractAuthClaims` directly.
+- **Claim-based helpers** (`auth.ts`) — `requireAppAccess`, `requireAnyAppAccess`, `requireAccountAccess`, `requireAccountOwner`, `requireSiteAdmin`. These operate on the typed `auth` object provided by the wrappers and throw 403 on authorization failure.
+
+The full interface and per-helper semantics are documented in `auth.md`.
+
+**JWT-claim consumption is layered.** Raw claim reads occur only in the middleware layer (`packages/lambda-middleware/`). Business-logic Lambdas access claims via the typed `auth` object provided by `withAuth` / `withAuthOnly`, using documented helpers when authorization decisions are needed. New Lambdas never read claims directly — that is the middleware layer's responsibility.
+
+This is a layering rule of the same shape as 5.1's data-access architecture. The middleware layer encapsulates raw-claim concerns; business logic operates on typed values. Direct claim access in business-logic code is non-conforming and migrates to helper-mediated access.
+
+**Cross-Lambda trust uses Pattern B with strict constraints.** When one platform Lambda invokes another (currently only `budget-ai → claude-proxy`), the receiving Lambda does not validate JWT signatures itself. Trust comes from IAM scope strictly limiting which callers can invoke. The caller propagates JWT claims via a synthetic event; the receiver reads them as if validated.
+
+This is consistent with the platform's general edge-validation posture (API Gateway validates at the edge; claim-reading helpers trust prior validation). Pattern A — per-hop JWT re-validation — would create an asymmetric posture inside the platform and adds operational complexity without proportionate benefit at the platform's current threat model (single trust domain, all Lambdas under common operational control).
+
+The pattern is permitted only with the following constraints, all binding:
+
+- IAM scope is load-bearing. Receiving Lambdas have IAM policies that strictly limit invokers. Reviewers of these policies must understand that policy broadness has security consequences beyond least-privilege.
+- CI verification of IAM scope is mandatory. A check confirms that receiving Lambdas using Pattern B have invoke-permission policies locked to expected callers. If a policy drifts to allow unexpected callers, CI fails. Without this verification, Pattern B is not acceptable.
+- Platform-Lambda-to-platform-Lambda only. External services or third-party callers must use Pattern A or go through API Gateway.
+
+If the platform's threat model changes (third-party Lambda code, multi-tenant Lambda deployment), Pattern B would be reconsidered.
+
+**Client-side auth follows the same layered architecture as data access.** A domain interface (`AuthService`) lives in contracts. Implementations are named for what they wrap: `CognitoAuthService` (production) and `MockAuthService` (v0). Selection is build-time per 5.3. Components, services, and hooks access claim-derived data only via the `AuthService` interface — never by reading JWT claims directly. Frontend treatment of auth is symmetric to Lambda treatment: typed access via interface; raw access only in the implementation layer.
+
 ---
 
 ## 6. Utility categories and conventions

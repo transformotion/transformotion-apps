@@ -697,18 +697,20 @@ both states. This milestone retires the legacy.
 
 - Legacy Cognito groups removed: `admin`, `stock-app`, `budget-app`,
   `transformotion`, `family`.
-- `custom:active_account` Cognito attribute removed (now dead code with
-  no writers under the new model).
+- `custom:active_account` writes removed from `account-provisioning` (`/auth/setup` and `/auth/switch`). The `/auth/switch` route itself is removed (no live callers; only called from the archived `web-vite-backup`). The attribute itself remains declared in the user pool schema permanently — Cognito does not permit removal of existing user pool schema attributes — but is inert post-M8.
+- `resolveAccountContext` JWT-claim fallback to `custom:active_account`
+  removed (per M2.2 #112 decision).
 - Per M1 #80: Lambda handlers do not read group names directly, so
   no handler-level callsite migration is needed. The
   "callsite migration" outcome originally framed in M8 turned out
   unnecessary — all 9 consumer Lambdas use claim-based helpers that
   never read group names.
-- `requireGroup` helper removed from `packages/lambda-middleware/` if
-  it exists and is unused (verify before removing — M1 #79 confirmed
-  it is exported but its call-sites must be checked).
-- `resolveAccountContext` JWT-claim fallback to `custom:active_account`
-  removed (per M2.2 decision on the fallback's fate).
+- `requireGroup` and `userInGroup` helpers removed from `packages/lambda-middleware/`. Both are group-name-based legacy patterns superseded by claim-based helpers; both retire together at this milestone (per M2.2 #109 + #111). Verify before removing — M1 #79 confirmed `requireGroup` is exported; `userInGroup` was found exported with zero callers during M2.2 diagnostic work.
+- **`auth/forgot-provider` abuse-resistance tightenings** (per M2.2 #111):
+  - SES grant scoped to the specific verified sender identity ARN (currently `Resource: ['*']` — broader than necessary)
+  - API Gateway stage throttling added as a second layer independent of the Lambda's DDB-based limiter
+  - CORS allowlist replacing `ALL_ORIGINS` — restrict to the sign-in page origin
+  - Rate-limiter changed from fail-open to fail-closed (if rate-limit table is unavailable, requests are blocked rather than bypassed; availability trade-off accepted for this endpoint)
 
 ### Goals served
 
@@ -717,8 +719,7 @@ artefacts). Goal 3 (one canonical naming, not two).
 
 ### Gate to next
 
-Legacy groups absent from `auth-stack.ts`. No code references to the
-old names. No references to `custom:active_account`.
+Legacy groups absent from `auth-stack.ts`. No code references to the old group names. `custom:active_account` writes absent from all Lambda code. `/auth/switch` route absent from `account-provisioning`. `forgot-provider` abuse-resistance tightenings landed (SES grant scoped, API Gateway throttling active, CORS restricted, rate-limiter fail-closed).
 
 ### Dependencies
 
@@ -1011,6 +1012,7 @@ ceremonial.
   - `functions/**` asymmetry investigated for `deploy-budget-tracker.yml`. Stock-analyser triggers on `functions/**`; budget-tracker does not. Whether budget-tracker Lambdas have dependencies on `functions/**` changes determines whether the asymmetry is intentional or a gap.
   - `deploy-migration-utilities.yml` path filters verified for completeness — triggers on `migration-utilities/**` and `migration-utilities/infrastructure/**` plus the same CI machinery paths (`.github/workflows/**`, `scripts/ci/**`).
 - Post-deploy smoke testing: a known-good request hits each app's primary endpoint after deploy, asserts a 2xx response or expected redirect. Failure rolls back or alerts. Existing PR #28 verification reviewed and extended if it doesn't already do this. Smoke testing extends to migration-utilities deployments — a known-good request hits a deployed migration utility's endpoint after deploy.
+- **Pattern B IAM scope CI verification** (per M2.2 #110): a CI check confirms that receiving Lambdas using Pattern B (cross-Lambda invocation with synthetic-event claim propagation, currently `claude-proxy`) have their `lambda:InvokeFunction` IAM policy locked to expected callers only. If the policy drifts to allow unexpected callers, CI fails. This verification is the load-bearing constraint that makes Pattern B acceptable; without it, the platform's cross-Lambda trust posture is weaker.
 - A first prod deploy executed against the populated environment as the milestone's verification — confirms the pipeline works end-to-end against prod.
 
 ### Goals served

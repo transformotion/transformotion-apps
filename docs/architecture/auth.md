@@ -35,7 +35,7 @@ The Cognito user pool declares these custom attributes:
 | Attribute | Type | Status | Purpose |
 |---|---|---|---|
 | `custom:accounts` | String (max 2048) | Active | Comma-separated account IDs the user belongs to (all apps combined). Maintained by the Lambdas that modify account membership; read by the pre-token Lambda. Not consulted directly by frontend or API handlers. |
-| `custom:active_account` | String (max 36) | Declared but unused | Historical attribute; no longer written or read by any code. Cannot be removed from the schema — Cognito does not permit removal of existing user pool schema attributes. Remains declared but inert. |
+| `custom:active_account` | String (max 36) | Inert (writes pending removal) | Currently still written by `account-provisioning` (`/auth/setup` and `/auth/switch`). The writes and the `/auth/switch` route are removed in M8 — they reflect a server-side approach to account switching that has been superseded by client-side switching (X-Account-Id header). The attribute itself remains declared in the user pool schema permanently — Cognito does not permit removal of existing user pool schema attributes — but is inert (no writers, no readers) post-M8. Account switching as a working feature is provided by the client-side header-based design described in *Auth middleware* below. |
 
 **Active account is not a Cognito attribute.** Which account a user is currently viewing in an app is browser-local UI state, persisted in localStorage per-app. API requests include the `accountId` as a request parameter. The auth middleware validates the parameter against the token's `accounts` claim and rejects requests where the caller is not a member of the stated account.
 
@@ -296,7 +296,18 @@ App deployment state is statically known to the launchpad (hardcoded list of dep
 
 ## Auth middleware (`packages/lambda-middleware`)
 
-All API Lambda handlers use `withAuth` to validate the Cognito JWT from the `Authorization: Bearer` header. The middleware parses the custom claims (JSON-stringified → objects) and exposes:
+The middleware has two layers:
+
+**Middleware wrappers** (`middleware.ts`) — the consumer-facing entry points that wrap Lambda handlers. Two wrappers exist:
+
+| Wrapper | Provides | Use case |
+|---|---|---|
+| `withAuth(handler)` | `{ auth, account, event }` | JWT + active account context (X-Account-Id header). Most account-scoped handlers. |
+| `withAuthOnly(handler)` | `{ auth, event }` | JWT only, no account context. Routes that operate on the user themselves rather than account-scoped data — e.g., user profile reads, first-login flows. |
+
+Both wrappers internally call `extractAuthClaims` to read JWT claims. Consumers do not import `extractAuthClaims` directly; it is the internal extractor for the wrappers.
+
+**Claim-based helpers** (`auth.ts`) — operate on the typed `auth` object that the wrappers provide:
 
 | Property | Type | Source |
 |---|---|---|
@@ -306,9 +317,13 @@ All API Lambda handlers use `withAuth` to validate the Cognito JWT from the `Aut
 | `auth.siteAdmin` | `boolean` | `site_admin` custom claim (parsed from `"true"`/`"false"`) |
 | `auth.accounts` | `Record<string, Array<{accountId: string, role: string}>>` | `accounts` custom claim (parsed from JSON string) |
 
+`resolveAccountContext(handler)` — middleware that adds `account.accountId` to the wrapped handler context by reading the X-Account-Id header. If the header is absent, throws `badRequest("No active account context")`. There is no fallback to JWT-claim-based account resolution. Account switching is a client-side concern (the client tracks active-account state and sends the appropriate header value); this middleware reads the result.
+
+`resolveAccountContext` is composed with `withAuth` rather than replacing it: handlers that need both JWT and account context get both. Handlers that only need JWT (no account context) use `withAuthOnly` and do not include `resolveAccountContext`.
+
 ### Authorization helpers
 
-The following helpers are provided by `packages/lambda-middleware`. Handlers use these instead of inspecting the `auth` object directly.
+The following helpers are provided by `packages/lambda-middleware` and operate on the `auth` object. Handlers use these instead of inspecting the `auth` object directly.
 
 ```typescript
 requireSiteAdmin(auth)
@@ -341,7 +356,18 @@ All helpers check `auth.siteAdmin` first as an override. A site-admin caller pas
 
 **Fail-closed semantics.** When `auth.apps` or `auth.accounts` are absent or empty (e.g., due to a pre-token Lambda failure), helpers deny access rather than granting it. The pre-token Lambda documents this under "On failure" above.
 
-Handlers do NOT call `requireGroup` (the old pattern) for new work. `requireGroup` remains during the 7e migration for transitional purposes and is removed at 7e-cleanup.
+### Claim-consumption layering
+
+Raw JWT claim reads occur only in the middleware layer (`packages/lambda-middleware/`). Business-logic Lambdas access claims via the typed `auth` object provided by `withAuth` / `withAuthOnly`, using documented helpers (`requireAccountAccess`, `requireAppAccess`, `requireSiteAdmin`, etc.) when authorization decisions are needed. New Lambdas never read claims directly; the middleware layer is the only place raw claim access belongs.
+
+This is a layering rule of the same shape as the data-access layered architecture (see `CONTRIBUTING.md` Section 5). Concerns are separated by layer: the middleware layer encapsulates raw-claim concerns; business logic operates on typed values.
+
+### Deprecated helpers (retiring in M8)
+
+- `requireGroup(auth, group)` — group-name-based pattern superseded by claim-based helpers. Currently retained for the legacy `auth/forgot-provider` route's IP-based rate limiter; retires when `auth/forgot-provider` migrates to the canonical claim-based pattern.
+- `userInGroup(auth, group)` — utility check, also group-name-based; zero current callers; retires alongside `requireGroup`.
+
+Handlers do NOT call `requireGroup` for new work.
 
 ---
 
@@ -379,6 +405,30 @@ export const handler = withAuth(async ({ auth, account, event }) => {
 5. **Ownership-only operations** (account deletion, ownership transfer) use `requireAccountOwner`.
 6. **Platform-admin operations** (cross-app user management, user disable/delete) use `requireSiteAdmin`.
 7. **`requireGroup` must not appear in new handler code.** It is deprecated and will be removed at 7e-cleanup.
+
+---
+
+## Per-Lambda permission models
+
+Five platform Lambdas have explicit permission models. Each is documented here for reference; the patterns reflect what each Lambda does and the authorization shape it requires.
+
+| Lambda | Wrapper | Authorization | IAM scope |
+|---|---|---|---|
+| `accounts` | `withAuth` | Per-route guards (`requireAccountAccess` / `requireAccountOwner`) | `platform.accounts` RW + `platform.account-members` RW |
+| `user` | `withAuthOnly` | None — user owns their own data | `platform.users` RW |
+| `auth/account-provisioning` | `withAuthOnly` | None — first-login flow; user has JWT but no app group memberships yet | `platform.accounts` RW + `platform.account-members` RW + `AdminUpdateUserAttributes` on user pool ARN |
+| `auth/invitations` | `withAuth` | Account-context guards | `platform.accounts` R + `platform.invitations` RW |
+| `auth/forgot-provider` | None (raw handler — pre-authentication) | None | `platform-rate-limits` RW + `AdminGetUser` on user pool ARN + SES `SendEmail` (scoped to verified sender identity ARN, pending tightening in M8) |
+
+**`accounts`, `user`, `auth/account-provisioning`, `auth/invitations`** are user-facing API endpoints. Each uses the appropriate middleware wrapper based on whether account context is required, and authorization helpers based on what the operation needs to verify.
+
+**`auth/forgot-provider`** is pre-authentication by necessity (the user has forgotten their identity provider; they cannot authenticate). It uses no middleware wrapper — the handler reads the request directly. Abuse-resistance is provided by Lambda-side IP-based rate limiting, plus tightenings scheduled for M8 (API Gateway throttling, CORS allowlist to the sign-in page origin, SES grant scoping, rate-limiter fail-closed behaviour). See *Forgot-provider flow* below.
+
+### Cross-Lambda trust pattern
+
+`claude-proxy` is invoked by `budget-ai` (a Lambda-to-Lambda call, not API-Gateway-to-Lambda). The trust model for this path is documented in `CONTRIBUTING.md` Section 5 as the canonical pattern for cross-Lambda invocations: **Pattern B with strict constraints** — the receiving Lambda does not validate JWT signatures itself; trust comes from IAM scope strictly limiting which callers can invoke. The caller propagates JWT claims via a synthetic event; the receiver reads them as if validated.
+
+This pattern is binding only for cross-Lambda invocations between platform Lambdas under common operational control. External services or third-party callers must use API-Gateway-validated paths (the standard `withAuth` flow).
 
 ---
 
@@ -578,7 +628,32 @@ The Lambda `transformotion-forgot-provider-{stage}` (in `AuthApiStack`):
 3. Reads the `identities` attribute to detect which IDP was used
 4. Sends an SES email to the user naming the sign-in method and a link
 
+The handler is pre-authentication by necessity. It uses no `withAuth` / `withAuthOnly` wrapper — there is no JWT to extract. Abuse-resistance is the load-bearing security property.
+
+### Abuse-resistance posture
+
+Current state has Lambda-side IP-based rate limiting (5 requests per IP per 15 minutes, stored in `platform-rate-limits-{stage}`). The rate limiter currently fails open: if the rate-limit table is unavailable, requests proceed without limiting.
+
+The following tightenings are scheduled for M8:
+
+- **SES grant scoping.** Current grant is `ses:SendEmail` on `Resource: ['*']` — broader than necessary. M8 scopes the grant to the specific verified sender identity ARN.
+- **API Gateway throttling.** A second layer independent of the Lambda's DDB-based limiter. Specific throttle parameters decided during M8 implementation.
+- **CORS allowlist.** Current configuration is `ALL_ORIGINS`; M8 restricts to the sign-in page origin so browser-based requests from other origins are blocked.
+- **Rate-limiter fail-closed.** The current fail-open behaviour is changed to fail-closed: if the rate-limit table is unavailable, requests are blocked rather than bypassed. The availability trade-off is accepted for this endpoint — it is not critical-path for active users; legitimate users can retry after DDB recovers; the abuse window stays closed during outages.
+
 **Known limitation:** For federated users, `AdminGetUser(Username=email)` fails because their Cognito username is `Google_{sub}` (not email). The fix using `ListUsersCommand` resolves this. See sub-phase `7e-forgot-provider-fix` in `docs/sub-phase-7e-plan.md`.
+
+---
+
+## Client-side auth
+
+Frontend code follows the same layered architecture pattern as data access (see `CONTRIBUTING.md` Section 5).
+
+A domain interface (`AuthService`) lives in contracts. Implementations are named for what they wrap: `CognitoAuthService` (production; reads JWT claims from a Cognito session) and `MockAuthService` (v0; returns mocked auth state without any real auth backend). Selection is build-time per the layered architecture pattern.
+
+Components, services, and hooks access claim-derived data only via the `AuthService` interface — never by reading JWT claims directly. The interface is the canonical access path for any claim-derived value (active account ID, app access flags, user identity, etc.).
+
+The current state has the interface duplicated across `packages/auth-client/`, `apps/stock-analyser/`, and `apps/budget-tracker/`, with the production implementation only existing for stock-analyser. Migration to the canonical pattern (interface in contracts, both implementations in `packages/auth-client/`, build-time selection) happens alongside the production bug fix for the missing `accounts` JWT claim.
 
 ---
 
