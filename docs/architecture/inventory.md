@@ -621,26 +621,40 @@ The permission model has two orthogonal dimensions:
 Site-admin bypasses both dimensions. Dimension A is the ceiling;
 Dimension B can only restrict within it.
 
-### 3.2 appSlug not written on platform.accounts
+### 3.2 appSlug not written on platform.accounts (code gap; current dev works via manual seeding)
 
-**Status: Confirmed (active blocker, addressed in M4)**
+**Status: Confirmed code gap — latent impact only; tracked at M4 #144**
 
-The pre-token-generation Lambda joins `platform.account-members`
-through `platform.accounts` to populate the `accounts` JWT claim.
-The join logic reads `appSlug` from the accounts row to bucket each
-account into `accountsByApp[appSlug]`. However, neither writer
-(`account-provisioning/handleSetup` or `accounts/createAccount`)
-currently writes `appSlug` onto the accounts row.
+Neither writer (`accounts/createAccount` or
+`auth/account-provisioning/handleSetup`) currently writes `appSlug`
+onto the accounts row. Both put `{ accountId, name, ownerId, plan,
+createdAt, updatedAt }` and nothing else. The pre-token Lambda reads
+`appSlug` from `platform.accounts` to build the JWT's `accounts` claim
+— when `appSlug` is missing, the claim ships empty, and account-scoped
+Lambda calls fail authorization for that user.
 
-Consequence: `accountsByApp` is empty for every JWT. The `accounts`
-claim ships empty. Every account-scoped Lambda call fails
-authorization. This is the single biggest active blocker in the
-inventory.
+**Current dev state:** the two existing dev accounts
+(`a03f9cd4-951f-463a-8b34-73c0f046e672` and
+`aed9dcdf-81b5-47a1-a0d5-5afbae940e93`) have `appSlug` populated via
+manual seeding on 2026-04-25T00:05:41Z. CloudWatch shows no Lambda
+invocations during that window; CloudFormation shows no stack activity
+until 7 minutes later; the same-second `createdAt` timestamp on both
+rows is consistent with a single `batch-write-item` operation. As a
+result, the pre-token Lambda finds `appSlug` data, the `accounts` claim
+populates correctly, and account-scoped endpoints work for these
+specific accounts.
 
-M4 closes this. The user-expressed preference recorded during M-setup
-is per-app accounts (one `platform.accounts` row per app per user-account
-relationship); M2.2 ratifies the model formally before M4's writer
-update lands.
+**Latent impact:** any new account created through normal code paths
+(`createAccount` or `handleSetup`) until M4 lands will have no
+`appSlug`, and that user's `accounts` claim will be empty. The
+"active blocker" framing from earlier inventory versions was overstated
+— the code gap is real but currently affects only new accounts, not
+existing ones.
+
+M4 #144 fixes this: both writers updated to populate `appSlug` based
+on which app initiated the account creation or first-login flow. M2.2
+ratifies the per-app accounts model formally before M4's writer update
+lands.
 
 ### 3.2a Pre-token-generation trigger not durably wired
 
@@ -665,9 +679,12 @@ inlines `LambdaConfig` into the `AWS::Cognito::UserPool` CloudFormation
 resource so it is treated as first-class UserPool state and can never
 be cleared by a future stack update.
 
-Note: even with the trigger correctly wired, the `accounts` claim is
-still empty due to Section 3.2 (appSlug not written). Both bugs must
-be fixed before account-scoped Lambda calls will succeed.
+The writer issue described in Section 3.2 is the other half of the
+JWT-claim production bug — together, the trigger wiring fix (this
+section) and the writer fix (M4 #144) resolve the bug for existing
+and new accounts respectively. For currently-seeded dev accounts the
+`accounts` claim already works; for new accounts it will be empty
+until M4 #144 lands.
 
 ### 3.3 Frontend auth store and JWT claims
 
