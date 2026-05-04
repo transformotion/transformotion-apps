@@ -290,18 +290,19 @@ Documented in `CONTRIBUTING.md` Section 5 (Architectural patterns) and Section 6
 
 **Decision M2.3 — Contracts policy.**
 
-- Existence of `contracts/platform/` and `contracts/stock-analyser/` (the
-  current `contracts/` directory has only `budget-tracker/`).
-- Normative-vs-descriptive classification rules.
-- Single-source-of-truth-per-shape rule.
-- Position on the "v0-sufficient subset" pattern (is the contract the
-  production interface, or the v0-sufficient subset that production
-  extends?).
-- Where platform-shared types (Account, User, AccountMember) live
-  canonically.
-- Final document location (per `CONTRIBUTING.md` Section 2.3, default is
-  `/docs/architecture/contracts.md` but may be folded elsewhere by
-  ratification).
+The seven M2.3 decisions establish what counts as a contract in this platform, where contracts canonically live, how they are structured, and the discipline that keeps them coherent.
+
+- **Definitional framing (M2.3 batch).** A contract documents the binding interface between a provider and one or more consumers. Contracts cover any provider/consumer boundary: HTTP APIs, Lambda-to-Lambda calls, Lambda-to-AWS service usage, TypeScript domain interfaces, data model schemas, and internal helper APIs. Definition lives in CONTRIBUTING.md Section 5.7.
+- **Normative-by-definition (#116).** Contracts are inherently normative. Anything in the contracts directory is a binding interface specification. Observation, history, project state, and other non-binding content do not belong in contracts; they live in operations docs, architecture inventory, or git history.
+- **Canonical location: v0 repo (#114).** Contracts live in the v0 repo (`transformotion-apps-b8`), not the Claude repo. The v0 repo is the only location both AIs (v0 and Claude Code) can read natively. Claude repo accesses via a one-way sync from v0 repo into a gitignored location.
+- **Single source of truth (#115).** Each contract has exactly one canonical location. Runtime code references contracts by import from the synced location; no copies, no embedded mirrors, no independent declarations of types that match contracts. Strict — independent type declarations matching contracts are non-conforming regardless of convenience.
+- **Bucket structure: frontend/backend per scope (#117).** Within each scope, contracts are organised into `frontend/` (UI-facing contracts, what v0 mocks) and `backend/` (server-side contracts, Lambda interfaces, IAM, DynamoDB schemas). Platform-shared contracts live in `contracts/platform/` as a sibling scope.
+- **Platform scope at sibling level (#118).** Platform-shared contracts (Account, User, AccountMember, AuthService) live in `contracts/platform/` — sibling to per-app scopes — with the same `frontend/` and `backend/` subdirectory pattern.
+- **Per-domain granularity for backend contracts (#133).** Backend service interface contracts are organised by functional domain (budget operations, auth operations, AI services, data storage, etc.), not per-Lambda. Each domain document covers related operations within the domain plus their cross-Lambda interactions.
+- **Hybrid format with TypeScript-authoritative shape rule (#133).** Each domain has paired `.ts` and `.md` files. TypeScript files are authoritative for shape (imported directly by Claude code). Markdown files describe behaviour, edge cases, validation rules, and cross-references — but do NOT redeclare types. This eliminates format ambiguity and makes the single-source-of-truth rule operationally enforceable.
+- **v0-sufficient minimum content (#117).** Frontend contracts must contain at least the content v0 needs to build a working mock — endpoint paths, methods, request/response shapes, status codes, authentication requirements, behavioural notes. Specific list documented in CONTRIBUTING.md Section 5.7.
+- **Backend contract template (#133).** Per-domain backend contracts follow a standard structure including operations, type definitions, behavioural specs, cross-Lambda interactions, external dependencies (mockability flagging), authentication/authorisation model, IAM scope, error responses, rate limiting, and cross-references.
+- **Authoring discipline (#114).** Contracts are edited in v0 repo first, then sync into Claude repo, then Claude-side work proceeds. Discipline is enforced by CI (Level 3: byte-identical match verification per #134) plus mechanical guardrails (gitignore, sync target README, sync script defensive behaviour).
 
 ### Goals served
 
@@ -596,6 +597,13 @@ interfaces in contracts — naturally pairs with the deduplication scope,
 since extracting domain interfaces from duplicated shapes simultaneously
 deduplicates AND migrates code to Position A. Two table renames (#105,
 #106) bring exception cases into canonical form.
+
+Note on scope boundary with M15: contracts-specific migration (moving
+contracts to v0 repo as canonical, restructuring into frontend/backend
+buckets, format conversion, removing independent type declarations
+that mirror contracts) is M15's responsibility per M2.3's decisions.
+M7 covers non-contract layered-architecture migration and the broader
+deduplication of duplicated runtime code.
 
 ### Outcome
 
@@ -1036,35 +1044,72 @@ verification of the verification.
 
 ---
 
-## 19. M15 — v0 development workflow infrastructure
+## 19. M15 — v0-canonical transition (workflow infrastructure and contracts migration)
 
 **Purpose**
 
-The v0 development workflow is foundational to how the platform's frontend is built (CONTRIBUTING.md Section 1.2). v0 generates UI against documented data shapes with mocked persistence; the same components run against real persistence in production. This requires bidirectional sync infrastructure plus mock-mode that toggles correctly across the swap.
+The v0 development workflow is foundational to how the platform's frontend is built (CONTRIBUTING.md Section 1.2). v0 generates UI against documented data shapes with mocked persistence; the same components run against real persistence in production.
 
-The current state has gaps:
+M2.3's contracts policy decisions established v0 repo as the canonical location for contracts (per #114), with Claude repo accessing via a one-way sync into a gitignored location. The cross-repo access asymmetry is the determining constraint: v0 cannot access the Claude repo; Claude Code can access the v0 repo. The v0 repo is the only location both AIs can read natively.
 
-- v0→app sync uses `scripts/sync-v0.sh` to pull v0's separate repo into a gitignored `v0-reference/` directory, after which Claude Code adapts components into the main repo. **The sync flow has not been validated end-to-end with a real component** — it may not work as documented.
-- app→v0 sync (taking UI changes made in the codebase back to v0's separate repo) does not currently exist as tooling.
-- Mock-mode infrastructure exists per M0; correct behaviour during a real swap has not been validated.
+M15 makes the v0-canonical workflow real end-to-end: it builds the workflow infrastructure (sync mechanism, CI verification, bidirectional component sync) AND executes the contracts migration that consumes that infrastructure. The two are inseparable in practice — the migration assumes the infrastructure is in place; the infrastructure is purposeless without the migration that uses it.
 
-M15 validates the existing pieces, builds the missing pieces, and operationalises the bidirectional workflow as canonical.
+The current state has gaps in both halves:
+
+**Workflow infrastructure gaps:**
+- `scripts/sync-v0.sh` is referenced but not yet implemented — it pulls v0 contracts into a gitignored Claude-repo location
+- CI verification of byte-identical match between Claude repo's sync target and v0 repo's contracts at HEAD does not exist
+- v0 repo access credentials (PAT or GitHub App) for Claude repo's CI not yet configured
+- app→v0 sync (taking UI changes made in the Claude repo back to v0 repo) does not exist as tooling
+- Mock-mode toggle behaviour validated per M0 but not validated against the canonical contracts pattern
+
+**Contracts migration gaps:**
+- Contracts currently exist in three locations (Claude repo `contracts/`, Claude repo `apps/<app>/contracts/`, v0 repo `contracts/budget-tracker/`) — only v0 repo is the canonical home per #114
+- v0 repo lacks the bucket structure (frontend/backend per scope per #117)
+- `aws-infrastructure.md` is mixed normative/descriptive content per #116 — needs dispersing
+- Independent type declarations exist in runtime code that mirror contracts, conflicting with #115's strict no-mirrors rule
+- Per-domain backend contracts per #133 do not yet exist; per-Lambda permission models in `auth.md` (M2.2 #111) await migration
+- Existing markdown contracts await format conversion to hybrid `.ts` + `.md` per #133
 
 **Key outcomes**
 
-- v0→app sync flow validated end-to-end with a real component round-trip. Gaps identified and closed.
-- app→v0 sync mechanism designed and implemented (script or process for taking UI changes back to v0's separate repo)
+*Workflow infrastructure:*
+
+- `scripts/sync-v0.sh` implemented — pulls v0 contracts into gitignored sync target in Claude repo
+- v0 repo access credential (PAT or GitHub App) configured in Claude repo's GitHub Actions secrets
+- CI verification implemented — Claude repo's CI runs sync, then verifies byte-identical match between sync target and v0 repo's contracts at HEAD; CI fails on any divergence
+- Mechanical guardrails: gitignore configured for sync target; sync target README warning against direct edits; sync script refuses to run if it detects local modifications
+- CLAUDE.md cross-references the contracts authoring discipline so Claude Code working in the repo picks it up automatically
+- v0→app sync flow validated end-to-end with a real component round-trip
+- app→v0 sync mechanism designed and implemented (script or process for taking UI changes back to v0 repo)
 - Mock-mode toggle behaviour validated across both v0 development and production-build contexts
-- v0 workflow documentation written as a dedicated doc (`docs/architecture/v0-workflow.md` or similar) covering both directions, mock-mode mechanics, and the contracts-as-v0-interface principle
-- CONTRIBUTING.md Section 1.2 cross-references the new doc
+- v0 workflow documentation written as a dedicated doc covering both directions, mock-mode mechanics, sync mechanism, and the contracts-as-v0-interface principle
+
+*Contracts migration:*
+
+- All contracts migrated from Claude repo (`contracts/`, `apps/*/contracts/`) to v0 repo as canonical location per #114
+- v0 repo contracts restructured into `frontend/` and `backend/` buckets per scope per #117
+- `contracts/platform/` established with platform-shared contracts per #118
+- `aws-infrastructure.md` dispersed per #116: normative pieces relocated to per-domain backend contracts and platform-domain contracts; descriptive pieces moved to ops docs or deleted; file itself goes away
+- `gap-analysis.md` and `changelog.md` moved out of contracts (not contracts per #116)
+- Contract format converted to hybrid `.ts` + `.md` per #133, with format authority rule applied (TypeScript authoritative for shape; markdown semantic-only)
+- Per-domain backend contracts authored per #133's pattern, replacing the per-Lambda framing of earlier scope
+- Per-Lambda permission models from M2.2's `auth.md` (M2.2 #111) migrated into per-domain backend contracts; `auth.md` retains high-level model with cross-references
+- Independent type declarations in runtime code (the `AuthService` triplication per M2.2 #130, plus other runtime mirrors of contract types) replaced with imports from synced contracts location per #115's strict rule
 
 **Goals served**
 
-Goal 2 (clean v0 development workflow). Cross-cutting since the v0 constraint is foundational and affects Goals 1, 3, and 4 indirectly.
+Goal 2 (clean v0 development workflow). Cross-cutting since the v0 constraint is foundational and affects Goals 1, 3, and 4 indirectly. Goal 4 (single source of truth for contracts).
 
 **Gate**
 
-Bidirectional sync demonstrated working with at least one full component round-trip — v0 component pulled into app, modified in app, pushed back to v0, re-pulled. Mock-mode toggle behaviour observable and documented.
+End-to-end v0-canonical workflow operational:
+- All contracts in v0 repo only; Claude repo has no `contracts/` or `apps/*/contracts/` directories
+- Sync mechanism running in CI; byte-identity verification active
+- Bidirectional sync demonstrated working with at least one full component round-trip — v0 component pulled into Claude repo, modified, pushed back to v0
+- All runtime code uses imports from synced contracts location; no independent type declarations matching contracts
+- Per-domain backend contracts exist for all platform Lambdas
+- Mock-mode toggle behaviour observable and documented
 
 **Dependencies**
 
@@ -1072,7 +1117,22 @@ Bidirectional sync demonstrated working with at least one full component round-t
 - M2.3 complete (contracts policy ratified — contracts are the v0 interface)
 - M6 in progress or complete (real-world test of v0→app sync via Budget Tracker activation)
 
-Can run in parallel with M7 once M2.1 lands.
+**Internal sequencing**
+
+The migration issues within M15 have dependencies on each other and on infrastructure:
+
+```
+#134 (sync mechanism + CI enforcement)
+   → #135 (location migration: Claude repo → v0 repo)
+       → #136 (bucket restructure + cleanup)
+           → #137 (format conversion, depends on #133 settled — done)
+               → #138 (mirror removal in runtime code)
+               → #139 (per-domain backend contract authoring, depends on #133 settled — done)
+```
+
+#124 (the original v0 development workflow infrastructure issue) is broader infrastructure that complements but doesn't strictly block the migration sequence above.
+
+Can run in parallel with M7 once M2.1 lands. Migration depends on infrastructure (#134) landing first within M15.
 
 ---
 
