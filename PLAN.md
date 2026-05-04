@@ -517,8 +517,7 @@ Goal 2 primarily (platform deployment substrate now supports shared gateway acro
 
 ### Dependencies
 
-- M4 complete (the auth substrate works end-to-end; gateway consolidation
-  doesn't add value if the auth chain underneath is broken).
+- M4 #144 done (handleSetup writer fix; PR #157). **Done.** M5 originally listed M4-as-a-milestone as a dependency, but the only piece M5 actually needs from M4 is the writer fix to ensure account-scoped JWT claims work correctly during gateway consolidation. The remainder of M4 folded into M11; none of that gates M5.
 
 ---
 
