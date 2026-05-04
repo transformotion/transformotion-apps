@@ -410,7 +410,13 @@ matches deployed reality.
 
 ---
 
-## 8. M4 — appSlug writer and account migration
+## 8. M4 — appSlug writer and account migration  *(CLOSED — folded into M11)*
+
+**Status (2026-05-05):** Closed. The writer fix (#144 / PR #157) landed cleanly on 2026-05-04. Remaining work — data migration (#146) and provisioning verification (#147) — moved to M11 because both depend on M11's invitation flow design. Account creation under the closed-signup model happens during invitation acceptance, not during sign-in; the migration target shape and provisioning verification both depend on how M11 ends up structuring that flow.
+
+The original outcomes below are preserved as historical record of what M4 was scoped for. The actual landed work was the writer fix only; the rest is M11's territory.
+
+---
 
 ### Purpose
 
@@ -562,7 +568,7 @@ changes. All paths go through real Cognito and real DynamoDB.
 
 ### Dependencies
 
-- M4 complete (auth substrate functional).
+- M4 #144 done (handleSetup writer fix; PR #157). **Done.** M6 originally listed M4-as-a-milestone as a dependency, but the only piece M6 actually needs from M4 is the writer fix to ensure account-scoped JWT claims work correctly. The remainder of M4 folded into M11 (data migration and provisioning verification both depend on M11's invitation flow design); none of that gates M6.
 - M5 complete (single gateway).
 - M2.1 complete (canonical persistence pattern ratified).
 
@@ -883,12 +889,12 @@ budget-tracker and see/edit data.
 
 ### Dependencies
 
-- M0 complete (closed-signup model is what makes invitations the only
-  path).
-- M4 complete (per-app accounts created via invitation follow the
-  ratified model).
-- M10 complete (admin-role enforcement on the create-invitation
-  endpoint depends on the helpers).
+- M0 complete (closed-signup model is what makes invitations the only path). **Done.**
+- M2.2 complete (helper interface ratified, including `requireSiteAdmin` and `requireAccountOwner` that the invitation flow uses for authorization). **Done.**
+- M2.3 complete (contracts policy ratified — establishes location for invitation-flow contracts). **Done.**
+- M4 #144 done (handleSetup writer fix; PR #157). **Done.** Note: M4 originally listed as a milestone-level dependency, but the only piece M11 actually needed from M4 was the writer fix. The remaining M4 work (#146 data migration, #147 provisioning verification) folded into M11 because that work depends on M11's design.
+
+M10 is no longer a dependency. PLAN.md previously listed M10 because helper interfaces were originally scoped as M10's outcome. M2.2 ratified those helpers; M10 reduces to verification-only of correct usage. M11 implementation should produce code conformant to M10's verification (i.e., M10 will eventually verify M11's invitation Lambda among others), but M11 doesn't wait on M10.
 
 ---
 
