@@ -26,6 +26,11 @@ const ACCOUNTS_TABLE        = process.env.ACCOUNTS_TABLE!;
 const ACCOUNT_MEMBERS_TABLE = process.env.ACCOUNT_MEMBERS_TABLE!;
 const USER_POOL_ID          = process.env.USER_POOL_ID!;
 
+const APP_CLIENT_TO_SLUG: Record<string, string> = {
+  [process.env.APP_CLIENT_STOCK_SIGNAL!]:   'stock-signal',
+  [process.env.APP_CLIENT_BUDGET_TRACKER!]: 'budget-tracker',
+};
+
 /**
  * Auth setup Lambda — handles two routes:
  *
@@ -60,6 +65,12 @@ async function handleSetup(
     return ok({ accountId: existingAccountId, created: false });
   }
 
+  // aud identifies which App Client the user signed in through → determines appSlug.
+  const aud = claims?.aud;
+  if (!aud) throw badRequest('Missing aud claim — token must be issued by a known App Client');
+  const appSlug = APP_CLIENT_TO_SLUG[aud];
+  if (!appSlug) throw new Error(`Unknown App Client ID in aud claim: ${aud}`);
+
   const accountId = randomUUID();
   const now       = new Date().toISOString();
 
@@ -71,6 +82,7 @@ async function handleSetup(
             TableName: ACCOUNTS_TABLE,
             Item: {
               accountId,
+              appSlug,
               name:      `${email}'s account`,
               ownerId:   userId,
               plan:      'free',

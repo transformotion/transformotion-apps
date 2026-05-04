@@ -70,10 +70,12 @@ const devStockAnalyserTables = new StockAnalyserTablesStack(app, 'Transformotion
 
 const devPlatformApi = new PlatformApiStack(app, 'TransformotionDev-Api', {
   env,
-  stage:              'dev',
-  description:        'Transformotion Apps — Dev platform API (shared routes for all apps)',
-  userPool:           devAuth.userPool,
-  analysisCacheTable: devStockAnalyserTables.analysisCacheTable,
+  stage:                    'dev',
+  description:              'Transformotion Apps — Dev platform API (shared routes for all apps)',
+  userPool:                 devAuth.userPool,
+  stockSignalAppClientId:   devAuth.stockAnalyserAppClient.userPoolClientId,
+  budgetTrackerAppClientId: devAuth.budgetTrackerAppClient.userPoolClientId,
+  analysisCacheTable:       devStockAnalyserTables.analysisCacheTable,
 });
 
 new StockAnalyserApiStack(app, 'TransformotionDev-StockAnalyserApi', {
@@ -140,10 +142,12 @@ const prodStockAnalyserTables = new StockAnalyserTablesStack(app, 'Transformotio
 
 const prodPlatformApi = new PlatformApiStack(app, 'TransformotionProd-Api', {
   env,
-  stage:              'prod',
-  description:        'Transformotion Apps — Prod platform API (shared routes for all apps)',
-  userPool:           prodAuth.userPool,
-  analysisCacheTable: prodStockAnalyserTables.analysisCacheTable,
+  stage:                    'prod',
+  description:              'Transformotion Apps — Prod platform API (shared routes for all apps)',
+  userPool:                 prodAuth.userPool,
+  stockSignalAppClientId:   prodAuth.stockAnalyserAppClient.userPoolClientId,
+  budgetTrackerAppClientId: prodAuth.budgetTrackerAppClient.userPoolClientId,
+  analysisCacheTable:       prodStockAnalyserTables.analysisCacheTable,
 });
 
 new StockAnalyserApiStack(app, 'TransformotionProd-StockAnalyserApi', {

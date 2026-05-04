@@ -13,6 +13,9 @@ export interface PlatformApiStackProps extends cdk.StackProps {
   stage: 'dev' | 'prod';
   /** Imported from AuthStack */
   userPool: cognito.IUserPool;
+  /** Imported from AuthStack — used by account-provisioning to map aud → appSlug */
+  stockSignalAppClientId: string;
+  budgetTrackerAppClientId: string;
   /** Imported from StockAnalyserTablesStack */
   analysisCacheTable: dynamodb.ITable;
 }
@@ -48,7 +51,7 @@ export class PlatformApiStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: PlatformApiStackProps) {
     super(scope, id, props);
 
-    const { stage, userPool, analysisCacheTable } = props;
+    const { stage, userPool, stockSignalAppClientId, budgetTrackerAppClientId, analysisCacheTable } = props;
 
     // ── REST API ─────────────────────────────────────────────────────────────
     this.api = new apigateway.RestApi(this, 'Api', {
@@ -95,9 +98,11 @@ export class PlatformApiStack extends cdk.Stack {
       timeout:      cdk.Duration.seconds(15),
       memorySize:   256,
       environment: {
-        ACCOUNTS_TABLE:        accountsTable.tableName,
-        ACCOUNT_MEMBERS_TABLE: accountMembersTable.tableName,
-        USER_POOL_ID:          userPool.userPoolId,
+        ACCOUNTS_TABLE:            accountsTable.tableName,
+        ACCOUNT_MEMBERS_TABLE:     accountMembersTable.tableName,
+        USER_POOL_ID:              userPool.userPoolId,
+        APP_CLIENT_STOCK_SIGNAL:   stockSignalAppClientId,
+        APP_CLIENT_BUDGET_TRACKER: budgetTrackerAppClientId,
       },
       bundling: { externalModules: ['@aws-sdk/*'], minify: true, sourceMap: false, forceDockerBundling: false },
     });
