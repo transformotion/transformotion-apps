@@ -1,7 +1,6 @@
 import * as path from 'path';
 import * as cdk from 'aws-cdk-lib';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
-import * as cr from 'aws-cdk-lib/custom-resources';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -254,51 +253,7 @@ export class AuthStack extends cdk.Stack {
       resources: [`arn:aws:cognito-idp:${this.region}:${this.account}:userpool/*`],
     }));
 
-    // Wire the pre-token trigger via a Custom Resource rather than userPool.addTrigger().
-    //
-    // addTrigger() modifies the AWS::Cognito::UserPool CloudFormation resource to add
-    // LambdaConfig. CloudFormation's resource provider then calls UpdateUserPool with
-    // the full resource state — including Schema — even though Schema hasn't changed.
-    // Cognito rejects any UpdateUserPool call that re-sends existing schema attributes
-    // ("Existing schema attributes cannot be modified or deleted.").
-    //
-    // The AwsCustomResource calls UpdateUserPool with ONLY LambdaConfig (no Schema),
-    // which Cognito accepts as a partial update. The UserPool CloudFormation resource
-    // is never modified, so the schema immutability error is never triggered.
-    preTokenFn.addPermission('CognitoPreTokenInvoke', {
-      principal:  new iam.ServicePrincipal('cognito-idp.amazonaws.com'),
-      sourceArn:  this.userPool.userPoolArn,
-      action:     'lambda:InvokeFunction',
-    });
-
-    new cr.AwsCustomResource(this, 'PreTokenTrigger', {
-      resourceType: 'Custom::CognitoPreTokenTrigger',
-      onCreate: {
-        service:            'CognitoIdentityServiceProvider',
-        action:             'updateUserPool',
-        parameters: {
-          UserPoolId:   this.userPool.userPoolId,
-          LambdaConfig: { PreTokenGeneration: preTokenFn.functionArn },
-        },
-        physicalResourceId: cr.PhysicalResourceId.of('PreTokenTrigger'),
-      },
-      onUpdate: {
-        service:            'CognitoIdentityServiceProvider',
-        action:             'updateUserPool',
-        parameters: {
-          UserPoolId:   this.userPool.userPoolId,
-          LambdaConfig: { PreTokenGeneration: preTokenFn.functionArn },
-        },
-        physicalResourceId: cr.PhysicalResourceId.of('PreTokenTrigger'),
-      },
-      policy: cr.AwsCustomResourcePolicy.fromStatements([
-        new iam.PolicyStatement({
-          actions:   ['cognito-idp:UpdateUserPool'],
-          resources: [`arn:aws:cognito-idp:${this.region}:${this.account}:userpool/*`],
-        }),
-      ]),
-      installLatestAwsSdk: false,
-    });
+    this.userPool.addTrigger(cognito.UserPoolOperation.PRE_TOKEN_GENERATION, preTokenFn);
 
     // ── Cognito Groups ─────────────────────────────────────────────────────
     const groups: Array<{ name: string; description: string; precedence: number }> = [

@@ -642,6 +642,33 @@ is per-app accounts (one `platform.accounts` row per app per user-account
 relationship); M2.2 ratifies the model formally before M4's writer
 update lands.
 
+### 3.2a Pre-token-generation trigger not durably wired
+
+**Status: Resolved by Issue #141 / PR replacing AwsCustomResource with addTrigger()**
+
+The pre-token-generation Lambda was wired via an `AwsCustomResource`
+that called `UpdateUserPool` with `LambdaConfig`. This approach has a
+structural flaw: `AwsCustomResource.onUpdate` only re-fires when the
+custom resource's *own* properties change. If any other UserPool
+property is updated by CloudFormation (e.g., a Schema change, a
+client update), the UserPool CFN resource is updated directly, and
+`UpdateUserPool` is called without `LambdaConfig` — silently clearing
+the trigger wiring.
+
+This happened on 2026-04-28 when a UserPool-only stack update cleared
+`LambdaConfig`. Symptom: JWTs lacked the `accounts` claim; Stock
+Analyser Market Analysis broke for affected users.
+
+**Fix:** replaced the custom resource with `userPool.addTrigger(
+UserPoolOperation.PRE_TOKEN_GENERATION, preTokenFn)`. `addTrigger()`
+inlines `LambdaConfig` into the `AWS::Cognito::UserPool` CloudFormation
+resource so it is treated as first-class UserPool state and can never
+be cleared by a future stack update.
+
+Note: even with the trigger correctly wired, the `accounts` claim is
+still empty due to Section 3.2 (appSlug not written). Both bugs must
+be fixed before account-scoped Lambda calls will succeed.
+
 ### 3.3 Frontend auth store and JWT claims
 
 **Status uncertain — code verification still needed (M9 scope)**
