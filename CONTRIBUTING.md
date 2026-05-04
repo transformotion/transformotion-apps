@@ -768,6 +768,130 @@ If the platform's threat model changes (third-party Lambda code, multi-tenant La
 
 **Client-side auth follows the same layered architecture as data access.** A domain interface (`AuthService`) lives in contracts. Implementations are named for what they wrap: `CognitoAuthService` (production) and `MockAuthService` (v0). Selection is build-time per 5.3. Components, services, and hooks access claim-derived data only via the `AuthService` interface — never by reading JWT claims directly. Frontend treatment of auth is symmetric to Lambda treatment: typed access via interface; raw access only in the implementation layer.
 
+### 5.7 Contracts
+
+A **contract** documents the binding interface between a provider and one or more consumers. Contracts cover any provider/consumer boundary worth documenting: HTTP APIs, Lambda-to-Lambda calls, Lambda-to-AWS service usage, TypeScript domain interfaces, data model schemas, and internal helper APIs. Contracts are inherently normative — changes are spec changes that all parties must accommodate.
+
+**Contracts are normative by definition.** Anything in the contracts directory is a binding interface specification. Observation, history, project state, and other non-binding content do not belong in contracts; they live in operations docs, architecture inventory, or git history. The directory is the marker — content in it is binding; content outside it is not.
+
+#### Canonical location
+
+Contracts live canonically in the **v0 repo** (`transformotion-apps-b8`), not the Claude repo. The v0 repo is the only location both AIs (v0 and Claude Code) can read natively — v0 cannot access the Claude repo; Claude Code can access the v0 repo.
+
+The Claude repo accesses contracts via a one-way sync from v0 repo into a gitignored location. Runtime code imports contracts from the gitignored synced location. The sync is implemented in `scripts/sync-v0.sh` and runs as part of CI before tests.
+
+#### Single source of truth
+
+Each contract has exactly one canonical location (in v0 repo). Runtime code references contracts by import from the synced location; no copies, no embedded mirrors, no independent declarations of types that match contracts.
+
+This is a strict rule. Independent type declarations in runtime code that match contract types are non-conforming, regardless of whether the duplication is convenient. The compiler does not detect divergence between independent declarations; eliminating the possibility of divergence requires eliminating duplicate declarations.
+
+#### Authoring discipline
+
+Contracts are edited in the v0 repo first. Claude-side work that needs a contract change goes through this workflow:
+
+1. Edit the contract in the v0 repo (`transformotion-apps-b8/contracts/...`)
+2. Commit and push the v0 repo change
+3. Run sync into Claude repo (or wait for CI to do it)
+4. Then proceed with Claude-side implementation work that depends on the change
+
+The discipline is enforced by CI verification (Level 3): Claude repo's CI verifies the gitignored sync target is byte-identical to v0 repo's contracts at HEAD. Mechanical guardrails (gitignore, sync target README warning against direct edits, sync script refusing to run if it detects local modifications) reduce the chance of mistakes reaching CI.
+
+#### Bucket structure
+
+Contracts within each scope are organised into two buckets: `frontend/` and `backend/`. The structure in v0 repo:
+
+```
+transformotion-apps-b8/contracts/
+  budget-tracker/
+    frontend/        (HTTP API shapes, data models, frontend conventions)
+    backend/         (per-domain Lambda contracts, IAM, DynamoDB schemas)
+  stock-analyser/
+    frontend/
+    backend/
+  platform/
+    frontend/        (cross-app domain interfaces — AuthService, etc.)
+    backend/         (Lambda-to-Lambda contracts, platform-shared schemas)
+```
+
+**Frontend bucket** holds:
+- HTTP API contracts (request/response shapes, status codes, authentication requirements)
+- Data model contracts (entity shapes consumed by frontend code)
+- Domain interface contracts (AuthService and similar — v0 implements mock versions)
+- Frontend-internal conventions (UI patterns, AI prompts, design tokens)
+
+**Backend bucket** holds:
+- Per-domain backend contracts (one document per functional domain — see *Granularity* below)
+- Lambda-to-Lambda contracts (synthetic event shapes, Pattern B trust)
+- Lambda-to-AWS contracts (DynamoDB schema definitions, IAM scope per Lambda, SES grants)
+- Internal helper interfaces
+
+**Platform-shared contracts** live in `contracts/platform/` — sibling to per-app scopes. Platform-shared types like `Account`, `User`, `AccountMember` live here.
+
+#### Granularity (backend contracts)
+
+Backend service interface contracts are organised by **functional domain**, not per-Lambda. Each domain document covers the related operations within that domain plus their cross-Lambda interactions.
+
+Examples of domains: budget operations, auth operations, AI services, account operations, user operations, data storage. Specific domain boundaries are decided during authoring; the principle is that tightly-related operations belong together while loosely-related operations are separated.
+
+Per-domain over per-Lambda: when reasoning about workflows that span multiple Lambdas (e.g., budget deletion cascading to rules; auth setup → claim refresh → service access), related operations belong together cognitively. Per-Lambda forces cross-referencing for any cross-Lambda flow.
+
+Per-domain over per-app: per-app groups loosely-related Lambdas. Per-domain is the right level of abstraction.
+
+#### Format (hybrid)
+
+Each domain has two paired files:
+
+- **`<domain>.ts`** — typed declarations for request/response shapes, entity types, error types. Authoritative for *shape*. Imported directly by Claude code.
+- **`<domain>.md`** — behavioural specs, edge cases, rate limits, validation rules, examples. Authoritative for *behaviour and context*.
+
+**Format authority rule:** TypeScript is authoritative for shape. Markdown describes shape *semantically* but does NOT redeclare types. Markdown content follows this discipline:
+
+- Reference types by name (e.g., "`BudgetInput` requires...") without redeclaring fields
+- Sample data is labelled "Example" and clearly distinct from type definitions
+- Behavioural notes (e.g., "returns null if X", "rate-limited to 5/min") live only in markdown
+- Cross-references to paired `.ts` files are explicit ("See `budget-operations.ts` for type definitions")
+
+Why hybrid: TypeScript-only forces behavioural specs into JSDoc comments where they're easy to miss while scanning for field names; markdown-only requires runtime code to either auto-generate types from markdown or maintain types separately (which is itself a mirror, conflicting with the single-source-of-truth rule). Hybrid eliminates both problems.
+
+#### v0-sufficient minimum content
+
+Frontend contracts must contain at least the content v0 needs to build a working mock:
+
+- **HTTP API contracts:** path, method, request shape (params + body), response shape (success + error cases), status codes, authentication requirement
+- **Domain interface contracts:** method signatures, return types, error/null cases, behavioural notes
+- **Data model contracts:** field names, types, optionality, validation rules, relationships to other shapes
+
+Examples (sample payloads, return values) are encouraged but not required.
+
+#### Backend contract template
+
+Per-domain backend contracts follow a standard structure:
+
+- **Operations** — list of Lambda functions in this domain, with high-level purpose
+- **Type definitions** — paired `.ts` file holds the actual types; `.md` file references them
+- **Behavioural specs** — what each operation does, in what conditions
+- **Cross-Lambda interactions** — how operations within the domain coordinate
+- **External dependencies** — AWS services (Cognito, SES, DynamoDB) the domain interacts with; flagged for v0 mockability awareness
+- **Authentication/authorisation model** — which middleware wrappers, which guards
+- **IAM scope** — least-privilege required
+- **Error responses** — what status codes, when
+- **Rate limiting/throttling** — if any
+- **Cross-references** — to paired frontend contracts, to other domain contracts, to platform contracts
+
+#### Pairing and cross-references
+
+Where a frontend contract has a corresponding backend contract (e.g., an HTTP API has both a UI-facing shape and a Lambda implementation):
+
+- **Naming convention (default).** Paired files share a base name. `accounts.md` in `frontend/` and `accounts.md` in `backend/` are implicitly paired.
+- **Explicit cross-reference (always).** Each contract that has a pair contains an explicit cross-reference to its counterpart.
+
+Not every contract has a pair. Frontend-internal conventions (UI patterns) typically don't have backend counterparts. Backend-only contracts (Lambda-to-Lambda interfaces, internal helpers) don't have frontend counterparts.
+
+#### Mockability flagging
+
+Backend contracts include an explicit "External dependencies" section listing AWS services the domain interacts with — Cognito, SES, DynamoDB, etc. This serves both v0 (knows what to stub when generating mocks) and Claude (understands what's the platform's vs what's AWS's).
+
 ---
 
 ## 6. Utility categories and conventions
