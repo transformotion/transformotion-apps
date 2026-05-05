@@ -885,6 +885,22 @@ importers:
         specifier: ^5.4.0
         version: 5.7.3
 
+  migration-utilities/infrastructure:
+    dependencies:
+      aws-cdk-lib:
+        specifier: ^2.100.0
+        version: 2.250.0(constructs@10.6.0)
+      constructs:
+        specifier: ^10.0.0
+        version: 10.6.0
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.17
+      typescript:
+        specifier: ^5.4.0
+        version: 5.7.3
+
   packages/api-client:
     devDependencies:
       typescript:

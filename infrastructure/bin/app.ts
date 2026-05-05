@@ -18,6 +18,9 @@ import { StockAnalyserTablesStack } from '../lib/stock-analyser/stock-analyser-t
 import { BudgetTrackerTablesStack } from '../lib/budget-tracker/budget-tracker-tables-stack';
 import { BudgetTrackerApiStack }    from '../lib/budget-tracker/budget-tracker-api-stack';
 
+// ── Migration Utilities stacks ────────────────────────────────────────────────
+import { MigrationsApiStack } from '../../migration-utilities/infrastructure/lib/migrations-api-stack';
+
 const app = new cdk.App();
 
 const env = {
@@ -101,6 +104,15 @@ new BudgetTrackerApiStack(app, 'TransformotionDev-BudgetTrackerApi', {
   apiResource: devPlatformApi.apiResource,
 });
 
+new MigrationsApiStack(app, 'TransformotionDev-MigrationsApi', {
+  env,
+  stage:       'dev',
+  description: 'Transformotion Apps — Dev Migration Utilities API routes',
+  api:         devPlatformApi.api,
+  authoriser:  devPlatformApi.authoriser,
+  apiResource: devPlatformApi.apiResource,
+});
+
 // ── Prod stacks ────────────────────────────────────────────────────────────────
 
 new StorageStack(app, 'TransformotionProd-Storage', {
@@ -170,6 +182,15 @@ new BudgetTrackerApiStack(app, 'TransformotionProd-BudgetTrackerApi', {
   env,
   stage:       'prod',
   description: 'Transformotion Apps — Prod Budget Tracker API routes',
+  api:         prodPlatformApi.api,
+  authoriser:  prodPlatformApi.authoriser,
+  apiResource: prodPlatformApi.apiResource,
+});
+
+new MigrationsApiStack(app, 'TransformotionProd-MigrationsApi', {
+  env,
+  stage:       'prod',
+  description: 'Transformotion Apps — Prod Migration Utilities API routes',
   api:         prodPlatformApi.api,
   authoriser:  prodPlatformApi.authoriser,
   apiResource: prodPlatformApi.apiResource,

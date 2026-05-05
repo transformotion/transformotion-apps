@@ -90,13 +90,21 @@ transformotion-apps/
 ├── migration-artifacts/                   # Historical data fixtures for backfill
 │   └── budget-tracker/                    # 726-transaction Budget Tracker export
 │
+├── migration-utilities/                   # Data migration utilities (CONTRIBUTING.md Section 6)
+│   └── infrastructure/                    # CDK stacks for the /api/migrations/... namespace
+│       ├── lib/
+│       │   └── migrations-api-stack.ts    # MigrationsApiStack — skeleton, routes added by consumers
+│       ├── package.json                   # @transformotion/migration-utilities-infrastructure
+│       └── tsconfig.json
+│
 ├── .github/
 │   ├── workflows/
 │   │   ├── ci.yml                         # PR typecheck + lint + CDK synth
 │   │   ├── cd.yml                         # Manual full-platform redeploy
 │   │   ├── deploy-platform.yml            # Triggered by infrastructure/lib/platform/** changes
 │   │   ├── deploy-stock-analyser.yml      # Triggered by apps/stock-analyser/** changes
-│   │   └── deploy-budget-tracker.yml      # Triggered by apps/budget-tracker/** changes
+│   │   ├── deploy-budget-tracker.yml      # Triggered by apps/budget-tracker/** changes
+│   │   └── deploy-migration-utilities.yml # Triggered by migration-utilities/** changes
 │   └── CODEOWNERS
 │
 ├── CLAUDE.md                              # Repository-level guide for Claude Code
@@ -121,6 +129,12 @@ Several directories above are migrating to different homes per
 - `contracts/platform/` and `contracts/stock-analyser/` will be created
   (M2.3 ratifies the contracts policy; subsequent work creates them).
 
+`migration-utilities/infrastructure/` is **not** subject to the M7
+platform restructuring. Per CONTRIBUTING.md Section 6.4, it is a
+permanent peer to `platform/infrastructure/` — utility infrastructure
+is conceptually distinct from platform infrastructure and stays
+separate.
+
 When those migrations run, this document gets updated in the same PR
 that lands them.
 
@@ -138,6 +152,10 @@ that lands them.
 - `functions/auth/*` — explicit nested glob because `functions/auth/`
   contains its own per-Lambda workspaces
 - `infrastructure` (single workspace at root)
+- `migration-utilities/infrastructure` — CDK stack package for the
+  migrations namespace
+- `migration-utilities/**` — pre-registered glob for future Lambda
+  packages within the namespace (e.g. `migration-utilities/budget-tracker/transactions/`)
 
 `apps/web-vite-backup` is explicitly excluded from workspaces.
 
@@ -195,7 +213,8 @@ the other app's deployment.
 | `infrastructure/lib/platform/**` | `deploy-platform.yml` |
 | `infrastructure/bin/**` | `deploy-platform.yml` |
 | `functions/**` | `deploy-platform.yml` |
-| `packages/**` | `deploy-stock-analyser.yml` only (gap: `deploy-budget-tracker.yml` missing this filter — tracked for M14 fix; currently latent because budget-tracker workflow is a no-op placeholder pending Issue #17/M5) |
+| `migration-utilities/**` | `deploy-migration-utilities.yml` |
+| `packages/**` | `deploy-stock-analyser.yml` only (gap: `deploy-budget-tracker.yml` and `deploy-migration-utilities.yml` missing this filter — tracked for M14 fix; currently latent because budget-tracker workflow is a no-op placeholder pending Issue #17/M5) |
 
 Path filter completeness is not yet verified for `.github/workflows/**`
 and `scripts/ci/**` — changes to CI machinery may not auto-trigger the
