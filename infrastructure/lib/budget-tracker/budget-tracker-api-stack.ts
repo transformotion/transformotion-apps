@@ -1,7 +1,6 @@
 import * as path from 'path';
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
-import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -10,14 +9,18 @@ import { Construct } from 'constructs';
 
 export interface BudgetTrackerApiStackProps extends cdk.StackProps {
   stage: 'dev' | 'prod';
-  /** Cognito User Pool — used to create the JWT authoriser for budget routes. */
-  userPool: cognito.IUserPool;
+  /** Shared REST API from PlatformApiStack — budget-tracker routes mount here. */
+  api: apigateway.RestApi;
+  /** Shared JWT authoriser from PlatformApiStack. */
+  authoriser: apigateway.CognitoUserPoolsAuthorizer;
+  /** Pre-built /api resource from PlatformApiStack — budget-tracker mounts /budget/v1 below it. */
+  apiResource: apigateway.Resource;
 }
 
 /**
  * BudgetTrackerApiStack — Lambda functions and API routes for the Budget Tracker.
  *
- * Mounts under /api/budget/v1/:
+ * Mounts onto the shared platform API Gateway under /api/budget/v1/:
  *   GET    /transactions
  *   POST   /transactions/bulk
  *   PATCH  /transactions/:id
@@ -38,32 +41,12 @@ export class BudgetTrackerApiStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: BudgetTrackerApiStackProps) {
     super(scope, id, props);
 
-    const { stage, userPool } = props;
-
-    // ── Own REST API Gateway (avoids cross-stack CDK dependency cycle) ─────────
-    const api = new apigateway.RestApi(this, 'BudgetApi', {
-      restApiName:  `budget-tracker-api-${stage}`,
-      description:  `Budget Tracker ${stage} API`,
-      deployOptions: { stageName: stage },
-      defaultCorsPreflightOptions: {
-        allowOrigins: apigateway.Cors.ALL_ORIGINS,
-        allowMethods: apigateway.Cors.ALL_METHODS,
-        allowHeaders: ['Content-Type', 'Authorization', 'X-Account-Id'],
-        maxAge: cdk.Duration.hours(1),
-      },
-    });
-
-    const authoriser = new apigateway.CognitoUserPoolsAuthorizer(this, 'Authoriser', {
-      cognitoUserPools: [userPool],
-      authorizerName:   `budget-tracker-jwt-${stage}`,
-      resultsCacheTtl:  cdk.Duration.minutes(5),
-    });
+    const { stage, authoriser, apiResource: platformApiResource } = props;
 
     const auth = authMethodOptions(authoriser);
 
-    // /api/budget/v1
-    const apiResource = api.root
-      .addResource('api')
+    // /api/budget/v1 — mounted on the shared platform gateway's /api resource
+    const apiResource = platformApiResource
       .addResource('budget')
       .addResource('v1');
 
@@ -217,12 +200,6 @@ export class BudgetTrackerApiStack extends cdk.Stack {
       'POST', new apigateway.LambdaIntegration(migrateFn, { proxy: true }), auth
     );
 
-    // ── Output: Budget Tracker API base ───────────────────────────────────────
-    new cdk.CfnOutput(this, 'BudgetApiBase', {
-      value:       `${api.url}api/budget/v1`,
-      description: `Budget Tracker API base URL for ${stage}`,
-      exportName:  `Transformotion-${stage}-BudgetApiBase`,
-    });
   }
 }
 
