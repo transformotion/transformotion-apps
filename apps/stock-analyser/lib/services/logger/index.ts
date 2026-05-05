@@ -8,7 +8,7 @@
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
 
-export type AppName = 'launchpad' | 'budget-tracker' | 'stock-signal'
+export type AppName = 'launchpad' | 'stock-signal'
 
 export interface LogContext {
   userId?: string
