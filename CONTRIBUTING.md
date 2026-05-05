@@ -622,6 +622,28 @@ sequencing. When the item is later promoted to a numbered milestone,
 both the milestone and the Status (if not already Todo) get updated
 together.
 
+### 4.9 Cross-stack resource moves
+
+When relocating an AWS resource (Lambda, table, route registration, etc.) between CDK stacks, the deploy order matters. CloudFormation cross-stack exports create dependencies between stacks; if the deploy sequence isn't right, CFN refuses to delete an export still referenced by another stack.
+
+The pattern that works:
+
+1. **New stack first.** Deploy the stack that gains the resource. The new resource exists; new exports get created.
+2. **Consumer stack with `--exclusively`.** Deploy the stack whose CFN template references those exports (typically PlatformApiStack for route registrations). Use `cdk deploy <stack-name> --exclusively` so CDK does NOT cascade into dependent stacks. The consumer picks up the new exports; old export references drop out.
+3. **Old stack last.** Deploy the stack that loses the resource. By this point, the old exports are no longer referenced — CFN can clean them up.
+
+Without `--exclusively` in step 2, `cdk deploy` cascades into the old stack's redeploy, which fails because the old stack's exports are still being referenced by the consumer's *previous* CFN template (the one that hasn't redeployed yet). `--exclusively` breaks that loop.
+
+This pattern applies to any cross-stack resource move — not just Lambdas. Table moves, IAM role moves, gateway resource moves all hit the same mechanic.
+
+Worked example: M6 #176 relocated the budget-migrate Lambda from BudgetTrackerApiStack to MigrationsApiStack. The deploy sequence was:
+
+1. `cdk deploy TransformotionDev-MigrationsApi` — creates the new Lambda; exports its ARN
+2. `cdk deploy TransformotionDev-Api --exclusively` — Platform's CFN gets the new route registration with the new Lambda ARN; old route registration drops out
+3. `cdk deploy TransformotionDev-BudgetTrackerApi` — old MigrateFn definition removed; old Lambda ARN export disappears (no longer referenced)
+
+If step 2 had run without `--exclusively`, CDK would have tried to redeploy BudgetTrackerApiStack as part of the cascade, which still had the export reference at that point — failure.
+
 ---
 ## 5. Architectural patterns
 
