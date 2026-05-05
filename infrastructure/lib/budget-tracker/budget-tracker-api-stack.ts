@@ -35,7 +35,6 @@ export interface BudgetTrackerApiStackProps extends cdk.StackProps {
  *   POST   /ai/review
  *   POST   /ai/csv-analysis
  *   GET    /business-export
- *   POST   /migrate-from-localstorage
  */
 export class BudgetTrackerApiStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: BudgetTrackerApiStackProps) {
@@ -138,25 +137,6 @@ export class BudgetTrackerApiStack extends cdk.Stack {
     });
     txTable.grantReadData(exportFn);
 
-    // ── budget-migrate-handler ────────────────────────────────────────────────
-    const migrateFn = new lambdaNodejs.NodejsFunction(this, 'MigrateFn', {
-      functionName: `budget-migrate-handler-${stage}`,
-      entry:        path.join(fnDir, 'budget-migrate/src/index.ts'),
-      handler:      'handler',
-      runtime:      lambda.Runtime.NODEJS_20_X,
-      timeout:      cdk.Duration.seconds(120),
-      memorySize:   512,
-      environment: {
-        TRANSACTIONS_TABLE: txTable.tableName,
-        RULES_TABLE:        rulesTable.tableName,
-        SETTINGS_TABLE:     settingsTable.tableName,
-      },
-      bundling,
-    });
-    txTable.grantReadWriteData(migrateFn);
-    rulesTable.grantReadWriteData(migrateFn);
-    settingsTable.grantReadWriteData(migrateFn);
-
     // ── API routes ────────────────────────────────────────────────────────────
     // /transactions
     const txRes     = apiResource.addResource('transactions');
@@ -193,11 +173,6 @@ export class BudgetTrackerApiStack extends cdk.Stack {
     // /business-export
     apiResource.addResource('business-export').addMethod(
       'GET', new apigateway.LambdaIntegration(exportFn, { proxy: true }), auth
-    );
-
-    // /migrate-from-localstorage
-    apiResource.addResource('migrate-from-localstorage').addMethod(
-      'POST', new apigateway.LambdaIntegration(migrateFn, { proxy: true }), auth
     );
 
   }

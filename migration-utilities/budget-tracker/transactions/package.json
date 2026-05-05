@@ -1,12 +1,12 @@
 {
-  "name": "@transformotion/fn-budget-migrate",
+  "name": "@transformotion/fn-migration-budget-tracker-transactions",
   "version": "0.0.0",
   "private": true,
   "main": "./src/index.ts",
   "scripts": {
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
-    "lint": "echo \"lint: budget-migrate\""
+    "lint": "echo \"lint: fn-migration-budget-tracker-transactions\""
   },
   "dependencies": {
     "@transformotion/budget-domain": "workspace:*",
@@ -15,7 +15,6 @@
   "devDependencies": {
     "@aws-sdk/client-dynamodb": "^3",
     "@aws-sdk/lib-dynamodb": "^3",
-    "@aws-sdk/client-lambda": "^3",
     "@types/aws-lambda": "^8",
     "@types/node": "^22",
     "typescript": "*"

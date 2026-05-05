@@ -78,7 +78,8 @@ interface BudgetRepository {
   // Business export
   generateBusinessExportCsv(filters?: { from?: string; to?: string }): Promise<Blob>;
 
-  // Migration
+  // Migration — calls POST /api/migrations/budget-tracker/transactions/import
+  // (MigrationsApi stack, not BudgetTrackerApi). UI adaptor update tracked in #180.
   migrateFromLocalStorage(data: {
     transactions: Transaction[];
     rules: CustomRule[];

@@ -1,5 +1,9 @@
+import * as path from 'path';
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as lambdaNodejs from 'aws-cdk-lib/aws-lambda-nodejs';
 import { Construct } from 'constructs';
 
 export interface MigrationsApiStackProps extends cdk.StackProps {
@@ -29,7 +33,7 @@ export class MigrationsApiStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: MigrationsApiStackProps) {
     super(scope, id, props);
 
-    const { apiResource } = props;
+    const { stage, apiResource, authoriser } = props;
 
     // Consistent with StockAnalyserApiStack and BudgetTrackerApiStack:
     // addResource() scopes the construct to the parent resource (a
@@ -41,6 +45,81 @@ export class MigrationsApiStack extends cdk.Stack {
     this.migrationsResource = apiResource.addResource('migrations');
 
     cdk.Tags.of(this).add('app', 'migration-utilities');
-    cdk.Tags.of(this).add('environment', props.stage);
+    cdk.Tags.of(this).add('environment', stage);
+
+    const auth = authMethodOptions(authoriser);
+
+    const bundling: lambdaNodejs.BundlingOptions = {
+      externalModules: ['@aws-sdk/*'],
+      minify: true,
+      sourceMap: false,
+      forceDockerBundling: false,
+    };
+
+    // ── budget-tracker tables (imported by name) ──────────────────────────────
+    const txTable = dynamodb.Table.fromTableName(
+      this, 'BudgetTrackerTxTable', `budget-tracker.transactions-${stage}`,
+    );
+    const rulesTable = dynamodb.Table.fromTableName(
+      this, 'BudgetTrackerRulesTable', `budget-tracker.rules-${stage}`,
+    );
+    const settingsTable = dynamodb.Table.fromTableName(
+      this, 'BudgetTrackerSettingsTable', `budget-tracker.settings-${stage}`,
+    );
+
+    // ── migration-budget-tracker-transactions Lambda ───────────────────────────
+    const fnDir = path.join(__dirname, '..', '..', 'budget-tracker');
+
+    const transactionsMigrateFn = new lambdaNodejs.NodejsFunction(this, 'BudgetTrackerTransactionsMigrateFn', {
+      functionName: `migration-budget-tracker-transactions-${stage}`,
+      entry:        path.join(fnDir, 'transactions/src/index.ts'),
+      handler:      'handler',
+      runtime:      lambda.Runtime.NODEJS_20_X,
+      timeout:      cdk.Duration.seconds(120),
+      memorySize:   512,
+      environment: {
+        TRANSACTIONS_TABLE: txTable.tableName,
+        RULES_TABLE:        rulesTable.tableName,
+        SETTINGS_TABLE:     settingsTable.tableName,
+      },
+      bundling,
+    });
+
+    txTable.grantReadWriteData(transactionsMigrateFn);
+    rulesTable.grantReadWriteData(transactionsMigrateFn);
+    settingsTable.grantReadWriteData(transactionsMigrateFn);
+
+    // ── POST /api/migrations/budget-tracker/transactions/import ───────────────
+    const budgetTrackerMigrations = this.migrationsResource.addResource('budget-tracker');
+    const transactionsMigrations  = budgetTrackerMigrations.addResource('transactions');
+    transactionsMigrations.addResource('import').addMethod(
+      'POST',
+      new apigateway.LambdaIntegration(transactionsMigrateFn, { proxy: true }),
+      auth,
+    );
   }
+}
+
+function authMethodOptions(
+  authoriser: apigateway.CognitoUserPoolsAuthorizer,
+): apigateway.MethodOptions {
+  return {
+    authorizer:        authoriser,
+    authorizationType: apigateway.AuthorizationType.COGNITO,
+    methodResponses: [
+      {
+        statusCode: '200',
+        responseParameters: {
+          'method.response.header.Access-Control-Allow-Origin':  true,
+          'method.response.header.Access-Control-Allow-Headers': true,
+        },
+      },
+      { statusCode: '400' },
+      { statusCode: '401' },
+      { statusCode: '403' },
+      { statusCode: '429' },
+      { statusCode: '500' },
+      { statusCode: '502' },
+    ],
+  };
 }

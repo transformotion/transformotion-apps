@@ -53,7 +53,6 @@ Source: `infrastructure/lib/budget-tracker/`
 | `budget-ai-review-handler-{stage}` | `POST /api/budget/v1/ai/review` |
 | `budget-ai-csv-analysis-handler-{stage}` | `POST /api/budget/v1/ai/csv-analysis` |
 | `budget-export-handler-{stage}` | `GET /api/budget/v1/business-export` |
-| `budget-migrate-handler-{stage}` | `POST /api/budget/v1/migrate-from-localstorage` |
 
 ## DynamoDB tables
 

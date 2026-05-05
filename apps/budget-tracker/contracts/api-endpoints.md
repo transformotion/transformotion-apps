@@ -240,8 +240,10 @@ Only transactions with `_business: true` are included.
 
 ## Migration
 
-### `POST /api/budget/migrate-from-localstorage`
+### `POST /api/migrations/budget-tracker/transactions/import`
 One-click migration from browser localStorage to backend. Called once per account when a user first logs in with local data present.
+
+This endpoint lives in the `migration-utilities` namespace (stack: `Transformotion{Stage}-MigrationsApi`), not under `/api/budget/v1`. See `migration-utilities/budget-tracker/transactions/` for the Lambda source.
 
 **Request:**
 ```typescript
