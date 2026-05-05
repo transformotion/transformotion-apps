@@ -66,7 +66,7 @@ async function batchWrite(table: string, items: Record<string, unknown>[]) {
   }
 }
 
-// POST /api/budget/v1/migrate-from-localstorage
+// POST /api/migrations/budget-tracker/transactions/import
 export const handler = withAuth(async ({ auth, account, event }) => {
   requireAppAccess(auth, 'budget-tracker');
   requireAccountAccess(auth, 'budget-tracker', account.accountId);

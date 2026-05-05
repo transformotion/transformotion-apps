@@ -150,11 +150,13 @@ Streams CSV directly from DynamoDB Query results.
 IAM permissions:
 - `dynamodb:Query` on `budget-tracker.transactions`
 
-### `budget-migrate-handler`
+### `migration-budget-tracker-transactions`
 
-Handles: `POST /migrate-from-localstorage`
+Handles: `POST /api/migrations/budget-tracker/transactions/import`
 
 Idempotent bulk import. Uses composite key `{date, amount, description, file}` to deduplicate.
+
+Lives in `migration-utilities/budget-tracker/transactions/` and is deployed by `Transformotion{Stage}-MigrationsApi` (not BudgetTrackerApi).
 
 IAM permissions:
 - `dynamodb:BatchWriteItem`, `dynamodb:Query`, `dynamodb:PutItem` on all `budget-tracker.*` tables
