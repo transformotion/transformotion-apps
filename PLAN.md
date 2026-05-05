@@ -480,9 +480,11 @@ that `requireAccountAccess` succeeds against deployed Lambdas.
 
 ### Purpose
 
-`BudgetTrackerApi` currently has its own API Gateway, separate from the platform API Gateway. This is documented in code as a "workaround for cross-stack CDK dependency cycle." `MONOREPO.md` declares that apps share the platform API Gateway — currently true for stock-analyser, false for budget-tracker. New apps onboarding will hit the same dependency cycle unless the structural problem is resolved.
+`BudgetTrackerApi` currently has its own API Gateway, separate from the platform API Gateway. This is documented in code as a "workaround for cross-stack CDK dependency cycle" — though investigation in #150 showed there was no actual circular dependency, just unfinished prop-threading between stacks. `MONOREPO.md` declares that apps share the platform API Gateway — currently true for stock-analyser, false for budget-tracker. New apps onboarding would hit the same wiring gap unless the structural pattern is resolved.
 
-This milestone retires `BudgetTrackerApi`'s separate gateway and moves its handlers onto the platform gateway. The CDK dependency-cycle workaround goes away.
+This milestone retires `BudgetTrackerApi`'s separate API Gateway construct (not the entire stack) and mounts its handlers onto the platform gateway. The CDK workaround goes away; `BudgetTrackerApiStack` continues to exist as the home for app-specific Lambda definitions and IAM, mirroring how `StockAnalyserApiStack` houses stock-analyser Lambdas. Both app stacks now consume the shared `api`/`authoriser` from `PlatformApiStack` via props.
+
+Note: this consolidation collapses the *workaround* third gateway. The auth-api gateway (forgot-provider flow) remains intentionally separate per its pre-authentication design (M2.2 #111).
 
 The milestone also resolves a related location problem: Budget Tracker code currently lives in two places. A duplicate component tree under `apps/stock-analyser/components/budget-tracker/` (which `apps/stock-analyser/` deploys at the `/budget-tracker` route) and a proper workspace at `apps/budget-tracker/` (which has a no-op echo placeholder for its deploy workflow and is not deployed). M5 deletes the duplicate and activates the proper workspace's deploy workflow, so Budget Tracker becomes a deployed standalone app at its own URL.
 
@@ -492,12 +494,12 @@ Note: M5 does not restructure Budget Tracker's internal code architecture. The c
 
 **Gateway consolidation:**
 
-- Budget-tracker Lambda routes (transactions, rules, settings, ai, export, migrate) mounted on the platform API Gateway.
-- `BudgetTrackerApi` stack retired.
+- Budget-tracker Lambda routes (transactions, rules, settings, ai, export, migrate) mounted on the platform API Gateway alongside stock-analyser's routes.
+- `BudgetTrackerApiStack`'s separate `RestApi` and `CognitoUserPoolsAuthorizer` constructions removed; stack now matches `StockAnalyserApiStack`'s pattern (receives `api`/`authoriser` from `PlatformApiStack` via props; houses app-specific Lambdas and IAM).
 - `NEXT_PUBLIC_BUDGET_API_URL` and equivalent env vars removed.
-- CDK dependency-cycle workaround code removed; structural fix documented in `cdk.md`.
+- CDK workaround code removed; structural pattern documented in `cdk.md`.
 - CORS verification: platform gateway covers Budget Tracker frontend needs.
-- Single platform gateway serves all apps. The "shared API gateway" rule in `MONOREPO.md` is fully honoured.
+- Application routes consolidated onto the shared platform gateway. Auth-api gateway remains intentionally separate per M2.2 #111. The "shared API gateway" rule in `MONOREPO.md` applies to app gateways and is now fully honoured.
 
 **Code location untangling:**
 
@@ -513,7 +515,7 @@ Goal 2 primarily (platform deployment substrate now supports shared gateway acro
 
 ### Gate to next
 
-`BudgetTrackerApi` stack absent from CDK output. All budget-tracker routes responding from platform gateway. `apps/stock-analyser/` no longer contains any Budget Tracker code or routes. Budget Tracker deploys to its own URL via its own activated workflow. End-to-end test confirms Budget Tracker app functions with the consolidated gateway and from its own deploy.
+Budget-tracker routes responding from the platform gateway under `/api/budget/v1`. The workaround `budget-tracker-api-{stage}` API Gateway no longer exists in deployed CFN. `BudgetTrackerApiStack` continues to exist housing the app's Lambda definitions, matching `StockAnalyserApiStack`'s shape. `apps/stock-analyser/` no longer contains any Budget Tracker code or routes. Budget Tracker deploys to its own URL via its own activated workflow. End-to-end test confirms Budget Tracker app functions with the consolidated gateway and from its own deploy.
 
 ### Dependencies
 
@@ -568,7 +570,7 @@ changes. All paths go through real Cognito and real DynamoDB.
 ### Dependencies
 
 - M4 #144 done (handleSetup writer fix; PR #157). **Done.** M6 originally listed M4-as-a-milestone as a dependency, but the only piece M6 actually needs from M4 is the writer fix to ensure account-scoped JWT claims work correctly. The remainder of M4 folded into M11 (data migration and provisioning verification both depend on M11's invitation flow design); none of that gates M6.
-- M5 complete (single gateway).
+- M5 complete (workaround gateway retired; budget-tracker routes consolidated onto the shared platform gateway alongside stock-analyser; `BudgetTrackerApiStack` continues to house app Lambdas in symmetry with `StockAnalyserApiStack`).
 - M2.1 complete (canonical persistence pattern ratified).
 
 Note: M6's Budget Tracker activation provides the first real-world
