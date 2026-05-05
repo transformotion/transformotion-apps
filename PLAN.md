@@ -486,7 +486,7 @@ This milestone retires `BudgetTrackerApi`'s separate API Gateway construct (not 
 
 Note: this consolidation collapses the *workaround* third gateway. The auth-api gateway (forgot-provider flow) remains intentionally separate per its pre-authentication design (M2.2 #111).
 
-The milestone also resolves a related location problem: Budget Tracker code currently lives in two places. A duplicate component tree under `apps/stock-analyser/components/budget-tracker/` (which `apps/stock-analyser/` deploys at the `/budget-tracker` route) and a proper workspace at `apps/budget-tracker/` (which has a no-op echo placeholder for its deploy workflow and is not deployed). M5 deletes the duplicate and activates the proper workspace's deploy workflow, so Budget Tracker becomes a deployed standalone app at its own URL.
+The milestone also resolves a related location problem: Budget Tracker code currently lives in two places. A duplicate component tree under `apps/stock-analyser/components/budget-tracker/` (which `apps/stock-analyser/` deploys at the `/budget-tracker` route) and a proper workspace at `apps/budget-tracker/` (mock-only today; deployment activation is M6 scope). M5 deletes the duplicate; the proper workspace's deploy workflow activation and the launchpad tile retargeting move to M6 where they sequence naturally with backend wiring.
 
 Note: M5 does not restructure Budget Tracker's internal code architecture. The code stays as-is (still non-conforming to the canonical layered architecture from M2.1); architectural migration is M7's scope. M5 only changes where the code lives and how it deploys.
 
@@ -504,10 +504,11 @@ Note: M5 does not restructure Budget Tracker's internal code architecture. The c
 **Code location untangling:**
 
 - Duplicate component tree under `apps/stock-analyser/components/budget-tracker/` deleted; `apps/stock-analyser/` no longer contains any Budget Tracker code or routes.
-- `apps/budget-tracker/` deploy workflow activated (currently a no-op echo placeholder). Workflow patterns match `deploy-stock-analyser.yml`.
-- Launchpad's Budget Tracker tile updated to navigate to the deployed Budget Tracker URL.
-- Budget Tracker available at its own URL as a deployed standalone app (running against mocks; backend wiring in M6, architectural migration in M7).
+- `NEXT_PUBLIC_BUDGET_API_URL` env var and its consumers removed (was only consumed by the duplicate tree). Includes removal from `.env.example`, the build arg in `.github/workflows/deploy-stock-analyser.yml`, and the GitHub Actions repo variable in the `dev` environment.
 - `@ts-nocheck` no longer present in Budget Tracker code (consequence of deleting the duplicate tree, which carried the suppressions).
+- Note: launchpad code (handler + tile definition still pointing at `/budget-tracker` on the stock-analyser domain) remains as transitional dead code. The launchpad tile is currently disabled — the route 404 is unreachable organically. M6 cleans up these references when re-enabling the tile with the deployed standalone URL.
+
+Deploy workflow activation and launchpad tile retargeting moved to M6 (issues #154 and #155 reassigned). Both depend on M6's backend wiring being in place — deploying or re-enabling the tile before then would create infrastructure or navigation paths that don't yet do anything useful.
 
 ### Goals served
 
@@ -515,7 +516,7 @@ Goal 2 primarily (platform deployment substrate now supports shared gateway acro
 
 ### Gate to next
 
-Budget-tracker routes responding from the platform gateway under `/api/budget/v1`. The workaround `budget-tracker-api-{stage}` API Gateway no longer exists in deployed CFN. `BudgetTrackerApiStack` continues to exist housing the app's Lambda definitions, matching `StockAnalyserApiStack`'s shape. `apps/stock-analyser/` no longer contains any Budget Tracker code or routes. Budget Tracker deploys to its own URL via its own activated workflow. End-to-end test confirms Budget Tracker app functions with the consolidated gateway and from its own deploy.
+Workaround `budget-tracker-api-{stage}` API Gateway no longer exists in deployed CFN. Budget-tracker routes responding from the platform gateway under `/api/budget/v1`. `BudgetTrackerApiStack` continues to exist housing the app's Lambda definitions, matching `StockAnalyserApiStack`'s shape. `apps/stock-analyser/` no longer contains any Budget Tracker code or routes. `NEXT_PUBLIC_BUDGET_API_URL` env var and its consumers removed across `.env.example`, deploy workflow, and GitHub Actions repo variable. End-to-end test confirms budget-tracker routes work via the consolidated gateway against existing dev account data.
 
 ### Dependencies
 
@@ -552,6 +553,8 @@ and makes Budget Tracker usable end-to-end with real users.
 - The localStorage middleman removed: client posts file contents directly to the import endpoint without an intermediate localStorage hop.
 - 726-transaction historical fixture (`migration-artifacts/budget-tracker/budget-tracker-export-2026-04-18.json`) backfilled.
 - CSV import UI for ANZ and Macquarie statements implemented.
+- `apps/budget-tracker/` deploy workflow activated (currently a no-op echo placeholder). Workflow patterns match `deploy-stock-analyser.yml`. Budget Tracker available at its own URL as a deployed standalone app. (Originally M5 #154; moved to M6 because deploying before backend wiring creates infrastructure that doesn't do anything useful.)
+- Launchpad's Budget Tracker tile updated to navigate to the deployed Budget Tracker standalone URL (replacing the dead-code reference to `/budget-tracker` on the stock-analyser domain). Tile re-enabled. (Originally M5 #155; sequences naturally with the deploy activation.)
 - Mock auth removed from Budget Tracker; replaced with real Cognito auth.
 - localStorage repositories removed; replaced with real DynamoDB-via-Lambda implementations through the canonical layered architecture pattern.
 - Tab-level error-boundary support: new `packages/ui/error-boundaries/` package implementing a generic `TabErrorBoundary` component that wraps tab content so a crash in one tab does not unmount the whole app. Both budget-tracker tabs and stock-analyser tabs wrapped using the same package (per Issue #16; bilateral application avoids leaving stock-analyser shipping without boundaries while waiting for a later milestone).
