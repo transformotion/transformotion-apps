@@ -969,6 +969,22 @@ There is no shared CDK construct library at `packages/cdk-constructs/`.
 Each new Lambda or table reimplements boilerplate. M7 populates
 `packages/cdk-constructs/` as part of deduplication.
 
+**CloudFront behaviors and S3 prefix occupancy — current state (post M6 #154 PR #194):**
+
+The `NetworkStack` CloudFront distribution currently has two configured behaviors:
+
+| Behavior pattern | Origin | Function | Status |
+|---|---|---|---|
+| Default (`*`) | S3 root | None | Serves stock-analyser (transitional; canonical target: launchpad) |
+| `/budget-tracker/*` | S3 `budget-tracker/` prefix | `SubAppIndexRewrite` | Implemented (M6 #154 PR #194) |
+
+Remaining behaviors not yet implemented (M7 scope):
+
+- `/stock-signal/*` — requires stock-analyser to gain `basePath: '/stock-signal'` in `next.config.mjs`, deploy workflow updated to sync to `stock-signal/` prefix, and a new `additionalBehaviors` entry with `SubAppIndexRewrite`
+- Launchpad at root — requires launchpad to gain `output: 'export'`, a new deploy workflow, and stock-analyser to have vacated root first; no `SubAppIndexRewrite` needed since launchpad will be the root occupant
+
+Current S3 bucket root occupant is stock-analyser (transitional; should be launchpad per target architecture). The SPA fallback (403/404 → `/index.html`) compensates but creates the routing failure that PR #194 fixed for budget-tracker. M7 closes the gap by completing the extractions.
+
 ### 5.7 Environment variables
 
 **Status: Confirmed (verified during initial inventory)**

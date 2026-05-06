@@ -83,9 +83,32 @@ Single distribution (`TransformotionDev-Network` / `TransformotionProd-Network`)
 - **Caching:** `CachingOptimized` policy (default behavior)
 - **Compression:** enabled
 
-> **Current limitation:** The CloudFront distribution has a single default behavior with no path-based behaviors. The 403/404 error fallback serves `/index.html` (the launchpad). This means direct navigation to `/stock-signal/some-route` will correctly load the stock-analyser SPA at `/stock-signal/index.html` only if the error response for 403 is updated to be path-aware, OR if S3 serves the correct `index.html` for the path prefix.
->
-> The target architecture has path-based CloudFront behaviors routing `/stock-signal/*` and `/budget-tracker/*` to their respective S3 path prefixes with per-prefix SPA fallbacks. This CDK change is part of sub-phase 7b/7g.
+### Sub-app index rewrite pattern
+
+Sub-apps deployed to nested S3 prefixes (e.g. `/budget-tracker/*` → `s3://bucket/budget-tracker/*`) hit a routing failure at the CloudFront/S3 boundary: a request for `/budget-tracker/` asks S3 for the object key `budget-tracker/` (with trailing slash). S3's OAC REST API returns 403 for this key (no object exists at that key), triggering the default behavior's SPA fallback to the root `/index.html`.
+
+The fix is a CloudFront Function (`SubAppIndexRewrite`) attached to each sub-app cache behavior on the `VIEWER_REQUEST` event. The function rewrites directory requests to append `index.html` before they reach S3:
+
+```javascript
+function handler(event) {
+  var request = event.request;
+  if (request.uri.endsWith('/')) {
+    request.uri += 'index.html';
+  }
+  return request;
+}
+```
+
+The function is path-agnostic and shared by every sub-app behavior. Each sub-app adds an `additionalBehaviors` entry in `NetworkStack` referencing the same function instance. Implemented for `/budget-tracker/*` in M6 #154 (PR #194). The same pattern applies to `/stock-signal/*` when the stock-analyser extraction lands (M7).
+
+### Current state
+
+The `/budget-tracker/*` cache behavior with `SubAppIndexRewrite` was implemented in M6 #154 (PR #194). Remaining extractions:
+
+- **stock-analyser:** currently serves from S3 root; needs `basePath: '/stock-signal'` in `next.config.mjs`, deploy workflow updated to sync to the `stock-signal/` prefix, and a new `/stock-signal/*` behavior (M7 scope)
+- **launchpad:** not yet static-export-ready (`output: 'export'` not set); will be promoted to S3 root once stock-analyser moves off root (M7 scope); no `SubAppIndexRewrite` needed since it will be the root occupant
+
+Until M7 completes the remaining extractions, the SPA fallback (403/404 → `/index.html`) returns stock-analyser content for any path not handled by an explicit behavior. This is acceptable transitional behaviour: stock-analyser routes continue to work via the fallback, and budget-tracker routes are now handled by the explicit behavior.
 
 ---
 
@@ -148,7 +171,7 @@ The deploy verification script (`scripts/ci/verify-deploy.sh`) checks that the c
 | `transformotion-api-{stage}` | Platform + Stock Analyser routes | `TransformotionDev-Api` stack output |
 | `budget-tracker-api-{stage}` | Budget Tracker routes (own gateway) | `TransformotionDev-BudgetTrackerApi` stack output |
 
-> The Budget Tracker has its own API Gateway rather than sharing the platform gateway. This is a known architectural divergence (tracked in the Stabilisation backlog as sub-phase 7f). The separate gateway is functional; consolidation is optional.
+> The Budget Tracker has its own API Gateway rather than sharing the platform gateway. This is a known architectural divergence (tracked as M5 in PLAN.md). The separate gateway is functional; consolidation is optional.
 
 ---
 
