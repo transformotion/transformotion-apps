@@ -7,6 +7,9 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint ."
   },
+  "dependencies": {
+    "aws-amplify": "^6.16.4"
+  },
   "devDependencies": {
     "typescript": "*"
   }

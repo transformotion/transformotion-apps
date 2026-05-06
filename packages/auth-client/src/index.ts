@@ -1,13 +1,5 @@
-/**
- * @transformotion/auth-client
- *
- * Shared authentication interfaces used by all Transformotion apps.
- * Apps import these types and implement them via Cognito (production)
- * or a mock (local/v0 preview).
- *
- * Real implementation lives in apps/<app>/lib/services/auth/cognito-auth.ts
- * Mock implementation lives in apps/<app>/lib/services/auth/mock-auth.ts
- */
+import { CognitoAuthService } from './cognito-auth'
+import { createMockAuthService } from './mock-auth'
 
 export interface User {
   id: string
@@ -25,40 +17,52 @@ export interface Account {
 }
 
 export interface AuthTokens {
-  accessToken: string       // JWT for API authorisation
-  idToken: string           // JWT with user identity claims
-  refreshToken: string      // For token refresh
-  expiresAt: number         // Unix timestamp
+  accessToken:  string   // JWT for API authorisation
+  idToken:      string   // JWT with user identity claims
+  refreshToken: string   // For token refresh
+  expiresAt:    number   // Unix timestamp
 }
 
 export interface AuthSession {
-  user: User
-  tokens: AuthTokens
+  user:           User
+  tokens:         AuthTokens
   currentAccount: Account
 }
 
 export interface SignInCredentials {
-  email: string
+  email:    string
   password: string
 }
 
 export interface SignUpCredentials {
-  email: string
+  email:    string
   password: string
-  name: string
+  name:     string
 }
 
 export interface AuthService {
-  getCurrentUser(): Promise<User | null>
-  getSession(): Promise<AuthSession | null>
-  signIn(credentials: SignInCredentials): Promise<AuthSession>
-  signUp(credentials: SignUpCredentials): Promise<AuthSession>
-  signOut(): Promise<void>
-  getAccessToken(): Promise<string | null>
-  getIdToken(): Promise<string | null>
-  refreshTokens(): Promise<AuthTokens>
-  isTokenExpired(): boolean
-  listAccounts(): Promise<Account[]>
-  switchAccount(accountId: string): Promise<AuthSession>
+  getCurrentUser():  Promise<User | null>
+  getSession():      Promise<AuthSession | null>
+  signIn(credentials: SignInCredentials):  Promise<AuthSession>
+  signUp(credentials: SignUpCredentials):  Promise<AuthSession>
+  signOut():         Promise<void>
+  getAccessToken():  Promise<string | null>
+  getIdToken():      Promise<string | null>
+  refreshTokens():   Promise<AuthTokens>
+  isTokenExpired():  boolean
+  listAccounts():    Promise<Account[]>
+  switchAccount(accountId: string):        Promise<AuthSession>
   onAuthStateChange(callback: (session: AuthSession | null) => void): () => void
+  /** Returns the first accountId for the given appSlug from the `accounts` JWT claim. */
+  getAccountIdForApp(appSlug: string):     Promise<string | null>
+}
+
+export { MockAuthService, createMockAuthService } from './mock-auth'
+export { CognitoAuthService } from './cognito-auth'
+
+export function createAuthService(appSlug?: string): AuthService {
+  if (process.env.NEXT_PUBLIC_AUTH_PROVIDER === 'cognito') {
+    return new CognitoAuthService(appSlug)
+  }
+  return createMockAuthService()
 }

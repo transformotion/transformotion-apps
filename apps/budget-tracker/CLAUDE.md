@@ -174,8 +174,12 @@ Environment: copy `apps/budget-tracker/.env.example` to `.env.local` and fill in
 
 | Variable | Purpose |
 |---|---|
-| `NEXT_PUBLIC_BUDGET_TRACKER_COGNITO_CLIENT_ID` | Cognito app client for this app |
+| `NEXT_PUBLIC_BUDGET_TRACKER_COGNITO_CLIENT_ID` | Cognito app client for this app (GitHub Actions variable) |
+| `NEXT_PUBLIC_COGNITO_CLIENT_ID` | Generic runtime name for the Cognito client ID — set in `.env.local` for local dev |
 | `NEXT_PUBLIC_COGNITO_USER_POOL_ID` | Shared Cognito user pool ID |
 | `NEXT_PUBLIC_COGNITO_DOMAIN` | Hosted UI domain |
+| `NEXT_PUBLIC_AUTH_PROVIDER` | `cognito` in deployed builds; omit (defaults to `mock`) for local dev without Cognito |
 | `NEXT_PUBLIC_USE_MOCK_DATA` | `true` = stub adaptors, `false` = real AWS |
 | `NEXT_PUBLIC_API_BASE_URL` | Budget Tracker API base URL |
+
+**Cognito client variable rebind:** The GitHub Actions variable `NEXT_PUBLIC_BUDGET_TRACKER_COGNITO_CLIENT_ID` is mapped to the generic runtime env var `NEXT_PUBLIC_COGNITO_CLIENT_ID` in the deploy workflow's env block. This allows each app to have its own Cognito App Client (established in sub-phase 7b.5-alpha) while the runtime code (`@transformotion/auth-client`) reads a single generic name. Local development reads `NEXT_PUBLIC_COGNITO_CLIENT_ID` directly from `.env.local`.
