@@ -61,8 +61,8 @@ export interface BudgetNavigationActions {
   navigateTo: (tab: BudgetTabId) => void
   setTransactions: (transactions: Transaction[]) => void
   addTransactions: (transactions: Transaction[]) => void
-  updateTransaction: (id: number, updates: Partial<Transaction>) => void
-  deleteTransaction: (id: number) => void
+  updateTransaction: (id: string, updates: Partial<Transaction>) => void
+  deleteTransaction: (id: string) => void
   setCustomRules: (rules: CustomRule[]) => void
   addCustomRule: (rule: CustomRule) => void
   updateCustomRule: (id: string, updates: Partial<CustomRule>) => void
@@ -275,7 +275,7 @@ export function BudgetNavigationProvider({
     })
   }, [])
 
-  const updateTransaction = useCallback((id: number, updates: Partial<Transaction>) => {
+  const updateTransaction = useCallback((id: string, updates: Partial<Transaction>) => {
     setState(prev => {
       const updated = prev.transactions.map(t => 
         t._id === id ? { ...t, ...updates } : t
@@ -285,7 +285,7 @@ export function BudgetNavigationProvider({
     })
   }, [])
 
-  const deleteTransaction = useCallback((id: number) => {
+  const deleteTransaction = useCallback((id: string) => {
     setState(prev => {
       const updated = prev.transactions.filter(t => t._id !== id)
       const uncategorizedCount = updated.filter(t => !t.category).length

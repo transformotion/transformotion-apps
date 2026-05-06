@@ -27,9 +27,14 @@ describe("applyRules", () => {
     const customRule: CustomRule = {
       id: "1",
       accountId: "acc1",
+      name: "Woolworths override",
       match: "woolworths",
+      matchType: "contains",
       category: "Custom",
       subcategory: "Override",
+      enabled: true,
+      priority: 100,
+      isBusiness: false,
       learned: true,
       createdAt: new Date().toISOString(),
     };
@@ -42,9 +47,14 @@ describe("applyRules", () => {
     const customRule: CustomRule = {
       id: "1",
       accountId: "acc1",
+      name: "Special store rule",
       match: "specialstore",
+      matchType: "contains",
       category: "Custom",
       subcategory: "Custom sub",
+      enabled: true,
+      priority: 100,
+      isBusiness: false,
       learned: false,
       createdAt: new Date().toISOString(),
     };

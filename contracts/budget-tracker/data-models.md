@@ -21,6 +21,7 @@ interface Transaction {
   file: string;                   // Source CSV filename
   _manual: boolean;               // User has manually set category — rules will not overwrite
   _business: boolean;             // Flagged as business expense — excluded from personal P&L
+  _ignore?: boolean;              // Excluded from P&L and cashflow; still visible in Transactions tab
 }
 ```
 
@@ -28,6 +29,7 @@ interface Transaction {
 - `amount` is deliberately a string. The prototype preserves the raw CSV value to avoid floating-point rounding issues and to support banks that use separate debit/credit columns. All arithmetic parses on read.
 - `_manual: true` is a sticky flag. Once a user manually categorises a transaction, the rules engine will never overwrite it on subsequent imports.
 - `_business: true` excludes the transaction from personal P&L calculations everywhere but keeps it visible in the transaction list with a 💼 badge.
+- `_ignore: true` is set by rules with `isIgnore: true` (typically transfers). Equivalent effect to `_business` for P&L exclusion but semantically distinct — represents "not a real transaction" rather than "business expense".
 
 ### Custom Rule
 
@@ -36,19 +38,27 @@ Heuristics that categorise transactions by description match.
 ```typescript
 interface CustomRule {
   id: string;                     // UUID
-  accountId: string;
-  match: string;                  // Keyword or regex pattern, case-insensitive
+  accountId: string;              // Household account ID (Cognito-derived)
+  name: string;                   // Display name for the rule (shown in Rules tab)
+  match: string;                  // Keyword or regex string, applied case-insensitive
+  matchType: 'contains' | 'startsWith' | 'regex';  // How match string is applied
   category: string;
   subcategory: string;
-  learned: boolean;               // true if created via "Learn" button on a transaction
-                                  // false if manually authored in Rules tab
+  enabled: boolean;               // Disabled rules are skipped without being deleted
+  priority: number;               // Lower number = higher priority; multiple matches: lowest priority wins
+  isBusiness: boolean;            // Sets _business: true on matched transactions
+  isIgnore?: boolean;             // Sets _ignore: true on matched transactions (transfers, etc.)
+  overridesBuiltinId?: string;    // Built-in rule ID this custom rule replaces/disables
+  projectId?: string;             // Assigns matched transactions to a project category
+  learned: boolean;               // true if created via "Learn" button; false if manually authored in Rules tab
   createdAt: string;              // ISO 8601
 }
 ```
 
 **Notes:**
 - The rules engine also ships a large **built-in ruleset** compiled into the codebase (see `ui-patterns.md` for storage location). Built-in rules are not CRUDable — they're the default heuristics for common Australian merchants.
-- Custom rules override built-in rules when both match. Most recent rule wins if multiple custom rules match.
+- Custom rules override built-in rules when both match. Lower `priority` number wins if multiple custom rules match.
+- `isIgnore: true` rules set `_ignore: true` on matched transactions, excluding them from P&L and cashflow. Used for transfers and internal account movements.
 
 ### Category Tree
 
@@ -187,8 +197,9 @@ A transaction is **excluded from personal P&L** if ANY of these are true:
 
 1. `subcategory === "Transfer"` (movements between own accounts)
 2. `_business === true`
-3. `category` is in `PROJECT_CATEGORIES` (default: `["Renovations"]`)
-4. `subcategory` is in `PROJECT_SUBCATEGORIES` (default: `["Capital purchases"]`)
+3. `_ignore === true` (set by rules with `isIgnore: true`)
+4. `category` is in `PROJECT_CATEGORIES` (default: `["Renovations"]`)
+5. `subcategory` is in `PROJECT_SUBCATEGORIES` (default: `["Capital purchases"]`)
 
 These exclusions must be applied **consistently** across:
 - Summary tab totals (income, expenses, net position)
@@ -245,6 +256,40 @@ interface AiCsvAnalysisResponse {
   notes: string;                  // Human-readable explanation for the confirmation UI
 }
 ```
+
+## Repository interfaces
+
+These are the canonical interfaces implemented by both local (localStorage) and remote (DynamoDB-via-Lambda) backends.
+
+### TransactionRepository
+
+```typescript
+interface TransactionRepository {
+  findAll(accountId: string): Promise<Transaction[]>;
+  findById(accountId: string, id: string): Promise<Transaction | null>;
+  upsertBulk(transactions: Transaction[]): Promise<Transaction[]>;
+  update(id: string, accountId: string, updates: Partial<Transaction>): Promise<Transaction>;
+  delete(id: string, accountId: string): Promise<void>;
+}
+```
+
+### CustomRulesRepository
+
+Custom rule CRUD only. Built-in rule overrides (disable/reset) are frontend-only concerns and are not part of this interface.
+
+```typescript
+interface CustomRulesRepository {
+  findAll(accountId: string): Promise<CustomRule[]>;
+  findById(accountId: string, id: string): Promise<CustomRule | null>;
+  save(rule: CustomRule): Promise<CustomRule>;
+  delete(id: string, accountId: string): Promise<void>;
+}
+```
+
+**Notes:**
+- Both interfaces are parameterised by `accountId` to enforce tenant isolation at the data access layer.
+- Local implementations ignore `accountId` (single-tenant localStorage); remote implementations scope all DynamoDB operations to it.
+- `upsertBulk` on the transaction side is the CSV import path — it accepts an array and returns the persisted array. Local implementation performs in-memory deduplication.
 
 ## Type safety requirements
 

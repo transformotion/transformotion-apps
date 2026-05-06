@@ -1,8 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { User, Account, AuthTokens } from '@transformotion/auth-client'
-import { createAuthService } from '@transformotion/auth-client'
-import { getConfig } from '@/lib/config'
+import { authService } from '@/lib/services/auth'
 
 interface AuthState {
   user:           User | null
@@ -21,8 +20,6 @@ interface AuthState {
   refreshTokens:  () => Promise<void>
   clearError:     () => void
 }
-
-const authService = createAuthService('budget-tracker', { provider: getConfig().auth.provider })
 
 export const useAuthStore = create<AuthState>()(
   persist(

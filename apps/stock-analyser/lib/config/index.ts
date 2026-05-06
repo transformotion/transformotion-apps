@@ -90,7 +90,11 @@ export function loadConfig(): AppConfig {
       model: process.env.NEXT_PUBLIC_AI_MODEL || 'claude-3-sonnet',
     },
     storage: {
-      provider: (process.env.NEXT_PUBLIC_STORAGE_PROVIDER as 'local' | 'dynamo') || 'local',
+      provider: selectProvider({
+        override: process.env.NEXT_PUBLIC_DATA_OVERRIDE,
+        profileDefaults: { mock: 'local', live: 'dynamo' },
+        validValues: ['local', 'dynamo'] as const,
+      }),
       dynamoTablePrefix: process.env.DYNAMODB_TABLE_PREFIX,
       region: process.env.AWS_REGION,
     },

@@ -1,34 +1,17 @@
-/**
- * Rules Repository
- * 
- * Data access layer for categorization rules.
- * Current: localStorage
- * Future: DynamoDB via Lambda
- */
+import { CustomRule, CustomRulesRepository } from '@transformotion/budget-domain'
 
-import { Repository } from '../base-repository'
+export type { CustomRule }
 
-export interface CustomRule {
-  id: string
-  name: string
-  pattern: string
-  matchType: "contains" | "startsWith" | "regex"
-  category: string
-  subcategory: string
-  isBusiness: boolean
-  isIgnore?: boolean
-  overridesBuiltinId?: string
-  projectId?: string
-  enabled: boolean
-  priority: number
-  createdAt: string
-}
+const CUSTOM_RULES_KEY = 'budget-tracker-custom-rules'
+const BUILTIN_RULES_KEY = 'budget-tracker-builtin-rules'
 
+// BuiltinRule is frontend-only (compiled into codebase, not stored in DynamoDB).
+// It is NOT part of CustomRulesRepository.
 export interface BuiltinRule {
   id: string
   name: string
   pattern: string
-  matchType: "contains" | "startsWith" | "regex"
+  matchType: 'contains' | 'startsWith' | 'regex'
   category: string
   subcategory: string
   isBusiness: boolean
@@ -39,26 +22,7 @@ export interface BuiltinRule {
   priority: number
 }
 
-const CUSTOM_RULES_KEY = 'budget-tracker-custom-rules'
-const BUILTIN_RULES_KEY = 'budget-tracker-builtin-rules'
-
-export interface RulesRepository {
-  // Custom rules
-  findAllCustomRules(): Promise<CustomRule[]>
-  findCustomRuleById(id: string): Promise<CustomRule | null>
-  saveCustomRule(rule: CustomRule): Promise<CustomRule>
-  deleteCustomRule(id: string): Promise<void>
-
-  // Built-in rules
-  findAllBuiltinRules(): Promise<BuiltinRule[]>
-  findBuiltinRuleById(id: string): Promise<BuiltinRule | null>
-  updateBuiltinRule(id: string, updates: Partial<BuiltinRule>): Promise<BuiltinRule>
-  resetBuiltinRules(defaults: BuiltinRule[]): Promise<BuiltinRule[]>
-}
-
-class LocalRulesRepository implements RulesRepository {
-  // Custom rules
-
+class LocalCustomRulesRepository implements CustomRulesRepository {
   private getCustomRules(): CustomRule[] {
     if (typeof window === 'undefined') return []
     try {
@@ -78,38 +42,33 @@ class LocalRulesRepository implements RulesRepository {
     }
   }
 
-  async findAllCustomRules(): Promise<CustomRule[]> {
+  async findAll(_accountId: string): Promise<CustomRule[]> {
     return this.getCustomRules()
   }
 
-  async findCustomRuleById(id: string): Promise<CustomRule | null> {
-    const rules = this.getCustomRules()
-    return rules.find(r => r.id === id) || null
+  async findById(_accountId: string, id: string): Promise<CustomRule | null> {
+    return this.getCustomRules().find(r => r.id === id) ?? null
   }
 
-  async saveCustomRule(rule: CustomRule): Promise<CustomRule> {
+  async save(rule: CustomRule): Promise<CustomRule> {
     const rules = this.getCustomRules()
     const index = rules.findIndex(r => r.id === rule.id)
-    
     if (index >= 0) {
       rules[index] = rule
     } else {
       rules.push(rule)
     }
-    
     this.saveCustomRules(rules)
     return rule
   }
 
-  async deleteCustomRule(id: string): Promise<void> {
-    const rules = this.getCustomRules()
-    const filtered = rules.filter(r => r.id !== id)
-    this.saveCustomRules(filtered)
+  async delete(id: string, _accountId: string): Promise<void> {
+    this.saveCustomRules(this.getCustomRules().filter(r => r.id !== id))
   }
 
-  // Built-in rules
+  // Built-in rule persistence (frontend-only, not part of canonical interface)
 
-  private getBuiltinRules(): BuiltinRule[] | null {
+  getBuiltinRules(): BuiltinRule[] | null {
     if (typeof window === 'undefined') return null
     try {
       const stored = localStorage.getItem(BUILTIN_RULES_KEY)
@@ -119,7 +78,7 @@ class LocalRulesRepository implements RulesRepository {
     }
   }
 
-  private saveBuiltinRules(rules: BuiltinRule[]): void {
+  saveBuiltinRules(rules: BuiltinRule[]): void {
     if (typeof window === 'undefined') return
     try {
       localStorage.setItem(BUILTIN_RULES_KEY, JSON.stringify(rules))
@@ -128,45 +87,29 @@ class LocalRulesRepository implements RulesRepository {
     }
   }
 
-  async findAllBuiltinRules(): Promise<BuiltinRule[]> {
-    return this.getBuiltinRules() || []
-  }
-
-  async findBuiltinRuleById(id: string): Promise<BuiltinRule | null> {
-    const rules = this.getBuiltinRules() || []
-    return rules.find(r => r.id === id) || null
-  }
-
-  async updateBuiltinRule(id: string, updates: Partial<BuiltinRule>): Promise<BuiltinRule> {
+  updateBuiltinRule(id: string, updates: Partial<BuiltinRule>): BuiltinRule {
     const rules = this.getBuiltinRules() || []
     const index = rules.findIndex(r => r.id === id)
-    
-    if (index < 0) {
-      throw new Error(`Built-in rule not found: ${id}`)
-    }
-    
+    if (index < 0) throw new Error(`Built-in rule not found: ${id}`)
     rules[index] = { ...rules[index], ...updates }
     this.saveBuiltinRules(rules)
     return rules[index]
   }
 
-  async resetBuiltinRules(defaults: BuiltinRule[]): Promise<BuiltinRule[]> {
+  resetBuiltinRules(defaults: BuiltinRule[]): BuiltinRule[] {
     this.saveBuiltinRules(defaults)
     return defaults
   }
 }
 
-// Factory function
-export function createRulesRepository(): RulesRepository {
-  return new LocalRulesRepository()
-}
+export { LocalCustomRulesRepository }
+export type { CustomRulesRepository }
 
-// Singleton instance
-let _repository: RulesRepository | null = null
+let _repository: LocalCustomRulesRepository | null = null
 
-export function getRulesRepository(): RulesRepository {
+export function getRulesRepository(): LocalCustomRulesRepository {
   if (!_repository) {
-    _repository = createRulesRepository()
+    _repository = new LocalCustomRulesRepository()
   }
   return _repository
 }

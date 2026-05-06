@@ -157,7 +157,7 @@ export const DEFAULT_BUILTIN_RULES: BuiltinRule[] = [
 export function applyRules(
   description: string,
   builtinRules: BuiltinRule[],
-  customRules?: Array<{ pattern: string; matchType: string; category: string; subcategory: string; enabled: boolean; isIgnore?: boolean; isBusiness?: boolean; overridesBuiltinId?: string }>
+  customRules?: Array<{ match: string; matchType: string; category: string; subcategory: string; enabled: boolean; isIgnore?: boolean; isBusiness?: boolean; overridesBuiltinId?: string }>
 ): { category: string; subcategory: string; ruleId: string; isIgnore?: boolean; isBusiness?: boolean } | null {
   // Build set of disabled builtin rule IDs from custom rule overrides
   const disabledBuiltinIds = new Set<string>()
@@ -185,12 +185,12 @@ export function applyRules(
       try {
         let regex: RegExp
         if (rule.matchType === "regex") {
-          regex = new RegExp(rule.pattern, "i")
+          regex = new RegExp(rule.match, "i")
         } else if (rule.matchType === "startsWith") {
-          regex = new RegExp(`^${rule.pattern}`, "i")
+          regex = new RegExp(`^${rule.match}`, "i")
         } else {
           // contains
-          regex = new RegExp(rule.pattern, "i")
+          regex = new RegExp(rule.match, "i")
         }
         
         if (regex.test(description)) {
