@@ -55,6 +55,11 @@ export interface FeaturesConfig {
   debugMode: boolean
 }
 
+export interface AppsConfig {
+  /** URL for the Budget Tracker app (cross-app navigation requires full page load) */
+  budgetTrackerUrl: string
+}
+
 export interface AppConfig {
   api: APIConfig
   auth: AuthConfig
@@ -63,6 +68,7 @@ export interface AppConfig {
   logging: LoggingConfig
   claude: ClaudeConfig
   features: FeaturesConfig
+  apps: AppsConfig
 }
 
 /**
@@ -112,6 +118,9 @@ export function loadConfig(): AppConfig {
     features: {
       useMockData: process.env.NEXT_PUBLIC_USE_MOCK_DATA !== 'false', // Default to true for dev
       debugMode: process.env.NEXT_PUBLIC_DEBUG_MODE === 'true',
+    },
+    apps: {
+      budgetTrackerUrl: process.env.NEXT_PUBLIC_BUDGET_URL || '/budget-tracker/',
     },
   }
 }
