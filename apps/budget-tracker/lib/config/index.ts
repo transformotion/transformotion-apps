@@ -86,7 +86,11 @@ export function loadConfig(): AppConfig {
       cognitoRegion: process.env.NEXT_PUBLIC_COGNITO_REGION,
     },
     ai: {
-      provider: (process.env.NEXT_PUBLIC_AI_PROVIDER as 'mock' | 'anthropic') || 'mock',
+      provider: selectProvider({
+        override: process.env.NEXT_PUBLIC_AI_OVERRIDE,
+        profileDefaults: { mock: 'mock', live: 'anthropic' },
+        validValues: ['mock', 'anthropic'] as const,
+      }),
       model: process.env.NEXT_PUBLIC_AI_MODEL || 'claude-3-sonnet',
     },
     storage: {
