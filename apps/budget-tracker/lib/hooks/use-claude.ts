@@ -104,7 +104,7 @@ export function useClaude<T = unknown>(options: UseClaudeOptions = {}): UseClaud
 
     try {
       // In mock mode, simulate the async pattern
-      if (config.features.useMockData) {
+      if (config.ai.provider === 'mock') {
         return await mockClaudeCall<T>(request, abortControllerRef.current.signal)
       }
 
@@ -394,7 +394,7 @@ export async function callClaudeAPI<T = unknown>(
 ): Promise<T> {
   const config = getConfig()
   
-  if (config.features.useMockData) {
+  if (config.ai.provider === 'mock') {
     return mockClaudeCall<T>(request, options.signal || new AbortController().signal)
   }
 
