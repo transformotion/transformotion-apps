@@ -80,7 +80,7 @@ jobs:
         run: pnpm build
 
       - name: Deploy to S3
-        run: aws s3 sync apps/stock-analyser/out s3://transformotion-web-dev-959516291617 --delete
+        run: aws s3 sync apps/stock-analyser/out s3://transformotion-web-dev-959516291617 --delete --exclude "budget-tracker/*"
 
       - name: Invalidate CloudFront
         run: aws cloudfront create-invalidation --distribution-id E1128DYYBLMWYK --paths "/*"
@@ -142,7 +142,7 @@ jobs:
         run: pnpm build
 
       - name: Deploy to S3
-        run: aws s3 sync apps/stock-analyser/out s3://transformotion-prod-bucket --delete
+        run: aws s3 sync apps/stock-analyser/out s3://transformotion-prod-bucket --delete --exclude "budget-tracker/*"
 
       - name: Invalidate CloudFront
         run: aws cloudfront create-invalidation --distribution-id ${{ vars.CLOUDFRONT_DISTRIBUTION_ID_PROD }} --paths "/*"
