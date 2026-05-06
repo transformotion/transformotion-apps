@@ -59,6 +59,25 @@ export class NetworkStack extends cdk.Stack {
       ? acm.Certificate.fromCertificateArn(this, 'Certificate', certificateArn)
       : undefined;
 
+    // ── CloudFront Function — sub-app index rewrite ───────────────────────
+    // S3 OAC REST API returns 403 for trailing-slash keys (e.g. /budget-tracker/)
+    // because there is no object at that key — only at /budget-tracker/index.html.
+    // Without this rewrite those requests fall through to the default SPA
+    // fallback (403 → /index.html), which serves the stock-analyser root instead.
+    const subAppIndexRewrite = new cloudfront.Function(this, 'SubAppIndexRewrite', {
+      code: cloudfront.FunctionCode.fromInline(`
+        function handler(event) {
+          var request = event.request;
+          if (request.uri.endsWith('/')) {
+            request.uri += 'index.html';
+          }
+          return request;
+        }
+      `),
+      comment: 'Rewrite sub-app directory requests to index.html (e.g. /budget-tracker/ → /budget-tracker/index.html)',
+      runtime: cloudfront.FunctionRuntime.JS_2_0,
+    });
+
     // ── CloudFront distribution ────────────────────────────────────────────
     this.distribution = new cloudfront.Distribution(this, 'WebDistribution', {
       defaultBehavior: {
@@ -66,6 +85,18 @@ export class NetworkStack extends cdk.Stack {
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
         compress: true,
+      },
+      additionalBehaviors: {
+        '/budget-tracker/*': {
+          origin: origins.S3BucketOrigin.withOriginAccessControl(this.bucket),
+          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+          compress: true,
+          functionAssociations: [{
+            function: subAppIndexRewrite,
+            eventType: cloudfront.FunctionEventType.VIEWER_REQUEST,
+          }],
+        },
       },
       defaultRootObject: 'index.html',
       errorResponses: [
