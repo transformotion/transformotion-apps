@@ -6,7 +6,7 @@
  * Client-safe keys use NEXT_PUBLIC_ prefix.
  */
 
-import { selectProvider } from '@transformotion/runtime-config'
+import { selectProvider, normaliseCrossAppUrl } from '@transformotion/runtime-config'
 
 export interface APIConfig {
   baseURL: string
@@ -55,6 +55,13 @@ export interface FeaturesConfig {
   debugMode: boolean
 }
 
+export interface AppsConfig {
+  /** URL for the Launchpad app (cross-app navigation requires full page load) */
+  launchpadUrl: string
+  /** URL for the sign-in page after sign-out */
+  signInUrl: string
+}
+
 export interface AppConfig {
   api: APIConfig
   auth: AuthConfig
@@ -63,6 +70,7 @@ export interface AppConfig {
   logging: LoggingConfig
   claude: ClaudeConfig
   features: FeaturesConfig
+  apps: AppsConfig
 }
 
 /**
@@ -116,6 +124,10 @@ export function loadConfig(): AppConfig {
     features: {
       useMockData: process.env.NEXT_PUBLIC_USE_MOCK_DATA !== 'false', // Default to true for dev
       debugMode: process.env.NEXT_PUBLIC_DEBUG_MODE === 'true',
+    },
+    apps: {
+      launchpadUrl: normaliseCrossAppUrl(process.env.NEXT_PUBLIC_LAUNCHPAD_URL, '/launchpad/'),
+      signInUrl: normaliseCrossAppUrl(process.env.NEXT_PUBLIC_SIGNIN_URL, '/sign-in/'),
     },
   }
 }

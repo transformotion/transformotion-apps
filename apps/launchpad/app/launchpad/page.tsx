@@ -2,9 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { Launchpad } from '@/components/launchpad/launchpad'
-
-const BUDGET_TRACKER_URL =
-  process.env.NEXT_PUBLIC_BUDGET_URL ?? 'http://localhost:3002'
+import { getConfig } from '@/lib/config'
 
 const STOCK_SIGNAL_URL =
   process.env.NEXT_PUBLIC_STOCK_URL ?? 'http://localhost:3000'
@@ -17,7 +15,7 @@ export default function LaunchpadPage() {
   }
 
   const handleLaunchBudgetTracker = () => {
-    window.location.href = BUDGET_TRACKER_URL
+    window.location.assign(getConfig().apps.budgetTrackerUrl)
   }
 
   const handleSignOut = () => {
