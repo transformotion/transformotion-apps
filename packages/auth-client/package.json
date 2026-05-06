@@ -11,6 +11,7 @@
     "aws-amplify": "^6.16.4"
   },
   "devDependencies": {
+    "@types/node": "^22",
     "typescript": "*"
   }
 }
