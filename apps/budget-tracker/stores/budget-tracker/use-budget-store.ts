@@ -1,14 +1,8 @@
-/**
- * Budget Tracker Store
- * 
- * Manages all budget tracker state.
- * Zustand store that calls repositories for persistence.
- */
-
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { 
+import {
   getTransactionRepository,
+  getCustomRulesRepository,
   getRulesRepository,
   getSettingsRepository,
   type Transaction,
@@ -45,8 +39,8 @@ interface BudgetState {
   // Transaction actions
   loadTransactions: () => Promise<void>
   addTransactions: (transactions: Transaction[]) => Promise<void>
-  updateTransaction: (id: number, updates: Partial<Transaction>) => Promise<void>
-  deleteTransaction: (id: number) => Promise<void>
+  updateTransaction: (id: string, updates: Partial<Transaction>) => Promise<void>
+  deleteTransaction: (id: string) => Promise<void>
   setTransactions: (transactions: Transaction[]) => void
 
   // Rules actions
@@ -108,34 +102,31 @@ export const useBudgetStore = create<BudgetState>()(
       // Transactions
       loadTransactions: async () => {
         const repo = getTransactionRepository()
-        const transactions = await repo.findAll()
+        const transactions = await repo.findAll('')
         const uncategorizedCount = transactions.filter(t => !t.category).length
         set({ transactions, uncategorizedCount })
       },
 
       addTransactions: async (newTransactions) => {
         const repo = getTransactionRepository()
-        await repo.saveMany(newTransactions)
-        const transactions = await repo.findAll()
+        await repo.upsertBulk(newTransactions)
+        const transactions = await repo.findAll('')
         const uncategorizedCount = transactions.filter(t => !t.category).length
         set({ transactions, uncategorizedCount })
       },
 
       updateTransaction: async (id, updates) => {
         const repo = getTransactionRepository()
-        const existing = await repo.findById(id)
-        if (existing) {
-          await repo.save({ ...existing, ...updates })
-          const transactions = await repo.findAll()
-          const uncategorizedCount = transactions.filter(t => !t.category).length
-          set({ transactions, uncategorizedCount })
-        }
+        await repo.update(id, '', updates)
+        const transactions = await repo.findAll('')
+        const uncategorizedCount = transactions.filter(t => !t.category).length
+        set({ transactions, uncategorizedCount })
       },
 
       deleteTransaction: async (id) => {
         const repo = getTransactionRepository()
-        await repo.delete(id)
-        const transactions = await repo.findAll()
+        await repo.delete(id, '')
+        const transactions = await repo.findAll('')
         const uncategorizedCount = transactions.filter(t => !t.category).length
         set({ transactions, uncategorizedCount })
       },
@@ -143,56 +134,47 @@ export const useBudgetStore = create<BudgetState>()(
       setTransactions: (transactions) => {
         const uncategorizedCount = transactions.filter(t => !t.category).length
         set({ transactions, uncategorizedCount })
-        // Persist
-        const repo = getTransactionRepository()
-        repo.saveMany(transactions)
+        getTransactionRepository().upsertBulk(transactions)
       },
 
       // Rules
       loadRules: async () => {
-        const repo = getRulesRepository()
-        const [customRules, builtinRules] = await Promise.all([
-          repo.findAllCustomRules(),
-          repo.findAllBuiltinRules(),
-        ])
+        const customRules = await getCustomRulesRepository().findAll('')
+        const builtinRules = getRulesRepository().getBuiltinRules() ?? []
         set({ customRules, builtinRules })
       },
 
       addCustomRule: async (rule) => {
-        const repo = getRulesRepository()
-        await repo.saveCustomRule(rule)
-        const customRules = await repo.findAllCustomRules()
+        await getCustomRulesRepository().save(rule)
+        const customRules = await getCustomRulesRepository().findAll('')
         set({ customRules })
       },
 
       updateCustomRule: async (id, updates) => {
-        const repo = getRulesRepository()
-        const existing = await repo.findCustomRuleById(id)
+        const repo = getCustomRulesRepository()
+        const existing = await repo.findById('', id)
         if (existing) {
-          await repo.saveCustomRule({ ...existing, ...updates })
-          const customRules = await repo.findAllCustomRules()
+          await repo.save({ ...existing, ...updates })
+          const customRules = await repo.findAll('')
           set({ customRules })
         }
       },
 
       deleteCustomRule: async (id) => {
-        const repo = getRulesRepository()
-        await repo.deleteCustomRule(id)
-        const customRules = await repo.findAllCustomRules()
+        await getCustomRulesRepository().delete(id, '')
+        const customRules = await getCustomRulesRepository().findAll('')
         set({ customRules })
       },
 
       setCustomRules: (customRules) => {
         set({ customRules })
-        // Persist each rule
-        const repo = getRulesRepository()
-        customRules.forEach(rule => repo.saveCustomRule(rule))
+        customRules.forEach(rule => getCustomRulesRepository().save(rule))
       },
 
       updateBuiltinRule: async (id, updates) => {
-        const repo = getRulesRepository()
-        await repo.updateBuiltinRule(id, updates)
-        const builtinRules = await repo.findAllBuiltinRules()
+        const localRepo = getRulesRepository()
+        localRepo.updateBuiltinRule(id, updates)
+        const builtinRules = localRepo.getBuiltinRules() ?? []
         set({ builtinRules })
       },
 
@@ -219,21 +201,18 @@ export const useBudgetStore = create<BudgetState>()(
       // Filters
       setFilters: (filters) => {
         set({ filters })
-        // Persist filters
-        const repo = getSettingsRepository()
-        repo.updateFilters(filters)
+        getSettingsRepository().updateFilters(filters)
       },
 
       resetFilters: () => {
         set({ filters: DEFAULT_FILTERS })
-        const repo = getSettingsRepository()
-        repo.resetFilters()
+        getSettingsRepository().resetFilters()
       },
 
       // Initialize
       initialize: async () => {
         if (get().isInitialized) return
-        
+
         set({ isLoading: true, error: null })
         try {
           await Promise.all([
@@ -253,7 +232,6 @@ export const useBudgetStore = create<BudgetState>()(
     {
       name: 'budget-store',
       partialize: (state) => ({
-        // Only persist navigation state and filters
         activeTab: state.activeTab,
         filters: state.filters,
       }),

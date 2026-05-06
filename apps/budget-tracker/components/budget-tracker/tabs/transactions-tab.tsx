@@ -105,13 +105,13 @@ export function TransactionsTab() {
   const [showImport, setShowImport] = useState(false)
   const [showFilters, setShowFilters] = useState(false)
   const [showSource, setShowSource] = useState(false)
-  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [editCategory, setEditCategory] = useState("")
   const [editSubcategory, setEditSubcategory] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
   
   // Multi-select for bulk operations
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkCategory, setBulkCategory] = useState("")
   const [bulkSubcategory, setBulkSubcategory] = useState("")
   const [showBulkEdit, setShowBulkEdit] = useState(false)
@@ -200,7 +200,7 @@ export function TransactionsTab() {
   const businessCount = transactions.filter(t => t._business).length
 
   // Toggle business flag
-  const toggleBusiness = (id: number) => {
+  const toggleBusiness = (id: string) => {
     const updatedTransactions = transactions.map(t => 
       t._id === id ? { ...t, _business: !t._business } : t
     )
@@ -208,7 +208,7 @@ export function TransactionsTab() {
   }
 
   // Reset single transaction (re-apply rules)
-  const resetTransaction = (id: number) => {
+  const resetTransaction = (id: string) => {
     const updatedTransactions = transactions.map(t => {
       if (t._id !== id) return t
       
@@ -254,14 +254,16 @@ export function TransactionsTab() {
     const words = tx.description.split(/\s+/).slice(0, 3).join(" ")
     const newRule = {
       id: `custom-${Date.now()}`,
+      accountId: "",
       name: words,
-      pattern: words,
+      match: words,
       matchType: "contains" as const,
       category: editCategory,
       subcategory: editSubcategory,
       isBusiness: false,
       enabled: true,
       priority: 100,
+      learned: true,
       createdAt: new Date().toISOString(),
     }
     addCustomRule(newRule)
@@ -300,7 +302,7 @@ export function TransactionsTab() {
   }
 
   // Multi-select helpers
-  const toggleSelect = (id: number) => {
+  const toggleSelect = (id: string) => {
     setSelectedIds(prev => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
@@ -1278,9 +1280,7 @@ Return ONLY valid JSON.`,
       return
     }
     
-    const maxId = transactions.reduce((max, t) => Math.max(max, t._id), 0)
-    
-    const newTransactions: Transaction[] = dataRows.map((row, idx) => {
+    const newTransactions: Transaction[] = dataRows.map((row) => {
       let amount: number
       
       if (columnMapping.amount >= 0) {
@@ -1300,7 +1300,8 @@ Return ONLY valid JSON.`,
       const aiResult = !ruleResult ? aiCategorizations.get(description) : null
       
       return {
-        _id: maxId + idx + 1,
+        _id: crypto.randomUUID(),
+        accountId: "",
         date: parseDate(row[columnMapping.date] || ""),
         amount: amount.toString(),
         description,

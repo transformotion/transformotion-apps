@@ -34,16 +34,24 @@ async function listRules(accountId: string) {
 
 // ── POST /api/budget/v1/rules ─────────────────────────────────────────────────
 async function createRule(event: APIGatewayProxyEvent, accountId: string) {
-  const body = parseBody<Pick<CustomRule, 'match' | 'category' | 'subcategory' | 'learned'>>(event);
+  const body = parseBody<Partial<Omit<CustomRule, 'id' | 'accountId' | 'createdAt'>>>(event);
   if (!body.match?.trim()) throw { statusCode: 400, message: 'match is required' };
   if (!body.category?.trim()) throw { statusCode: 400, message: 'category is required' };
 
   const rule: CustomRule = {
     id: randomUUID(),
     accountId,
+    name: body.name?.trim() ?? body.match.trim(),
     match: body.match.trim(),
+    matchType: body.matchType ?? 'contains',
     category: body.category.trim(),
     subcategory: body.subcategory?.trim() ?? '',
+    enabled: body.enabled ?? true,
+    priority: body.priority ?? 100,
+    isBusiness: body.isBusiness ?? false,
+    isIgnore: body.isIgnore,
+    overridesBuiltinId: body.overridesBuiltinId,
+    projectId: body.projectId,
     learned: body.learned ?? false,
     createdAt: new Date().toISOString(),
   };
@@ -54,15 +62,23 @@ async function createRule(event: APIGatewayProxyEvent, accountId: string) {
 
 // ── PATCH /api/budget/v1/rules/:id ───────────────────────────────────────────
 async function updateRule(event: APIGatewayProxyEvent, accountId: string, ruleId: string) {
-  const body = parseBody<Partial<Pick<CustomRule, 'match' | 'category' | 'subcategory'>>>(event);
+  const body = parseBody<Partial<Omit<CustomRule, 'id' | 'accountId' | 'createdAt'>>>(event);
 
   const expressions: string[] = [];
   const names: Record<string, string> = {};
   const values: Record<string, unknown> = { ':aid': accountId };
 
-  if (body.match !== undefined) { expressions.push('#match = :match'); names['#match'] = 'match'; values[':match'] = body.match.trim(); }
-  if (body.category !== undefined) { expressions.push('category = :cat'); values[':cat'] = body.category.trim(); }
-  if (body.subcategory !== undefined) { expressions.push('subcategory = :sub'); values[':sub'] = body.subcategory.trim(); }
+  if (body.match !== undefined)              { expressions.push('#match = :match');       names['#match'] = 'match';   values[':match'] = body.match.trim(); }
+  if (body.name !== undefined)               { expressions.push('#name = :name');         names['#name'] = 'name';     values[':name'] = body.name.trim(); }
+  if (body.matchType !== undefined)          { expressions.push('matchType = :mtype');                                  values[':mtype'] = body.matchType; }
+  if (body.category !== undefined)           { expressions.push('category = :cat');                                     values[':cat'] = body.category.trim(); }
+  if (body.subcategory !== undefined)        { expressions.push('subcategory = :sub');                                  values[':sub'] = body.subcategory.trim(); }
+  if (body.enabled !== undefined)            { expressions.push('enabled = :enabled');                                  values[':enabled'] = body.enabled; }
+  if (body.priority !== undefined)           { expressions.push('priority = :priority');                                values[':priority'] = body.priority; }
+  if (body.isBusiness !== undefined)         { expressions.push('isBusiness = :biz');                                  values[':biz'] = body.isBusiness; }
+  if (body.isIgnore !== undefined)           { expressions.push('isIgnore = :ignore');                                  values[':ignore'] = body.isIgnore; }
+  if (body.overridesBuiltinId !== undefined) { expressions.push('overridesBuiltinId = :obid');                          values[':obid'] = body.overridesBuiltinId; }
+  if (body.projectId !== undefined)          { expressions.push('projectId = :pid');                                    values[':pid'] = body.projectId; }
   if (expressions.length === 0) throw { statusCode: 400, message: 'No fields to update' };
 
   const res = await ddb.send(new UpdateCommand({

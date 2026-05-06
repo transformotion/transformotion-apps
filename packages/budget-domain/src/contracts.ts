@@ -12,16 +12,40 @@ export interface Transaction {
   file: string;
   _manual: boolean;
   _business: boolean;
+  _ignore?: boolean;              // Excluded from P&L and cashflow; still visible in Transactions tab
 }
 
 export interface CustomRule {
   id: string;
   accountId: string;
-  match: string;                  // Keyword or regex pattern, case-insensitive
+  name: string;                   // Display name for the rule (shown in Rules tab)
+  match: string;                  // Keyword or regex string, applied case-insensitive
+  matchType: 'contains' | 'startsWith' | 'regex';
   category: string;
   subcategory: string;
-  learned: boolean;
+  enabled: boolean;               // Disabled rules are skipped without being deleted
+  priority: number;               // Lower number = higher priority; multiple matches: lowest wins
+  isBusiness: boolean;            // Sets _business: true on matched transactions
+  isIgnore?: boolean;             // Sets _ignore: true on matched transactions
+  overridesBuiltinId?: string;    // Built-in rule ID this custom rule replaces/disables
+  projectId?: string;             // Assigns matched transactions to a project category
+  learned: boolean;               // true if created via "Learn" button; false if manually authored
   createdAt: string;              // ISO 8601
+}
+
+export interface TransactionRepository {
+  findAll(accountId: string): Promise<Transaction[]>;
+  findById(accountId: string, id: string): Promise<Transaction | null>;
+  upsertBulk(transactions: Transaction[]): Promise<Transaction[]>;
+  update(id: string, accountId: string, updates: Partial<Transaction>): Promise<Transaction>;
+  delete(id: string, accountId: string): Promise<void>;
+}
+
+export interface CustomRulesRepository {
+  findAll(accountId: string): Promise<CustomRule[]>;
+  findById(accountId: string, id: string): Promise<CustomRule | null>;
+  save(rule: CustomRule): Promise<CustomRule>;
+  delete(id: string, accountId: string): Promise<void>;
 }
 
 export interface BuiltinRule {

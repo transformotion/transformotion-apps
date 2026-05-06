@@ -112,8 +112,9 @@ Suggest 3-5 rules that would categorize the most transactions. Return ONLY valid
   const acceptSuggestedRule = (suggestion: SuggestedRule) => {
     const rule: CustomRule = {
       id: `custom-${Date.now()}`,
+      accountId: "",
       name: suggestion.name,
-      pattern: suggestion.pattern,
+      match: suggestion.pattern,
       matchType: suggestion.matchType,
       category: suggestion.category,
       subcategory: suggestion.subcategory,
@@ -121,6 +122,7 @@ Suggest 3-5 rules that would categorize the most transactions. Return ONLY valid
       isIgnore: false,
       enabled: true,
       priority: customRules.length,
+      learned: true,
       createdAt: new Date().toISOString()
     }
     setCustomRules([...customRules, rule])
@@ -158,13 +160,13 @@ Suggest 3-5 rules that would categorize the most transactions. Return ONLY valid
       try {
         let regex: RegExp
         if (rule.matchType === "regex") {
-          regex = new RegExp(rule.pattern, "i")
+          regex = new RegExp(rule.match, "i")
         } else if (rule.matchType === "startsWith") {
-          regex = new RegExp(`^${rule.pattern}`, "i")
+          regex = new RegExp(`^${rule.match}`, "i")
         } else {
-          regex = new RegExp(rule.pattern, "i")
+          regex = new RegExp(rule.match, "i")
         }
-        
+
         if (regex.test(testInput)) {
           results.push({ rule, isBuiltin: false, isWinner: false })
         }
@@ -243,8 +245,9 @@ Suggest 3-5 rules that would categorize the most transactions. Return ONLY valid
     
     const rule: CustomRule = {
       id: `custom-${Date.now()}`,
+      accountId: "",
       name: newRule.name.trim(),
-      pattern: newRule.pattern.trim(),
+      match: newRule.pattern.trim(),
       matchType: newRule.matchType,
       category: newRule.isIgnore ? "Ignore" : newRule.category,
       subcategory: newRule.isIgnore ? "Ignored" : newRule.subcategory,
@@ -252,6 +255,7 @@ Suggest 3-5 rules that would categorize the most transactions. Return ONLY valid
       isIgnore: newRule.isIgnore,
       enabled: true,
       priority: customRules.length,
+      learned: false,
       createdAt: new Date().toISOString()
     }
     
@@ -267,7 +271,7 @@ Suggest 3-5 rules that would categorize the most transactions. Return ONLY valid
     
     // Pre-fill the form with existing override values or built-in defaults
     setBuiltinEditForm({
-      pattern: existingOverride?.pattern || builtinRule.pattern,
+      pattern: existingOverride?.match || builtinRule.pattern,
       category: existingOverride?.category || builtinRule.category,
       subcategory: existingOverride?.subcategory || builtinRule.subcategory,
       isBusiness: existingOverride?.isBusiness || false,
@@ -288,9 +292,9 @@ Suggest 3-5 rules that would categorize the most transactions. Return ONLY valid
       // Update existing override
       setCustomRules(customRules.map(r => 
         r.id === existingOverride.id 
-          ? { 
+          ? {
               ...r,
-              pattern: builtinEditForm.pattern,
+              match: builtinEditForm.pattern,
               category: builtinEditForm.isIgnore ? "Ignore" : builtinEditForm.category,
               subcategory: builtinEditForm.isIgnore ? "Ignored" : builtinEditForm.subcategory,
               isBusiness: builtinEditForm.isBusiness,
@@ -304,8 +308,9 @@ Suggest 3-5 rules that would categorize the most transactions. Return ONLY valid
       // Create new rule (either override or standalone custom rule)
       const rule: CustomRule = {
         id: patternChanged ? `custom-${Date.now()}` : `override-${editingBuiltinRule.id}-${Date.now()}`,
+        accountId: "",
         name: patternChanged ? `${editingBuiltinRule.name} (Modified)` : `${editingBuiltinRule.name} (Override)`,
-        pattern: builtinEditForm.pattern,
+        match: builtinEditForm.pattern,
         matchType: "regex",
         category: builtinEditForm.isIgnore ? "Ignore" : builtinEditForm.category,
         subcategory: builtinEditForm.isIgnore ? "Ignored" : builtinEditForm.subcategory,
@@ -315,6 +320,7 @@ Suggest 3-5 rules that would categorize the most transactions. Return ONLY valid
         overridesBuiltinId: patternChanged ? undefined : editingBuiltinRule.id,
         enabled: true,
         priority: patternChanged ? 100 : -1,
+        learned: false,
         createdAt: new Date().toISOString()
       }
       setCustomRules([rule, ...customRules])
@@ -340,8 +346,9 @@ Suggest 3-5 rules that would categorize the most transactions. Return ONLY valid
       // Create disabled override
       const rule: CustomRule = {
         id: `disabled-${builtinRule.id}-${Date.now()}`,
+        accountId: "",
         name: `[Disabled] ${builtinRule.name}`,
-        pattern: builtinRule.pattern,
+        match: builtinRule.pattern,
         matchType: "regex",
         category: builtinRule.category,
         subcategory: builtinRule.subcategory,
@@ -349,6 +356,7 @@ Suggest 3-5 rules that would categorize the most transactions. Return ONLY valid
         overridesBuiltinId: builtinRule.id,
         enabled: false,
         priority: -1,
+        learned: false,
         createdAt: new Date().toISOString()
       }
       setCustomRules([rule, ...customRules])
@@ -774,7 +782,7 @@ Suggest 3-5 rules that would categorize the most transactions. Return ONLY valid
                           <div>
                             <label className="text-[10px] uppercase tracking-wider text-muted-foreground block mb-1">Pattern ({rule.matchType})</label>
                             <code className="block text-xs text-primary bg-background p-2 rounded overflow-x-auto">
-                              {rule.pattern}
+                              {rule.match}
                             </code>
                           </div>
                           
@@ -915,8 +923,8 @@ Suggest 3-5 rules that would categorize the most transactions. Return ONLY valid
                             <label className="text-[10px] uppercase tracking-wider text-muted-foreground block mb-1">Pattern</label>
                             <input
                               type="text"
-                              value={rule.pattern}
-                              onChange={(e) => updateRule(rule.id, { pattern: e.target.value })}
+                              value={rule.match}
+                              onChange={(e) => updateRule(rule.id, { match: e.target.value })}
                               className="w-full h-8 px-2 bg-background border border-border rounded text-sm"
                               placeholder="Pattern"
                             />

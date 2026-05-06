@@ -981,11 +981,12 @@ Approximately 22 environment variables are exposed to the client side
   production values is in PLAN.md Section 19 (Backlog).
 - `NEXT_PUBLIC_RUNTIME_PROFILE` — profile + override pattern (M6 #189).
   Set to `mock` (default; local dev) or `live` (deployed). Per-concern
-  overrides (`NEXT_PUBLIC_AUTH_OVERRIDE`, `NEXT_PUBLIC_DATA_OVERRIDE`,
-  etc.) allow targeted swaps. Auth axis wired (#177/#189); data axis
-  pending #178; AI axis pending #181. Replaces the former per-axis env
-  vars (`NEXT_PUBLIC_AUTH_PROVIDER` removed). See CONTRIBUTING.md
-  Section 5.8.
+  overrides allow targeted swaps: `NEXT_PUBLIC_AUTH_OVERRIDE` (wired
+  #189), `NEXT_PUBLIC_DATA_OVERRIDE` (wired #178 — `local|dynamo`),
+  `NEXT_PUBLIC_AI_OVERRIDE` (pending #181). Auth and data axes now
+  wired in both apps' configs via `selectProvider`; AI axis pending
+  #181. Replaces the former per-axis env vars (`NEXT_PUBLIC_AUTH_PROVIDER`,
+  `NEXT_PUBLIC_STORAGE_PROVIDER` removed). See CONTRIBUTING.md Section 5.8.
 - `NEXT_PUBLIC_BUDGET_API_URL` — points at the BudgetTrackerApi
   gateway. Removed in M5.
 

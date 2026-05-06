@@ -2,39 +2,9 @@
  * Budget Tracker Type Definitions
  */
 
-/**
- * Transaction record - exactly 9 fields as per spec
- */
-export interface Transaction {
-  _id: number           // auto-incremented integer
-  date: string          // DD/MM/YYYY — internal format always
-  amount: string        // negative = expense, positive = income or refund
-  description: string
-  category: string
-  subcategory: string
-  file: string          // source CSV filename
-  _manual: boolean      // user manually set — rules engine will NOT overwrite
-  _business: boolean    // flagged as business expense — excluded from personal P&L
-}
-
-/**
- * Custom rule (user-created)
- */
-export interface CustomRule {
-  id: string
-  name: string
-  pattern: string       // stored as string, converted to RegExp at runtime
-  matchType: "contains" | "startsWith" | "regex"
-  category: string
-  subcategory: string
-  isBusiness: boolean
-  isIgnore?: boolean    // if true, transaction excluded from Summary/Cashflow
-  overridesBuiltinId?: string  // if set, this rule overrides/disables a built-in rule
-  projectId?: string
-  enabled: boolean
-  priority: number      // lower = higher priority
-  createdAt: string
-}
+// Canonical cross-boundary types — source of truth in /contracts/budget-tracker/data-models.md
+import type { Transaction } from '@transformotion/budget-domain'
+export type { Transaction, CustomRule } from '@transformotion/budget-domain'
 
 /**
  * Account model - for multi-user support
