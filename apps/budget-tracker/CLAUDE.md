@@ -178,7 +178,7 @@ Environment: copy `apps/budget-tracker/.env.example` to `.env.local` and fill in
 | `NEXT_PUBLIC_COGNITO_CLIENT_ID` | Generic runtime name for the Cognito client ID — set in `.env.local` for local dev |
 | `NEXT_PUBLIC_COGNITO_USER_POOL_ID` | Shared Cognito user pool ID |
 | `NEXT_PUBLIC_COGNITO_DOMAIN` | Hosted UI domain |
-| `NEXT_PUBLIC_AUTH_PROVIDER` | `cognito` in deployed builds; omit (defaults to `mock`) for local dev without Cognito |
+| `NEXT_PUBLIC_RUNTIME_PROFILE` | `mock` (default; local development) or `live` (deployed environments). Determines defaults for auth, data, AI, and future concerns. See root `CLAUDE.md` for the design map. |
 | `NEXT_PUBLIC_USE_MOCK_DATA` | `true` = stub adaptors, `false` = real AWS |
 | `NEXT_PUBLIC_API_BASE_URL` | Budget Tracker API base URL |
 

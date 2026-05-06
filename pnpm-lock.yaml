@@ -131,6 +131,9 @@ importers:
       '@transformotion/auth-client':
         specifier: workspace:*
         version: link:../../packages/auth-client
+      '@transformotion/runtime-config':
+        specifier: workspace:*
+        version: link:../../packages/runtime-config
       autoprefixer:
         specifier: ^10.4.20
         version: 10.5.0(postcss@8.5.10)
@@ -513,6 +516,9 @@ importers:
       '@transformotion/auth-client':
         specifier: workspace:*
         version: link:../../packages/auth-client
+      '@transformotion/runtime-config':
+        specifier: workspace:*
+        version: link:../../packages/runtime-config
       '@vercel/analytics':
         specifier: 1.6.1
         version: 1.6.1(next@16.2.0(@babel/core@7.29.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(react@19.2.5)
@@ -943,6 +949,18 @@ importers:
       '@types/aws-lambda':
         specifier: ^8
         version: 8.10.161
+      '@types/node':
+        specifier: ^22
+        version: 22.19.17
+      typescript:
+        specifier: '*'
+        version: 5.7.3
+      vitest:
+        specifier: ^1
+        version: 1.6.1(@types/node@22.19.17)(lightningcss@1.32.0)
+
+  packages/runtime-config:
+    devDependencies:
       '@types/node':
         specifier: ^22
         version: 22.19.17

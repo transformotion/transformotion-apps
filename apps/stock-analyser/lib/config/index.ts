@@ -1,10 +1,12 @@
 /**
  * Application Configuration
- * 
+ *
  * Centralised configuration loaded from environment variables.
  * Sensitive keys (API_KEY, ANTHROPIC_API_KEY) are server-side only.
  * Client-safe keys use NEXT_PUBLIC_ prefix.
  */
+
+import { selectProvider } from '@transformotion/runtime-config'
 
 export interface APIConfig {
   baseURL: string
@@ -74,7 +76,11 @@ export function loadConfig(): AppConfig {
       timeout: 30000,
     },
     auth: {
-      provider: (process.env.NEXT_PUBLIC_AUTH_PROVIDER as 'mock' | 'cognito') || 'mock',
+      provider: selectProvider({
+        override: process.env.NEXT_PUBLIC_AUTH_OVERRIDE,
+        profileDefaults: { mock: 'mock', live: 'cognito' },
+        validValues: ['mock', 'cognito'] as const,
+      }),
       cognitoUserPoolId: process.env.NEXT_PUBLIC_COGNITO_USER_POOL_ID,
       cognitoClientId: process.env.NEXT_PUBLIC_COGNITO_CLIENT_ID,
       cognitoRegion: process.env.NEXT_PUBLIC_COGNITO_REGION,
