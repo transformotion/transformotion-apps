@@ -914,6 +914,49 @@ Not every contract has a pair. Frontend-internal conventions (UI patterns) typic
 
 Backend contracts include an explicit "External dependencies" section listing AWS services the domain interacts with — Cognito, SES, DynamoDB, etc. This serves both v0 (knows what to stub when generating mocks) and Claude (understands what's the platform's vs what's AWS's).
 
+### 5.8 Runtime configuration: profile + override pattern
+
+The platform selects between provider implementations across multiple architectural concerns (auth, data, AI, cache, email sender, file storage) using a single foundational pattern: a profile env var sets the high-level mode, and optional per-concern override env vars allow targeted swaps.
+
+**Profile.** `NEXT_PUBLIC_RUNTIME_PROFILE` accepts `mock` or `live`. Defaults to `mock` if unset. Local development reads `mock` (preserving v0 workflow); deploy workflows explicitly set `live` for deployed environments.
+
+**Per-concern overrides.** Each concern has an optional `NEXT_PUBLIC_<CONCERN>_OVERRIDE` env var. When set with a valid value, the override wins; otherwise the concern's profile default applies.
+
+**Resolution order.**
+
+1. If the override env var is set and has a valid value: use it.
+2. Otherwise, use the profile's default for this concern.
+3. If the profile is unset or invalid: default to `mock`.
+
+**Concerns.**
+
+| Concern | mock profile | live profile |
+|---|---|---|
+| Auth | `mock` | `cognito` |
+| Data | `local` | `dynamo` |
+| AI | `mock` | `claude` |
+| Cache | `memory` | (TBD) |
+| Email sender | `mock` | `ses` |
+| File storage | `local` | `s3` |
+
+The pattern accommodates future concerns by adding a row; the resolution logic stays unchanged.
+
+**Implementation.** The `@transformotion/runtime-config` package provides the canonical resolution helper:
+
+```typescript
+import { selectProvider } from '@transformotion/runtime-config';
+
+const authProvider = selectProvider({
+  override: process.env.NEXT_PUBLIC_AUTH_OVERRIDE,
+  profileDefaults: { mock: 'mock', live: 'cognito' },
+  validValues: ['mock', 'cognito'],
+});
+```
+
+**Call site discipline.** Each app's `lib/config/index.ts` is the canonical resolution point — it calls `selectProvider` once at app startup, stores the resolved values in the config object (e.g., `config.auth.provider`), and downstream factories receive the resolved value as a parameter rather than reading env vars directly. This keeps runtime decisions centralised, testable, and visible.
+
+**Relationship to Section 5.3.** Section 5.3 (Implementation selection) covers the architectural pattern of having multiple implementations behind a domain interface. Section 5.8 covers the specific env var semantics and resolution mechanism. The two work together: 5.3 establishes the pattern; 5.8 defines how the choice is made.
+
 ---
 
 ## 6. Utility categories and conventions

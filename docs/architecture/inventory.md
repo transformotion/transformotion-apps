@@ -979,8 +979,13 @@ Approximately 22 environment variables are exposed to the client side
 - `NEXT_PUBLIC_USE_MOCK_DATA` — defaults to mock-mode in code,
   reclassified as `[REQUIRED]` in PR #23. Long-term default-flip to
   production values is in PLAN.md Section 19 (Backlog).
-- `NEXT_PUBLIC_AI_PROVIDER` and `NEXT_PUBLIC_AUTH_PROVIDER` — same
-  pattern.
+- `NEXT_PUBLIC_RUNTIME_PROFILE` — profile + override pattern (M6 #189).
+  Set to `mock` (default; local dev) or `live` (deployed). Per-concern
+  overrides (`NEXT_PUBLIC_AUTH_OVERRIDE`, `NEXT_PUBLIC_DATA_OVERRIDE`,
+  etc.) allow targeted swaps. Auth axis wired (#177/#189); data axis
+  pending #178; AI axis pending #181. Replaces the former per-axis env
+  vars (`NEXT_PUBLIC_AUTH_PROVIDER` removed). See CONTRIBUTING.md
+  Section 5.8.
 - `NEXT_PUBLIC_BUDGET_API_URL` — points at the BudgetTrackerApi
   gateway. Removed in M5.
 

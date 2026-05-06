@@ -48,3 +48,18 @@ Note: some paths are migrating per `CONTRIBUTING.md` Section 3 — see `MONOREPO
 | Archived superseded docs | `/docs/archive/` |
 
 Before modifying shared code or platform infrastructure, consider the impact on every app — these changes deploy to all of them.
+
+## Runtime configuration pattern
+
+The platform uses a profile + override pattern to select between provider implementations across architectural concerns. Set `NEXT_PUBLIC_RUNTIME_PROFILE=mock` (default; local dev) or `live` (deployed). Per-concern overrides (e.g., `NEXT_PUBLIC_AUTH_OVERRIDE`) allow targeted swaps without changing the profile.
+
+| Concern | mock profile | live profile | Implemented |
+|---|---|---|---|
+| Auth | mock | cognito | Yes (#177, #189) |
+| Data | local | dynamo | #178 |
+| AI | mock | claude | #181 |
+| Cache | memory | (TBD) | future |
+| Email sender | mock | ses | future |
+| File storage | local | s3 | future |
+
+Resolution order: override env var (if set with valid value) > profile default > `mock` fallback. See `CONTRIBUTING.md` Section 5.8 for the canonical pattern documentation.

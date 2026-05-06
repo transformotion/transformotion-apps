@@ -60,8 +60,11 @@ export interface AuthService {
 export { MockAuthService, createMockAuthService } from './mock-auth'
 export { CognitoAuthService } from './cognito-auth'
 
-export function createAuthService(appSlug?: string): AuthService {
-  if (process.env.NEXT_PUBLIC_AUTH_PROVIDER === 'cognito') {
+export function createAuthService(
+  appSlug?: string,
+  options?: { provider: 'mock' | 'cognito' }
+): AuthService {
+  if (options?.provider === 'cognito') {
     return new CognitoAuthService(appSlug)
   }
   return createMockAuthService()
