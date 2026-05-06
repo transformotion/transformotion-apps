@@ -120,7 +120,7 @@ export function loadConfig(): AppConfig {
       debugMode: process.env.NEXT_PUBLIC_DEBUG_MODE === 'true',
     },
     apps: {
-      budgetTrackerUrl: process.env.NEXT_PUBLIC_BUDGET_URL || '/budget-tracker/',
+      budgetTrackerUrl: (process.env.NEXT_PUBLIC_BUDGET_URL || '/budget-tracker/').replace(/\/*$/, '/'),
     },
   }
 }
