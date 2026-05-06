@@ -54,3 +54,30 @@ export function selectProvider<T extends string>(args: SelectProviderArgs<T>): T
   const profile = resolveProfile()
   return profileDefaults[profile]
 }
+
+/**
+ * Normalises a cross-app URL by ensuring it ends with exactly one trailing slash.
+ *
+ * Cross-app navigation depends on URL shapes matching CloudFront behaviour
+ * patterns (which require trailing-prefix patterns like /budget-tracker/*).
+ * A URL like 'https://dev.apps.transformotion.com.au/budget-tracker' (no
+ * trailing slash) won't match the /budget-tracker/* behaviour and falls
+ * through to the SPA fallback, causing a SyntaxError in the wrong app's
+ * runtime.
+ *
+ * @param envValue - The env var value (often process.env.NEXT_PUBLIC_X_URL)
+ * @param fallback - The fallback URL when env var is unset (typically a
+ *                   local path for local dev, e.g. '/budget-tracker/')
+ * @returns A URL guaranteed to end with exactly one trailing slash
+ *
+ * @example
+ * normaliseCrossAppUrl(process.env.NEXT_PUBLIC_BUDGET_URL, '/budget-tracker/')
+ *   // → 'https://dev.apps.transformotion.com.au/budget-tracker/' (slash added)
+ *   //   or '/budget-tracker/' if env var is unset
+ */
+export function normaliseCrossAppUrl(
+  envValue: string | undefined,
+  fallback: string
+): string {
+  return (envValue || fallback).replace(/\/*$/, '/')
+}

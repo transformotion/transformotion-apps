@@ -6,7 +6,7 @@
  * Client-safe keys use NEXT_PUBLIC_ prefix.
  */
 
-import { selectProvider } from '@transformotion/runtime-config'
+import { selectProvider, normaliseCrossAppUrl } from '@transformotion/runtime-config'
 
 export interface APIConfig {
   baseURL: string
@@ -120,7 +120,7 @@ export function loadConfig(): AppConfig {
       debugMode: process.env.NEXT_PUBLIC_DEBUG_MODE === 'true',
     },
     apps: {
-      budgetTrackerUrl: (process.env.NEXT_PUBLIC_BUDGET_URL || '/budget-tracker/').replace(/\/*$/, '/'),
+      budgetTrackerUrl: normaliseCrossAppUrl(process.env.NEXT_PUBLIC_BUDGET_URL, '/budget-tracker/'),
     },
   }
 }

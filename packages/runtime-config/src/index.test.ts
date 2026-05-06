@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { selectProvider, resolveProfile } from './index'
+import { selectProvider, resolveProfile, normaliseCrossAppUrl } from './index'
 
 describe('resolveProfile', () => {
   beforeEach(() => {
@@ -46,5 +46,37 @@ describe('selectProvider', () => {
 
   it('ignores invalid override and falls back to profile', () => {
     expect(selectProvider({ ...args, override: 'invalid' })).toBe('foo')
+  })
+})
+
+describe('normaliseCrossAppUrl', () => {
+  it('adds trailing slash when missing', () => {
+    expect(normaliseCrossAppUrl('https://example.com/app', '/fallback/'))
+      .toBe('https://example.com/app/')
+  })
+
+  it('preserves single trailing slash', () => {
+    expect(normaliseCrossAppUrl('https://example.com/app/', '/fallback/'))
+      .toBe('https://example.com/app/')
+  })
+
+  it('collapses multiple trailing slashes to one', () => {
+    expect(normaliseCrossAppUrl('https://example.com/app///', '/fallback/'))
+      .toBe('https://example.com/app/')
+  })
+
+  it('uses fallback when env value is undefined', () => {
+    expect(normaliseCrossAppUrl(undefined, '/fallback/'))
+      .toBe('/fallback/')
+  })
+
+  it('uses fallback when env value is empty string', () => {
+    expect(normaliseCrossAppUrl('', '/fallback/'))
+      .toBe('/fallback/')
+  })
+
+  it('normalises fallback if missing trailing slash', () => {
+    expect(normaliseCrossAppUrl(undefined, '/fallback'))
+      .toBe('/fallback/')
   })
 })
