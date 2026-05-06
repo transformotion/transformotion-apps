@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation"
 import { Launchpad } from "@/components/launchpad/launchpad"
 import { AuthGuard } from "@/components/providers/auth-guard"
 import { useAuthStore } from "@/stores/auth/use-auth-store"
+import { getConfig } from "@/lib/config"
 
 function LaunchpadContent() {
   const router = useRouter()
@@ -14,7 +15,7 @@ function LaunchpadContent() {
   }
 
   const handleLaunchBudgetTracker = () => {
-    router.push("/budget-tracker")
+    window.location.assign(getConfig().apps.budgetTrackerUrl)
   }
 
   const handleSignOut = async () => {
