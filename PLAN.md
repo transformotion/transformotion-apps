@@ -670,6 +670,33 @@ deduplication of duplicated runtime code.
   migrations touch this document in the same PR.
 - The `apps/web/` 0-LOC shell cleanup (if not done in M3) folded in
   here.
+- Stock-analyser migrated from S3 root to `/stock-signal/` prefix:
+  - `apps/stock-analyser/next.config.mjs` gains `basePath: '/stock-signal'`
+    (`output: 'export'` already present)
+  - `deploy-stock-analyser.yml` syncs to `s3://transformotion-web-{stage}-{account}/stock-signal/`
+    (not bucket root; `--delete` scoped to prefix only)
+  - New `additionalBehaviors` entry for `/stock-signal/*` in `NetworkStack`
+    with `SubAppIndexRewrite` function (function established by M6 #154 PR #194)
+  - CDK deploy of `TransformotionDev-Network` / `TransformotionProd-Network`
+    to activate the behavior
+  - Stock-analyser sign-in, launchpad tile, and budget-tracker tile URLs
+    verified post-migration
+- Launchpad promoted to root deployment:
+  - `apps/launchpad/next.config.mjs` gains `output: 'export'` and
+    `trailingSlash: true` (currently not static-export-ready)
+  - New deploy workflow `deploy-launchpad.yml` mirroring
+    `deploy-stock-analyser.yml`'s pattern but syncing to S3 root
+    (`--exclude "stock-signal/*" --exclude "budget-tracker/*"`)
+  - Default CloudFront behavior verified to serve launchpad correctly
+    (root `index.html` resolves directly; no `SubAppIndexRewrite` needed)
+  - Atomic swap concern: stock-analyser must be moved off root in the same
+    milestone window; CloudFront cache invalidation for `/*` required at
+    swap time to flush stale stock-analyser content from edge nodes
+- Cross-cutting deployment verification for all migrated apps:
+  - Smoke check per app post-deploy: `data-commit` hash matches the
+    deploying commit; sign-in completes; repository operations succeed
+  - CloudFront cache invalidation strategy confirmed (stale cached content
+    flushed when root occupant changes)
 
 ### Goals served
 
@@ -686,7 +713,11 @@ Lint re-enabled and passing. Cross-app file copies caught at CI. Per-app
 infrastructure split into the canonical structure. All non-conforming
 data-access code migrated to layered architecture (Position A). Domain
 interfaces in contracts; implementations named for physical store. Two
-table renames complete (analysis-cache, rate-limits).
+table renames complete (analysis-cache, rate-limits). Each app deployed
+at its canonical S3 prefix per `docs/architecture/urls-and-deploy.md`
+target layout. No app served via the SPA fallback (every path resolves
+to its intended app via an explicit CloudFront behavior or the root
+default).
 
 ### Dependencies
 
