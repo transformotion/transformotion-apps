@@ -4,12 +4,15 @@ import {
   QueryCommand,
   BatchWriteCommand,
 } from '@aws-sdk/lib-dynamodb';
+import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { withAuth, parseBody, ok, requireAppAccess, requireAccountAccess } from '@transformotion/lambda-middleware';
 import { randomUUID } from 'crypto';
 import type { Transaction } from '@transformotion/budget-domain';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
-const TRANSACTIONS_TABLE = process.env.TRANSACTIONS_TABLE!;
+const s3  = new S3Client({});
+const TRANSACTIONS_TABLE       = process.env.TRANSACTIONS_TABLE!;
+const MIGRATION_UPLOADS_BUCKET = process.env.MIGRATION_UPLOADS_BUCKET!;
 
 function toIso(ddmmyyyy: string): string {
   const p = ddmmyyyy.split('/');
@@ -45,9 +48,19 @@ export const handler = withAuth(async ({ auth, account, event }) => {
   requireAccountAccess(auth, 'budget-tracker', account.accountId);
   const { accountId } = account;
 
-  const { transactions } = parseBody<{
-    transactions: Omit<Transaction, 'accountId'>[];
-  }>(event);
+  const { s3Key } = parseBody<{ s3Key: string }>(event);
+  if (!s3Key?.trim()) throw { statusCode: 400, message: 's3Key is required' };
+
+  const s3Res = await s3.send(new GetObjectCommand({
+    Bucket: MIGRATION_UPLOADS_BUCKET,
+    Key: s3Key,
+  }));
+  const raw = await s3Res.Body!.transformToString();
+  const transactions = JSON.parse(raw) as Omit<Transaction, 'accountId'>[];
+  if (!Array.isArray(transactions)) throw {
+    statusCode: 422,
+    message: 'Invalid export file: expected a JSON array of transactions at top level',
+  };
 
   // Load existing transactions for deduplication by natural key
   const existingTxRes = await ddb.send(new QueryCommand({
@@ -63,7 +76,7 @@ export const handler = withAuth(async ({ auth, account, event }) => {
   let txMigrated = 0; let txAlreadyPresent = 0;
   const txItems: Record<string, unknown>[] = [];
 
-  for (const tx of transactions ?? []) {
+  for (const tx of transactions) {
     const transformed = transformTransaction(tx);
     const key = txNaturalKey(transformed);
     if (existingTxKeys.has(key)) { txAlreadyPresent++; continue; }
@@ -83,7 +96,7 @@ export const handler = withAuth(async ({ auth, account, event }) => {
   await batchWrite(TRANSACTIONS_TABLE, txItems);
 
   return ok({
-    migrated:      { transactions: txMigrated },
+    migrated:       { transactions: txMigrated },
     alreadyPresent: { transactions: txAlreadyPresent },
   });
 });

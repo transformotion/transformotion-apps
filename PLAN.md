@@ -551,7 +551,7 @@ and makes Budget Tracker usable end-to-end with real users.
 - Contract files updated to reflect the new endpoint path. `/v1/` documentation drift fixed in the same change (contracts previously omitted the `v1` segment that exists in the actual route).
 - `MONOREPO.md` updated to document `migration-utilities/` as a peer category alongside `apps/`, `packages/`, `platform/`. The new `deploy-migration-utilities.yml` workflow documented alongside existing app and platform deploy workflows.
 - The localStorage middleman removed: client posts file contents directly to the import endpoint without an intermediate localStorage hop.
-- 732-transaction historical fixture (`migration-artifacts/budget-tracker/budget-tracker-export-2026-04-18.json`) backfilled.
+- 732-transaction historical fixture (`migration-artifacts/budget-tracker/transactions/exports/export.json`) backfilled via S3-mediated migration endpoint.
 - CSV import UI for ANZ and Macquarie statements implemented.
 - `apps/budget-tracker/` deploy workflow activated (currently a no-op echo placeholder). Workflow patterns match `deploy-stock-analyser.yml`. Budget Tracker available at its own URL as a deployed standalone app. (Originally M5 #154; moved to M6 because deploying before backend wiring creates infrastructure that doesn't do anything useful.)
 - Launchpad's Budget Tracker tile updated to navigate to the deployed Budget Tracker standalone URL (replacing the dead-code reference to `/budget-tracker` on the stock-analyser domain). Tile re-enabled. (Originally M5 #155; sequences naturally with the deploy activation.)

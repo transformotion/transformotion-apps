@@ -4,6 +4,7 @@ import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as lambdaNodejs from 'aws-cdk-lib/aws-lambda-nodejs';
+import * as s3 from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
 
 export interface MigrationsApiStackProps extends cdk.StackProps {
@@ -56,15 +57,22 @@ export class MigrationsApiStack extends cdk.Stack {
       forceDockerBundling: false,
     };
 
+    // ── Migration uploads bucket ──────────────────────────────────────────────
+    const uploadsBucket = new s3.Bucket(this, 'MigrationUploadsBucket', {
+      bucketName: `transformotion-migration-uploads-${this.account}`,
+      versioned: true,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      lifecycleRules: [{
+        expiration: cdk.Duration.days(90),
+        noncurrentVersionExpiration: cdk.Duration.days(30),
+      }],
+    });
+
     // ── budget-tracker tables (imported by name) ──────────────────────────────
     const txTable = dynamodb.Table.fromTableName(
       this, 'BudgetTrackerTxTable', `budget-tracker.transactions-${stage}`,
-    );
-    const rulesTable = dynamodb.Table.fromTableName(
-      this, 'BudgetTrackerRulesTable', `budget-tracker.rules-${stage}`,
-    );
-    const settingsTable = dynamodb.Table.fromTableName(
-      this, 'BudgetTrackerSettingsTable', `budget-tracker.settings-${stage}`,
     );
 
     // ── migration-budget-tracker-transactions Lambda ───────────────────────────
@@ -78,16 +86,14 @@ export class MigrationsApiStack extends cdk.Stack {
       timeout:      cdk.Duration.seconds(120),
       memorySize:   512,
       environment: {
-        TRANSACTIONS_TABLE: txTable.tableName,
-        RULES_TABLE:        rulesTable.tableName,
-        SETTINGS_TABLE:     settingsTable.tableName,
+        TRANSACTIONS_TABLE:       txTable.tableName,
+        MIGRATION_UPLOADS_BUCKET: uploadsBucket.bucketName,
       },
       bundling,
     });
 
     txTable.grantReadWriteData(transactionsMigrateFn);
-    rulesTable.grantReadWriteData(transactionsMigrateFn);
-    settingsTable.grantReadWriteData(transactionsMigrateFn);
+    uploadsBucket.grantRead(transactionsMigrateFn);
 
     // ── POST /api/migrations/budget-tracker/transactions/import ───────────────
     const budgetTrackerMigrations = this.migrationsResource.addResource('budget-tracker');
