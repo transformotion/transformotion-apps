@@ -1,0 +1,440 @@
+[
+  {
+    "match": "qantas|jetstar",
+    "category": "Eating-out & Entertainment",
+    "subcategory": "Holidays",
+    "learned": false
+  },
+  {
+    "match": "VODAFONE AUSTRALIA",
+    "category": "Home & utilities",
+    "subcategory": "Ellas Mobile",
+    "learned": false
+  },
+  {
+    "match": "sfs scuh|sfs the container|sfs scuh alice",
+    "category": "Eating-out & Entertainment",
+    "subcategory": "Coffee & tea",
+    "learned": false
+  },
+  {
+    "match": "mcafee",
+    "category": "Medical, personal & education",
+    "subcategory": "Computers & gadgets",
+    "learned": false
+  },
+  {
+    "match": "Dietitians Austral",
+    "category": "Medical, personal & education",
+    "subcategory": "Education & Professional Memberships",
+    "learned": false
+  },
+  {
+    "match": "COBBCO",
+    "category": "Eating-out & Entertainment",
+    "subcategory": "Holidays",
+    "learned": false
+  },
+  {
+    "match": "TRANSPORTMAINRDS",
+    "category": "Car & Transport",
+    "subcategory": "Rego & licence",
+    "learned": false
+  },
+  {
+    "match": "pickleball",
+    "category": "Medical, personal & education",
+    "subcategory": "Sports & gym",
+    "learned": false
+  },
+  {
+    "match": "brunswick hotel|alh venues|maroochy rsl|rose.*crown|chancellor tavern|Maroochy RSL|deck sea salt|dock mooloolaba|MOOLOOLABA SURF LIFE",
+    "category": "Eating-out & Entertainment",
+    "subcategory": "Bars & clubs",
+    "learned": false
+  },
+  {
+    "match": "bws|liquorland|l/land",
+    "category": "Eating-out & Entertainment",
+    "subcategory": "Drinks & alcohol",
+    "learned": false
+  },
+  {
+    "match": "Pavilion Mooloolaba|pomona distilling|boatshed|little parliament|beach bar|green at tanawha",
+    "category": "Eating-out & Entertainment",
+    "subcategory": "Restaurants",
+    "learned": false
+  },
+  {
+    "match": "Noosa Chocolate Factory",
+    "category": "Eating-out & Entertainment",
+    "subcategory": "Take-away & snacks",
+    "learned": false
+  },
+  {
+    "match": "The Beach Bar & Gri",
+    "category": "Eating-out & Entertainment",
+    "subcategory": "Restaurants",
+    "learned": false
+  },
+  {
+    "match": "RAINBOW BEACH SURF LI",
+    "category": "Eating-out & Entertainment",
+    "subcategory": "Bars & clubs",
+    "learned": false
+  },
+  {
+    "match": "OZT*",
+    "category": "Eating-out & Entertainment",
+    "subcategory": "Movies, shows & music",
+    "learned": false
+  },
+  {
+    "match": "SFS SCUH ALICE & GEO",
+    "category": "Eating-out & Entertainment",
+    "subcategory": "Coffee & tea",
+    "learned": false
+  },
+  {
+    "match": "Salary from QLD DEPARTMENT",
+    "category": "Income",
+    "subcategory": "Your partner's take-home pay",
+    "learned": false
+  },
+  {
+    "match": "snshn-kr-th-bdrm",
+    "category": "Eating-out & Entertainment",
+    "subcategory": "Restaurants",
+    "learned": false
+  },
+  {
+    "match": "From AUSTRALIAN UNITY|MEDICARE BENEFIT",
+    "category": "Income",
+    "subcategory": "Health insurance reimbursement",
+    "learned": false
+  },
+  {
+    "match": "To Jasper Rouse-upjohn",
+    "category": "Children",
+    "subcategory": "Child support payment",
+    "learned": false
+  },
+  {
+    "match": "To Bailen Rouse-Upjohn",
+    "category": "Children",
+    "subcategory": "Child support payment",
+    "learned": false
+  },
+  {
+    "match": "From E552212",
+    "category": "Income",
+    "subcategory": "Other income",
+    "learned": false
+  },
+  {
+    "match": "BYRON SHIRE COUNCIL",
+    "category": "Eating-out & Entertainment",
+    "subcategory": "Coffee & tea",
+    "learned": true
+  },
+  {
+    "match": "snshn-kr-th-bdrm Buderim",
+    "category": "Eating-out & Entertainment",
+    "subcategory": "Restaurants",
+    "learned": true
+  },
+  {
+    "match": "FUNDS TFER TRANSFER ",
+    "category": "Financial & Insurance",
+    "subcategory": "Transfer",
+    "learned": false
+  },
+  {
+    "match": "ALH VENUES",
+    "category": "Eating-out & Entertainment",
+    "subcategory": "Restaurants",
+    "learned": false
+  },
+  {
+    "match": "SUNCORP INSURANCE",
+    "category": "Financial & Insurance",
+    "subcategory": "Home & contents insurance",
+    "learned": false
+  },
+  {
+    "match": "MAROOCHYDORE STATE HIG",
+    "category": "Children",
+    "subcategory": "School uniforms",
+    "learned": false
+  },
+  {
+    "match": "ELLA MOODIE",
+    "category": "Children",
+    "subcategory": "Child support payment",
+    "learned": false
+  },
+  {
+    "match": "ANZ INTERNET BANKING",
+    "category": "Car & Transport",
+    "subcategory": "Rego & licence",
+    "learned": true
+  },
+  {
+    "match": "ACCOUNT SERVICING FEE",
+    "category": "Financial & Insurance",
+    "subcategory": "Bank fees",
+    "learned": true
+  },
+  {
+    "match": "A&E JONES PTY",
+    "category": "Eating-out & Entertainment",
+    "subcategory": "Restaurants",
+    "learned": true
+  },
+  {
+    "match": "DEPOT NOOSA|MOUSTACHE Mermaid",
+    "category": "Eating-out & Entertainment",
+    "subcategory": "Restaurants",
+    "learned": true
+  },
+  {
+    "match": "Kiosk Alexandra Hea",
+    "category": "Eating-out & Entertainment",
+    "subcategory": "Restaurants",
+    "learned": true
+  },
+  {
+    "match": "PAYMENT TO BUPA",
+    "category": "Financial & Insurance",
+    "subcategory": "Health insurance",
+    "learned": true
+  },
+  {
+    "match": "PAY/SALARY FROM TALENT",
+    "category": "Income",
+    "subcategory": "Your take-home pay",
+    "learned": true
+  },
+  {
+    "match": "PAYMENT FROM Hawkins",
+    "category": "_ignore",
+    "subcategory": "",
+    "learned": true
+  },
+  {
+    "match": "PAYMENT TO MOODIE",
+    "category": "Financial & Insurance",
+    "subcategory": "Home loan",
+    "learned": true
+  },
+  {
+    "match": "SUNCORP INSURANCE BRISBANE",
+    "category": "Financial & Insurance",
+    "subcategory": "Home & contents insurance",
+    "learned": true
+  },
+  {
+    "match": "Cotton Tree Ice",
+    "category": "Eating-out & Entertainment",
+    "subcategory": "Take-away & snacks",
+    "learned": true
+  },
+  {
+    "match": "NDC SERVICE CO",
+    "category": "Medical, personal & education",
+    "subcategory": "Dental",
+    "learned": true
+  },
+  {
+    "match": "Aussie World Palmview",
+    "category": "Eating-out & Entertainment",
+    "subcategory": "Bars & clubs",
+    "learned": true
+  },
+  {
+    "match": "The Pocket Espresso",
+    "category": "Eating-out & Entertainment",
+    "subcategory": "Bars & clubs",
+    "learned": true
+  },
+  {
+    "match": "Gun Cotton Coffee",
+    "category": "Eating-out & Entertainment",
+    "subcategory": "Restaurants",
+    "learned": true
+  },
+  {
+    "match": "KINGS BEACH HOTEL",
+    "category": "Eating-out & Entertainment",
+    "subcategory": "Bars & clubs",
+    "learned": true
+  },
+  {
+    "match": "Cars on Booking",
+    "category": "Eating-out & Entertainment",
+    "subcategory": "Holidays",
+    "learned": true
+  },
+  {
+    "match": "HARRIS SCARFE MRHYDR",
+    "category": "Home & utilities",
+    "subcategory": "Furniture & appliances",
+    "learned": true
+  },
+  {
+    "match": "Disney Plus 1800-965160",
+    "category": "Home & utilities",
+    "subcategory": "Streaming Services",
+    "learned": true
+  },
+  {
+    "match": "QTIX TICKETING",
+    "category": "Eating-out & Entertainment",
+    "subcategory": "Movies, shows & music",
+    "learned": true
+  },
+  {
+    "match": "help.hbomax.com St. Leonards",
+    "category": "Home & utilities",
+    "subcategory": "Streaming Services",
+    "learned": true
+  },
+  {
+    "match": "BURLEIGH HDS RUGBY",
+    "category": "Eating-out & Entertainment",
+    "subcategory": "Bars & clubs",
+    "learned": true
+  },
+  {
+    "match": "FOSTER & BLACK",
+    "category": "Eating-out & Entertainment",
+    "subcategory": "Coffee & tea",
+    "learned": true
+  },
+  {
+    "match": "BANJOS SIPPY DOWNS",
+    "category": "Groceries",
+    "subcategory": "Deli & bakery",
+    "learned": true
+  },
+  {
+    "match": "APPLE.COM/BILL SYDNEY",
+    "category": "Medical, personal & education",
+    "subcategory": "Computers & gadgets",
+    "learned": true
+  },
+  {
+    "match": "MAMMOTH FOREST GLEN",
+    "category": "Home & utilities",
+    "subcategory": "Furniture & appliances",
+    "learned": true
+  },
+  {
+    "match": "SPRINGBOK FOODS PTY",
+    "category": "Groceries",
+    "subcategory": "Deli & bakery",
+    "learned": true
+  },
+  {
+    "match": "EVENT CINEMAS",
+    "category": "Eating-out & Entertainment",
+    "subcategory": "Movies, shows & music",
+    "learned": true
+  },
+  {
+    "match": "IPY*COBBCO NINE MILE",
+    "category": "Eating-out & Entertainment",
+    "subcategory": "Holidays",
+    "learned": true
+  },
+  {
+    "match": "HUBBL - KAYO",
+    "category": "Home & utilities",
+    "subcategory": "Streaming Services",
+    "learned": true
+  },
+  {
+    "match": "SPOTIFY",
+    "category": "Home & utilities",
+    "subcategory": "Streaming Services",
+    "learned": true
+  },
+  {
+    "match": "Mrs Luus",
+    "category": "Eating-out & Entertainment",
+    "subcategory": "Lunches bought",
+    "learned": true
+  },
+  {
+    "match": "SPINTEL PTY LTD",
+    "category": "Home & utilities",
+    "subcategory": "Internet",
+    "learned": true
+  },
+  {
+    "match": "Audible Limited AU",
+    "category": "Home & utilities",
+    "subcategory": "Streaming Services",
+    "learned": true
+  },
+  {
+    "match": "Boost Sunshine Plaza",
+    "category": "Eating-out & Entertainment",
+    "subcategory": "Take-away & snacks",
+    "learned": true
+  },
+  {
+    "match": "Bli Bli Watersports",
+    "category": "Medical, personal & education",
+    "subcategory": "Hobbies",
+    "learned": true
+  },
+  {
+    "match": "THE GREEN AT",
+    "category": "Medical, personal & education",
+    "subcategory": "Sports & gym",
+    "learned": true
+  },
+  {
+    "match": "Mebami South Brisban",
+    "category": "Eating-out & Entertainment",
+    "subcategory": "Lunches bought",
+    "learned": true
+  },
+  {
+    "match": "THEPICKLEB*",
+    "category": "Medical, personal & education",
+    "subcategory": "Sports & gym",
+    "learned": true
+  },
+  {
+    "match": "Netflix.com Melbourne",
+    "category": "Home & utilities",
+    "subcategory": "Streaming Services",
+    "learned": true
+  },
+  {
+    "match": "Coles Group Limited",
+    "category": "Eating-out & Entertainment",
+    "subcategory": "Celebrations & gifts",
+    "learned": true
+  },
+  {
+    "match": "GLOW UP YANDINA",
+    "category": "Eating-out & Entertainment",
+    "subcategory": "Restaurants",
+    "learned": true
+  },
+  {
+    "match": "AMRITYU PTY LTD",
+    "category": "Car & Transport",
+    "subcategory": "Petrol",
+    "learned": true
+  },
+  {
+    "match": "AN NAM VIETNAMESE|Mebami",
+    "category": "Eating-out & Entertainment",
+    "subcategory": "Lunches bought",
+    "learned": true
+  }
+]

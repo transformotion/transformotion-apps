@@ -248,24 +248,26 @@ This endpoint lives in the `migration-utilities` namespace (stack: `Transformoti
 **Request:**
 ```typescript
 {
-  transactions: Transaction[];
+  s3Key: string;   // S3 object key within the migration-uploads bucket
 }
 ```
 
 **Response 200:**
 ```typescript
 {
-  migrated:      { transactions: number };
+  migrated:       { transactions: number };
   alreadyPresent: { transactions: number };
 }
 ```
 
 **Notes:**
+- S3-mediated: caller uploads the export JSON to `transformotion-migration-uploads-{account}`, then POSTs the object key here. Lambda reads from S3 and persists.
+- The file at `s3Key` must be a JSON array of Transaction objects at the top level (no wrapping object). Each Transaction follows the canonical contract from `packages/budget-domain/src/contracts.ts`.
+- Bucket has RETAIN policy and 90-day object expiration. See `migration-utilities/infrastructure/lib/migrations-api-stack.ts`.
 - Idempotent. Safe to call multiple times. Matches transactions by composite key: `{date, amount, description, file}`.
 - Strips the legacy integer `_id` from v0 export data; writes `transactionId` (UUID) as the DynamoDB SK.
 - Transactions with `subcategory === 'Transfer'` are written with `_ignore: true` (excluded from P&L and cashflow).
 - Rules and settings migration are handled by separate endpoints (#200, #204) not yet implemented.
-- Does not delete localStorage — UI offers that as a separate confirmation after migration succeeds.
 
 ## Versioning
 
