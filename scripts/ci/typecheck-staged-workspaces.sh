@@ -62,7 +62,7 @@ fi
 
 # Identify affected workspace directories by walking up from each staged
 # file until we find a package.json with a "name" field.
-declare -A SEEN_WORKSPACES
+declare -A SEEN_WORKSPACES=()
 
 for file in "$@"; do
   dir=$(dirname "$file")
