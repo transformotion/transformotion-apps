@@ -34,12 +34,12 @@ async function listRules(accountId: string) {
 
 // ── POST /api/budget/v1/rules ─────────────────────────────────────────────────
 async function createRule(event: APIGatewayProxyEvent, accountId: string) {
-  const body = parseBody<Partial<Omit<CustomRule, 'id' | 'accountId' | 'createdAt'>>>(event);
+  const body = parseBody<Partial<Omit<CustomRule, 'ruleId' | 'accountId' | 'createdAt'>>>(event);
   if (!body.match?.trim()) throw { statusCode: 400, message: 'match is required' };
   if (!body.category?.trim()) throw { statusCode: 400, message: 'category is required' };
 
   const rule: CustomRule = {
-    id: randomUUID(),
+    ruleId: randomUUID(),
     accountId,
     name: body.name?.trim() ?? body.match.trim(),
     match: body.match.trim(),
@@ -56,13 +56,13 @@ async function createRule(event: APIGatewayProxyEvent, accountId: string) {
     createdAt: new Date().toISOString(),
   };
 
-  await ddb.send(new PutCommand({ TableName: TABLE, Item: { ...rule, ruleId: rule.id } }));
+  await ddb.send(new PutCommand({ TableName: TABLE, Item: { ...rule } }));
   return ok({ rule });
 }
 
 // ── PATCH /api/budget/v1/rules/:id ───────────────────────────────────────────
 async function updateRule(event: APIGatewayProxyEvent, accountId: string, ruleId: string) {
-  const body = parseBody<Partial<Omit<CustomRule, 'id' | 'accountId' | 'createdAt'>>>(event);
+  const body = parseBody<Partial<Omit<CustomRule, 'ruleId' | 'accountId' | 'createdAt'>>>(event);
 
   const expressions: string[] = [];
   const names: Record<string, string> = {};
@@ -93,7 +93,7 @@ async function updateRule(event: APIGatewayProxyEvent, accountId: string, ruleId
 
   const item = res.Attributes;
   if (!item) throw notFound(`Rule ${ruleId} not found`);
-  return ok({ rule: { ...item, id: item['ruleId'] } });
+  return ok({ rule: { ...item } });
 }
 
 // ── DELETE /api/budget/v1/rules/:id ──────────────────────────────────────────

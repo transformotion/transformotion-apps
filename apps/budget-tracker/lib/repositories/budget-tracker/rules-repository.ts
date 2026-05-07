@@ -47,12 +47,12 @@ class LocalCustomRulesRepository implements CustomRulesRepository {
   }
 
   async findById(_accountId: string, id: string): Promise<CustomRule | null> {
-    return this.getCustomRules().find(r => r.id === id) ?? null
+    return this.getCustomRules().find(r => r.ruleId === id) ?? null
   }
 
   async save(rule: CustomRule): Promise<CustomRule> {
     const rules = this.getCustomRules()
-    const index = rules.findIndex(r => r.id === rule.id)
+    const index = rules.findIndex(r => r.ruleId === rule.ruleId)
     if (index >= 0) {
       rules[index] = rule
     } else {
@@ -63,7 +63,7 @@ class LocalCustomRulesRepository implements CustomRulesRepository {
   }
 
   async delete(id: string, _accountId: string): Promise<void> {
-    this.saveCustomRules(this.getCustomRules().filter(r => r.id !== id))
+    this.saveCustomRules(this.getCustomRules().filter(r => r.ruleId !== id))
   }
 
   // Built-in rule persistence (frontend-only, not part of canonical interface)

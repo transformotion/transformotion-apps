@@ -111,7 +111,7 @@ Suggest 3-5 rules that would categorize the most transactions. Return ONLY valid
 
   const acceptSuggestedRule = (suggestion: SuggestedRule) => {
     const rule: CustomRule = {
-      id: `custom-${Date.now()}`,
+      ruleId: `custom-${Date.now()}`,
       accountId: "",
       name: suggestion.name,
       match: suggestion.pattern,
@@ -244,7 +244,7 @@ Suggest 3-5 rules that would categorize the most transactions. Return ONLY valid
     if (!newRule.isIgnore && (!newRule.category || !newRule.subcategory)) return
     
     const rule: CustomRule = {
-      id: `custom-${Date.now()}`,
+      ruleId: `custom-${Date.now()}`,
       accountId: "",
       name: newRule.name.trim(),
       match: newRule.pattern.trim(),
@@ -290,8 +290,8 @@ Suggest 3-5 rules that would categorize the most transactions. Return ONLY valid
     
     if (existingOverride) {
       // Update existing override
-      setCustomRules(customRules.map(r => 
-        r.id === existingOverride.id 
+      setCustomRules(customRules.map(r =>
+        r.ruleId === existingOverride.ruleId
           ? {
               ...r,
               match: builtinEditForm.pattern,
@@ -307,7 +307,7 @@ Suggest 3-5 rules that would categorize the most transactions. Return ONLY valid
     } else {
       // Create new rule (either override or standalone custom rule)
       const rule: CustomRule = {
-        id: patternChanged ? `custom-${Date.now()}` : `override-${editingBuiltinRule.id}-${Date.now()}`,
+        ruleId: patternChanged ? `custom-${Date.now()}` : `override-${editingBuiltinRule.id}-${Date.now()}`,
         accountId: "",
         name: patternChanged ? `${editingBuiltinRule.name} (Modified)` : `${editingBuiltinRule.name} (Override)`,
         match: builtinEditForm.pattern,
@@ -339,13 +339,13 @@ Suggest 3-5 rules that would categorize the most transactions. Return ONLY valid
     const existingOverride = customRules.find(r => r.overridesBuiltinId === builtinRule.id)
     if (existingOverride) {
       // Just disable it
-      setCustomRules(customRules.map(r => 
-        r.id === existingOverride.id ? { ...r, enabled: false } : r
+      setCustomRules(customRules.map(r =>
+        r.ruleId === existingOverride.ruleId ? { ...r, enabled: false } : r
       ))
     } else {
       // Create disabled override
       const rule: CustomRule = {
-        id: `disabled-${builtinRule.id}-${Date.now()}`,
+        ruleId: `disabled-${builtinRule.id}-${Date.now()}`,
         accountId: "",
         name: `[Disabled] ${builtinRule.name}`,
         match: builtinRule.pattern,
@@ -366,21 +366,21 @@ Suggest 3-5 rules that would categorize the most transactions. Return ONLY valid
 
   // Delete custom rule
   const deleteRule = (id: string) => {
-    setCustomRules(customRules.filter(r => r.id !== id))
+    setCustomRules(customRules.filter(r => r.ruleId !== id))
     setEditingRule(null)
   }
 
   // Toggle rule enabled
   const toggleRuleEnabled = (id: string) => {
     setCustomRules(customRules.map(r => 
-      r.id === id ? { ...r, enabled: !r.enabled } : r
+      r.ruleId === id ? { ...r, enabled: !r.enabled } : r
     ))
   }
 
   // Update rule
   const updateRule = (id: string, updates: Partial<CustomRule>) => {
     setCustomRules(customRules.map(r =>
-      r.id === id ? { ...r, ...updates } : r
+      r.ruleId === id ? { ...r, ...updates } : r
     ))
   }
 
@@ -416,10 +416,12 @@ Suggest 3-5 rules that would categorize the most transactions. Return ONLY valid
                 <p className="text-xs text-muted-foreground mb-2">
                   {matchingRules.length} rule{matchingRules.length !== 1 ? "s" : ""} match (first wins):
                 </p>
-                {matchingRules.slice(0, 8).map(({ rule, isBuiltin, isWinner }) => (
+                {matchingRules.slice(0, 8).map(({ rule, isBuiltin, isWinner }) => {
+                  const ruleKey = isBuiltin ? (rule as BuiltinRule).id : (rule as CustomRule).ruleId
+                  return (
                   <button
-                    key={rule.id}
-                    onClick={() => handleRuleBadgeClick(rule.id, isBuiltin)}
+                    key={ruleKey}
+                    onClick={() => handleRuleBadgeClick(ruleKey, isBuiltin)}
                     className={cn(
                       "w-full flex items-center justify-between p-2 rounded-lg text-left transition-colors hover:bg-surface2 min-w-0",
                       isWinner ? "bg-signal-green/10 border border-signal-green/30" : "bg-surface2 opacity-60"
@@ -449,7 +451,8 @@ Suggest 3-5 rules that would categorize the most transactions. Return ONLY valid
                       </span>
                     </div>
                   </button>
-                ))}
+                  )
+                })}
               </>
             )}
           </div>
@@ -731,16 +734,16 @@ Suggest 3-5 rules that would categorize the most transactions. Return ONLY valid
             ) : (
               <div className="space-y-1">
                 {customRules.map((rule) => {
-                  const isViewing = viewingCustomRule === rule.id
-                  const isEditing = editingRule === rule.id
-                  
+                  const isViewing = viewingCustomRule === rule.ruleId
+                  const isEditing = editingRule === rule.ruleId
+
                   return (
-                    <div key={rule.id}>
+                    <div key={rule.ruleId}>
                       {/* Row header - click to expand */}
                       <button
                         onClick={() => {
                           if (isEditing) return
-                          setViewingCustomRule(isViewing ? null : rule.id)
+                          setViewingCustomRule(isViewing ? null : rule.ruleId)
                         }}
                         className={cn(
                           "w-full flex items-center justify-between py-2 px-2 hover:bg-surface2 rounded transition-colors text-left",
@@ -825,7 +828,7 @@ Suggest 3-5 rules that would categorize the most transactions. Return ONLY valid
                             <button
                               onClick={(e) => {
                                 e.stopPropagation()
-                                setEditingRule(rule.id)
+                                setEditingRule(rule.ruleId)
                               }}
                               className="flex-1 h-9 rounded-lg bg-surface2 border border-border text-foreground text-sm font-medium hover:bg-surface2/80 flex items-center justify-center gap-1"
                             >
@@ -836,7 +839,7 @@ Suggest 3-5 rules that would categorize the most transactions. Return ONLY valid
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation()
-                                  toggleRuleEnabled(rule.id)
+                                  toggleRuleEnabled(rule.ruleId)
                                 }}
                                 className="h-9 px-3 rounded-lg bg-signal-red/10 text-signal-red text-sm font-medium hover:bg-signal-red/20 flex items-center gap-1"
                               >
@@ -847,7 +850,7 @@ Suggest 3-5 rules that would categorize the most transactions. Return ONLY valid
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation()
-                                  toggleRuleEnabled(rule.id)
+                                  toggleRuleEnabled(rule.ruleId)
                                 }}
                                 className="h-9 px-3 rounded-lg bg-signal-green/10 text-signal-green text-sm font-medium hover:bg-signal-green/20 flex items-center gap-1"
                               >
@@ -865,7 +868,7 @@ Suggest 3-5 rules that would categorize the most transactions. Return ONLY valid
                           <div className="flex items-center justify-between">
                             <h4 className="text-sm font-semibold text-foreground">Edit Rule</h4>
                             <button 
-                              onClick={(e) => { e.stopPropagation(); setEditingRule(null); setViewingCustomRule(rule.id) }}
+                              onClick={(e) => { e.stopPropagation(); setEditingRule(null); setViewingCustomRule(rule.ruleId) }}
                               className="p-1 text-muted-foreground hover:text-foreground"
                             >
                               <X className="size-4" />
@@ -878,7 +881,7 @@ Suggest 3-5 rules that would categorize the most transactions. Return ONLY valid
                               <input
                                 type="text"
                                 value={rule.name}
-                                onChange={(e) => updateRule(rule.id, { name: e.target.value })}
+                                onChange={(e) => updateRule(rule.ruleId, { name: e.target.value })}
                                 className="w-full h-8 px-2 bg-background border border-border rounded text-sm"
                                 placeholder="Rule name"
                               />
@@ -896,7 +899,7 @@ Suggest 3-5 rules that would categorize the most transactions. Return ONLY valid
                               </label>
                               <select
                                 value={rule.matchType}
-                                onChange={(e) => updateRule(rule.id, { matchType: e.target.value as "contains" | "startsWith" | "regex" })}
+                                onChange={(e) => updateRule(rule.ruleId, { matchType: e.target.value as "contains" | "startsWith" | "regex" })}
                                 className="w-full h-8 px-2 bg-background border border-border rounded text-sm"
                               >
                                 <option value="contains">Contains</option>
@@ -924,7 +927,7 @@ Suggest 3-5 rules that would categorize the most transactions. Return ONLY valid
                             <input
                               type="text"
                               value={rule.match}
-                              onChange={(e) => updateRule(rule.id, { match: e.target.value })}
+                              onChange={(e) => updateRule(rule.ruleId, { match: e.target.value })}
                               className="w-full h-8 px-2 bg-background border border-border rounded text-sm"
                               placeholder="Pattern"
                             />
@@ -935,7 +938,7 @@ Suggest 3-5 rules that would categorize the most transactions. Return ONLY valid
                               <label className="text-[10px] uppercase tracking-wider text-muted-foreground block mb-1">Category</label>
                               <select
                                 value={rule.category}
-                                onChange={(e) => updateRule(rule.id, { category: e.target.value, subcategory: "" })}
+                                onChange={(e) => updateRule(rule.ruleId, { category: e.target.value, subcategory: "" })}
                                 disabled={rule.isIgnore}
                                 className="w-full h-8 px-2 bg-background border border-border rounded text-sm disabled:opacity-50"
                               >
@@ -949,7 +952,7 @@ Suggest 3-5 rules that would categorize the most transactions. Return ONLY valid
                               <label className="text-[10px] uppercase tracking-wider text-muted-foreground block mb-1">Subcategory</label>
                               <select
                                 value={rule.subcategory}
-                                onChange={(e) => updateRule(rule.id, { subcategory: e.target.value })}
+                                onChange={(e) => updateRule(rule.ruleId, { subcategory: e.target.value })}
                                 disabled={rule.isIgnore || !rule.category}
                                 className="w-full h-8 px-2 bg-background border border-border rounded text-sm disabled:opacity-50"
                               >
@@ -966,7 +969,7 @@ Suggest 3-5 rules that would categorize the most transactions. Return ONLY valid
                               <input
                                 type="checkbox"
                                 checked={rule.isBusiness}
-                                onChange={(e) => updateRule(rule.id, { isBusiness: e.target.checked })}
+                                onChange={(e) => updateRule(rule.ruleId, { isBusiness: e.target.checked })}
                                 className="rounded border-border"
                               />
                               Business expense
@@ -975,7 +978,7 @@ Suggest 3-5 rules that would categorize the most transactions. Return ONLY valid
                               <input
                                 type="checkbox"
                                 checked={rule.isIgnore || false}
-                                onChange={(e) => updateRule(rule.id, { 
+                                onChange={(e) => updateRule(rule.ruleId, {
                                   isIgnore: e.target.checked,
                                   category: e.target.checked ? "Ignore" : rule.category,
                                   subcategory: e.target.checked ? "Ignored" : rule.subcategory
@@ -996,7 +999,7 @@ Suggest 3-5 rules that would categorize the most transactions. Return ONLY valid
                             <button
                               onClick={(e) => {
                                 e.stopPropagation()
-                                deleteRule(rule.id)
+                                deleteRule(rule.ruleId)
                                 setEditingRule(null)
                                 setViewingCustomRule(null)
                               }}
@@ -1009,7 +1012,7 @@ Suggest 3-5 rules that would categorize the most transactions. Return ONLY valid
                               onClick={(e) => { 
                                 e.stopPropagation()
                                 setEditingRule(null)
-                                setViewingCustomRule(rule.id)
+                                setViewingCustomRule(rule.ruleId)
                               }}
                               className="flex-1 h-9 rounded-lg bg-primary text-primary-foreground text-sm font-medium flex items-center justify-center gap-1"
                             >
@@ -1149,7 +1152,7 @@ Suggest 3-5 rules that would categorize the most transactions. Return ONLY valid
                             onClick={(e) => {
                               e.stopPropagation()
                               const override = customRules.find(r => r.overridesBuiltinId === rule.id)
-                              if (override) toggleRuleEnabled(override.id)
+                              if (override) toggleRuleEnabled(override.ruleId)
                               setViewingBuiltinRule(null)
                             }}
                             className="h-9 px-3 rounded-lg bg-signal-green/10 text-signal-green text-sm font-medium hover:bg-signal-green/20 flex items-center gap-1"

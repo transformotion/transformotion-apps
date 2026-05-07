@@ -2,7 +2,7 @@
 // Do not extend these without updating data-models.md first.
 
 export interface Transaction {
-  _id: string;
+  transactionId: string;
   accountId: string;
   date: string;                   // DD/MM/YYYY
   amount: string;                 // Negative = expense, positive = income/refund
@@ -16,7 +16,7 @@ export interface Transaction {
 }
 
 export interface CustomRule {
-  id: string;
+  ruleId: string;
   accountId: string;
   name: string;                   // Display name for the rule (shown in Rules tab)
   match: string;                  // Keyword or regex string, applied case-insensitive

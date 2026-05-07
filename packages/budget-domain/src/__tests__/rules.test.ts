@@ -25,7 +25,7 @@ describe("applyRules", () => {
 
   it("custom rule overrides builtin when listed first", () => {
     const customRule: CustomRule = {
-      id: "1",
+      ruleId: "1",
       accountId: "acc1",
       name: "Woolworths override",
       match: "woolworths",
@@ -45,7 +45,7 @@ describe("applyRules", () => {
 
   it("falls back to builtin when custom rule does not match", () => {
     const customRule: CustomRule = {
-      id: "1",
+      ruleId: "1",
       accountId: "acc1",
       name: "Special store rule",
       match: "specialstore",

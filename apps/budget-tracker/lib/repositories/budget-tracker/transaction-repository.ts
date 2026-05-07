@@ -29,13 +29,13 @@ class LocalTransactionRepository implements TransactionRepository {
   }
 
   async findById(_accountId: string, id: string): Promise<Transaction | null> {
-    return this.getAll().find(t => t._id === id) ?? null
+    return this.getAll().find(t => t.transactionId === id) ?? null
   }
 
   async upsertBulk(transactions: Transaction[]): Promise<Transaction[]> {
     const all = this.getAll()
     for (const tx of transactions) {
-      const index = all.findIndex(t => t._id === tx._id)
+      const index = all.findIndex(t => t.transactionId === tx.transactionId)
       if (index >= 0) {
         all[index] = tx
       } else {
@@ -48,7 +48,7 @@ class LocalTransactionRepository implements TransactionRepository {
 
   async update(id: string, _accountId: string, updates: Partial<Transaction>): Promise<Transaction> {
     const all = this.getAll()
-    const index = all.findIndex(t => t._id === id)
+    const index = all.findIndex(t => t.transactionId === id)
     if (index < 0) throw new Error(`Transaction not found: ${id}`)
     all[index] = { ...all[index], ...updates }
     this.saveAll(all)
@@ -56,7 +56,7 @@ class LocalTransactionRepository implements TransactionRepository {
   }
 
   async delete(id: string, _accountId: string): Promise<void> {
-    this.saveAll(this.getAll().filter(t => t._id !== id))
+    this.saveAll(this.getAll().filter(t => t.transactionId !== id))
   }
 
   // Extended query methods (localStorage only — not part of canonical interface)
