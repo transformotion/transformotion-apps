@@ -85,6 +85,8 @@ Single distribution (`TransformotionDev-Network` / `TransformotionProd-Network`)
 
 ### Sub-app index rewrite pattern
 
+**Rule: Every sub-app deployed to a nested S3 prefix MUST have its own CloudFront `additionalBehaviors` entry with the `SubAppIndexRewrite` function association. Without this entry, requests for the sub-app's path fall through to the default behavior's SPA fallback (403 → `/index.html`), which serves whichever app currently occupies the S3 root (currently stock-analyser, transitionally). This produces a silent routing failure where the user sees the wrong app's HTML for their requested URL.** This rule was established by M6 #154 (PR #194, budget-tracker) and relearned for launchpad (M6 #155 follow-up). Future sub-app extractions in M7 must follow it.
+
 Sub-apps deployed to nested S3 prefixes (e.g. `/budget-tracker/*` → `s3://bucket/budget-tracker/*`) hit a routing failure at the CloudFront/S3 boundary: a request for `/budget-tracker/` asks S3 for the object key `budget-tracker/` (with trailing slash). S3's OAC REST API returns 403 for this key (no object exists at that key), triggering the default behavior's SPA fallback to the root `/index.html`.
 
 The fix is a CloudFront Function (`SubAppIndexRewrite`) attached to each sub-app cache behavior on the `VIEWER_REQUEST` event. The function rewrites directory requests to append `index.html` before they reach S3:
@@ -99,16 +101,21 @@ function handler(event) {
 }
 ```
 
-The function is path-agnostic and shared by every sub-app behavior. Each sub-app adds an `additionalBehaviors` entry in `NetworkStack` referencing the same function instance. Implemented for `/budget-tracker/*` in M6 #154 (PR #194). The same pattern applies to `/stock-signal/*` when the stock-analyser extraction lands (M7).
+The function is path-agnostic and shared by every sub-app behavior. Each sub-app adds an `additionalBehaviors` entry in `NetworkStack` referencing the same function instance. Implemented for `/budget-tracker/*` in M6 #154 (PR #194) and `/launchpad/*` in M6 #155 follow-up. The same pattern applies to `/stock-signal/*` when the stock-analyser extraction lands (M7).
 
 ### Current state
 
-The `/budget-tracker/*` cache behavior with `SubAppIndexRewrite` was implemented in M6 #154 (PR #194). Remaining extractions:
+Implemented behaviors with `SubAppIndexRewrite`:
 
-- **stock-analyser:** currently serves from S3 root; needs `basePath: '/stock-signal'` in `next.config.mjs`, deploy workflow updated to sync to the `stock-signal/` prefix, and a new `/stock-signal/*` behavior (M7 scope)
-- **launchpad:** not yet static-export-ready (`output: 'export'` not set); will be promoted to S3 root once stock-analyser moves off root (M7 scope); no `SubAppIndexRewrite` needed since it will be the root occupant
+- `/budget-tracker/*` — M6 #154 (PR #194)
+- `/launchpad/*` — M6 #155 follow-up (transitional; will be removed when launchpad promotes to S3 root and the default behavior takes over)
 
-Until M7 completes the remaining extractions, the SPA fallback (403/404 → `/index.html`) returns stock-analyser content for any path not handled by an explicit behavior. This is acceptable transitional behaviour: stock-analyser routes continue to work via the fallback, and budget-tracker routes are now handled by the explicit behavior.
+Remaining extractions (M7 scope):
+
+- **stock-analyser:** currently serves from S3 root; needs `basePath: '/stock-signal'` in `next.config.mjs`, deploy workflow updated to sync to the `stock-signal/` prefix, and a new `/stock-signal/*` behavior
+- **launchpad at root:** requires stock-analyser to vacate root first; once promoted, the `/launchpad/*` transitional behavior is removed and launchpad serves via the default behavior (no `SubAppIndexRewrite` needed for the root occupant)
+
+Until M7 completes the remaining extractions, the SPA fallback (403/404 → `/index.html`) returns stock-analyser content for any path not handled by an explicit behavior. This is acceptable transitional behaviour: stock-analyser routes continue to work via the fallback, and budget-tracker and launchpad routes are handled by their explicit behaviors.
 
 ---
 

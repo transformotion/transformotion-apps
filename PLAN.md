@@ -697,6 +697,26 @@ deduplication of duplicated runtime code.
     deploying commit; sign-in completes; repository operations succeed
   - CloudFront cache invalidation strategy confirmed (stale cached content
     flushed when root occupant changes)
+- `additionalBehaviors` abstracted into a reusable helper: once 3+ sub-app
+  behaviors exist (budget-tracker, launchpad, stock-signal), the repeated
+  `additionalBehaviors` entries in `NetworkStack` are extracted into a
+  helper (e.g., `addSubAppBehavior(distribution, prefix, rewriteFn)`) in
+  `packages/cdk-constructs/`. The helper encapsulates the canonical
+  configuration (S3BucketOrigin with OAC, REDIRECT_TO_HTTPS,
+  CACHING_OPTIMIZED, compress, function association on VIEWER_REQUEST).
+  Each sub-app extraction then becomes a single helper invocation rather
+  than ~10 lines of repeated configuration. Pattern emerged through
+  PRs #194 and the launchpad routing fix; the third recurrence triggers
+  the abstraction.
+- Post-deploy app-identity verification: extend `verify-deploy.sh` (or
+  equivalent per-workflow check) to assert the deployed URL returns HTML
+  containing the expected app's identity marker in addition to the
+  `data-commit` hash check already in place. This catches the class of
+  routing failure surfaced by PRs #194 and the launchpad fix — bugs where
+  S3 returns the wrong app's HTML with a 200 status, making the commit
+  hash check pass while the wrong content is served. Verification should
+  run as the final step of every deploy workflow after CloudFront
+  invalidation completes.
 
 ### Goals served
 
@@ -717,7 +737,9 @@ table renames complete (analysis-cache, rate-limits). Each app deployed
 at its canonical S3 prefix per `docs/architecture/urls-and-deploy.md`
 target layout. No app served via the SPA fallback (every path resolves
 to its intended app via an explicit CloudFront behavior or the root
-default).
+default). Sub-app `additionalBehaviors` entries abstracted into a
+`cdk-constructs` helper. Post-deploy app-identity verification running
+in every deploy workflow.
 
 ### Dependencies
 
