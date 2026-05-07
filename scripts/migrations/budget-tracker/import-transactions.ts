@@ -69,7 +69,7 @@ async function main() {
     headers: {
       'Authorization': `Bearer ${idToken}`,
       'Content-Type':  'application/json',
-      'X-Account-Id':  ACCOUNT_ID,
+      'x-account-id':  ACCOUNT_ID,
     },
     body: JSON.stringify({ s3Key }),
   });
