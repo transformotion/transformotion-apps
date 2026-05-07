@@ -977,11 +977,12 @@ The `NetworkStack` CloudFront distribution currently has two configured behavior
 |---|---|---|---|
 | Default (`*`) | S3 root | None | Serves stock-analyser (transitional; canonical target: launchpad) |
 | `/budget-tracker/*` | S3 `budget-tracker/` prefix | `SubAppIndexRewrite` | Implemented (M6 #154 PR #194) |
+| `/launchpad/*` | S3 `launchpad/` prefix | `SubAppIndexRewrite` | Implemented (M6 #155 follow-up, this PR) |
 
 Remaining behaviors not yet implemented (M7 scope):
 
 - `/stock-signal/*` — requires stock-analyser to gain `basePath: '/stock-signal'` in `next.config.mjs`, deploy workflow updated to sync to `stock-signal/` prefix, and a new `additionalBehaviors` entry with `SubAppIndexRewrite`
-- Launchpad at root — requires launchpad to gain `output: 'export'`, a new deploy workflow, and stock-analyser to have vacated root first; no `SubAppIndexRewrite` needed since launchpad will be the root occupant
+- Launchpad at root — requires stock-analyser to vacate S3 root and launchpad to gain a `deploy-launchpad.yml` workflow syncing to root; the `/launchpad/*` behavior (above) is transitional and will be removed once launchpad occupies the root default behavior
 
 Current S3 bucket root occupant is stock-analyser (transitional; should be launchpad per target architecture). The SPA fallback (403/404 → `/index.html`) compensates but creates the routing failure that PR #194 fixed for budget-tracker. M7 closes the gap by completing the extractions.
 
