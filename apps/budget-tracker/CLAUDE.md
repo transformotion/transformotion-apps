@@ -144,14 +144,14 @@ cd packages/budget-domain
 pnpm test
 ```
 
-Real export fixture: `migration-artifacts/budget-tracker/budget-tracker-export-2026-04-18.json` (726 transactions).
+Real export fixture: `migration-artifacts/budget-tracker/budget-tracker-export-2026-04-18.json` (732 transactions).
 
 Key invariants to preserve in tests:
-1. `Transaction._id` is always a UUID string
+1. `Transaction.transactionId` is always a UUID string
 2. `buildBudgetVsActual()` numMonths matches the transaction date range
 3. `isExcludedFromCashflow()` always excludes Transfer, `_business`, project categories
 4. `buildMonthlyTrend()` net = income − expenses (exact equality)
-5. Migration endpoint strips legacy `_id` before writing to DynamoDB
+5. Migration endpoint strips legacy integer `_id` from v0 export before writing to DynamoDB; Transfer subcategory transactions get `_ignore: true`
 6. `getSubcategoryMonthlyBudget()` returns 0 for tombstoned subcategories (override = -1)
 
 ## v0 origins

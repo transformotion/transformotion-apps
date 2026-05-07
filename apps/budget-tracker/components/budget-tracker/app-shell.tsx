@@ -278,7 +278,7 @@ export function BudgetNavigationProvider({
   const updateTransaction = useCallback((id: string, updates: Partial<Transaction>) => {
     setState(prev => {
       const updated = prev.transactions.map(t => 
-        t._id === id ? { ...t, ...updates } : t
+        t.transactionId === id ? { ...t, ...updates } : t
       )
       const uncategorizedCount = updated.filter(t => !t.category).length
       return { ...prev, transactions: updated, uncategorizedCount }
@@ -287,7 +287,7 @@ export function BudgetNavigationProvider({
 
   const deleteTransaction = useCallback((id: string) => {
     setState(prev => {
-      const updated = prev.transactions.filter(t => t._id !== id)
+      const updated = prev.transactions.filter(t => t.transactionId !== id)
       const uncategorizedCount = updated.filter(t => !t.category).length
       return { ...prev, transactions: updated, uncategorizedCount }
     })
@@ -304,14 +304,14 @@ export function BudgetNavigationProvider({
   const updateCustomRule = useCallback((id: string, updates: Partial<CustomRule>) => {
     setState(prev => ({
       ...prev,
-      customRules: prev.customRules.map(r => r.id === id ? { ...r, ...updates } : r)
+      customRules: prev.customRules.map(r => r.ruleId === id ? { ...r, ...updates } : r)
     }))
   }, [])
 
   const deleteCustomRule = useCallback((id: string) => {
     setState(prev => ({
       ...prev,
-      customRules: prev.customRules.filter(r => r.id !== id)
+      customRules: prev.customRules.filter(r => r.ruleId !== id)
     }))
   }, [])
 

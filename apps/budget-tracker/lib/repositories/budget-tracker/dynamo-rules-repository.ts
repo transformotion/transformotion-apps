@@ -21,9 +21,9 @@ export class DynamoRulesRepository implements CustomRulesRepository {
   }
 
   async save(rule: CustomRule): Promise<CustomRule> {
-    if (rule.id && rule.createdAt) {
+    if (rule.ruleId && rule.createdAt) {
       // Update existing
-      const res = await this.http.patch<{ rule: CustomRule }>(`${BASE}/${rule.id}`, rule)
+      const res = await this.http.patch<{ rule: CustomRule }>(`${BASE}/${rule.ruleId}`, rule)
       return res.rule
     }
     // Create new

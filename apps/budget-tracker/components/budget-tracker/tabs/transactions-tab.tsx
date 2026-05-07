@@ -202,7 +202,7 @@ export function TransactionsTab() {
   // Toggle business flag
   const toggleBusiness = (id: string) => {
     const updatedTransactions = transactions.map(t => 
-      t._id === id ? { ...t, _business: !t._business } : t
+      t.transactionId === id ? { ...t, _business: !t._business } : t
     )
     setTransactions(updatedTransactions)
   }
@@ -210,7 +210,7 @@ export function TransactionsTab() {
   // Reset single transaction (re-apply rules)
   const resetTransaction = (id: string) => {
     const updatedTransactions = transactions.map(t => {
-      if (t._id !== id) return t
+      if (t.transactionId !== id) return t
       
       // Re-apply rules using unified applyRules function
       const result = applyRules(t.description, builtinRules, customRulesRef.current)
@@ -225,7 +225,7 @@ export function TransactionsTab() {
 
   // Start editing a transaction
   const startEdit = (tx: Transaction) => {
-    setEditingId(tx._id)
+    setEditingId(tx.transactionId)
     setEditCategory(tx.category || "")
     setEditSubcategory(tx.subcategory || "")
   }
@@ -236,7 +236,7 @@ export function TransactionsTab() {
     
     // setTransactions expects an array, not a callback
     const updatedTransactions = transactions.map(t =>
-      t._id === editingId 
+      t.transactionId === editingId 
         ? { ...t, category: editCategory, subcategory: editSubcategory, _manual: true }
         : t
     )
@@ -247,13 +247,13 @@ export function TransactionsTab() {
   // Save and create rule (Learn button)
   const saveAndLearn = () => {
     if (editingId === null) return
-    const tx = transactions.find(t => t._id === editingId)
+    const tx = transactions.find(t => t.transactionId === editingId)
     if (!tx) return
     
     // Create a rule from first 3 words
     const words = tx.description.split(/\s+/).slice(0, 3).join(" ")
     const newRule = {
-      id: `custom-${Date.now()}`,
+      ruleId: `custom-${Date.now()}`,
       accountId: "",
       name: words,
       match: words,
@@ -273,7 +273,7 @@ export function TransactionsTab() {
     const allCustomRules = [...customRules, newRule]
     const updatedTransactions = transactions.map(t => {
       // Always update the current transaction being edited
-      if (t._id === editingId) {
+      if (t.transactionId === editingId) {
         return { ...t, category: editCategory, subcategory: editSubcategory, _manual: true }
       }
       // Re-apply rules to uncategorized transactions
@@ -312,7 +312,7 @@ export function TransactionsTab() {
   }
 
   const selectAll = () => {
-    setSelectedIds(new Set(filteredTransactions.map(t => t._id)))
+    setSelectedIds(new Set(filteredTransactions.map(t => t.transactionId)))
   }
 
   const clearSelection = () => {
@@ -326,7 +326,7 @@ export function TransactionsTab() {
   const applyBulkCategory = () => {
     if (!bulkCategory || selectedIds.size === 0) return
     const updatedTransactions = transactions.map(t =>
-      selectedIds.has(t._id)
+      selectedIds.has(t.transactionId)
         ? { ...t, category: bulkCategory, subcategory: bulkSubcategory || '', _manual: true }
         : t
     )
@@ -338,7 +338,7 @@ export function TransactionsTab() {
   const reapplyRulesToSelected = () => {
     if (selectedIds.size === 0) return
     const updatedTransactions = transactions.map(t => {
-      if (!selectedIds.has(t._id)) return t
+      if (!selectedIds.has(t.transactionId)) return t
       const result = applyRules(t.description, builtinRules, customRules)
       if (result) {
         return { ...t, category: result.category, subcategory: result.subcategory, _business: result.isBusiness ?? false, _manual: false }
@@ -725,22 +725,22 @@ export function TransactionsTab() {
               <div className="space-y-2">
                 {txs.map((tx) => (
                   <TransactionRow
-                    key={tx._id}
+                    key={tx.transactionId}
                     transaction={tx}
-                    isEditing={editingId === tx._id}
+                    isEditing={editingId === tx.transactionId}
                     editCategory={editCategory}
                     editSubcategory={editSubcategory}
                     showSource={showSource}
-                    isSelected={selectedIds.has(tx._id)}
+                    isSelected={selectedIds.has(tx.transactionId)}
                     categoryList={activeCategoryList}
                     disabledProjects={disabledProjects}
-                    onToggleSelect={() => toggleSelect(tx._id)}
+                    onToggleSelect={() => toggleSelect(tx.transactionId)}
                     onStartEdit={() => startEdit(tx)}
                     onCancelEdit={() => setEditingId(null)}
                     onSave={saveEdit}
                     onSaveAndLearn={saveAndLearn}
-                    onToggleBusiness={() => toggleBusiness(tx._id)}
-                    onReset={() => resetTransaction(tx._id)}
+                    onToggleBusiness={() => toggleBusiness(tx.transactionId)}
+                    onReset={() => resetTransaction(tx.transactionId)}
                     onCategoryChange={setEditCategory}
                     onSubcategoryChange={setEditSubcategory}
                   />
@@ -1300,7 +1300,7 @@ Return ONLY valid JSON.`,
       const aiResult = !ruleResult ? aiCategorizations.get(description) : null
       
       return {
-        _id: crypto.randomUUID(),
+        transactionId: crypto.randomUUID(),
         accountId: "",
         date: parseDate(row[columnMapping.date] || ""),
         amount: amount.toString(),

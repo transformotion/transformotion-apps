@@ -240,35 +240,31 @@ Only transactions with `_business: true` are included.
 
 ## Migration
 
-### `POST /api/budget/migrate-from-localstorage`
+### `POST /api/migrations/budget-tracker/transactions/import`
 One-click migration from browser localStorage to backend. Called once per account when a user first logs in with local data present.
+
+This endpoint lives in the `migration-utilities` namespace (stack: `Transformotion{Stage}-MigrationsApi`), not under `/api/budget/v1`. See `migration-utilities/budget-tracker/transactions/` for the Lambda source.
 
 **Request:**
 ```typescript
 {
   transactions: Transaction[];
-  rules: CustomRule[];
-  settings: Partial<BudgetSettings>;
 }
 ```
 
 **Response 200:**
 ```typescript
 {
-  migrated: {
-    transactions: number;
-    rules: number;
-    settings: string[];           // Keys migrated
-  };
-  alreadyPresent: {
-    transactions: number;
-    rules: number;
-  };
+  migrated:      { transactions: number };
+  alreadyPresent: { transactions: number };
 }
 ```
 
 **Notes:**
 - Idempotent. Safe to call multiple times. Matches transactions by composite key: `{date, amount, description, file}`.
+- Strips the legacy integer `_id` from v0 export data; writes `transactionId` (UUID) as the DynamoDB SK.
+- Transactions with `subcategory === 'Transfer'` are written with `_ignore: true` (excluded from P&L and cashflow).
+- Rules and settings migration are handled by separate endpoints (#200, #204) not yet implemented.
 - Does not delete localStorage — UI offers that as a separate confirmation after migration succeeds.
 
 ## Versioning

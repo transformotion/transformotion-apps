@@ -38,7 +38,7 @@ export function ReviewTab() {
   const handleAIReview = async () => {
     try {
       const transactionsToReview = uncategorizedTransactions.slice(0, 10).map(t => ({
-        id: t._id,
+        id: t.transactionId,
         description: t.description,
         amount: t.amount,
         date: t.date,
@@ -194,7 +194,7 @@ Return ONLY valid JSON, no markdown.`,
           </div>
           
           {pendingResults.map((result) => {
-            const transaction = transactions.find(t => t._id === result.transactionId)
+            const transaction = transactions.find(t => t.transactionId === result.transactionId)
             if (!transaction) return null
             const isEditing = editingId === result.transactionId
             

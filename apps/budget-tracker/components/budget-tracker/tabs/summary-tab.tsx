@@ -468,7 +468,7 @@ export function SummaryTab() {
                                         
                                         return (
                                           <div 
-                                            key={tx._id} 
+                                            key={tx.transactionId} 
                                             className="flex items-center justify-between py-1 px-2 bg-surface2/50 rounded text-xs"
                                           >
                                             <div className="flex items-center gap-2 min-w-0">
@@ -586,7 +586,7 @@ export function SummaryTab() {
                                 <div className="ml-4 mt-1 space-y-1">
                                   {subData.transactions.map(tx => (
                                     <div 
-                                      key={tx._id} 
+                                      key={tx.transactionId} 
                                       className="flex items-center justify-between py-1 px-2 bg-surface2/50 rounded text-xs"
                                     >
                                       <div className="flex items-center gap-2 min-w-0">

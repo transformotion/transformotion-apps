@@ -64,7 +64,7 @@ describe("buildMonthlyTrend", () => {
     const withTransfer: Transaction[] = [
       ...transactions,
       {
-        _id: "9999", accountId: "acc-test", date: "15/01/2026",
+        transactionId: "9999", accountId: "acc-test", date: "15/01/2026",
         amount: "-1000000", description: "BIG TRANSFER",
         category: "Financial & Insurance", subcategory: "Transfer",
         file: "test.csv", _manual: false, _business: false,

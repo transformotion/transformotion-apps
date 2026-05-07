@@ -108,7 +108,7 @@ async function bulkUpsert(event: APIGatewayProxyEvent, accountId: string) {
     const full: Transaction = {
       ...tx,
       accountId,
-      _id: randomUUID(),
+      transactionId: randomUUID(),
       _manual: tx._manual ?? false,
       _business: tx._business ?? false,
     };
@@ -124,7 +124,7 @@ async function bulkUpsert(event: APIGatewayProxyEvent, accountId: string) {
       RequestItems: {
         [TABLE]: chunk.map(tx => ({
           PutRequest: {
-            Item: { ...tx, transactionId: tx._id, dateIso: toIso(tx.date) },
+            Item: { ...tx, dateIso: toIso(tx.date) },
           },
         })),
       },
@@ -161,7 +161,7 @@ async function updateTransaction(event: APIGatewayProxyEvent, accountId: string,
 
   if (!res.Attributes) throw notFound(`Transaction ${transactionId} not found`);
   const item = res.Attributes;
-  return ok({ transaction: { ...item, _id: item['transactionId'] } });
+  return ok({ transaction: { ...item } });
 }
 
 // ── DELETE /api/budget/v1/transactions/:id ────────────────────────────────────
