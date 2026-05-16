@@ -48,10 +48,15 @@ export function extractAuthClaims(event: APIGatewayProxyEvent): AuthClaims {
 
 /**
  * Resolve the active account for this request from the `X-Account-Id` header.
- * Throws HttpError(400) if the header is absent.
+ * Header name matching is case-insensitive (RFC 7230). API Gateway v1 preserves
+ * the original casing sent by the client, so a literal key lookup would silently
+ * reject requests that use conventional HTTP capitalisation (X-Account-Id).
+ * Throws HttpError(400) if the header is absent or blank.
  */
 export function resolveAccountContext(event: APIGatewayProxyEvent): AccountContext {
-  const headerAccountId = event.headers?.['x-account-id']?.trim();
+  const headers = event.headers ?? {};
+  const entry = Object.entries(headers).find(([k]) => k.toLowerCase() === 'x-account-id');
+  const headerAccountId = entry?.[1]?.trim();
   if (headerAccountId) {
     return { accountId: headerAccountId };
   }
