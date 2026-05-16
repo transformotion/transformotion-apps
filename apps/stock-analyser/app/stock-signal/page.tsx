@@ -1,6 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
+import { getConfig } from "@/lib/config"
 import { NavigationProvider, AppShell, useNavigation } from "@/components/stock-signal/app-shell"
 import { MarketAnalysisTab } from "@/components/stock-signal/tabs/market-analysis-tab"
 import { RecommendationsTab } from "@/components/stock-signal/tabs/recommendations-tab"
@@ -41,7 +42,7 @@ function StockSignalContent() {
 
   const handleSignOut = async () => {
     await signOut()
-    router.push("/sign-in")
+    window.location.assign(getConfig().apps.signOutUrl)
   }
 
   const handleGoToLaunchpad = () => {

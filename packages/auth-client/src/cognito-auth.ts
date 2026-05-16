@@ -23,7 +23,7 @@ export class CognitoAuthService implements AuthService {
               domain:          process.env.NEXT_PUBLIC_COGNITO_DOMAIN!,
               scopes:          ['openid', 'email', 'profile'],
               redirectSignIn:  [process.env.NEXT_PUBLIC_CALLBACK_URL ?? `${process.env.NEXT_PUBLIC_APP_URL}/callback`],
-              redirectSignOut: [process.env.NEXT_PUBLIC_APP_URL!],
+              redirectSignOut: [process.env.NEXT_PUBLIC_SIGNOUT_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? ''],
               responseType:    'code' as const,
             },
           },
@@ -117,7 +117,11 @@ export class CognitoAuthService implements AuthService {
   }
 
   async signOut(): Promise<void> {
-    await amplifySignOut()
+    // global: true revokes the refresh token server-side AND redirects to the
+    // Cognito logout endpoint, which clears the Hosted UI session cookie.
+    // Without this, the cookie persists and sign-in pages that auto-trigger
+    // signInWithRedirect silently re-authenticate the user.
+    await amplifySignOut({ global: true })
   }
 
   async signInWithRedirect(options?: { provider?: string }): Promise<void> {

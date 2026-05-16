@@ -22,7 +22,7 @@ export default function CallbackPage() {
     const unsubscribe = Hub.listen('auth', ({ payload }) => {
       if (payload.event === 'signInWithRedirect') {
         sanitizeAmplifyOAuthState()
-        window.location.replace('/')
+        window.location.replace('/budget-tracker/')
       }
       if (payload.event === 'signInWithRedirect_failure') {
         setError('Sign in failed. Please try again.')
@@ -30,7 +30,7 @@ export default function CallbackPage() {
     })
 
     authService.getCurrentUser().then((user) => {
-      if (user) window.location.replace('/')
+      if (user) window.location.replace('/budget-tracker/')
     }).catch(() => {})
 
     return unsubscribe
