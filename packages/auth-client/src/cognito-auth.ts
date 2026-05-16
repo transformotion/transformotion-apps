@@ -120,9 +120,17 @@ export class CognitoAuthService implements AuthService {
   }
 
   async signInWithRedirect(options?: { provider?: string }): Promise<void> {
-    await amplifySignInWithRedirect(
-      options?.provider ? { provider: options.provider as never } : {}
-    )
+    const args = options?.provider ? { provider: options.provider as never } : {}
+    try {
+      await amplifySignInWithRedirect(args)
+    } catch (err) {
+      if (err instanceof Error && err.message?.includes('already a signed in user')) {
+        await amplifySignOut()
+        await amplifySignInWithRedirect(args)
+      } else {
+        throw err
+      }
+    }
   }
 
   async getAccessToken(): Promise<string | null> {
