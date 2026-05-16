@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { Hub } from 'aws-amplify/utils'
 import { authService } from '@/lib/services/auth'
 
@@ -17,14 +16,13 @@ function sanitizeAmplifyOAuthState() {
 }
 
 export default function CallbackPage() {
-  const router = useRouter()
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     const unsubscribe = Hub.listen('auth', ({ payload }) => {
       if (payload.event === 'signInWithRedirect') {
         sanitizeAmplifyOAuthState()
-        router.replace('/stock-signal/')
+        window.location.replace('/stock-signal/')
       }
       if (payload.event === 'signInWithRedirect_failure') {
         setError('Sign in failed. Please try again.')
@@ -32,11 +30,11 @@ export default function CallbackPage() {
     })
 
     authService.getCurrentUser().then((user) => {
-      if (user) router.replace('/stock-signal/')
+      if (user) window.location.replace('/stock-signal/')
     }).catch(() => {})
 
     return unsubscribe
-  }, [router])
+  }, [])
 
   if (error) {
     return (
