@@ -4,11 +4,12 @@
  * Applied via CfnUserPoolUICustomizationAttachment in auth-stack.ts.
  * Matches the Transformotion dark theme: navy background (#0D1B2A), teal primary (#00C4B3).
  *
- * Only Cognito's named .customizable classes are permitted — raw HTML element
- * selectors (body, h1, a, etc.) are rejected by the API with a 400 error.
+ * Cognito enforces an allowlist of CSS class names — only the .customizable
+ * classes documented at https://docs.aws.amazon.com/cognito/latest/developerguide/hosted-ui-customization.html
+ * are accepted. Raw HTML element selectors and undocumented classes are rejected.
  *
- * If the user pool is ever migrated to Cognito Managed Login (v2), these selectors
- * will need to be replaced with the Managed Login CSS custom properties instead.
+ * Allowed pseudo-selectors: :hover on .submitButton-customizable and
+ * .idpButton-customizable; :focus on .inputField-customizable.
  */
 export const cognitoHostedUiCss = `
 .background-customizable {
@@ -43,7 +44,6 @@ export const cognitoHostedUiCss = `
 
 .inputField-customizable:focus {
   border-color: #00C4B3;
-  box-shadow: 0 0 0 3px rgba(0, 196, 179, 0.15);
   outline: none;
 }
 
@@ -79,12 +79,6 @@ export const cognitoHostedUiCss = `
 
 .idpButton-customizable:hover {
   background-color: #252a3a;
-  border-color: rgba(0, 196, 179, 0.3);
-}
-
-.idpButtonText-customizable {
-  color: #e8eaf0;
-  font-weight: 500;
 }
 
 .or-customizable {
@@ -93,11 +87,6 @@ export const cognitoHostedUiCss = `
 }
 
 .lostPassword-customizable {
-  color: #6b7280;
-  font-size: 14px;
-}
-
-.redirect-customizable {
   color: #6b7280;
   font-size: 14px;
 }
