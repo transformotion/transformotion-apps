@@ -5,6 +5,7 @@ import {
   signIn as amplifySignIn,
   signOut as amplifySignOut,
   signUp as amplifySignUp,
+  signInWithRedirect as amplifySignInWithRedirect,
   getCurrentUser,
   fetchAuthSession,
   fetchUserAttributes,
@@ -22,7 +23,7 @@ export class CognitoAuthService implements AuthService {
             oauth: {
               domain:          process.env.NEXT_PUBLIC_COGNITO_DOMAIN!,
               scopes:          ['openid', 'email', 'profile'],
-              redirectSignIn:  [`${process.env.NEXT_PUBLIC_APP_URL}/callback`],
+              redirectSignIn:  [process.env.NEXT_PUBLIC_CALLBACK_URL ?? `${process.env.NEXT_PUBLIC_APP_URL}/callback`],
               redirectSignOut: [process.env.NEXT_PUBLIC_APP_URL!],
               responseType:    'code' as const,
             },
@@ -116,6 +117,12 @@ export class CognitoAuthService implements AuthService {
 
   async signOut(): Promise<void> {
     await amplifySignOut()
+  }
+
+  async signInWithRedirect(options?: { provider?: string }): Promise<void> {
+    await amplifySignInWithRedirect(
+      options?.provider ? { provider: options.provider as never } : {}
+    )
   }
 
   async getAccessToken(): Promise<string | null> {

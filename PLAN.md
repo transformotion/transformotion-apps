@@ -556,7 +556,13 @@ and makes Budget Tracker usable end-to-end with real users.
 - CSV import UI for ANZ and Macquarie statements implemented.
 - `apps/budget-tracker/` deploy workflow activated (currently a no-op echo placeholder). Workflow patterns match `deploy-stock-analyser.yml`. Budget Tracker available at its own URL as a deployed standalone app. (Originally M5 #154; moved to M6 because deploying before backend wiring creates infrastructure that doesn't do anything useful.)
 - Launchpad's Budget Tracker tile updated to navigate to the deployed Budget Tracker standalone URL (replacing the dead-code reference to `/budget-tracker` on the stock-analyser domain). Tile re-enabled. (Originally M5 #155; sequences naturally with the deploy activation.)
-- Mock auth removed from Budget Tracker; replaced with real Cognito auth.
+- Canonical Hosted UI authentication flow implemented across all three apps (per auth.md, issue #213):
+  - Launchpad: real sign-in via `signInWithRedirect` with `LaunchpadAppClient`; `/launchpad/callback` route; deploy workflow; deploys to dev
+  - Stock Analyser: sign-in converted from direct SRP to `signInWithRedirect` with `StockAnalyserAppClient`; `/stock-signal/callback` route
+  - Budget Tracker: `/budget-tracker/callback` route; unauthenticated trigger calls `signInWithRedirect` with `BudgetTrackerAppClient`; `NEXT_PUBLIC_APP_URL` set in deploy workflow
+  - Cognito Hosted UI session cookie set on first sign-in; per-app silent re-auth via SSO works across apps
+  - Auth store localStorage key collision resolved: SA uses `stock-analyser-auth`; BT uses `budget-tracker-auth`
+  - Existing direct-SRP sessions require one-time re-sign-in after deploy
 - localStorage repositories removed; replaced with real DynamoDB-via-Lambda implementations through the canonical layered architecture pattern.
 - Tab-level error-boundary support: new `packages/ui/error-boundaries/` package implementing a generic `TabErrorBoundary` component that wraps tab content so a crash in one tab does not unmount the whole app. Both budget-tracker tabs and stock-analyser tabs wrapped using the same package (per Issue #16; bilateral application avoids leaving stock-analyser shipping without boundaries while waiting for a later milestone).
 - Budget Tracker functional end-to-end with the live user account.

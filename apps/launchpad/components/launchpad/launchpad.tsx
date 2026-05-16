@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react'
 import { cn } from '@/lib/utils'
 import { Wordmark } from '@/components/brand/wordmark'
-import { TrendingUp, Wallet, Layers, LogOut, Settings, User, Check } from 'lucide-react'
+import { TrendingUp, Wallet, Layers, LogOut, Settings, User as UserIcon, Check } from 'lucide-react'
+import type { User } from '@transformotion/auth-client'
 
 interface App {
   id: string
@@ -29,15 +30,9 @@ interface UserProfile {
   activeAccount: string
 }
 
-const MOCK_USER: UserProfile = {
-  name: 'Steve Moodie',
-  email: 'steve@example.com',
-  accounts: [
-    { id: '1', name: "Steve's Account", type: 'Personal' },
-    { id: '2', name: "Steve's Household", type: 'Household' },
-  ],
-  activeAccount: '2',
-}
+const PLACEHOLDER_ACCOUNTS: Account[] = [
+  { id: '1', name: 'Personal', type: 'Personal' },
+]
 
 const APPS: App[] = [
   {
@@ -279,7 +274,7 @@ function ProfileMenu({
 
         <div className="py-2">
           <button className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-surface2 transition-colors">
-            <User className="size-4 text-muted-foreground" />
+            <UserIcon className="size-4 text-muted-foreground" />
             Profile
           </button>
           <button className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-surface2 transition-colors">
@@ -315,19 +310,28 @@ function Footer() {
 }
 
 export function Launchpad({
+  user: authUser,
   onLaunchApp,
   onLaunchBudgetTracker,
   onSignOut,
 }: {
+  user: User | null
   onLaunchApp?: () => void
   onLaunchBudgetTracker?: () => void
   onSignOut?: () => void
 }) {
-  const [user, setUser] = useState<UserProfile>(MOCK_USER)
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
+  const [activeAccount, setActiveAccount] = useState(PLACEHOLDER_ACCOUNTS[0].id)
+
+  const user: UserProfile = {
+    name:          authUser?.name  ?? 'User',
+    email:         authUser?.email ?? '',
+    accounts:      PLACEHOLDER_ACCOUNTS,
+    activeAccount,
+  }
 
   const handleAccountChange = (accountId: string) => {
-    setUser({ ...user, activeAccount: accountId })
+    setActiveAccount(accountId)
   }
 
   return (

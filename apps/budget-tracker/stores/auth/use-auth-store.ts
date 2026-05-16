@@ -1,24 +1,21 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { User, Account, AuthTokens } from '@transformotion/auth-client'
+import type { User, Account } from '@transformotion/auth-client'
 import { authService } from '@/lib/services/auth'
 
 interface AuthState {
-  user:           User | null
-  currentAccount: Account | null
-  accounts:       Account[]
-  tokens:         AuthTokens | null
+  user:            User | null
+  currentAccount:  Account | null
+  accounts:        Account[]
   isAuthenticated: boolean
-  isLoading:      boolean
-  error:          string | null
+  isLoading:       boolean
+  isInitialized:   boolean
+  error:           string | null
 
-  initialize:     () => Promise<void>
-  signIn:         (email: string, password: string) => Promise<void>
-  signUp:         (email: string, password: string, name: string) => Promise<void>
-  signOut:        () => Promise<void>
-  switchAccount:  (accountId: string) => Promise<void>
-  refreshTokens:  () => Promise<void>
-  clearError:     () => void
+  initialize:    () => Promise<void>
+  signOut:       () => Promise<void>
+  switchAccount: (accountId: string) => Promise<void>
+  clearError:    () => void
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -27,77 +24,33 @@ export const useAuthStore = create<AuthState>()(
       user:            null,
       currentAccount:  null,
       accounts:        [],
-      tokens:          null,
       isAuthenticated: false,
-      isLoading:       true,
+      isLoading:       false,
+      isInitialized:   false,
       error:           null,
 
       initialize: async () => {
+        const state = get()
+        if (state.isInitialized || state.isLoading) return
+        set({ isLoading: true })
         try {
-          const session = await authService.getSession()
-          if (session) {
+          const user = await authService.getCurrentUser()
+          if (user) {
             const accounts = await authService.listAccounts()
             set({
-              user:            session.user,
-              currentAccount:  session.currentAccount,
+              user,
+              currentAccount:  accounts[0] ?? null,
               accounts,
-              tokens:          session.tokens,
               isAuthenticated: true,
               isLoading:       false,
+              isInitialized:   true,
               error:           null,
             })
           } else {
-            set({ isLoading: false })
+            set({ user: null, isAuthenticated: false, isLoading: false, isInitialized: true })
           }
-        } catch (error) {
-          set({
-            isLoading: false,
-            error: error instanceof Error ? error.message : 'Failed to initialize auth',
-          })
-        }
-      },
-
-      signIn: async (email: string, password: string) => {
-        set({ isLoading: true, error: null })
-        try {
-          const session  = await authService.signIn({ email, password })
-          const accounts = await authService.listAccounts()
-          set({
-            user:            session.user,
-            currentAccount:  session.currentAccount,
-            accounts,
-            tokens:          session.tokens,
-            isAuthenticated: true,
-            isLoading:       false,
-          })
-        } catch (error) {
-          set({
-            isLoading: false,
-            error: error instanceof Error ? error.message : 'Sign in failed',
-          })
-          throw error
-        }
-      },
-
-      signUp: async (email: string, password: string, name: string) => {
-        set({ isLoading: true, error: null })
-        try {
-          const session  = await authService.signUp({ email, password, name })
-          const accounts = await authService.listAccounts()
-          set({
-            user:            session.user,
-            currentAccount:  session.currentAccount,
-            accounts,
-            tokens:          session.tokens,
-            isAuthenticated: true,
-            isLoading:       false,
-          })
-        } catch (error) {
-          set({
-            isLoading: false,
-            error: error instanceof Error ? error.message : 'Sign up failed',
-          })
-          throw error
+        } catch {
+          set({ user: null, isAuthenticated: false, isLoading: false, isInitialized: true })
         }
       },
 
@@ -109,7 +62,6 @@ export const useAuthStore = create<AuthState>()(
             user:            null,
             currentAccount:  null,
             accounts:        [],
-            tokens:          null,
             isAuthenticated: false,
             isLoading:       false,
             error:           null,
@@ -126,7 +78,7 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true, error: null })
         try {
           const session = await authService.switchAccount(accountId)
-          set({ currentAccount: session.currentAccount, tokens: session.tokens, isLoading: false })
+          set({ currentAccount: session.currentAccount, isLoading: false })
         } catch (error) {
           set({
             isLoading: false,
@@ -136,19 +88,11 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      refreshTokens: async () => {
-        try {
-          const tokens = await authService.refreshTokens()
-          set({ tokens })
-        } catch {
-          await get().signOut()
-        }
-      },
-
       clearError: () => set({ error: null }),
     }),
     {
-      name:       'auth-store',
+      name:       'budget-tracker-auth',
+      version:    1,
       partialize: (state) => ({
         user:            state.user,
         currentAccount:  state.currentAccount,
@@ -158,7 +102,8 @@ export const useAuthStore = create<AuthState>()(
   )
 )
 
-export const selectUser             = (state: AuthState) => state.user
-export const selectCurrentAccount   = (state: AuthState) => state.currentAccount
-export const selectIsAuthenticated  = (state: AuthState) => state.isAuthenticated
-export const selectIsLoading        = (state: AuthState) => state.isLoading
+export const selectUser            = (state: AuthState) => state.user
+export const selectCurrentAccount  = (state: AuthState) => state.currentAccount
+export const selectIsAuthenticated = (state: AuthState) => state.isAuthenticated
+export const selectIsLoading       = (state: AuthState) => state.isLoading
+export const selectIsInitialized   = (state: AuthState) => state.isInitialized
