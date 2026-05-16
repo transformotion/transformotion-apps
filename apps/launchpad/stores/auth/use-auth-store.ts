@@ -45,14 +45,14 @@ export const useAuthStore = create<AuthState>()(
         try {
           await authService.signOut()
         } finally {
-          set({ user: null, isAuthenticated: false, isLoading: false, error: null })
+          set({ user: null, isAuthenticated: false, isLoading: false, isInitialized: false, error: null })
         }
       },
 
       clearError: () => set({ error: null }),
     }),
     {
-      name:       'stock-analyser-auth',
+      name:       'launchpad-auth',
       version:    1,
       partialize: (state) => ({ user: state.user }),
     }

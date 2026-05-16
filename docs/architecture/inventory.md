@@ -147,7 +147,7 @@ should resolve this in the course of lifting duplicated code.
 
 ### 1.6 Launchpad as platform shell
 
-**Status: Confirmed (current state)**
+**Status: Confirmed (current state — Hosted UI auth landed, M6)**
 
 `apps/launchpad/` is the platform shell — sign-in flow, account
 switcher, app tile rendering. Treated as an app for structural
@@ -157,6 +157,14 @@ app) per `CONTRIBUTING.md` Section 3.2.
 Per M0 verification: `apps/launchpad/` contains no public signup UI
 (no `signUp`, `register`, `createAccount` references in any `.ts` or
 `.tsx` file).
+
+As of M6 PR (canonical auth), Launchpad hosts real Cognito Hosted UI
+sign-in via `signInWithRedirect`. The sign-in stub (setTimeout/console.log)
+is removed. Social providers (Google, Microsoft, Facebook) and email
+sign-in all route through the Cognito Hosted UI. Launchpad has its own
+Cognito App Client (`LaunchpadAppClient`) and dedicated
+`/launchpad/callback` OAuth return route. Auth store persist key:
+`launchpad-auth`.
 
 The hard-coded `userCanAccessFramework` prop in launchpad currently
 governs tile visibility for the Transformotion Framework app. M9
@@ -780,6 +788,42 @@ authoriser config there. Aligns with `auth.md` line 277.
 
 The v4 inventory's uncertainty on this finding was well-founded;
 the answer is clean.
+
+### 3.6 Canonical Hosted UI auth flow — landed (M6)
+
+**Status: Resolved by M6 canonical auth PR**
+
+All three apps now use Cognito Hosted UI (`signInWithRedirect`) as
+the canonical sign-in mechanism. SRP (direct email/password via
+Amplify) is removed from all frontends.
+
+**Per-app state:**
+- **Launchpad** — real Hosted UI sign-in with social providers (Google,
+  Microsoft, Facebook); `/launchpad/callback` route; `LaunchpadAppClient`;
+  `launchpad-auth` persist key; deploy workflow: `deploy-launchpad.yml`.
+- **Stock Analyser** — `signInWithRedirect` replaces the SRP email/password
+  form; `/stock-signal/callback` route; `StockAnalyserAppClient`;
+  `stock-analyser-auth` persist key (was `auth-store`).
+- **Budget Tracker** — `signInWithRedirect` trigger when unauthenticated;
+  `/budget-tracker/callback` route; `BudgetTrackerAppClient`;
+  `budget-tracker-auth` persist key (was `auth-store`).
+
+**Auth store persist key collision resolved:** All three apps previously
+used `auth-store` as the Zustand persist key. Each now uses a namespaced
+key (`launchpad-auth`, `stock-analyser-auth`, `budget-tracker-auth`) with
+`version: 1`, preventing stale data bleed between apps sharing
+`localStorage` on the same origin.
+
+**`NEXT_PUBLIC_CALLBACK_URL` introduced:** `CognitoAuthService` now reads
+`NEXT_PUBLIC_CALLBACK_URL` (explicit full URL) instead of deriving the
+callback from `NEXT_PUBLIC_APP_URL + /callback`. Fixes a `redirect_uri_mismatch`
+bug where SA's derived URL (`/callback`) didn't match the CDK-registered
+URL (`/stock-signal/callback`).
+
+**SSO session cookie** is set by the Hosted UI on the Cognito domain.
+Users who sign in via Launchpad are silently re-authenticated by SA and
+BT (each finds the cookie and exchanges it for app-specific tokens without
+re-prompting). This is the SSO precursor for cross-app navigation.
 
 ### 3.5 Platform Lambda permission model
 

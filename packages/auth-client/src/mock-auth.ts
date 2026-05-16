@@ -95,6 +95,10 @@ export class MockAuthService implements AuthService {
     this.notifyListeners()
   }
 
+  async signInWithRedirect(_options?: { provider?: string }): Promise<void> {
+    // No-op in mock mode — sign-in is handled by signIn() directly
+  }
+
   async getAccessToken(): Promise<string | null> {
     if (!this.session) return null
     if (this.isTokenExpired()) await this.refreshTokens()

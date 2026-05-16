@@ -46,6 +46,7 @@ export interface AuthService {
   signIn(credentials: SignInCredentials):  Promise<AuthSession>
   signUp(credentials: SignUpCredentials):  Promise<AuthSession>
   signOut():         Promise<void>
+  signInWithRedirect(options?: { provider?: string }): Promise<void>
   getAccessToken():  Promise<string | null>
   getIdToken():      Promise<string | null>
   refreshTokens():   Promise<AuthTokens>
