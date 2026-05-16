@@ -1,18 +1,16 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { Hub } from 'aws-amplify/utils'
 import { authService } from '@/lib/services/auth'
 
 export default function CallbackPage() {
-  const router = useRouter()
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     const unsubscribe = Hub.listen('auth', ({ payload }) => {
       if (payload.event === 'signInWithRedirect') {
-        router.replace('/')
+        window.location.href = '/launchpad'
       }
       if (payload.event === 'signInWithRedirect_failure') {
         setError('Sign in failed. Please try again.')
@@ -20,11 +18,11 @@ export default function CallbackPage() {
     })
 
     authService.getCurrentUser().then((user) => {
-      if (user) router.replace('/')
+      if (user) window.location.href = '/launchpad'
     }).catch(() => {})
 
     return unsubscribe
-  }, [router])
+  }, [])
 
   if (error) {
     return (
@@ -32,10 +30,10 @@ export default function CallbackPage() {
         <div className="text-center space-y-4">
           <p className="text-sm text-red-400">{error}</p>
           <a
-            href="/"
+            href="/launchpad"
             className="inline-block px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
           >
-            Try again
+            Go to Launchpad
           </a>
         </div>
       </div>

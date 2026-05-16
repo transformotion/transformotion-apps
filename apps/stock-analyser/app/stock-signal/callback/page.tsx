@@ -12,7 +12,7 @@ export default function CallbackPage() {
   useEffect(() => {
     const unsubscribe = Hub.listen('auth', ({ payload }) => {
       if (payload.event === 'signInWithRedirect') {
-        router.replace('/')
+        router.replace('/launchpad')
       }
       if (payload.event === 'signInWithRedirect_failure') {
         setError('Sign in failed. Please try again.')
@@ -20,7 +20,7 @@ export default function CallbackPage() {
     })
 
     authService.getCurrentUser().then((user) => {
-      if (user) router.replace('/')
+      if (user) router.replace('/launchpad')
     }).catch(() => {})
 
     return unsubscribe
@@ -32,7 +32,7 @@ export default function CallbackPage() {
         <div className="text-center space-y-4">
           <p className="text-sm text-red-400">{error}</p>
           <a
-            href="/stock-signal/sign-in/"
+            href="/sign-in"
             className="inline-block px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
           >
             Back to sign in
