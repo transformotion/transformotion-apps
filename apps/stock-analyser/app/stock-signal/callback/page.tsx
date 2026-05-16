@@ -5,6 +5,17 @@ import { useRouter } from 'next/navigation'
 import { Hub } from 'aws-amplify/utils'
 import { authService } from '@/lib/services/auth'
 
+function sanitizeAmplifyOAuthState() {
+  const keysToFix: string[] = []
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i)
+    if (key?.endsWith('.oauthSignIn') && localStorage.getItem(key) === 'true,false') {
+      keysToFix.push(key)
+    }
+  }
+  keysToFix.forEach(key => localStorage.setItem(key, 'true'))
+}
+
 export default function CallbackPage() {
   const router = useRouter()
   const [error, setError] = useState<string | null>(null)
@@ -12,6 +23,7 @@ export default function CallbackPage() {
   useEffect(() => {
     const unsubscribe = Hub.listen('auth', ({ payload }) => {
       if (payload.event === 'signInWithRedirect') {
+        sanitizeAmplifyOAuthState()
         router.replace('/stock-signal/')
       }
       if (payload.event === 'signInWithRedirect_failure') {
