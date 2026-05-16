@@ -6,9 +6,8 @@ import {
   signOut as amplifySignOut,
   signUp as amplifySignUp,
   signInWithRedirect as amplifySignInWithRedirect,
-  getCurrentUser,
+  getCurrentUser as amplifyGetCurrentUser,
   fetchAuthSession,
-  fetchUserAttributes,
 } from 'aws-amplify/auth'
 import type { AuthService, AuthSession, AuthTokens, User, Account, SignInCredentials, SignUpCredentials } from './index'
 
@@ -35,17 +34,19 @@ export class CognitoAuthService implements AuthService {
 
   async getCurrentUser(): Promise<User | null> {
     try {
-      const [cognitoUser, attributes] = await Promise.all([
-        getCurrentUser(),
-        fetchUserAttributes(),
+      const [cognitoUser, session] = await Promise.all([
+        amplifyGetCurrentUser(),
+        fetchAuthSession(),
       ])
-      return {
-        id:    cognitoUser.userId,
-        email: attributes.email ?? '',
-        name:  [attributes.given_name, attributes.family_name].filter(Boolean).join(' ')
-               || attributes.email
-               || '',
-      }
+      if (!session.tokens?.idToken) return null
+      const claims     = session.tokens.idToken.payload
+      const email      = claims['email'] as string
+      const givenName  = claims['given_name'] as string | undefined
+      const familyName = claims['family_name'] as string | undefined
+      const name       = (givenName && familyName)
+        ? `${givenName} ${familyName}`
+        : (givenName ?? email)
+      return { id: cognitoUser.userId, email, name }
     } catch {
       return null
     }
@@ -124,12 +125,24 @@ export class CognitoAuthService implements AuthService {
     try {
       await amplifySignInWithRedirect(args)
     } catch (err) {
-      if (err instanceof Error && err.message?.includes('already a signed in user')) {
-        await amplifySignOut()
-        await amplifySignInWithRedirect(args)
-      } else {
-        throw err
+      const isAlreadyAuthenticated =
+        err instanceof Error &&
+        (err.name === 'UserAlreadyAuthenticatedException' ||
+         err.message?.includes('already a signed in user'))
+      if (!isAlreadyAuthenticated) throw err
+
+      // Discriminate: stale inflightOAuth (no tokens) vs user is genuinely authenticated.
+      // fetchAuthSession() reads localStorage directly and does not fail when tokens exist.
+      const session = await fetchAuthSession()
+      if (session.tokens) {
+        // Tokens are present — user IS authenticated. getCurrentUser() must have failed
+        // for another reason (e.g. transient network error). Do not destroy valid tokens.
+        // The auth guard will pick up the authenticated state on next render.
+        return
       }
+      // No tokens — genuine stale-inflightOAuth state. Clear and retry.
+      await amplifySignOut()
+      await amplifySignInWithRedirect(args)
     }
   }
 
