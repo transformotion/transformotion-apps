@@ -7,6 +7,7 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as lambdaNodejs from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import { Construct } from 'constructs';
+import { cognitoHostedUiCss } from './cognito-hosted-ui-css';
 
 export interface AuthStackProps extends cdk.StackProps {
   stage: 'dev' | 'prod';
@@ -277,6 +278,20 @@ export class AuthStack extends cdk.Stack {
         precedence:  group.precedence,
       });
     }
+
+    // ── Hosted UI Customisation ────────────────────────────────────────────
+    // Applies the dark navy + teal theme to the Cognito Classic Hosted UI.
+    // Applied to all app clients (clientId: 'ALL'). SA and BT clients don't
+    // render social IDP buttons so those CSS rules are harmlessly unused for them.
+    const hostedUiCustomisation = new cognito.CfnUserPoolUICustomizationAttachment(
+      this, 'HostedUICustomisation', {
+        userPoolId: this.userPool.userPoolId,
+        clientId:   'ALL',
+        css:        cognitoHostedUiCss,
+      },
+    );
+    // Domain must exist before customisation can be applied.
+    hostedUiCustomisation.node.addDependency(this.userPoolDomain);
 
     // ── Outputs ────────────────────────────────────────────────────────────
     new cdk.CfnOutput(this, 'UserPoolId', {
