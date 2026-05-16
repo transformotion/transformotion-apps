@@ -66,19 +66,28 @@ export function BudgetTrackerApp({
     }
   }, [isAuthenticated, initialize])
 
-  // Redirect to sign-in when auth check completes and user is not authenticated
-  useEffect(() => {
-    if (!authLoading && !isAuthenticated) {
-      window.location.assign(getConfig().apps.signInUrl)
-    }
-  }, [authLoading, isAuthenticated])
-
-  if (authLoading || (!isAuthenticated && !authLoading)) {
+  if (authLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="flex items-center gap-3 text-muted-foreground">
           <div className="size-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
           <span className="text-sm">Loading...</span>
+        </div>
+      </div>
+    )
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <p className="text-sm text-muted-foreground">Sign in required</p>
+          <a
+            href={getConfig().apps.signInUrl}
+            className="inline-block px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+          >
+            Sign in
+          </a>
         </div>
       </div>
     )
