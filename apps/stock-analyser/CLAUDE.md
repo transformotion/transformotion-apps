@@ -5,18 +5,19 @@ Read this file before any Stock Analyser work. Read the root `CLAUDE.md` for bra
 ## Overview
 
 Next.js app at `apps/stock-analyser/`. Static export deployed to S3/CloudFront.  
-Serves at `{host}/stock-signal/*`.  
+Serves at `{host}/*` (CloudFront catch-all / default behaviour). Root page redirects to `/sign-in/`.  
+The protected app content is at `/stock-signal/` via the Next.js route `app/stock-signal/page.tsx`.  
 React + TypeScript + Tailwind CSS.
 
 ## Quick reference
 
 | What | Value |
 |---|---|
-| basePath | `/stock-signal` |
+| basePath | none (SA is the root / default app) |
 | Local dev port | `3000` |
 | Deploy workflow | `.github/workflows/deploy-stock-analyser.yml` |
 | Cognito client var | `NEXT_PUBLIC_STOCK_ANALYSER_COGNITO_CLIENT_ID` |
-| S3 prefix | `stock-signal/` in `transformotion-web-{stage}-959516291617` |
+| S3 prefix | bucket root in `transformotion-web-{stage}-959516291617` |
 
 ## Architecture references
 

@@ -135,17 +135,22 @@ export class CognitoAuthService implements AuthService {
          err.message?.includes('already a signed in user'))
       if (!isAlreadyAuthenticated) throw err
 
-      // Discriminate: stale inflightOAuth (no tokens) vs user is genuinely authenticated.
-      // fetchAuthSession() reads localStorage directly and does not fail when tokens exist.
+      // Three cases after UserAlreadyAuthenticatedException:
+      //   1. Tokens present and valid for this client → return (genuinely authenticated)
+      //   2. Tokens present but invalid for this client → cross-client stale tokens from
+      //      another app at the same origin; clear all Cognito storage and retry
+      //   3. No tokens → stale in-flight OAuth; clear and retry
       const session = await fetchAuthSession()
       if (session.tokens) {
-        // Tokens are present — user IS authenticated. getCurrentUser() must have failed
-        // for another reason (e.g. transient network error). Do not destroy valid tokens.
-        // The auth guard will pick up the authenticated state on next render.
-        return
+        try {
+          await amplifyGetCurrentUser()
+          return  // Case 1: tokens are valid for this client
+        } catch {
+          // Case 2: tokens belong to a different app's Cognito client at this origin
+        }
       }
-      // No tokens — genuine stale-inflightOAuth state. Clear and retry.
-      await amplifySignOut()
+      // Cases 2 and 3: clear all Cognito localStorage entries then retry
+      clearCognitoStorage()
       await amplifySignInWithRedirect(args)
     }
   }
@@ -223,4 +228,13 @@ export class CognitoAuthService implements AuthService {
       expiresAt:    exp * 1000,
     }
   }
+}
+
+// Remove all Cognito-related localStorage entries regardless of client ID.
+// Used to clear stale tokens from other apps at the same origin before retrying OAuth.
+function clearCognitoStorage(): void {
+  if (typeof window === 'undefined') return
+  Object.keys(localStorage)
+    .filter(k => k.startsWith('CognitoIdentityServiceProvider.') || k === 'amplify-signin-with-hostedUI')
+    .forEach(k => localStorage.removeItem(k))
 }

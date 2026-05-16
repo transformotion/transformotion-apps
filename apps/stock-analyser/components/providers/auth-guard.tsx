@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react'
 import { useAuthStore } from '@/stores/auth/use-auth-store'
-import { getConfig } from '@/lib/config'
+import { authService } from '@/lib/services/auth'
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isInitialized, initialize } = useAuthStore()
@@ -14,7 +14,10 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (isInitialized && !isAuthenticated) {
-      window.location.replace(getConfig().apps.signInUrl)
+      // Uses the Cognito Hosted UI SSO session cookie for silent re-auth when
+      // Launchpad has already authenticated. Shows the SA client's Cognito login
+      // page only for genuinely new sessions (no SSO cookie present).
+      authService.signInWithRedirect()
     }
   }, [isAuthenticated, isInitialized])
 
