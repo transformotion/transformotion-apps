@@ -10,7 +10,7 @@ import { RulesTab } from "./tabs/rules-tab"
 import { ReviewTab } from "./tabs/review-tab"
 import { useBudgetStore } from "@/stores/budget-tracker/use-budget-store"
 import { useAuthStore } from "@/stores/auth/use-auth-store"
-import { authService } from "@/lib/services/auth"
+import { getConfig } from "@/lib/config"
 
 // ============================================================================
 // TAB RENDERER
@@ -60,7 +60,7 @@ export function BudgetTrackerApp({
 
   useEffect(() => {
     if (authIsInitialized && !isAuthenticated) {
-      authService.signInWithRedirect().catch(() => {})
+      window.location.replace(getConfig().apps.signInUrl)
     }
   }, [isAuthenticated, authIsInitialized])
 

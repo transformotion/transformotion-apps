@@ -47,6 +47,7 @@ jobs:
       NEXT_PUBLIC_APP_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}
       NEXT_PUBLIC_CALLBACK_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}/budget-tracker/callback
       NEXT_PUBLIC_LAUNCHPAD_URL: ${{ vars.NEXT_PUBLIC_LAUNCHPAD_URL }}
+      NEXT_PUBLIC_SIGNIN_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}/launchpad/sign-in/
       NEXT_PUBLIC_SIGNOUT_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}/launchpad/signed-out/
       NEXT_PUBLIC_COMMIT_HASH: ${{ github.sha }}
     steps:
@@ -111,6 +112,7 @@ jobs:
       NEXT_PUBLIC_APP_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}
       NEXT_PUBLIC_CALLBACK_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}/budget-tracker/callback
       NEXT_PUBLIC_LAUNCHPAD_URL: ${{ vars.NEXT_PUBLIC_LAUNCHPAD_URL }}
+      NEXT_PUBLIC_SIGNIN_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}/launchpad/sign-in/
       NEXT_PUBLIC_SIGNOUT_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}/launchpad/signed-out/
       NEXT_PUBLIC_COMMIT_HASH: ${{ github.sha }}
     steps:

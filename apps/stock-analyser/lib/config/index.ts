@@ -58,6 +58,8 @@ export interface FeaturesConfig {
 export interface AppsConfig {
   /** URL for the Budget Tracker app (cross-app navigation requires full page load) */
   budgetTrackerUrl: string
+  /** URL for the Launchpad sign-in page; unauthenticated users are redirected here */
+  signInUrl: string
   /** URL for the signed-out landing page; used by mock-profile signOut handler */
   signOutUrl: string
 }
@@ -123,6 +125,7 @@ export function loadConfig(): AppConfig {
     },
     apps: {
       budgetTrackerUrl: normaliseCrossAppUrl(process.env.NEXT_PUBLIC_BUDGET_URL, '/budget-tracker/'),
+      signInUrl: normaliseCrossAppUrl(process.env.NEXT_PUBLIC_SIGNIN_URL, '/launchpad/sign-in/'),
       signOutUrl: normaliseCrossAppUrl(process.env.NEXT_PUBLIC_SIGNOUT_URL, '/launchpad/signed-out/'),
     },
   }

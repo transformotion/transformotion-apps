@@ -58,6 +58,8 @@ export interface FeaturesConfig {
 export interface AppsConfig {
   /** URL for the Launchpad app (cross-app navigation requires full page load) */
   launchpadUrl: string
+  /** URL for the Launchpad sign-in page; unauthenticated users are redirected here */
+  signInUrl: string
   /** URL for the signed-out landing page after sign-out */
   signOutUrl: string
 }
@@ -127,6 +129,7 @@ export function loadConfig(): AppConfig {
     },
     apps: {
       launchpadUrl: normaliseCrossAppUrl(process.env.NEXT_PUBLIC_LAUNCHPAD_URL, '/launchpad/'),
+      signInUrl: normaliseCrossAppUrl(process.env.NEXT_PUBLIC_SIGNIN_URL, '/launchpad/sign-in/'),
       signOutUrl: normaliseCrossAppUrl(process.env.NEXT_PUBLIC_SIGNOUT_URL, '/launchpad/signed-out/'),
     },
   }
