@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import { useBudgetNavigation } from "../app-shell"
+import { useBudgetStore } from "@/stores/budget-tracker/use-budget-store"
 import { PageHeader, Card, EmptyState, PillSelector } from "@/components/ui/design-system"
 import { BarChart3 } from "lucide-react"
 import { CATEGORY_LIST } from "../data/categories"
@@ -74,7 +74,7 @@ function formatCurrencyFull(amount: number): string {
 }
 
 export function CashflowTab() {
-  const { transactions } = useBudgetNavigation()
+  const transactions = useBudgetStore((s) => s.transactions)
   const [timeRange, setTimeRange] = useState<TimeRange>("6M")
 
   // Calculate monthly data

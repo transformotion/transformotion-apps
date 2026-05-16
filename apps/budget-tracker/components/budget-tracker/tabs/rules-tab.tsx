@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useRef, useMemo, useEffect } from "react"
-import { useBudgetNavigation } from "../app-shell"
+import { useBudgetStore } from "@/stores/budget-tracker/use-budget-store"
 import { PageHeader, Card, PrimaryButton, SecondaryButton } from "@/components/ui/design-system"
 import { Search, Plus, RotateCcw, ChevronDown, Check, X, Pencil, Trash2, Ban, Eye, HelpCircle, Sparkles, AlertCircle } from "lucide-react"
 import { findAllMatchingRules, applyRules, type BuiltinRule } from "../data/builtin-rules"
@@ -22,7 +22,12 @@ interface SuggestedRule {
 }
 
 export function RulesTab() {
-  const { customRules, setCustomRules, builtinRules, updateBuiltinRule, addBuiltinRule, transactions, setTransactions } = useBudgetNavigation()
+  const customRules = useBudgetStore((s) => s.customRules)
+  const setCustomRules = useBudgetStore((s) => s.setCustomRules)
+  const builtinRules = useBudgetStore((s) => s.builtinRules)
+  const updateBuiltinRule = useBudgetStore((s) => s.updateBuiltinRule)
+  const transactions = useBudgetStore((s) => s.transactions)
+  const setTransactions = useBudgetStore((s) => s.setTransactions)
   
   // Fix stale closure issue with useRef
   const customRulesRef = useRef<CustomRule[]>([])

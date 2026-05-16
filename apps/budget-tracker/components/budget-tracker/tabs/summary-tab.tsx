@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import { useBudgetNavigation } from "../app-shell"
+import { useBudgetStore } from "@/stores/budget-tracker/use-budget-store"
 import { PageHeader, Card, EmptyState } from "@/components/ui/design-system"
 import { ChevronLeft, ChevronRight, ChevronDown, PieChart, Briefcase } from "lucide-react"
 import { BUDGET_CATEGORIES, CATEGORY_LIST } from "../data/categories"
@@ -47,7 +47,8 @@ function formatDateShort(dateStr: string): string {
 }
 
 export function SummaryTab() {
-  const { transactions, settings } = useBudgetNavigation()
+  const transactions = useBudgetStore((s) => s.transactions)
+  const settings = useBudgetStore((s) => s.settings)
   const budgetSettings = settings // alias for compatibility
   
   // Get available months from transactions

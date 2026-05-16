@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import { useBudgetNavigation } from "../app-shell"
+import { useBudgetStore } from "@/stores/budget-tracker/use-budget-store"
 import { PageHeader, Card, PrimaryButton, SecondaryButton } from "@/components/ui/design-system"
 import { ChevronDown, Plus, Pencil, Trash2, RotateCcw, X, Check, Undo2 } from "lucide-react"
 import { BUDGET_CATEGORIES, CATEGORY_LIST } from "../data/categories"
@@ -28,12 +28,10 @@ function formatCurrency(amount: number): string {
 }
 
 export function BudgetTab() {
-  const { 
-    transactions,
-    setTransactions,
-    settings,
-    updateSettings
-  } = useBudgetNavigation()
+  const transactions = useBudgetStore((s) => s.transactions)
+  const setTransactions = useBudgetStore((s) => s.setTransactions)
+  const settings = useBudgetStore((s) => s.settings)
+  const updateSettings = useBudgetStore((s) => s.updateSettings)
   const budgetSettings = settings
   const setBudgetSettings = updateSettings
 

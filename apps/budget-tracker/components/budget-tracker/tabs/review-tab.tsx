@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { useBudgetNavigation } from "../app-shell"
+import { useBudgetStore } from "@/stores/budget-tracker/use-budget-store"
 import { PageHeader, Card, PrimaryButton, EmptyState } from "@/components/ui/design-system"
 import { Sparkles, Check, X, ChevronRight, Pencil, AlertCircle } from "lucide-react"
 import { getCategoryBadgeClasses } from "../data/category-colors"
@@ -18,7 +18,9 @@ interface ReviewResult {
 }
 
 export function ReviewTab() {
-  const { transactions, uncategorizedCount, updateTransaction } = useBudgetNavigation()
+  const transactions = useBudgetStore((s) => s.transactions)
+  const uncategorizedCount = useBudgetStore((s) => s.uncategorizedCount)
+  const updateTransaction = useBudgetStore((s) => s.updateTransaction)
   const { callClaude, isLoading: loading, error } = useClaude<{
     suggestions: Array<{
       transactionId: string
