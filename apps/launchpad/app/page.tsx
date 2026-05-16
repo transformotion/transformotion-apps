@@ -32,7 +32,9 @@ export default function Page() {
 
   const handleSignOut = async () => {
     await signOut()
-    router.replace('/sign-in')
+    // For live profile, amplifySignOut navigates to Cognito logout then redirectSignOut.
+    // For mock profile, navigate explicitly to the signed-out page.
+    router.replace('/signed-out')
   }
 
   return (

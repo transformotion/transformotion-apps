@@ -30,6 +30,14 @@ export class MockAuthService implements AuthService {
 
   constructor() {
     this.loadSession()
+    if (!this.session) {
+      this.session = {
+        user: MOCK_USER,
+        tokens: generateMockTokens(),
+        currentAccount: MOCK_ACCOUNTS[0],
+      }
+      this.saveSession()
+    }
   }
 
   private loadSession(): void {
@@ -96,7 +104,18 @@ export class MockAuthService implements AuthService {
   }
 
   async signInWithRedirect(_options?: { provider?: string }): Promise<void> {
-    // No-op in mock mode — sign-in is handled by signIn() directly
+    // Mirrors Cognito's full-page-navigation UX: seed session then reload so
+    // the calling page (sign-in) re-mounts as authenticated.
+    this.session = {
+      user: MOCK_USER,
+      tokens: generateMockTokens(),
+      currentAccount: MOCK_ACCOUNTS[0],
+    }
+    this.saveSession()
+    this.notifyListeners()
+    if (typeof window !== 'undefined') {
+      window.location.reload()
+    }
   }
 
   async getAccessToken(): Promise<string | null> {

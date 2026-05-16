@@ -176,8 +176,8 @@ export class AuthStack extends cdk.Stack {
             'http://localhost:3000/launchpad/callback',
           ],
       logoutUrls: isProd
-        ? ['https://apps.transformotion.com.au/sign-in']
-        : ['https://dev.apps.transformotion.com.au/sign-in', 'http://localhost:3000/sign-in'],
+        ? ['https://apps.transformotion.com.au/launchpad/signed-out/']
+        : ['https://dev.apps.transformotion.com.au/launchpad/signed-out/', 'http://localhost:3000/launchpad/signed-out/'],
       supportedIdentityProviders: [
         cognito.UserPoolClientIdentityProvider.COGNITO,
         cognito.UserPoolClientIdentityProvider.GOOGLE,
@@ -196,8 +196,8 @@ export class AuthStack extends cdk.Stack {
             'http://localhost:3000/stock-signal/callback',
           ],
       logoutUrls: isProd
-        ? ['https://apps.transformotion.com.au/sign-in']
-        : ['https://dev.apps.transformotion.com.au/sign-in', 'http://localhost:3000/sign-in'],
+        ? ['https://apps.transformotion.com.au/launchpad/signed-out/']
+        : ['https://dev.apps.transformotion.com.au/launchpad/signed-out/', 'http://localhost:3000/launchpad/signed-out/'],
       supportedIdentityProviders: [cognito.UserPoolClientIdentityProvider.COGNITO],
     });
 
@@ -211,8 +211,8 @@ export class AuthStack extends cdk.Stack {
             'http://localhost:3002/budget-tracker/callback',
           ],
       logoutUrls: isProd
-        ? ['https://apps.transformotion.com.au/sign-in']
-        : ['https://dev.apps.transformotion.com.au/sign-in', 'http://localhost:3002/sign-in'],
+        ? ['https://apps.transformotion.com.au/launchpad/signed-out/']
+        : ['https://dev.apps.transformotion.com.au/launchpad/signed-out/', 'http://localhost:3002/launchpad/signed-out/'],
       supportedIdentityProviders: [cognito.UserPoolClientIdentityProvider.COGNITO],
     });
 

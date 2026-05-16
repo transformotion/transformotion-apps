@@ -22,7 +22,7 @@ export default function CallbackPage() {
     const unsubscribe = Hub.listen('auth', ({ payload }) => {
       if (payload.event === 'signInWithRedirect') {
         sanitizeAmplifyOAuthState()
-        window.location.replace('/')
+        window.location.replace('/launchpad/')
       }
       if (payload.event === 'signInWithRedirect_failure') {
         setError('Sign in failed. Please try again.')
@@ -32,7 +32,7 @@ export default function CallbackPage() {
     // If the Hub event already fired before the listener was set up, check
     // whether Amplify already has an authenticated user.
     authService.getCurrentUser().then((user) => {
-      if (user) window.location.replace('/')
+      if (user) window.location.replace('/launchpad/')
     }).catch(() => {})
 
     return unsubscribe

@@ -20,7 +20,7 @@ function LaunchpadContent() {
 
   const handleSignOut = async () => {
     await signOut()
-    router.push("/sign-in")
+    window.location.assign(getConfig().apps.signOutUrl)
   }
 
   return (

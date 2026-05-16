@@ -13,7 +13,7 @@ export default function Page() {
 
   const handleSignOut = async () => {
     await signOut()
-    window.location.assign(getConfig().apps.signInUrl)
+    window.location.assign(getConfig().apps.signOutUrl)
   }
 
   return (
