@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo, useRef } from "react"
-import { useBudgetNavigation } from "../app-shell"
+import { useBudgetStore } from "@/stores/budget-tracker/use-budget-store"
 import { PageHeader, Card, PrimaryButton, SecondaryButton, EmptyState } from "@/components/ui/design-system"
 import { 
   Upload, Receipt, Filter, Download, Briefcase, X, ChevronDown, ChevronRight,
@@ -89,7 +89,15 @@ function exportToCSV(transactions: Transaction[], filename: string) {
 }
 
 export function TransactionsTab() {
-  const { transactions, setTransactions, settings, customRules, addCustomRule, builtinRules, uncategorizedCount, transactionFilters, setTransactionFilters } = useBudgetNavigation()
+  const transactions = useBudgetStore((s) => s.transactions)
+  const setTransactions = useBudgetStore((s) => s.setTransactions)
+  const settings = useBudgetStore((s) => s.settings)
+  const customRules = useBudgetStore((s) => s.customRules)
+  const addCustomRule = useBudgetStore((s) => s.addCustomRule)
+  const builtinRules = useBudgetStore((s) => s.builtinRules)
+  const uncategorizedCount = useBudgetStore((s) => s.uncategorizedCount)
+  const filters = useBudgetStore((s) => s.filters)
+  const setFilters = useBudgetStore((s) => s.setFilters)
   const customRulesRef = useRef(customRules) // Fix stale closure
   customRulesRef.current = customRules
 
@@ -117,8 +125,6 @@ export function TransactionsTab() {
   const [showBulkEdit, setShowBulkEdit] = useState(false)
   
   // Use filters from context (persisted across tab navigation)
-  const filters = transactionFilters
-  const setFilters = setTransactionFilters
 
   // Get unique sources for filter dropdown
   const uniqueSources = useMemo(() => {
@@ -1047,7 +1053,12 @@ function TransactionRow({
 
 // CSV Import Modal
 function CSVImportModal({ onClose }: { onClose: () => void }) {
-  const { transactions, setTransactions, settings, updateSettings, builtinRules, customRules } = useBudgetNavigation()
+  const transactions = useBudgetStore((s) => s.transactions)
+  const setTransactions = useBudgetStore((s) => s.setTransactions)
+  const settings = useBudgetStore((s) => s.settings)
+  const updateSettings = useBudgetStore((s) => s.updateSettings)
+  const builtinRules = useBudgetStore((s) => s.builtinRules)
+  const customRules = useBudgetStore((s) => s.customRules)
   const [step, setStep] = useState<"upload" | "preview" | "categorizing" | "importing">("upload")
   
   // AI Smart Import

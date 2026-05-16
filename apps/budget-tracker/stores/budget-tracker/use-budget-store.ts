@@ -3,14 +3,13 @@ import { persist } from 'zustand/middleware'
 import {
   getTransactionRepository,
   getCustomRulesRepository,
-  getRulesRepository,
   getSettingsRepository,
   type Transaction,
   type CustomRule,
-  type BuiltinRule,
   type BudgetSettings,
   type TransactionFilters,
 } from '@/lib/repositories/budget-tracker'
+import { DEFAULT_BUILTIN_RULES, type BuiltinRule } from '@/components/budget-tracker/data/builtin-rules'
 
 export type BudgetTabId = 'transactions' | 'summary' | 'budget' | 'cashflow' | 'rules' | 'review'
 
@@ -57,7 +56,7 @@ interface BudgetState {
   updateSettings: (updates: Partial<BudgetSettings>) => Promise<void>
 
   // Filter actions
-  setFilters: (filters: TransactionFilters) => void
+  setFilters: (filtersOrUpdater: TransactionFilters | ((prev: TransactionFilters) => TransactionFilters)) => void
   resetFilters: () => void
 
   // Initialization
@@ -79,6 +78,12 @@ const DEFAULT_SETTINGS: BudgetSettings = {
   budgetFreqs: {},
   customCategories: {},
   projectBudgets: {},
+  deletedCategories: [],
+  customTopCategories: [],
+  projectTasks: {},
+  customProjectCategories: [],
+  deletedProjectCategories: [],
+  disabledProjectCategories: [],
 }
 
 export const useBudgetStore = create<BudgetState>()(
@@ -140,8 +145,7 @@ export const useBudgetStore = create<BudgetState>()(
       // Rules
       loadRules: async () => {
         const customRules = await getCustomRulesRepository().findAll('')
-        const builtinRules = getRulesRepository().getBuiltinRules() ?? []
-        set({ customRules, builtinRules })
+        set({ customRules, builtinRules: DEFAULT_BUILTIN_RULES })
       },
 
       addCustomRule: async (rule) => {
@@ -172,10 +176,9 @@ export const useBudgetStore = create<BudgetState>()(
       },
 
       updateBuiltinRule: async (id, updates) => {
-        const localRepo = getRulesRepository()
-        localRepo.updateBuiltinRule(id, updates)
-        const builtinRules = localRepo.getBuiltinRules() ?? []
-        set({ builtinRules })
+        set((state) => ({
+          builtinRules: state.builtinRules.map(r => r.id === id ? { ...r, ...updates } : r),
+        }))
       },
 
       setBuiltinRules: (builtinRules) => {
@@ -199,7 +202,8 @@ export const useBudgetStore = create<BudgetState>()(
       },
 
       // Filters
-      setFilters: (filters) => {
+      setFilters: (filtersOrUpdater) => {
+        const filters = typeof filtersOrUpdater === 'function' ? filtersOrUpdater(get().filters) : filtersOrUpdater
         set({ filters })
         getSettingsRepository().updateFilters(filters)
       },

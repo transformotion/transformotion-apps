@@ -13,6 +13,13 @@ export interface BudgetSettings {
   budgetFreqs: Record<string, BudgetFrequency>
   customCategories: Record<string, string[]>
   projectBudgets: Record<string, number>
+  deletedCategories: string[]
+  customTopCategories: string[]
+  projectTasks: Record<string, string[]>
+  customProjectCategories: string[]
+  deletedProjectCategories: string[]
+  disabledProjectCategories: string[]
+  csvFormatMappings?: Record<string, unknown>
 }
 
 export interface TransactionFilters {
@@ -33,6 +40,12 @@ const DEFAULT_SETTINGS: BudgetSettings = {
   budgetFreqs: {},
   customCategories: {},
   projectBudgets: {},
+  deletedCategories: [],
+  customTopCategories: [],
+  projectTasks: {},
+  customProjectCategories: [],
+  deletedProjectCategories: [],
+  disabledProjectCategories: [],
 }
 
 const DEFAULT_FILTERS: TransactionFilters = {
