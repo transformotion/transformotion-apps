@@ -59,22 +59,33 @@ export class NetworkStack extends cdk.Stack {
       ? acm.Certificate.fromCertificateArn(this, 'Certificate', certificateArn)
       : undefined;
 
-    // ── CloudFront Function — sub-app index rewrite ───────────────────────
-    // S3 OAC REST API returns 403 for trailing-slash keys (e.g. /budget-tracker/)
-    // because there is no object at that key — only at /budget-tracker/index.html.
-    // Without this rewrite those requests fall through to the default SPA
-    // fallback (403 → /index.html), which serves the stock-analyser root instead.
-    const subAppIndexRewrite = new cloudfront.Function(this, 'SubAppIndexRewrite', {
+    // ── CloudFront Function — index rewrite ───────────────────────────────
+    // S3 OAC REST API returns 403 for both directory keys (e.g. /sign-in/) and
+    // extension-less paths (e.g. /stock-signal/callback). Without rewriting these
+    // to their index.html equivalents, all such requests fall through to the
+    // 403→/index.html error response, which serves the SA root page. This breaks
+    // OAuth callbacks because the SA root page does not configure Amplify and the
+    // auth code in the query string is never exchanged.
+    //
+    // The function handles three cases:
+    //   /path/   → /path/index.html   (trailing slash directory)
+    //   /path    → /path/index.html   (no trailing slash, no extension)
+    //   /path.js → unchanged          (static asset — has an extension)
+    const indexRewrite = new cloudfront.Function(this, 'IndexRewrite', {
       code: cloudfront.FunctionCode.fromInline(`
         function handler(event) {
           var request = event.request;
-          if (request.uri.endsWith('/')) {
-            request.uri += 'index.html';
+          var uri = request.uri;
+          if (uri.includes('.')) return request;
+          if (uri.endsWith('/')) {
+            request.uri = uri + 'index.html';
+          } else {
+            request.uri = uri + '/index.html';
           }
           return request;
         }
       `),
-      comment: 'Rewrite sub-app directory requests to index.html (e.g. /budget-tracker/ → /budget-tracker/index.html)',
+      comment: 'Rewrite all route paths to their index.html (handles /path, /path/, skips /path.ext)',
       runtime: cloudfront.FunctionRuntime.JS_2_0,
     });
 
@@ -85,6 +96,10 @@ export class NetworkStack extends cdk.Stack {
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
         compress: true,
+        functionAssociations: [{
+          function: indexRewrite,
+          eventType: cloudfront.FunctionEventType.VIEWER_REQUEST,
+        }],
       },
       additionalBehaviors: {
         '/budget-tracker/*': {
@@ -93,7 +108,7 @@ export class NetworkStack extends cdk.Stack {
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
           compress: true,
           functionAssociations: [{
-            function: subAppIndexRewrite,
+            function: indexRewrite,
             eventType: cloudfront.FunctionEventType.VIEWER_REQUEST,
           }],
         },
@@ -103,7 +118,7 @@ export class NetworkStack extends cdk.Stack {
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
           compress: true,
           functionAssociations: [{
-            function: subAppIndexRewrite,
+            function: indexRewrite,
             eventType: cloudfront.FunctionEventType.VIEWER_REQUEST,
           }],
         },
