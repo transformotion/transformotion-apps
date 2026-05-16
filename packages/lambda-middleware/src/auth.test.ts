@@ -7,6 +7,7 @@ import {
   requireAccountOwner,
   requireGroup,
   extractAuthClaims,
+  resolveAccountContext,
 } from './auth';
 import type { AuthClaims } from './types';
 import { HttpError } from './errors';
@@ -261,6 +262,39 @@ describe('requireAccountOwner', () => {
 
   it('passes for site admin', () => {
     expect(() => requireAccountOwner(makeClaims({ siteAdmin: true }), 'budget-tracker', 'acc-1')).not.toThrow();
+  });
+});
+
+// ── resolveAccountContext ─────────────────────────────────────────────────────
+
+describe('resolveAccountContext', () => {
+  function makeHeaderEvent(headers: Record<string, string>): APIGatewayProxyEvent {
+    return { headers } as unknown as APIGatewayProxyEvent;
+  }
+
+  it('accepts lowercase x-account-id', () => {
+    expect(resolveAccountContext(makeHeaderEvent({ 'x-account-id': 'acc-123' })))
+      .toEqual({ accountId: 'acc-123' });
+  });
+
+  it('accepts HTTP-conventional X-Account-Id', () => {
+    expect(resolveAccountContext(makeHeaderEvent({ 'X-Account-Id': 'acc-123' })))
+      .toEqual({ accountId: 'acc-123' });
+  });
+
+  it('accepts all-caps X-ACCOUNT-ID', () => {
+    expect(resolveAccountContext(makeHeaderEvent({ 'X-ACCOUNT-ID': 'acc-123' })))
+      .toEqual({ accountId: 'acc-123' });
+  });
+
+  it('throws 400 when header is absent', () => {
+    expect(() => resolveAccountContext(makeHeaderEvent({})))
+      .toThrow(expect.objectContaining({ statusCode: 400 }));
+  });
+
+  it('throws 400 when header value is whitespace only', () => {
+    expect(() => resolveAccountContext(makeHeaderEvent({ 'x-account-id': '   ' })))
+      .toThrow(expect.objectContaining({ statusCode: 400 }));
   });
 });
 
