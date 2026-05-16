@@ -4,37 +4,20 @@
  * Applied via CfnUserPoolUICustomizationAttachment in auth-stack.ts.
  * Matches the Transformotion dark theme: navy background (#0D1B2A), teal primary (#00C4B3).
  *
+ * Only Cognito's named .customizable classes are permitted — raw HTML element
+ * selectors (body, h1, a, etc.) are rejected by the API with a 400 error.
+ *
  * If the user pool is ever migrated to Cognito Managed Login (v2), these selectors
  * will need to be replaced with the Managed Login CSS custom properties instead.
  */
 export const cognitoHostedUiCss = `
-body {
+.background-customizable {
   background-color: #0D1B2A;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
 }
 
 .banner-customizable {
   padding: 24px 0 8px 0;
   background-color: #0D1B2A;
-}
-
-.modal-content {
-  background-color: #141720;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 16px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
-}
-
-h1 {
-  color: #e8eaf0;
-  font-size: 24px;
-  font-weight: 700;
-}
-
-h2 {
-  color: #e8eaf0;
-  font-size: 18px;
-  font-weight: 600;
 }
 
 .label-customizable {
@@ -79,11 +62,6 @@ h2 {
   color: #ffffff;
 }
 
-.submitButton-customizable:active {
-  background-color: #009e8f;
-  border-color: #009e8f;
-}
-
 .errorMessage-customizable {
   color: #f05656;
   font-size: 14px;
@@ -119,20 +97,8 @@ h2 {
   font-size: 14px;
 }
 
-.lostPassword-customizable:hover {
-  color: #00C4B3;
-}
-
-.redirectToSignUp {
+.redirect-customizable {
   color: #6b7280;
   font-size: 14px;
-}
-
-a {
-  color: #00C4B3;
-}
-
-a:hover {
-  color: #00b0a0;
 }
 `;
