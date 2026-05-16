@@ -128,9 +128,9 @@ export function loadConfig(): AppConfig {
       debugMode: process.env.NEXT_PUBLIC_DEBUG_MODE === 'true',
     },
     apps: {
-      launchpadUrl: normaliseCrossAppUrl(process.env.NEXT_PUBLIC_LAUNCHPAD_URL, '/launchpad/'),
-      signInUrl: normaliseCrossAppUrl(process.env.NEXT_PUBLIC_SIGNIN_URL, '/launchpad/sign-in/'),
-      signOutUrl: normaliseCrossAppUrl(process.env.NEXT_PUBLIC_SIGNOUT_URL, '/launchpad/signed-out/'),
+      launchpadUrl: normaliseCrossAppUrl(process.env.NEXT_PUBLIC_LAUNCHPAD_URL, '/'),
+      signInUrl: normaliseCrossAppUrl(process.env.NEXT_PUBLIC_SIGNIN_URL, '/sign-in/'),
+      signOutUrl: normaliseCrossAppUrl(process.env.NEXT_PUBLIC_SIGNOUT_URL, '/signed-out/'),
     },
   }
 }

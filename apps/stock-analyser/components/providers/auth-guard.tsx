@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react'
 import { useAuthStore } from '@/stores/auth/use-auth-store'
-import { getConfig } from '@/lib/config'
+import { authService } from '@/lib/services/auth'
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isInitialized, initialize } = useAuthStore()
@@ -14,7 +14,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (isInitialized && !isAuthenticated) {
-      window.location.replace(getConfig().apps.signInUrl)
+      authService.signInWithRedirect()
     }
   }, [isAuthenticated, isInitialized])
 

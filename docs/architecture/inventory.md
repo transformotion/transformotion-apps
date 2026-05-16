@@ -1013,22 +1013,17 @@ There is no shared CDK construct library at `packages/cdk-constructs/`.
 Each new Lambda or table reimplements boilerplate. M7 populates
 `packages/cdk-constructs/` as part of deduplication.
 
-**CloudFront behaviors and S3 prefix occupancy — current state (post M6 #154 PR #194):**
+**CloudFront behaviors and S3 prefix occupancy — current state (post canonical basePath restructure):**
 
-The `NetworkStack` CloudFront distribution currently has two configured behaviors:
+The `NetworkStack` CloudFront distribution has three configured behaviors plus the default:
 
-| Behavior pattern | Origin | Function | Status |
+| Behavior pattern | S3 occupant | Function | Status |
 |---|---|---|---|
-| Default (`*`) | S3 root | None | Serves stock-analyser (transitional; canonical target: launchpad) |
-| `/budget-tracker/*` | S3 `budget-tracker/` prefix | `SubAppIndexRewrite` | Implemented (M6 #154 PR #194) |
-| `/launchpad/*` | S3 `launchpad/` prefix | `SubAppIndexRewrite` | Implemented (M6 #155 follow-up, this PR) |
+| Default (`*`) | Launchpad (root) | `IndexRewrite` | Implemented — Launchpad owns `/`, `/sign-in/`, `/signed-out/`, `/launchpad/callback/` |
+| `/budget-tracker/*` | BT (`budget-tracker/` prefix) | `IndexRewrite` | Implemented |
+| `/stock-signal/*` | SA (`stock-signal/` prefix) | `IndexRewrite` | Implemented |
 
-Remaining behaviors not yet implemented (M7 scope):
-
-- `/stock-signal/*` — requires stock-analyser to gain `basePath: '/stock-signal'` in `next.config.mjs`, deploy workflow updated to sync to `stock-signal/` prefix, and a new `additionalBehaviors` entry with `SubAppIndexRewrite`
-- Launchpad at root — requires stock-analyser to vacate S3 root and launchpad to gain a `deploy-launchpad.yml` workflow syncing to root; the `/launchpad/*` behavior (above) is transitional and will be removed once launchpad occupies the root default behavior
-
-Current S3 bucket root occupant is stock-analyser (transitional; should be launchpad per target architecture). The SPA fallback (403/404 → `/index.html`) compensates but creates the routing failure that PR #194 fixed for budget-tracker. M7 closes the gap by completing the extractions.
+Launchpad deploy syncs to S3 root (excluding `stock-signal/*` and `budget-tracker/*`). Stock Analyser deploys to the `stock-signal/` prefix. Budget Tracker deploys to `budget-tracker/` prefix. The SPA fallback (403/404 → `/index.html`) serves Launchpad's root page.
 
 ### 5.7 Environment variables
 

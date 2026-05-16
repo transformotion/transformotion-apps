@@ -2,7 +2,6 @@
 const nextConfig = {
   output: 'export',
   trailingSlash: true,
-  basePath: '/launchpad',
   images: { unoptimized: true },
   transpilePackages: [
     '@transformotion/auth-client',

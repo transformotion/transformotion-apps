@@ -40,9 +40,9 @@ jobs:
       NEXT_PUBLIC_COGNITO_DOMAIN: ${{ vars.NEXT_PUBLIC_COGNITO_DOMAIN }}
       NEXT_PUBLIC_CALLBACK_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}/launchpad/callback
       NEXT_PUBLIC_APP_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}
-      NEXT_PUBLIC_STOCK_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}
+      NEXT_PUBLIC_STOCK_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}/stock-signal/
       NEXT_PUBLIC_BUDGET_URL: ${{ vars.NEXT_PUBLIC_BUDGET_TRACKER_APP_URL }}
-      NEXT_PUBLIC_SIGNOUT_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}/launchpad/signed-out/
+      NEXT_PUBLIC_SIGNOUT_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}/signed-out/
       NEXT_PUBLIC_RUNTIME_PROFILE: live
       NEXT_PUBLIC_COMMIT_HASH: ${{ github.sha }}
     steps:
@@ -73,15 +73,15 @@ jobs:
         run: pnpm build
 
       - name: Deploy to S3
-        run: aws s3 sync apps/launchpad/out s3://transformotion-web-dev-959516291617/launchpad --delete
+        run: aws s3 sync apps/launchpad/out s3://transformotion-web-dev-959516291617 --delete --exclude "stock-signal/*" --exclude "budget-tracker/*"
 
       - name: Invalidate CloudFront
-        run: aws cloudfront create-invalidation --distribution-id E1128DYYBLMWYK --paths "/launchpad/*"
+        run: aws cloudfront create-invalidation --distribution-id E1128DYYBLMWYK --paths "/*"
 
       - name: Verify deployment
         run: |
           bash scripts/ci/verify-deploy.sh \
-            "https://dev.apps.transformotion.com.au/launchpad/" \
+            "https://dev.apps.transformotion.com.au/" \
             apps/launchpad/.env.example \
             "${{ github.sha }}"
 
@@ -97,9 +97,9 @@ jobs:
       NEXT_PUBLIC_COGNITO_DOMAIN: ${{ vars.NEXT_PUBLIC_COGNITO_DOMAIN }}
       NEXT_PUBLIC_CALLBACK_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}/launchpad/callback
       NEXT_PUBLIC_APP_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}
-      NEXT_PUBLIC_STOCK_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}
+      NEXT_PUBLIC_STOCK_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}/stock-signal/
       NEXT_PUBLIC_BUDGET_URL: ${{ vars.NEXT_PUBLIC_BUDGET_TRACKER_APP_URL }}
-      NEXT_PUBLIC_SIGNOUT_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}/launchpad/signed-out/
+      NEXT_PUBLIC_SIGNOUT_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}/signed-out/
       NEXT_PUBLIC_RUNTIME_PROFILE: live
       NEXT_PUBLIC_COMMIT_HASH: ${{ github.sha }}
     steps:
@@ -130,14 +130,14 @@ jobs:
         run: pnpm build
 
       - name: Deploy to S3
-        run: aws s3 sync apps/launchpad/out s3://transformotion-prod-bucket/launchpad --delete
+        run: aws s3 sync apps/launchpad/out s3://transformotion-prod-bucket --delete --exclude "stock-signal/*" --exclude "budget-tracker/*"
 
       - name: Invalidate CloudFront
-        run: aws cloudfront create-invalidation --distribution-id ${{ vars.CLOUDFRONT_DISTRIBUTION_ID_PROD }} --paths "/launchpad/*"
+        run: aws cloudfront create-invalidation --distribution-id ${{ vars.CLOUDFRONT_DISTRIBUTION_ID_PROD }} --paths "/*"
 
       - name: Verify deployment
         run: |
           bash scripts/ci/verify-deploy.sh \
-            "https://apps.transformotion.com.au/launchpad/" \
+            "https://apps.transformotion.com.au/" \
             apps/launchpad/.env.example \
             "${{ github.sha }}"
