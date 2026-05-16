@@ -81,11 +81,6 @@ export const cognitoHostedUiCss = `
   background-color: #252a3a;
 }
 
-.or-customizable {
-  color: #6b7280;
-  font-size: 12px;
-}
-
 .lostPassword-customizable {
   color: #6b7280;
   font-size: 14px;
