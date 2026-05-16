@@ -135,17 +135,21 @@ export class CognitoAuthService implements AuthService {
          err.message?.includes('already a signed in user'))
       if (!isAlreadyAuthenticated) throw err
 
-      // Discriminate: stale inflightOAuth (no tokens) vs user is genuinely authenticated.
-      // fetchAuthSession() reads localStorage directly and does not fail when tokens exist.
       const session = await fetchAuthSession()
       if (session.tokens) {
-        // Tokens are present — user IS authenticated. getCurrentUser() must have failed
-        // for another reason (e.g. transient network error). Do not destroy valid tokens.
-        // The auth guard will pick up the authenticated state on next render.
-        return
+        try {
+          await amplifyGetCurrentUser()
+          // Case 1: tokens belong to this client — user is genuinely authenticated.
+          // The auth guard will pick up the authenticated state on next render.
+          return
+        } catch {
+          // Case 2: tokens exist but getCurrentUser() failed — cross-client stale tokens
+          // from another app (e.g. SA tokens in Launchpad's shared-origin localStorage).
+          // Clear all Cognito storage and retry.
+        }
       }
-      // No tokens — genuine stale-inflightOAuth state. Clear and retry.
-      await amplifySignOut()
+      // No tokens (stale inflightOAuth) or cross-client stale tokens — clear and retry.
+      clearCognitoStorage()
       await amplifySignInWithRedirect(args)
     }
   }
@@ -223,4 +227,11 @@ export class CognitoAuthService implements AuthService {
       expiresAt:    exp * 1000,
     }
   }
+}
+
+function clearCognitoStorage(): void {
+  if (typeof window === 'undefined') return
+  Object.keys(localStorage)
+    .filter(k => k.startsWith('CognitoIdentityServiceProvider.') || k === 'amplify-signin-with-hostedUI')
+    .forEach(k => localStorage.removeItem(k))
 }

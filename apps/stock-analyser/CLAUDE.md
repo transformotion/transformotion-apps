@@ -143,5 +143,4 @@ Required env vars marked `[REQUIRED]` in `.env.example` must be set before the d
 ## Known constraints
 
 - The app currently contains Budget Tracker UI components at `components/budget-tracker/` and `app/budget-tracker/`. These are scheduled for deletion in sub-phase 7h, after `apps/budget-tracker` is live at `/budget-tracker/`.
-- The launchpad and sign-in routes (`app/launchpad/`, `app/sign-in/`) are also in this app pending sub-phase 7e deploying `apps/launchpad`.
 - `eslint-plugin-boundaries` enforces no cross-app imports — do not import from `apps/budget-tracker/`.

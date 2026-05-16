@@ -48,8 +48,8 @@ jobs:
       NEXT_PUBLIC_RUNTIME_PROFILE: live
       NEXT_PUBLIC_USE_MOCK_DATA: ${{ vars.NEXT_PUBLIC_USE_MOCK_DATA }}
       NEXT_PUBLIC_BUDGET_URL: ${{ vars.NEXT_PUBLIC_BUDGET_URL }}
-      NEXT_PUBLIC_SIGNIN_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}/launchpad/sign-in/
-      NEXT_PUBLIC_SIGNOUT_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}/launchpad/signed-out/
+      NEXT_PUBLIC_SIGNIN_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}/sign-in/
+      NEXT_PUBLIC_SIGNOUT_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}/signed-out/
       NEXT_PUBLIC_COMMIT_HASH: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
@@ -83,7 +83,7 @@ jobs:
         run: pnpm build
 
       - name: Deploy to S3
-        run: aws s3 sync apps/stock-analyser/out s3://transformotion-web-dev-959516291617 --delete --exclude "budget-tracker/*"
+        run: aws s3 sync apps/stock-analyser/out s3://transformotion-web-dev-959516291617/stock-signal --delete
 
       - name: Invalidate CloudFront
         run: aws cloudfront create-invalidation --distribution-id E1128DYYBLMWYK --paths "/*"
@@ -113,8 +113,8 @@ jobs:
       NEXT_PUBLIC_RUNTIME_PROFILE: live
       NEXT_PUBLIC_USE_MOCK_DATA: ${{ vars.NEXT_PUBLIC_USE_MOCK_DATA }}
       NEXT_PUBLIC_BUDGET_URL: ${{ vars.NEXT_PUBLIC_BUDGET_URL }}
-      NEXT_PUBLIC_SIGNIN_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}/launchpad/sign-in/
-      NEXT_PUBLIC_SIGNOUT_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}/launchpad/signed-out/
+      NEXT_PUBLIC_SIGNIN_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}/sign-in/
+      NEXT_PUBLIC_SIGNOUT_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}/signed-out/
       NEXT_PUBLIC_COMMIT_HASH: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
@@ -148,7 +148,7 @@ jobs:
         run: pnpm build
 
       - name: Deploy to S3
-        run: aws s3 sync apps/stock-analyser/out s3://transformotion-prod-bucket --delete --exclude "budget-tracker/*"
+        run: aws s3 sync apps/stock-analyser/out s3://transformotion-prod-bucket/stock-signal --delete
 
       - name: Invalidate CloudFront
         run: aws cloudfront create-invalidation --distribution-id ${{ vars.CLOUDFRONT_DISTRIBUTION_ID_PROD }} --paths "/*"

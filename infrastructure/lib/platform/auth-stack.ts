@@ -172,12 +172,12 @@ export class AuthStack extends cdk.Stack {
         : [
             'https://dev.apps.transformotion.com.au/sign-in/callback',
             'https://dev.apps.transformotion.com.au/launchpad/callback',
-            'http://localhost:3000/sign-in/callback',
-            'http://localhost:3000/launchpad/callback',
+            'http://localhost:3001/sign-in/callback',
+            'http://localhost:3001/launchpad/callback',
           ],
       logoutUrls: isProd
-        ? ['https://apps.transformotion.com.au/launchpad/signed-out/']
-        : ['https://dev.apps.transformotion.com.au/launchpad/signed-out/', 'http://localhost:3000/launchpad/signed-out/'],
+        ? ['https://apps.transformotion.com.au/signed-out/']
+        : ['https://dev.apps.transformotion.com.au/signed-out/', 'http://localhost:3001/signed-out/'],
       supportedIdentityProviders: [
         cognito.UserPoolClientIdentityProvider.COGNITO,
         cognito.UserPoolClientIdentityProvider.GOOGLE,
@@ -196,8 +196,8 @@ export class AuthStack extends cdk.Stack {
             'http://localhost:3000/stock-signal/callback',
           ],
       logoutUrls: isProd
-        ? ['https://apps.transformotion.com.au/launchpad/signed-out/']
-        : ['https://dev.apps.transformotion.com.au/launchpad/signed-out/', 'http://localhost:3000/launchpad/signed-out/'],
+        ? ['https://apps.transformotion.com.au/signed-out/']
+        : ['https://dev.apps.transformotion.com.au/signed-out/', 'http://localhost:3000/signed-out/'],
       supportedIdentityProviders: [cognito.UserPoolClientIdentityProvider.COGNITO],
     });
 
@@ -211,8 +211,8 @@ export class AuthStack extends cdk.Stack {
             'http://localhost:3002/budget-tracker/callback',
           ],
       logoutUrls: isProd
-        ? ['https://apps.transformotion.com.au/launchpad/signed-out/']
-        : ['https://dev.apps.transformotion.com.au/launchpad/signed-out/', 'http://localhost:3002/launchpad/signed-out/'],
+        ? ['https://apps.transformotion.com.au/signed-out/']
+        : ['https://dev.apps.transformotion.com.au/signed-out/', 'http://localhost:3002/signed-out/'],
       supportedIdentityProviders: [cognito.UserPoolClientIdentityProvider.COGNITO],
     });
 

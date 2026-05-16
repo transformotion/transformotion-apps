@@ -2,6 +2,7 @@
 const nextConfig = {
   output: 'export',
   trailingSlash: true,
+  basePath: '/stock-signal',
   images: { unoptimized: true },
   transpilePackages: ['@transformotion/api-client'],
   typescript: {
