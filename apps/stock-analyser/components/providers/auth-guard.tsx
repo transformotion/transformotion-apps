@@ -1,12 +1,11 @@
 'use client'
 
 import { useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import { useAuthStore } from '@/stores/auth/use-auth-store'
+import { authService } from '@/lib/services/auth'
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isInitialized, initialize } = useAuthStore()
-  const router = useRouter()
 
   useEffect(() => {
     initialize()
@@ -15,9 +14,9 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (isInitialized && !isAuthenticated) {
-      router.push('/sign-in')
+      authService.signInWithRedirect()
     }
-  }, [isAuthenticated, isInitialized, router])
+  }, [isAuthenticated, isInitialized])
 
   if (!isInitialized) {
     return (
