@@ -9,6 +9,8 @@ import { CashflowTab } from "./tabs/cashflow-tab"
 import { RulesTab } from "./tabs/rules-tab"
 import { ReviewTab } from "./tabs/review-tab"
 import { useBudgetStore } from "@/stores/budget-tracker/use-budget-store"
+import { useAuthStore } from "@/stores/auth/use-auth-store"
+import { getConfig } from "@/lib/config"
 
 // ============================================================================
 // TAB RENDERER
@@ -46,13 +48,41 @@ export function BudgetTrackerApp({
   onSignOut?: () => void
   onGoToLaunchpad?: () => void
 }) {
+  const initAuth = useAuthStore((s) => s.initialize)
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
+  const authLoading = useAuthStore((s) => s.isLoading)
+
   const initialize = useBudgetStore((s) => s.initialize)
   const isInitialized = useBudgetStore((s) => s.isInitialized)
   const error = useBudgetStore((s) => s.error)
 
   useEffect(() => {
-    initialize()
-  }, [initialize])
+    initAuth()
+  }, [initAuth])
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      initialize()
+    }
+  }, [isAuthenticated, initialize])
+
+  // Redirect to sign-in when auth check completes and user is not authenticated
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      window.location.assign(getConfig().apps.signInUrl)
+    }
+  }, [authLoading, isAuthenticated])
+
+  if (authLoading || (!isAuthenticated && !authLoading)) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="flex items-center gap-3 text-muted-foreground">
+          <div className="size-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          <span className="text-sm">Loading...</span>
+        </div>
+      </div>
+    )
+  }
 
   if (error) {
     return (
