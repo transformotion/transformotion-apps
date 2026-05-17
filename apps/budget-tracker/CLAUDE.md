@@ -151,7 +151,7 @@ Key invariants to preserve in tests:
 2. `buildBudgetVsActual()` numMonths matches the transaction date range
 3. `isExcludedFromCashflow()` always excludes Transfer, `_business`, and `type='capital'` categories
 4. `buildMonthlyTrend()` net = income − expenses (exact equality)
-5. Migration endpoint strips legacy integer `_id` from v0 export before writing to DynamoDB; Transfer subcategory transactions get `_ignore: true`
+5. Migration endpoint strips legacy integer `_id` from v0 export before writing to DynamoDB; Transfer subcategory transactions are routed to the Transfer subcategory (identified by `excludeFromCashflow: true`)
 6. `getSubcategoryMonthlyBudget()` returns 0 for soft-deleted subcategories (`sub.deleted === true`)
 
 ## AI service

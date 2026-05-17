@@ -5,7 +5,7 @@ import { useBudgetStore } from "@/stores/budget-tracker/use-budget-store"
 import { PageHeader, Card, EmptyState, PillSelector } from "@/components/ui/design-system"
 import { BarChart3 } from "lucide-react"
 import { CATEGORY_COLORS } from "../data/category-colors"
-import { getActiveCategories, getCategoryName, getSubcategoryName, isCapital, isTransfer } from "@/lib/categories"
+import { getActiveCategories, getCategoryName, getSubcategoryName, isCapital, excludeFromCashflow } from "@/lib/categories"
 import { cn } from "@/lib/utils"
 import {
   LineChart,
@@ -89,8 +89,7 @@ export function CashflowTab() {
     }> = {}
 
     for (const tx of transactions) {
-      const txIsTransfer = isTransfer(categories, tx.subcategoryId ?? null) || tx.subcategory === 'Transfer'
-      if (tx._business || txIsTransfer || tx._ignore) continue
+      if (tx._business || excludeFromCashflow(categories, tx.subcategoryId ?? null)) continue
 
       const monthKey = getMonthKey(tx.date)
       if (!byMonth[monthKey]) {
@@ -217,8 +216,7 @@ export function CashflowTab() {
     const expensesBySubcategory: Record<string, { amount: number; category: string }> = {}
 
     for (const tx of transactions) {
-      const txIsTransfer = isTransfer(categories, tx.subcategoryId ?? null) || tx.subcategory === 'Transfer'
-      if (tx._business || txIsTransfer || tx._ignore) continue
+      if (tx._business || excludeFromCashflow(categories, tx.subcategoryId ?? null)) continue
 
       const monthKey = getMonthKey(tx.date)
       if (!filteredMonths.includes(monthKey)) continue

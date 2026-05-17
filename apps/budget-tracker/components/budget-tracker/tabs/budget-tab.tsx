@@ -3,17 +3,18 @@
 import { useState, useMemo } from "react"
 import { useBudgetStore } from "@/stores/budget-tracker/use-budget-store"
 import { PageHeader, Card, PrimaryButton, SecondaryButton } from "@/components/ui/design-system"
-import { ChevronDown, Plus, Pencil, Trash2, RotateCcw, X, Check, Undo2 } from "lucide-react"
+import { ChevronDown, Plus, Pencil, Trash2, RotateCcw, X, Check, Undo2, Eye, EyeOff } from "lucide-react"
 import {
   getActiveCategories,
   getActiveSubcategories,
   getCategoriesByType,
+  excludeFromCashflow,
   FREQUENCY_LABELS,
   toMonthlyAmount,
-  isTransfer,
   type BudgetFrequency,
 } from "@/lib/categories"
 import { CATEGORY_COLORS } from "../data/category-colors"
+import { ExcludedBadge } from "../badges/excluded-badge"
 import type { Category, Subcategory } from "@transformotion/budget-domain"
 import { cn } from "@/lib/utils"
 
@@ -44,6 +45,7 @@ export function BudgetTab() {
   const [editBudget, setEditBudget] = useState("")
   const [editFrequency, setEditFrequency] = useState<BudgetFrequency>("monthly")
   const [editName, setEditName] = useState("")
+  const [editExclude, setEditExclude] = useState(false)
   const [addingToCategoryId, setAddingToCategoryId] = useState<string | null>(null)
   const [newSubcategoryName, setNewSubcategoryName] = useState("")
   const [showUpdateFeedback, setShowUpdateFeedback] = useState<string | null>(null)
@@ -71,7 +73,7 @@ export function BudgetTab() {
     const months = new Set<string>()
 
     for (const tx of transactions) {
-      if (tx._business || tx._ignore) continue
+      if (tx._business) continue
 
       let resolvedId: string | null = tx.subcategoryId ?? null
       if (!resolvedId && tx.subcategory) {
@@ -80,8 +82,8 @@ export function BudgetTab() {
           if (found) { resolvedId = found.subcategoryId; break }
         }
       }
-      if (!resolvedId || tx.subcategory === "Transfer") continue
-      if (isTransfer(categories, resolvedId)) continue
+      if (!resolvedId) continue
+      if (excludeFromCashflow(categories, resolvedId)) continue
 
       const monthKey = getMonthKey(tx.date)
       months.add(monthKey)
@@ -147,6 +149,7 @@ export function BudgetTab() {
     setEditName(sub.name)
     setEditBudget(getBudgetAmount(sub.subcategoryId).toString())
     setEditFrequency(getBudgetFrequency(sub.subcategoryId))
+    setEditExclude(sub.excludeFromCashflow ?? false)
   }
 
   function saveEdit(categoryId: string) {
@@ -158,7 +161,7 @@ export function BudgetTab() {
         ...cat,
         subcategories: cat.subcategories.map(sub =>
           sub.subcategoryId === editingSubcategoryId
-            ? { ...sub, name: editName.trim() || sub.name }
+            ? { ...sub, name: editName.trim() || sub.name, excludeFromCashflow: editExclude || undefined }
             : sub
         ),
       }
@@ -169,6 +172,21 @@ export function BudgetTab() {
       budgetFrequencies: { ...budgetData.budgetFrequencies, [editingSubcategoryId]: editFrequency },
     })
     setEditingSubcategoryId(null)
+  }
+
+  function toggleSubcategoryExclude(sub: Subcategory, categoryId: string) {
+    const updatedCategories = categories.map(cat => {
+      if (cat.categoryId !== categoryId) return cat
+      return {
+        ...cat,
+        subcategories: cat.subcategories.map(s =>
+          s.subcategoryId === sub.subcategoryId
+            ? { ...s, excludeFromCashflow: !s.excludeFromCashflow || undefined }
+            : s
+        ),
+      }
+    })
+    updateBudgetData({ categories: updatedCategories })
   }
 
   function getParentCategoryId(subcategoryId: string): string | null {
@@ -449,26 +467,49 @@ export function BudgetTab() {
                           </select>
                         </div>
                       </div>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={editExclude}
+                          onChange={(e) => setEditExclude(e.target.checked)}
+                          className="rounded border-border"
+                        />
+                        <span className="text-xs text-muted-foreground">Exclude from Summary &amp; Cashflow</span>
+                      </label>
                     </div>
                   )
                 }
 
                 return (
                   <div key={sub.subcategoryId} className="flex items-center justify-between py-1.5 group">
-                    <span className="text-sm text-muted-foreground">{sub.name}</span>
-                    <div className="flex items-center gap-2">
-                      {actual > 0 && (
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className={cn("text-sm truncate", sub.excludeFromCashflow ? "text-muted-foreground/50 italic" : "text-muted-foreground")}>
+                        {sub.name}
+                      </span>
+                      {sub.excludeFromCashflow && <ExcludedBadge />}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {actual > 0 && !sub.excludeFromCashflow && (
                         <span className={cn("text-xs", isOver ? "text-signal-red" : "text-muted-foreground")}>
                           {formatCurrency(actual)} actual
                         </span>
                       )}
-                      <span className="text-sm text-foreground">{formatCurrency(budget)}</span>
+                      <span className={cn("text-sm", sub.excludeFromCashflow ? "text-muted-foreground/50" : "text-foreground")}>
+                        {formatCurrency(budget)}
+                      </span>
                       {freq !== "monthly" && (
                         <span className="text-[10px] text-muted-foreground">
                           /{FREQUENCY_LABELS[freq].toLowerCase().slice(0, 2)}
                         </span>
                       )}
                       <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={() => toggleSubcategoryExclude(sub, category.categoryId)}
+                          className="size-6 rounded flex items-center justify-center text-muted-foreground hover:text-amber-500"
+                          title={sub.excludeFromCashflow ? "Include in cashflow" : "Exclude from cashflow"}
+                        >
+                          {sub.excludeFromCashflow ? <Eye className="size-3" /> : <EyeOff className="size-3" />}
+                        </button>
                         <button
                           onClick={() => startEdit(sub)}
                           className="size-6 rounded flex items-center justify-center text-muted-foreground hover:text-foreground"

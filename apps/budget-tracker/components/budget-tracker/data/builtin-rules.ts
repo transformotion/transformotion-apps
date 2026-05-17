@@ -7,7 +7,7 @@ function escapeRegex(s: string): string {
 export function applyRules(
   description: string,
   rules: MatchingRule[],
-): { categoryId: string; subcategoryId: string; ruleId: string; isIgnore?: boolean; isBusiness: boolean } | null {
+): { categoryId: string; subcategoryId: string; ruleId: string; isBusiness: boolean } | null {
   const sorted = [...rules].sort((a, b) => a.priority - b.priority)
   for (const rule of sorted) {
     if (!rule.enabled) continue
@@ -25,7 +25,6 @@ export function applyRules(
           categoryId: rule.categoryId,
           subcategoryId: rule.subcategoryId,
           ruleId: rule.ruleId,
-          isIgnore: rule.isIgnore,
           isBusiness: rule.isBusiness,
         }
       }

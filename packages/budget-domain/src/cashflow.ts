@@ -55,11 +55,11 @@ function getActiveSubs(cat: Category) {
 }
 
 function isExcludedTx(tx: Transaction, categories: Category[]): boolean {
-  if (tx._business || tx._ignore) return true;
+  if (tx._business) return true;
   if (tx.subcategoryId) {
     const sub = categories.flatMap(c => c.subcategories).find(s => s.subcategoryId === tx.subcategoryId);
-    if (sub?.name === "Transfer") return true;
-  } else if (tx.subcategory === "Transfer") return true;
+    if (sub?.excludeFromCashflow) return true;
+  }
   const cat = categories.find(c => c.categoryId === tx.categoryId);
   if (cat?.type === "capital") return true;
   return false;
