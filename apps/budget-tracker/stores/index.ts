@@ -20,5 +20,3 @@ export {
   selectActiveTab,
 } from './budget-tracker/use-budget-store'
 
-// Stock Signal store (to be created)
-// export { useSignalStore } from './stock-signal/use-signal-store'
