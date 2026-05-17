@@ -1,252 +1,196 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
 import {
   getTransactionRepository,
-  getCustomRulesRepository,
+  getMatchingRulesRepositoryInstance,
+  getBudgetDataRepository,
   getSettingsRepository,
+  getFilters,
+  saveFilters,
+  clearFilters,
   type Transaction,
-  type CustomRule,
+  type MatchingRule,
+  type BudgetData,
   type BudgetSettings,
   type TransactionFilters,
 } from '@/lib/repositories/budget-tracker'
-import { DEFAULT_BUILTIN_RULES, type BuiltinRule } from '@/components/budget-tracker/data/builtin-rules'
 
 export type BudgetTabId = 'transactions' | 'summary' | 'budget' | 'cashflow' | 'rules' | 'review'
 
 interface BudgetState {
-  // Navigation
   activeTab: BudgetTabId
 
-  // Data
   transactions: Transaction[]
-  customRules: CustomRule[]
-  builtinRules: BuiltinRule[]
+  matchingRules: MatchingRule[]
+  budgetData: BudgetData
   settings: BudgetSettings
   filters: TransactionFilters
 
-  // Derived
   uncategorizedCount: number
-
-  // Loading states
   isLoading: boolean
   isInitialized: boolean
   error: string | null
 
-  // Navigation actions
   setActiveTab: (tab: BudgetTabId) => void
 
-  // Transaction actions
   loadTransactions: () => Promise<void>
   addTransactions: (transactions: Transaction[]) => Promise<void>
   updateTransaction: (id: string, updates: Partial<Transaction>) => Promise<void>
   deleteTransaction: (id: string) => Promise<void>
   setTransactions: (transactions: Transaction[]) => void
 
-  // Rules actions
-  loadRules: () => Promise<void>
-  addCustomRule: (rule: CustomRule) => Promise<void>
-  updateCustomRule: (id: string, updates: Partial<CustomRule>) => Promise<void>
-  deleteCustomRule: (id: string) => Promise<void>
-  setCustomRules: (rules: CustomRule[]) => void
-  updateBuiltinRule: (id: string, updates: Partial<BuiltinRule>) => Promise<void>
-  setBuiltinRules: (rules: BuiltinRule[]) => void
+  loadMatchingRules: () => Promise<void>
+  addMatchingRule: (rule: MatchingRule) => Promise<void>
+  updateMatchingRule: (id: string, updates: Partial<MatchingRule>) => Promise<void>
+  deleteMatchingRule: (id: string) => Promise<void>
+  setMatchingRules: (rules: MatchingRule[]) => void
 
-  // Settings actions
+  loadBudgetData: () => Promise<void>
+  updateBudgetData: (partial: Partial<BudgetData>) => Promise<void>
+
   loadSettings: () => Promise<void>
   updateSettings: (updates: Partial<BudgetSettings>) => Promise<void>
 
-  // Filter actions
   setFilters: (filtersOrUpdater: TransactionFilters | ((prev: TransactionFilters) => TransactionFilters)) => void
   resetFilters: () => void
 
-  // Initialization
   initialize: () => Promise<void>
 }
 
-const DEFAULT_FILTERS: TransactionFilters = {
-  dateRange: null,
-  category: null,
-  subcategory: null,
-  bankAccount: null,
-  source: null,
-  businessFilter: 'all',
-  uncategorizedOnly: false,
+const DEFAULT_BUDGET_DATA: BudgetData = {
+  categories: [],
+  budgetAmounts: {},
+  budgetFrequencies: {},
 }
 
 const DEFAULT_SETTINGS: BudgetSettings = {
-  budgetOverrides: {},
-  budgetFreqs: {},
-  customCategories: {},
-  projectBudgets: {},
-  deletedCategories: [],
-  customTopCategories: [],
-  projectTasks: {},
-  customProjectCategories: [],
-  deletedProjectCategories: [],
-  disabledProjectCategories: [],
+  csvFormatMappings: {},
 }
 
-export const useBudgetStore = create<BudgetState>()(
-  persist(
-    (set, get) => ({
-      // Initial state
-      activeTab: 'transactions',
-      transactions: [],
-      customRules: [],
-      builtinRules: [],
-      settings: DEFAULT_SETTINGS,
-      filters: DEFAULT_FILTERS,
-      uncategorizedCount: 0,
-      isLoading: false,
-      isInitialized: false,
-      error: null,
+export const useBudgetStore = create<BudgetState>()((set, get) => ({
+  activeTab: 'transactions',
+  transactions: [],
+  matchingRules: [],
+  budgetData: DEFAULT_BUDGET_DATA,
+  settings: DEFAULT_SETTINGS,
+  filters: getFilters(),
+  uncategorizedCount: 0,
+  isLoading: false,
+  isInitialized: false,
+  error: null,
 
-      // Navigation
-      setActiveTab: (tab) => set({ activeTab: tab }),
+  setActiveTab: (tab) => set({ activeTab: tab }),
 
-      // Transactions
-      loadTransactions: async () => {
-        const repo = getTransactionRepository()
-        const transactions = await repo.findAll('')
-        const uncategorizedCount = transactions.filter(t => !t.category).length
-        set({ transactions, uncategorizedCount })
-      },
+  loadTransactions: async () => {
+    const transactions = await getTransactionRepository().findAll('')
+    set({ transactions, uncategorizedCount: transactions.filter(t => !t.categoryId && !t.category).length })
+  },
 
-      addTransactions: async (newTransactions) => {
-        const repo = getTransactionRepository()
-        await repo.upsertBulk(newTransactions)
-        const transactions = await repo.findAll('')
-        const uncategorizedCount = transactions.filter(t => !t.category).length
-        set({ transactions, uncategorizedCount })
-      },
+  addTransactions: async (newTransactions) => {
+    await getTransactionRepository().upsertBulk(newTransactions)
+    const transactions = await getTransactionRepository().findAll('')
+    set({ transactions, uncategorizedCount: transactions.filter(t => !t.categoryId && !t.category).length })
+  },
 
-      updateTransaction: async (id, updates) => {
-        const repo = getTransactionRepository()
-        await repo.update(id, '', updates)
-        const transactions = await repo.findAll('')
-        const uncategorizedCount = transactions.filter(t => !t.category).length
-        set({ transactions, uncategorizedCount })
-      },
+  updateTransaction: async (id, updates) => {
+    await getTransactionRepository().update(id, '', updates)
+    const transactions = await getTransactionRepository().findAll('')
+    set({ transactions, uncategorizedCount: transactions.filter(t => !t.categoryId && !t.category).length })
+  },
 
-      deleteTransaction: async (id) => {
-        const repo = getTransactionRepository()
-        await repo.delete(id, '')
-        const transactions = await repo.findAll('')
-        const uncategorizedCount = transactions.filter(t => !t.category).length
-        set({ transactions, uncategorizedCount })
-      },
+  deleteTransaction: async (id) => {
+    await getTransactionRepository().delete(id, '')
+    const transactions = await getTransactionRepository().findAll('')
+    set({ transactions, uncategorizedCount: transactions.filter(t => !t.categoryId && !t.category).length })
+  },
 
-      setTransactions: (transactions) => {
-        const uncategorizedCount = transactions.filter(t => !t.category).length
-        set({ transactions, uncategorizedCount })
-        getTransactionRepository().upsertBulk(transactions)
-      },
+  setTransactions: (transactions) => {
+    set({ transactions, uncategorizedCount: transactions.filter(t => !t.categoryId && !t.category).length })
+    getTransactionRepository().upsertBulk(transactions)
+  },
 
-      // Rules
-      loadRules: async () => {
-        const customRules = await getCustomRulesRepository().findAll('')
-        set({ customRules, builtinRules: DEFAULT_BUILTIN_RULES })
-      },
+  loadMatchingRules: async () => {
+    const matchingRules = await getMatchingRulesRepositoryInstance().findAll('')
+    set({ matchingRules })
+  },
 
-      addCustomRule: async (rule) => {
-        await getCustomRulesRepository().save(rule)
-        const customRules = await getCustomRulesRepository().findAll('')
-        set({ customRules })
-      },
+  addMatchingRule: async (rule) => {
+    await getMatchingRulesRepositoryInstance().save(rule)
+    const matchingRules = await getMatchingRulesRepositoryInstance().findAll('')
+    set({ matchingRules })
+  },
 
-      updateCustomRule: async (id, updates) => {
-        const repo = getCustomRulesRepository()
-        const existing = await repo.findById('', id)
-        if (existing) {
-          await repo.save({ ...existing, ...updates })
-          const customRules = await repo.findAll('')
-          set({ customRules })
-        }
-      },
-
-      deleteCustomRule: async (id) => {
-        await getCustomRulesRepository().delete(id, '')
-        const customRules = await getCustomRulesRepository().findAll('')
-        set({ customRules })
-      },
-
-      setCustomRules: (customRules) => {
-        set({ customRules })
-        customRules.forEach(rule => getCustomRulesRepository().save(rule))
-      },
-
-      updateBuiltinRule: async (id, updates) => {
-        set((state) => ({
-          builtinRules: state.builtinRules.map(r => r.id === id ? { ...r, ...updates } : r),
-        }))
-      },
-
-      setBuiltinRules: (builtinRules) => {
-        set({ builtinRules })
-      },
-
-      // Settings
-      loadSettings: async () => {
-        const repo = getSettingsRepository()
-        const [settings, filters] = await Promise.all([
-          repo.getSettings(),
-          repo.getFilters(),
-        ])
-        set({ settings, filters })
-      },
-
-      updateSettings: async (updates) => {
-        const repo = getSettingsRepository()
-        const settings = await repo.updateSettings(updates)
-        set({ settings })
-      },
-
-      // Filters
-      setFilters: (filtersOrUpdater) => {
-        const filters = typeof filtersOrUpdater === 'function' ? filtersOrUpdater(get().filters) : filtersOrUpdater
-        set({ filters })
-        getSettingsRepository().updateFilters(filters)
-      },
-
-      resetFilters: () => {
-        set({ filters: DEFAULT_FILTERS })
-        getSettingsRepository().resetFilters()
-      },
-
-      // Initialize
-      initialize: async () => {
-        if (get().isInitialized) return
-
-        set({ isLoading: true, error: null })
-        try {
-          await Promise.all([
-            get().loadTransactions(),
-            get().loadRules(),
-            get().loadSettings(),
-          ])
-          set({ isInitialized: true, isLoading: false })
-        } catch (error) {
-          set({
-            isLoading: false,
-            error: error instanceof Error ? error.message : 'Failed to initialize',
-          })
-        }
-      },
-    }),
-    {
-      name: 'budget-store',
-      partialize: (state) => ({
-        activeTab: state.activeTab,
-        filters: state.filters,
-      }),
+  updateMatchingRule: async (id, updates) => {
+    const repo = getMatchingRulesRepositoryInstance()
+    const existing = await repo.findById('', id)
+    if (existing) {
+      await repo.save({ ...existing, ...updates })
+      const matchingRules = await repo.findAll('')
+      set({ matchingRules })
     }
-  )
-)
+  },
 
-// Selectors
+  deleteMatchingRule: async (id) => {
+    await getMatchingRulesRepositoryInstance().delete(id, '')
+    const matchingRules = await getMatchingRulesRepositoryInstance().findAll('')
+    set({ matchingRules })
+  },
+
+  setMatchingRules: (matchingRules) => {
+    set({ matchingRules })
+    matchingRules.forEach(rule => getMatchingRulesRepositoryInstance().save(rule))
+  },
+
+  loadBudgetData: async () => {
+    const budgetData = await getBudgetDataRepository().get('')
+    set({ budgetData })
+  },
+
+  updateBudgetData: async (partial) => {
+    const budgetData = await getBudgetDataRepository().patch('', partial)
+    set({ budgetData })
+  },
+
+  loadSettings: async () => {
+    const settings = await getSettingsRepository().get('')
+    set({ settings })
+  },
+
+  updateSettings: async (updates) => {
+    const settings = await getSettingsRepository().patch('', updates)
+    set({ settings })
+  },
+
+  setFilters: (filtersOrUpdater) => {
+    const filters = typeof filtersOrUpdater === 'function' ? filtersOrUpdater(get().filters) : filtersOrUpdater
+    set({ filters })
+    saveFilters(filters)
+  },
+
+  resetFilters: () => set({ filters: clearFilters() }),
+
+  initialize: async () => {
+    if (get().isInitialized) return
+    set({ isLoading: true, error: null })
+    try {
+      await Promise.all([
+        get().loadTransactions(),
+        get().loadMatchingRules(),
+        get().loadBudgetData(),
+        get().loadSettings(),
+      ])
+      set({ isInitialized: true, isLoading: false })
+    } catch (error) {
+      set({
+        isLoading: false,
+        error: error instanceof Error ? error.message : 'Failed to initialize',
+      })
+    }
+  },
+}))
+
 export const selectTransactions = (state: BudgetState) => state.transactions
-export const selectCustomRules = (state: BudgetState) => state.customRules
-export const selectBuiltinRules = (state: BudgetState) => state.builtinRules
+export const selectMatchingRules = (state: BudgetState) => state.matchingRules
+export const selectBudgetData = (state: BudgetState) => state.budgetData
 export const selectSettings = (state: BudgetState) => state.settings
 export const selectFilters = (state: BudgetState) => state.filters
 export const selectUncategorizedCount = (state: BudgetState) => state.uncategorizedCount

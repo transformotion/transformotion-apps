@@ -1,69 +1,87 @@
 import { describe, it, expect } from "vitest";
-import { applyRules, BUILTIN_RULES } from "../rules.js";
-import type { CustomRule } from "../contracts.js";
+import { applyRules } from "../rules.js";
+import type { MatchingRule } from "../contracts.js";
+
+function makeRule(overrides: Partial<MatchingRule> & { match: string; categoryId: string; subcategoryId: string }): MatchingRule {
+  return {
+    ruleId: crypto.randomUUID(),
+    accountId: "acc1",
+    name: overrides.match,
+    matchType: "contains",
+    enabled: true,
+    priority: 100,
+    isBusiness: false,
+    learned: false,
+    createdAt: new Date().toISOString(),
+    ...overrides,
+  };
+}
+
+const groceryCatId = "cat-groceries";
+const supermarketSubId = "sub-supermarket";
+const entertainmentCatId = "cat-entertainment";
+const moviesSubId = "sub-movies";
+const customCatId = "cat-custom";
+const customSubId = "sub-custom";
+
+const sampleRules: MatchingRule[] = [
+  makeRule({ match: "woolworths", categoryId: groceryCatId, subcategoryId: supermarketSubId }),
+  makeRule({ match: "coles", categoryId: groceryCatId, subcategoryId: supermarketSubId }),
+  makeRule({ match: "netflix", categoryId: entertainmentCatId, subcategoryId: moviesSubId }),
+];
 
 describe("applyRules", () => {
-  it("matches woolworths to Groceries/Supermarket", () => {
-    const result = applyRules("WOOLWORTHS MAROOCHYDORE", BUILTIN_RULES);
-    expect(result).toEqual({ category: "Groceries", subcategory: "Supermarket" });
+  it("matches woolworths to Groceries/Supermarket IDs", () => {
+    const result = applyRules("WOOLWORTHS MAROOCHYDORE", sampleRules);
+    expect(result).toMatchObject({ categoryId: groceryCatId, subcategoryId: supermarketSubId });
   });
 
-  it("matches COLES to Groceries/Supermarket", () => {
-    const result = applyRules("COLES ONLINE", BUILTIN_RULES);
-    expect(result).toEqual({ category: "Groceries", subcategory: "Supermarket" });
+  it("matches COLES to Groceries/Supermarket IDs", () => {
+    const result = applyRules("COLES ONLINE", sampleRules);
+    expect(result).toMatchObject({ categoryId: groceryCatId, subcategoryId: supermarketSubId });
   });
 
-  it("matches Netflix to Eating-out/Movies", () => {
-    const result = applyRules("NETFLIX.COM", BUILTIN_RULES);
-    expect(result).toEqual({ category: "Eating-out & Entertainment", subcategory: "Movies, shows & music" });
+  it("matches Netflix to entertainment IDs", () => {
+    const result = applyRules("NETFLIX.COM", sampleRules);
+    expect(result).toMatchObject({ categoryId: entertainmentCatId, subcategoryId: moviesSubId });
   });
 
   it("returns null for unknown description", () => {
-    const result = applyRules("ZXQWERTY UNKNOWN MERCHANT", BUILTIN_RULES);
+    const result = applyRules("ZXQWERTY UNKNOWN MERCHANT", sampleRules);
     expect(result).toBeNull();
   });
 
-  it("custom rule overrides builtin when listed first", () => {
-    const customRule: CustomRule = {
-      ruleId: "1",
-      accountId: "acc1",
-      name: "Woolworths override",
+  it("higher priority rule wins (lower priority number = higher priority)", () => {
+    const overrideRule = makeRule({
       match: "woolworths",
-      matchType: "contains",
-      category: "Custom",
-      subcategory: "Override",
-      enabled: true,
-      priority: 100,
-      isBusiness: false,
-      learned: true,
-      createdAt: new Date().toISOString(),
-    };
-    // Custom rules passed first (most-recent order), then builtins
-    const result = applyRules("WOOLWORTHS KAWANA", [customRule, ...BUILTIN_RULES]);
-    expect(result).toEqual({ category: "Custom", subcategory: "Override" });
+      categoryId: customCatId,
+      subcategoryId: customSubId,
+      priority: 50,
+    });
+    const result = applyRules("WOOLWORTHS KAWANA", [overrideRule, ...sampleRules]);
+    expect(result).toMatchObject({ categoryId: customCatId, subcategoryId: customSubId });
   });
 
-  it("falls back to builtin when custom rule does not match", () => {
-    const customRule: CustomRule = {
-      ruleId: "1",
-      accountId: "acc1",
-      name: "Special store rule",
+  it("falls back to next rule when first does not match", () => {
+    const nonMatchRule = makeRule({
       match: "specialstore",
-      matchType: "contains",
-      category: "Custom",
-      subcategory: "Custom sub",
-      enabled: true,
-      priority: 100,
-      isBusiness: false,
-      learned: false,
-      createdAt: new Date().toISOString(),
-    };
-    const result = applyRules("WOOLWORTHS MOOLOOLABA", [customRule, ...BUILTIN_RULES]);
-    expect(result).toEqual({ category: "Groceries", subcategory: "Supermarket" });
+      categoryId: customCatId,
+      subcategoryId: customSubId,
+      priority: 50,
+    });
+    const result = applyRules("WOOLWORTHS MOOLOOLABA", [nonMatchRule, ...sampleRules]);
+    expect(result).toMatchObject({ categoryId: groceryCatId, subcategoryId: supermarketSubId });
   });
 
-  it("handles Hawkins rule -> Financial/Transfer", () => {
-    const result = applyRules("PAYMENT FROM Hawkins E A", BUILTIN_RULES);
-    expect(result).toEqual({ category: "Financial & Insurance", subcategory: "Transfer" });
+  it("skips disabled rules", () => {
+    const disabledRule = makeRule({
+      match: "woolworths",
+      categoryId: customCatId,
+      subcategoryId: customSubId,
+      enabled: false,
+      priority: 50,
+    });
+    const result = applyRules("WOOLWORTHS KAWANA", [disabledRule, ...sampleRules]);
+    expect(result).toMatchObject({ categoryId: groceryCatId, subcategoryId: supermarketSubId });
   });
 });

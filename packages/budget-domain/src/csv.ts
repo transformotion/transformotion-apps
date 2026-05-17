@@ -72,7 +72,7 @@ export function parseCSVWithMapping(
     }
 
     if (!date || !desc) return [];
-    return [{ date, amount: amount.toString(), description: desc, file: filename, category: "", subcategory: "" }];
+    return [{ date, amount: amount.toString(), description: desc, file: filename, categoryId: null, subcategoryId: null }];
   });
 }
 
@@ -148,6 +148,6 @@ export function parseCSV(text: string, filename: string): RawTransaction[] {
     }
 
     if (!date || !desc) return [];
-    return [{ date, amount: amount.toString(), description: desc, file: filename, category: "", subcategory: "" }];
+    return [{ date, amount: amount.toString(), description: desc, file: filename, categoryId: null, subcategoryId: null }];
   });
 }

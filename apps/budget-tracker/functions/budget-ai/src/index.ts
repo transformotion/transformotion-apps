@@ -2,7 +2,7 @@ import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
 import { withAuth, parseBody, ok, requireAppAccess, requireAccountAccess } from '@transformotion/lambda-middleware';
 import type { AuthClaims } from '@transformotion/lambda-middleware';
 import type {
-  CategoryTree,
+  Category,
   AiReviewResponse,
   AiCsvAnalysisResponse,
 } from '@transformotion/budget-domain';
@@ -60,9 +60,10 @@ async function invokeProxy(
   return JSON.parse(response.body) as Record<string, unknown>;
 }
 
-function formatCategoryList(categories: CategoryTree): string {
-  return Object.entries(categories)
-    .map(([cat, subs]) => `${cat}: ${subs.join(', ')}`)
+function formatCategoryList(categories: Category[]): string {
+  return categories
+    .filter(cat => !cat.deleted)
+    .map(cat => `${cat.name}: ${cat.subcategories.filter(sub => !sub.deleted).map(sub => sub.name).join(', ')}`)
     .join('\n');
 }
 
@@ -78,7 +79,7 @@ async function review(
 ) {
   const { transactions, categories } = parseBody<{
     transactions: Array<{ index: number; description: string; amount: string }>;
-    categories: CategoryTree;
+    categories: Category[];
   }>(event);
 
   const categoryList = formatCategoryList(categories);

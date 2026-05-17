@@ -7,21 +7,19 @@ import {
   Upload, Receipt, Filter, Download, Briefcase, X,
   RotateCcw, Check, BookOpen, Search, FileText
 } from "lucide-react"
-import { CATEGORY_LIST, getSubcategories } from "../data/categories"
 import { CATEGORY_COLORS } from "../data/category-colors"
 import { applyRules } from "../data/builtin-rules"
-import type { Transaction } from "../data/types"
+import { getActiveCategories, getActiveSubcategories, getCategoryName, getSubcategoryName, getDisplayLabel } from "@/lib/categories"
+import type { Transaction, Category } from "@transformotion/budget-domain"
+import type { MatchingRule, CSVMapping } from "@transformotion/budget-domain"
 import { cn } from "@/lib/utils"
 
-// Date grouping helper
 function getDateGroup(dateStr: string): string {
   const [day, month, year] = dateStr.split("/").map(Number)
   const date = new Date(year, month - 1, day)
   const today = new Date()
   today.setHours(0, 0, 0, 0)
-  
   const diffDays = Math.floor((today.getTime() - date.getTime()) / (1000 * 60 * 60 * 24))
-  
   if (diffDays === 0) return "Today"
   if (diffDays === 1) return "Yesterday"
   if (diffDays <= 7) return "This Week"
@@ -29,19 +27,16 @@ function getDateGroup(dateStr: string): string {
   return "Earlier"
 }
 
-// Format date for display
 function formatDate(dateStr: string): string {
   const [day, month, year] = dateStr.split("/").map(Number)
   const date = new Date(year, month - 1, day)
   return date.toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" })
 }
 
-// Parse amount to number
 function parseAmount(amount: string): number {
   return parseFloat(amount) || 0
 }
 
-// Group transactions by date
 function groupByDate(transactions: Transaction[]): Map<string, Transaction[]> {
   const groups = new Map<string, Transaction[]>()
   const sortedTransactions = [...transactions].sort((a, b) => {
@@ -49,36 +44,33 @@ function groupByDate(transactions: Transaction[]): Map<string, Transaction[]> {
     const [bDay, bMonth, bYear] = b.date.split("/").map(Number)
     const aDate = new Date(aYear, aMonth - 1, aDay)
     const bDate = new Date(bYear, bMonth - 1, bDay)
-    return bDate.getTime() - aDate.getTime() // Most recent first
+    return bDate.getTime() - aDate.getTime()
   })
-  
   for (const tx of sortedTransactions) {
     const group = getDateGroup(tx.date)
-    if (!groups.has(group)) {
-      groups.set(group, [])
-    }
+    if (!groups.has(group)) groups.set(group, [])
     groups.get(group)!.push(tx)
   }
-  
   return groups
 }
 
-// CSV Export using data: URI (CSP-safe)
-function exportToCSV(transactions: Transaction[], filename: string) {
+function exportToCSV(transactions: Transaction[], categories: Category[], filename: string) {
   const headers = ["Date", "Description", "Amount", "Category", "Subcategory", "Source", "Business"]
-  const rows = transactions.map(t => [
-    t.date,
-    `"${t.description.replace(/"/g, '""')}"`,
-    t.amount,
-    t.category || "",
-    t.subcategory || "",
-    t.file || "",
-    t._business ? "Yes" : "No"
-  ])
-  
+  const rows = transactions.map(t => {
+    const catName = getCategoryName(categories, t.categoryId ?? null) || t.category || ""
+    const subName = getSubcategoryName(categories, t.subcategoryId ?? null) || t.subcategory || ""
+    return [
+      t.date,
+      `"${t.description.replace(/"/g, '""')}"`,
+      t.amount,
+      catName,
+      subName,
+      t.file || "",
+      t._business ? "Yes" : "No",
+    ]
+  })
   const csv = [headers.join(","), ...rows.map(r => r.join(","))].join("\n")
   const dataUri = `data:text/csv;charset=utf-8,${encodeURIComponent(csv)}`
-  
   const link = document.createElement("a")
   link.href = dataUri
   link.download = filename
@@ -91,69 +83,64 @@ export function TransactionsTab() {
   const transactions = useBudgetStore((s) => s.transactions)
   const setTransactions = useBudgetStore((s) => s.setTransactions)
   const settings = useBudgetStore((s) => s.settings)
-  const customRules = useBudgetStore((s) => s.customRules)
-  const addCustomRule = useBudgetStore((s) => s.addCustomRule)
-  const builtinRules = useBudgetStore((s) => s.builtinRules)
+  const updateSettings = useBudgetStore((s) => s.updateSettings)
+  const matchingRules = useBudgetStore((s) => s.matchingRules)
+  const addMatchingRule = useBudgetStore((s) => s.addMatchingRule)
+  const budgetData = useBudgetStore((s) => s.budgetData)
   const uncategorizedCount = useBudgetStore((s) => s.uncategorizedCount)
   const filters = useBudgetStore((s) => s.filters)
   const setFilters = useBudgetStore((s) => s.setFilters)
-  const customRulesRef = useRef(customRules) // Fix stale closure
-  customRulesRef.current = customRules
 
-  // Category list with disabled projects filtered out
-  const disabledProjects = settings.disabledProjectCategories || []
-  const activeCategoryList = CATEGORY_LIST.filter(cat => !disabledProjects.includes(cat))
+  const categories = budgetData.categories
 
-  // Helper to get subcategories with disabled ones filtered out
-  const getActiveSubcategories = (category: string) => {
-    return getSubcategories(category).filter(sub => !disabledProjects.includes(sub))
-  }
-  
+  const matchingRulesRef = useRef(matchingRules)
+  matchingRulesRef.current = matchingRules
+
   const [showImport, setShowImport] = useState(false)
   const [showFilters, setShowFilters] = useState(false)
   const [showSource, setShowSource] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [editCategory, setEditCategory] = useState("")
-  const [editSubcategory, setEditSubcategory] = useState("")
+  const [editCategoryId, setEditCategoryId] = useState("")
+  const [editSubcategoryId, setEditSubcategoryId] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
-  
-  // Multi-select for bulk operations
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  const [bulkCategory, setBulkCategory] = useState("")
-  const [bulkSubcategory, setBulkSubcategory] = useState("")
-  const [showBulkEdit, setShowBulkEdit] = useState(false)
-  
-  // Use filters from context (persisted across tab navigation)
 
-  // Get unique sources for filter dropdown
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkCategoryId, setBulkCategoryId] = useState("")
+  const [bulkSubcategoryId, setBulkSubcategoryId] = useState("")
+  const [showBulkEdit, setShowBulkEdit] = useState(false)
+
   const uniqueSources = useMemo(() => {
     const sources = new Set<string>()
     transactions.forEach(t => { if (t.file) sources.add(t.file) })
     return Array.from(sources).sort()
   }, [transactions])
 
-  // Get unique categories from actual transactions (not master list)
   const usedCategories = useMemo(() => {
     const cats = new Set<string>()
-    transactions.forEach(t => { if (t.category) cats.add(t.category) })
+    transactions.forEach(t => {
+      const name = getCategoryName(categories, t.categoryId ?? null) || t.category
+      if (name) cats.add(name)
+    })
     return Array.from(cats).sort()
-  }, [transactions])
+  }, [transactions, categories])
 
-  // Get unique subcategories for selected category
   const usedSubcategories = useMemo(() => {
-    if (!filters.category) return []
+    if (!filters.categoryId) return []
     const subs = new Set<string>()
     transactions.forEach(t => {
-      if (t.category === filters.category && t.subcategory) subs.add(t.subcategory)
+      const txCatName = getCategoryName(categories, t.categoryId ?? null) || t.category || ''
+      if (txCatName === filters.categoryId) {
+        const subName = getSubcategoryName(categories, t.subcategoryId ?? null) || t.subcategory
+        if (subName) subs.add(subName)
+      }
     })
     return Array.from(subs).sort()
-  }, [transactions, filters.category])
+  }, [transactions, filters.categoryId, categories])
 
-  // Count active filters for badge
   const activeFilterCount = useMemo(() => {
     let count = 0
-    if (filters.category) count++
-    if (filters.subcategory) count++
+    if (filters.categoryId) count++
+    if (filters.subcategoryId) count++
     if (filters.source) count++
     if (filters.dateRange) count++
     if (filters.uncategorizedOnly) count++
@@ -161,152 +148,127 @@ export function TransactionsTab() {
     return count
   }, [filters])
 
-  // Filter transactions
   const filteredTransactions = useMemo(() => {
     return transactions.filter(t => {
-      // Business filter
       if (filters.businessFilter === "personal" && t._business) return false
       if (filters.businessFilter === "business" && !t._business) return false
-      
-      // Category filter
-      if (filters.category && t.category !== filters.category) return false
 
-      // Subcategory filter
-      if (filters.subcategory && t.subcategory !== filters.subcategory) return false
-      
-      // Source filter
+      if (filters.categoryId) {
+        const txCatName = getCategoryName(categories, t.categoryId ?? null) || t.category || ''
+        if (txCatName !== filters.categoryId) return false
+      }
+      if (filters.subcategoryId) {
+        const txSubName = getSubcategoryName(categories, t.subcategoryId ?? null) || t.subcategory || ''
+        if (txSubName !== filters.subcategoryId) return false
+      }
+
       if (filters.source && t.file !== filters.source) return false
-      
-      // Uncategorized only
-      if (filters.uncategorizedOnly && t.category) return false
+      if (filters.uncategorizedOnly && (t.categoryId || t.category)) return false
 
-      // Date range filter
       if (filters.dateRange) {
         const txDate = new Date(t.date)
         if (txDate < filters.dateRange.start || txDate > filters.dateRange.end) return false
       }
-      
-      // Search query
+
       if (searchQuery) {
         const query = searchQuery.toLowerCase()
+        const catName = getCategoryName(categories, t.categoryId ?? null) || t.category || ''
+        const subName = getSubcategoryName(categories, t.subcategoryId ?? null) || t.subcategory || ''
         return t.description.toLowerCase().includes(query) ||
-               (t.category?.toLowerCase().includes(query)) ||
-               (t.subcategory?.toLowerCase().includes(query))
+               catName.toLowerCase().includes(query) ||
+               subName.toLowerCase().includes(query)
       }
-      
+
       return true
     })
-  }, [transactions, filters, searchQuery])
+  }, [transactions, filters, searchQuery, categories])
 
-  // Group filtered transactions
   const groupedTransactions = useMemo(() => groupByDate(filteredTransactions), [filteredTransactions])
-  
+
   const hasTransactions = transactions.length > 0
   const businessCount = transactions.filter(t => t._business).length
 
-  // Toggle business flag
+  const bulkCat = getActiveCategories(categories).find(c => c.categoryId === bulkCategoryId)
+
   const toggleBusiness = (id: string) => {
-    const updatedTransactions = transactions.map(t => 
+    setTransactions(transactions.map(t =>
       t.transactionId === id ? { ...t, _business: !t._business } : t
-    )
-    setTransactions(updatedTransactions)
+    ))
   }
 
-  // Reset single transaction (re-apply rules)
   const resetTransaction = (id: string) => {
-    const updatedTransactions = transactions.map(t => {
+    setTransactions(transactions.map(t => {
       if (t.transactionId !== id) return t
-      
-      // Re-apply rules using unified applyRules function
-      const result = applyRules(t.description, builtinRules, customRulesRef.current)
+      const result = applyRules(t.description, matchingRulesRef.current)
       if (result) {
-        return { ...t, category: result.category, subcategory: result.subcategory, _manual: false }
+        return { ...t, categoryId: result.categoryId, subcategoryId: result.subcategoryId, _manual: false }
       }
-      
       return { ...t, _manual: false }
-    })
-    setTransactions(updatedTransactions)
+    }))
   }
 
-  // Start editing a transaction
   const startEdit = (tx: Transaction) => {
     setEditingId(tx.transactionId)
-    setEditCategory(tx.category || "")
-    setEditSubcategory(tx.subcategory || "")
+    setEditCategoryId(tx.categoryId ?? "")
+    setEditSubcategoryId(tx.subcategoryId ?? "")
   }
 
-  // Save edit (Done button)
   const saveEdit = () => {
     if (editingId === null) return
-    
-    // setTransactions expects an array, not a callback
-    const updatedTransactions = transactions.map(t =>
-      t.transactionId === editingId 
-        ? { ...t, category: editCategory, subcategory: editSubcategory, _manual: true }
+    setTransactions(transactions.map(t =>
+      t.transactionId === editingId
+        ? { ...t, categoryId: editCategoryId || null, subcategoryId: editSubcategoryId || null, _manual: true }
         : t
-    )
-    setTransactions(updatedTransactions)
+    ))
     setEditingId(null)
   }
 
-  // Save and create rule (Learn button)
-  const saveAndLearn = () => {
+  const saveAndLearn = async () => {
     if (editingId === null) return
     const tx = transactions.find(t => t.transactionId === editingId)
     if (!tx) return
-    
-    // Create a rule from first 3 words
+
     const words = tx.description.split(/\s+/).slice(0, 3).join(" ")
-    const newRule = {
-      ruleId: `custom-${Date.now()}`,
+    const newMatchingRule: MatchingRule = {
+      ruleId: crypto.randomUUID(),
       accountId: "",
       name: words,
       match: words,
-      matchType: "contains" as const,
-      category: editCategory,
-      subcategory: editSubcategory,
+      matchType: 'contains',
+      categoryId: editCategoryId,
+      subcategoryId: editSubcategoryId,
       isBusiness: false,
       enabled: true,
-      priority: 100,
+      priority: Date.now(),
       learned: true,
       createdAt: new Date().toISOString(),
     }
-    addCustomRule(newRule)
-    
-    // Re-apply ALL rules to ALL uncategorized transactions (and the edited one)
-    // Include the new rule in the set
-    const allCustomRules = [...customRules, newRule]
-    const updatedTransactions = transactions.map(t => {
-      // Always update the current transaction being edited
+    await addMatchingRule(newMatchingRule)
+
+    const allRules = [...matchingRules, newMatchingRule]
+    setTransactions(transactions.map(t => {
       if (t.transactionId === editingId) {
-        return { ...t, category: editCategory, subcategory: editSubcategory, _manual: true }
+        return { ...t, categoryId: editCategoryId || null, subcategoryId: editSubcategoryId || null, _manual: true }
       }
-      // Re-apply rules to uncategorized transactions
-      if (!t.category || !t._manual) {
-        const result = applyRules(t.description, builtinRules, allCustomRules)
+      if ((!t.categoryId && !t.category) || !t._manual) {
+        const result = applyRules(t.description, allRules)
         if (result) {
-          return { ...t, category: result.category, subcategory: result.subcategory, _business: result.isBusiness ?? false, _manual: false }
+          return { ...t, categoryId: result.categoryId, subcategoryId: result.subcategoryId, _business: result.isBusiness ?? false, _manual: false }
         }
       }
       return t
-    })
-    setTransactions(updatedTransactions)
-
+    }))
     setEditingId(null)
   }
 
-  // Export business transactions
   const exportBusiness = () => {
-    const businessTx = transactions.filter(t => t._business)
-    exportToCSV(businessTx, `business-expenses-${new Date().toISOString().split("T")[0]}.csv`)
+    exportToCSV(transactions.filter(t => t._business), categories, `business-expenses-${new Date().toISOString().split("T")[0]}.csv`)
   }
 
-  // Export all filtered transactions
   const exportFiltered = () => {
-    exportToCSV(filteredTransactions, `transactions-${new Date().toISOString().split("T")[0]}.csv`)
+    exportToCSV(filteredTransactions, categories, `transactions-${new Date().toISOString().split("T")[0]}.csv`)
   }
 
-  // Multi-select helpers
   const toggleSelect = (id: string) => {
     setSelectedIds(prev => {
       const next = new Set(prev)
@@ -316,50 +278,45 @@ export function TransactionsTab() {
     })
   }
 
-  const selectAll = () => {
-    setSelectedIds(new Set(filteredTransactions.map(t => t.transactionId)))
-  }
+  const selectAll = () => setSelectedIds(new Set(filteredTransactions.map(t => t.transactionId)))
 
   const clearSelection = () => {
     setSelectedIds(new Set())
     setShowBulkEdit(false)
-    setBulkCategory("")
-    setBulkSubcategory("")
+    setBulkCategoryId("")
+    setBulkSubcategoryId("")
   }
 
-  // Apply bulk category to selected transactions
   const applyBulkCategory = () => {
-    if (!bulkCategory || selectedIds.size === 0) return
-    const updatedTransactions = transactions.map(t =>
+    if (!bulkCategoryId || selectedIds.size === 0) return
+    setTransactions(transactions.map(t =>
       selectedIds.has(t.transactionId)
-        ? { ...t, category: bulkCategory, subcategory: bulkSubcategory || '', _manual: true }
+        ? { ...t, categoryId: bulkCategoryId, subcategoryId: bulkSubcategoryId || null, _manual: true }
         : t
-    )
-    setTransactions(updatedTransactions)
+    ))
     clearSelection()
   }
 
-  // Re-apply rules to selected transactions
   const reapplyRulesToSelected = () => {
     if (selectedIds.size === 0) return
-    const updatedTransactions = transactions.map(t => {
+    setTransactions(transactions.map(t => {
       if (!selectedIds.has(t.transactionId)) return t
-      const result = applyRules(t.description, builtinRules, customRules)
+      const result = applyRules(t.description, matchingRules)
       if (result) {
-        return { ...t, category: result.category, subcategory: result.subcategory, _business: result.isBusiness ?? false, _manual: false }
+        return { ...t, categoryId: result.categoryId, subcategoryId: result.subcategoryId, _business: result.isBusiness ?? false, _manual: false }
       }
-      return { ...t, category: '', subcategory: '', _business: false, _manual: false }
-    })
-    setTransactions(updatedTransactions)
+      return { ...t, categoryId: null, subcategoryId: null, _business: false, _manual: false }
+    }))
     clearSelection()
   }
+
+  const clearFilters = () => setFilters({ dateRange: null, categoryId: null, subcategoryId: null, bankAccount: null, source: null, businessFilter: "all", uncategorizedOnly: false })
 
   return (
     <div className="p-4 space-y-4">
-      {/* Header */}
       <PageHeader
         title="Transactions"
-        subtitle={hasTransactions 
+        subtitle={hasTransactions
           ? `${transactions.length} transactions${uncategorizedCount > 0 ? ` • ${uncategorizedCount} uncategorised` : ""}`
           : "Import and manage your transactions"
         }
@@ -369,7 +326,6 @@ export function TransactionsTab() {
       <div className="flex items-center gap-2">
         {hasTransactions ? (
           <>
-            {/* Compact import button when transactions exist */}
             <button
               onClick={() => setShowImport(true)}
               className="size-11 rounded-xl bg-card border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-primary/50 transition-colors"
@@ -378,7 +334,6 @@ export function TransactionsTab() {
               <Upload className="size-5" />
             </button>
             <div className="flex-1" />
-            {/* Uncategorised quick-toggle */}
             {uncategorizedCount > 0 && (
               <button
                 onClick={() => setFilters(f => ({ ...f, uncategorizedOnly: !f.uncategorizedOnly }))}
@@ -405,12 +360,12 @@ export function TransactionsTab() {
                 </span>
               </button>
             )}
-            <button 
+            <button
               onClick={() => setShowFilters(!showFilters)}
               className={cn(
                 "relative size-11 rounded-xl border flex items-center justify-center transition-colors",
                 showFilters || activeFilterCount > 0
-                  ? "bg-primary text-primary-foreground border-primary" 
+                  ? "bg-primary text-primary-foreground border-primary"
                   : "bg-card border-border text-muted-foreground hover:text-foreground"
               )}
               title="Filters"
@@ -434,7 +389,7 @@ export function TransactionsTab() {
             >
               <FileText className="size-5" />
             </button>
-            <button 
+            <button
               onClick={exportFiltered}
               className="size-11 rounded-xl bg-card border border-border flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
               title="Export filtered transactions"
@@ -470,16 +425,12 @@ export function TransactionsTab() {
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold text-foreground">Filters</h3>
             {activeFilterCount > 0 && (
-              <button
-                onClick={() => setFilters({ dateRange: null, category: null, subcategory: null, bankAccount: null, source: null, businessFilter: "all", uncategorizedOnly: false })}
-                className="text-xs text-primary hover:underline"
-              >
+              <button onClick={clearFilters} className="text-xs text-primary hover:underline">
                 Clear all ({activeFilterCount})
               </button>
             )}
           </div>
 
-          {/* Type */}
           <div>
             <label className="text-[10px] uppercase tracking-wider text-muted-foreground block mb-2">Type</label>
             <div className="flex items-center gap-2 flex-wrap">
@@ -502,7 +453,6 @@ export function TransactionsTab() {
             </div>
           </div>
 
-          {/* Date Range */}
           <div>
             <label className="text-[10px] uppercase tracking-wider text-muted-foreground block mb-2">Date Range</label>
             <div className="flex items-center gap-2">
@@ -539,13 +489,12 @@ export function TransactionsTab() {
             </div>
           </div>
 
-          {/* Category + Subcategory */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-[10px] uppercase tracking-wider text-muted-foreground block mb-2">Category</label>
               <select
-                value={filters.category || ""}
-                onChange={(e) => setFilters(f => ({ ...f, category: e.target.value || null, subcategory: null }))}
+                value={filters.categoryId || ""}
+                onChange={(e) => setFilters(f => ({ ...f, categoryId: e.target.value || null, subcategoryId: null }))}
                 className="w-full h-10 px-3 bg-surface2 border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
               >
                 <option value="">All categories</option>
@@ -557,9 +506,9 @@ export function TransactionsTab() {
             <div>
               <label className="text-[10px] uppercase tracking-wider text-muted-foreground block mb-2">Subcategory</label>
               <select
-                value={filters.subcategory || ""}
-                onChange={(e) => setFilters(f => ({ ...f, subcategory: e.target.value || null }))}
-                disabled={!filters.category || usedSubcategories.length === 0}
+                value={filters.subcategoryId || ""}
+                onChange={(e) => setFilters(f => ({ ...f, subcategoryId: e.target.value || null }))}
+                disabled={!filters.categoryId || usedSubcategories.length === 0}
                 className="w-full h-10 px-3 bg-surface2 border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:opacity-40"
               >
                 <option value="">All subcategories</option>
@@ -570,7 +519,6 @@ export function TransactionsTab() {
             </div>
           </div>
 
-          {/* Source File */}
           {uniqueSources.length > 0 && (
             <div>
               <label className="text-[10px] uppercase tracking-wider text-muted-foreground block mb-2">Source File</label>
@@ -587,7 +535,6 @@ export function TransactionsTab() {
             </div>
           )}
 
-          {/* Uncategorised Toggle */}
           <div className="flex items-center justify-between">
             <div>
               <span className="text-sm text-foreground">Uncategorised only</span>
@@ -609,7 +556,6 @@ export function TransactionsTab() {
             </button>
           </div>
 
-          {/* Business Export */}
           {businessCount > 0 && (
             <SecondaryButton onClick={exportBusiness} className="w-full">
               <Briefcase className="size-4 mr-2" />
@@ -648,31 +594,31 @@ export function TransactionsTab() {
           ) : (
             <div className="flex items-center gap-2 flex-wrap">
               <select
-                value={bulkCategory}
+                value={bulkCategoryId}
                 onChange={(e) => {
-                  setBulkCategory(e.target.value)
-                  setBulkSubcategory("")
+                  setBulkCategoryId(e.target.value)
+                  setBulkSubcategoryId("")
                 }}
                 className="h-8 px-2 bg-background border border-border rounded text-sm min-w-[140px]"
               >
                 <option value="">Select category</option>
-                {activeCategoryList.map(cat => (
-                  <option key={cat} value={cat}>{cat}</option>
+                {getActiveCategories(categories).map(cat => (
+                  <option key={cat.categoryId} value={cat.categoryId}>{cat.name}</option>
                 ))}
               </select>
-              {bulkCategory && (
+              {bulkCategoryId && bulkCat && (
                 <select
-                  value={bulkSubcategory}
-                  onChange={(e) => setBulkSubcategory(e.target.value)}
+                  value={bulkSubcategoryId}
+                  onChange={(e) => setBulkSubcategoryId(e.target.value)}
                   className="h-8 px-2 bg-background border border-border rounded text-sm min-w-[140px]"
                 >
                   <option value="">No subcategory</option>
-                  {getActiveSubcategories(bulkCategory).map(sub => (
-                    <option key={sub} value={sub}>{sub}</option>
+                  {getActiveSubcategories(bulkCat).map(sub => (
+                    <option key={sub.subcategoryId} value={sub.subcategoryId}>{sub.name}</option>
                   ))}
                 </select>
               )}
-              <PrimaryButton onClick={applyBulkCategory} disabled={!bulkCategory}>
+              <PrimaryButton onClick={applyBulkCategory} disabled={!bulkCategoryId}>
                 Apply
               </PrimaryButton>
               <button onClick={() => setShowBulkEdit(false)} className="p-1 text-muted-foreground hover:text-foreground">
@@ -683,7 +629,6 @@ export function TransactionsTab() {
         </Card>
       )}
 
-      {/* Empty State */}
       {!hasTransactions && (
         <EmptyState
           icon={Receipt}
@@ -692,23 +637,11 @@ export function TransactionsTab() {
         />
       )}
 
-      {/* Transaction List */}
       {hasTransactions && filteredTransactions.length === 0 && (
         <div className="py-12 text-center">
           <p className="text-muted-foreground">No transactions match your filters</p>
           <button
-            onClick={() => {
-              setFilters({
-                dateRange: null,
-                category: null,
-                subcategory: null,
-                bankAccount: null,
-                source: null,
-                businessFilter: "all",
-                uncategorizedOnly: false
-              })
-              setSearchQuery("")
-            }}
+            onClick={() => { clearFilters(); setSearchQuery("") }}
             className="mt-2 text-sm text-primary hover:underline"
           >
             Clear filters
@@ -720,25 +653,21 @@ export function TransactionsTab() {
         <div className="space-y-4">
           {Array.from(groupedTransactions.entries()).map(([group, txs]) => (
             <div key={group}>
-              {/* Date Group Header */}
               <div className="flex items-center gap-2 mb-2">
                 <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{group}</span>
                 <div className="flex-1 h-px bg-border" />
               </div>
-              
-              {/* Transactions in Group */}
               <div className="space-y-2">
                 {txs.map((tx) => (
                   <TransactionRow
                     key={tx.transactionId}
                     transaction={tx}
                     isEditing={editingId === tx.transactionId}
-                    editCategory={editCategory}
-                    editSubcategory={editSubcategory}
+                    editCategoryId={editCategoryId}
+                    editSubcategoryId={editSubcategoryId}
                     showSource={showSource}
                     isSelected={selectedIds.has(tx.transactionId)}
-                    categoryList={activeCategoryList}
-                    disabledProjects={disabledProjects}
+                    categories={categories}
                     onToggleSelect={() => toggleSelect(tx.transactionId)}
                     onStartEdit={() => startEdit(tx)}
                     onCancelEdit={() => setEditingId(null)}
@@ -746,8 +675,8 @@ export function TransactionsTab() {
                     onSaveAndLearn={saveAndLearn}
                     onToggleBusiness={() => toggleBusiness(tx.transactionId)}
                     onReset={() => resetTransaction(tx.transactionId)}
-                    onCategoryChange={setEditCategory}
-                    onSubcategoryChange={setEditSubcategory}
+                    onCategoryChange={setEditCategoryId}
+                    onSubcategoryChange={setEditSubcategoryId}
                   />
                 ))}
               </div>
@@ -756,24 +685,28 @@ export function TransactionsTab() {
         </div>
       )}
 
-      {/* Import Modal */}
       {showImport && (
-        <CSVImportModal onClose={() => setShowImport(false)} />
+        <CSVImportModal
+          onClose={() => setShowImport(false)}
+          matchingRules={matchingRules}
+          settings={settings}
+          updateSettings={updateSettings}
+          transactions={transactions}
+          setTransactions={setTransactions}
+        />
       )}
     </div>
   )
 }
 
-// Transaction Row Component
 interface TransactionRowProps {
   transaction: Transaction
   isEditing: boolean
-  editCategory: string
-  editSubcategory: string
+  editCategoryId: string
+  editSubcategoryId: string
   showSource: boolean
   isSelected: boolean
-  categoryList: string[]
-  disabledProjects: string[]
+  categories: Category[]
   onToggleSelect: () => void
   onStartEdit: () => void
   onCancelEdit: () => void
@@ -781,19 +714,18 @@ interface TransactionRowProps {
   onSaveAndLearn: () => void
   onToggleBusiness: () => void
   onReset: () => void
-  onCategoryChange: (cat: string) => void
-  onSubcategoryChange: (sub: string) => void
+  onCategoryChange: (catId: string) => void
+  onSubcategoryChange: (subId: string) => void
 }
 
 function TransactionRow({
   transaction: tx,
   isEditing,
-  editCategory,
-  editSubcategory,
+  editCategoryId,
+  editSubcategoryId,
   showSource,
   isSelected,
-  categoryList,
-  disabledProjects,
+  categories,
   onToggleSelect,
   onStartEdit,
   onCancelEdit,
@@ -802,16 +734,20 @@ function TransactionRow({
   onToggleBusiness,
   onReset,
   onCategoryChange,
-  onSubcategoryChange
+  onSubcategoryChange,
 }: TransactionRowProps) {
   const amount = parseAmount(tx.amount)
   const isIncome = amount > 0
-  const categoryColor = CATEGORY_COLORS[tx.category] || CATEGORY_COLORS["default"]
-  
+  const isUncategorised = !tx.categoryId && !tx.category
+  const catName = getCategoryName(categories, tx.categoryId ?? null) || tx.category || ''
+  const categoryColor = CATEGORY_COLORS[catName] || CATEGORY_COLORS["default"]
+  const displayLabel = getDisplayLabel(categories, tx.categoryId ?? null, tx.subcategoryId ?? null, tx.category, tx.subcategory)
+
+  const editCat = isEditing ? getActiveCategories(categories).find(c => c.categoryId === editCategoryId) : undefined
+
   if (isEditing) {
     return (
       <Card className="space-y-3">
-        {/* Header */}
         <div className="flex items-start justify-between">
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-foreground truncate">{tx.description}</p>
@@ -821,13 +757,12 @@ function TransactionRow({
             <X className="size-4" />
           </button>
         </div>
-        
-        {/* Category Picker */}
+
         <div className="grid grid-cols-2 gap-2">
           <div>
             <label className="text-[10px] uppercase tracking-wider text-muted-foreground block mb-1">Category</label>
             <select
-              value={editCategory}
+              value={editCategoryId}
               onChange={(e) => {
                 onCategoryChange(e.target.value)
                 onSubcategoryChange("")
@@ -835,30 +770,27 @@ function TransactionRow({
               className="w-full h-9 px-2 bg-surface2 border border-border rounded-lg text-sm text-foreground"
             >
               <option value="">Select...</option>
-              {categoryList.map(cat => (
-                <option key={cat} value={cat}>{cat}</option>
+              {getActiveCategories(categories).map(cat => (
+                <option key={cat.categoryId} value={cat.categoryId}>{cat.name}</option>
               ))}
             </select>
           </div>
           <div>
             <label className="text-[10px] uppercase tracking-wider text-muted-foreground block mb-1">Subcategory</label>
             <select
-              value={editSubcategory}
+              value={editSubcategoryId}
               onChange={(e) => onSubcategoryChange(e.target.value)}
               className="w-full h-9 px-2 bg-surface2 border border-border rounded-lg text-sm text-foreground"
-              disabled={!editCategory}
+              disabled={!editCategoryId}
             >
               <option value="">Select...</option>
-              {editCategory && getSubcategories(editCategory)
-                .filter(sub => !disabledProjects.includes(sub))
-                .map(sub => (
-                  <option key={sub} value={sub}>{sub}</option>
-                ))}
+              {editCat && getActiveSubcategories(editCat).map(sub => (
+                <option key={sub.subcategoryId} value={sub.subcategoryId}>{sub.name}</option>
+              ))}
             </select>
           </div>
         </div>
-        
-        {/* Action Buttons */}
+
         <div className="flex items-center gap-2">
           <button
             onClick={onCancelEdit}
@@ -868,7 +800,7 @@ function TransactionRow({
           </button>
           <button
             onClick={onSave}
-            disabled={!editCategory || !editSubcategory}
+            disabled={!editCategoryId || !editSubcategoryId}
             className="flex-1 h-9 rounded-lg bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-1.5"
           >
             <Check className="size-4" />
@@ -876,7 +808,7 @@ function TransactionRow({
           </button>
           <button
             onClick={onSaveAndLearn}
-            disabled={!editCategory || !editSubcategory}
+            disabled={!editCategoryId || !editSubcategoryId}
             className="flex-1 h-9 rounded-lg bg-signal-amber text-background text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-1.5"
           >
             <BookOpen className="size-4" />
@@ -888,13 +820,8 @@ function TransactionRow({
   }
 
   return (
-    <Card 
-      interactive 
-      onClick={onStartEdit}
-      className="group"
-    >
+    <Card interactive onClick={onStartEdit} className="group">
       <div className="flex items-start gap-3">
-        {/* Selection Checkbox */}
         <input
           type="checkbox"
           checked={isSelected}
@@ -902,51 +829,36 @@ function TransactionRow({
           onClick={(e) => e.stopPropagation()}
           className="size-4 rounded border-border accent-primary mt-0.5 shrink-0"
         />
-        {/* Category Color Bar */}
-        <div 
+        <div
           className="w-1 self-stretch rounded-full shrink-0"
           style={{ backgroundColor: categoryColor }}
         />
-        
-        <div className="flex-1 min-w-0 overflow-hidden">
-          {/* Top Row: Description + Amount */}
-          {/* 
-            Layout:
-            - Mobile (default): two rows - description+amount on top, meta on bottom
-            - Desktop (sm+): single row when showSource is off
-                             two rows when showSource is on
-          */}
 
+        <div className="flex-1 min-w-0 overflow-hidden">
           {/* Single-line desktop layout */}
           <div className={cn(
             "hidden items-center gap-3 min-w-0",
             !showSource && "sm:flex"
           )}>
-            {/* Description */}
             <span className="text-sm font-medium text-foreground truncate flex-1 min-w-0">
               {tx.description}
             </span>
-            {/* Badges */}
             {tx._business && <Briefcase className="size-3 text-signal-amber shrink-0" />}
             {tx._manual && <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/20 text-primary shrink-0">Manual</span>}
-            {/* Date */}
             <span className="text-xs text-muted-foreground shrink-0">{formatDate(tx.date)}</span>
-            {/* Category pill */}
             <span className={cn(
               "text-xs shrink-0",
-              !tx.category && "text-signal-amber",
-              tx.category && "text-foreground/70"
+              isUncategorised && "text-signal-amber",
+              !isUncategorised && "text-foreground/70"
             )}>
-              {tx.category ? (tx.subcategory || tx.category) : "Uncategorised"}
+              {isUncategorised ? "Uncategorised" : displayLabel}
             </span>
-            {/* Amount */}
             <span className={cn(
               "text-sm font-semibold tabular-nums shrink-0",
               isIncome ? "text-signal-green" : "text-foreground"
             )}>
               {isIncome ? "+" : "-"}${Math.abs(amount).toFixed(2)}
             </span>
-            {/* Action Buttons */}
             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
               <button
                 onClick={(e) => { e.stopPropagation(); onToggleBusiness() }}
@@ -958,7 +870,7 @@ function TransactionRow({
               >
                 <Briefcase className="size-3.5" />
               </button>
-              {tx.category && (
+              {!isUncategorised && (
                 <button
                   onClick={(e) => { e.stopPropagation(); onReset() }}
                   className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-surface2 transition-colors"
@@ -975,7 +887,6 @@ function TransactionRow({
             "flex flex-col gap-1",
             !showSource && "sm:hidden"
           )}>
-            {/* Top row: description + amount */}
             <div className="flex items-start justify-between gap-2">
               <div className="flex-1 min-w-0 overflow-hidden">
                 <div className="flex items-center gap-2 min-w-0">
@@ -994,20 +905,18 @@ function TransactionRow({
               </span>
             </div>
 
-            {/* Bottom row: date, category, source, actions */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
                 <span>{formatDate(tx.date)}</span>
-                {tx.category && (
-                  <>
-                    <span>•</span>
-                    <span className="text-foreground/70">{tx.subcategory || tx.category}</span>
-                  </>
-                )}
-                {!tx.category && (
+                {isUncategorised ? (
                   <>
                     <span>•</span>
                     <span className="text-signal-amber">Uncategorised</span>
+                  </>
+                ) : (
+                  <>
+                    <span>•</span>
+                    <span className="text-foreground/70">{displayLabel}</span>
                   </>
                 )}
                 {showSource && tx.file && (
@@ -1020,7 +929,6 @@ function TransactionRow({
                   </>
                 )}
               </div>
-              {/* Action Buttons */}
               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                 <button
                   onClick={(e) => { e.stopPropagation(); onToggleBusiness() }}
@@ -1032,7 +940,7 @@ function TransactionRow({
                 >
                   <Briefcase className="size-3.5" />
                 </button>
-                {tx.category && (
+                {!isUncategorised && (
                   <button
                     onClick={(e) => { e.stopPropagation(); onReset() }}
                     className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-surface2 transition-colors"
@@ -1050,47 +958,45 @@ function TransactionRow({
   )
 }
 
-// CSV Import Modal
-function CSVImportModal({ onClose }: { onClose: () => void }) {
-  const transactions = useBudgetStore((s) => s.transactions)
-  const setTransactions = useBudgetStore((s) => s.setTransactions)
-  const settings = useBudgetStore((s) => s.settings)
-  const updateSettings = useBudgetStore((s) => s.updateSettings)
-  const builtinRules = useBudgetStore((s) => s.builtinRules)
-  const customRules = useBudgetStore((s) => s.customRules)
+function CSVImportModal({
+  onClose,
+  matchingRules,
+  settings,
+  updateSettings,
+  transactions,
+  setTransactions,
+}: {
+  onClose: () => void
+  matchingRules: MatchingRule[]
+  settings: { csvFormatMappings?: Record<string, CSVMapping> }
+  updateSettings: (u: { csvFormatMappings: Record<string, CSVMapping> }) => void
+  transactions: Transaction[]
+  setTransactions: (txs: Transaction[]) => void
+}) {
   const [step, setStep] = useState<"upload" | "preview" | "importing">("upload")
   const [file, setFile] = useState<File | null>(null)
   const [csvData, setCsvData] = useState<string[][]>([])
   const [columnMapping, setColumnMapping] = useState({
-    date: 0,
-    description: 1,
-    amount: 2,
-    debit: -1,
-    credit: -1
+    date: 0, description: 1, amount: 2, debit: -1, credit: -1,
   })
   const [dateFormat, setDateFormat] = useState("DD/MM/YYYY")
   const [skipRows, setSkipRows] = useState(1)
   const [bankName, setBankName] = useState("")
   const [isDragging, setIsDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  
-  // Saved format mappings from settings
-  const savedFormats: Record<string, unknown> = settings.csvFormatMappings || {}
 
-  // Process file (shared by both click and drag)
+  const savedFormats = settings.csvFormatMappings || {}
+
   const processFile = (selectedFile: File) => {
     setFile(selectedFile)
-    
     const reader = new FileReader()
     reader.onload = (event) => {
       const text = event.target?.result as string
       const lines = text.split("\n").filter(line => line.trim())
       const rows = lines.map(line => {
-        // Simple CSV parsing (handles basic quoted fields)
         const result: string[] = []
         let current = ""
         let inQuotes = false
-        
         for (let i = 0; i < line.length; i++) {
           const char = line[i]
           if (char === '"') {
@@ -1105,25 +1011,29 @@ function CSVImportModal({ onClose }: { onClose: () => void }) {
         result.push(current.trim())
         return result
       })
-      
+
       setCsvData(rows)
       setStep("preview")
-      
-      // Check if we have a saved format for this bank
-      const matchedBank = Object.keys(savedFormats).find(bank => 
+
+      const matchedBank = Object.keys(savedFormats).find(bank =>
         selectedFile.name.toLowerCase().includes(bank.toLowerCase())
       )
-      
+
       if (matchedBank && savedFormats[matchedBank]) {
-        const saved = savedFormats[matchedBank] as { columnMapping: typeof columnMapping; dateFormat: string; skipRows: number }
+        const saved = savedFormats[matchedBank]
         setBankName(matchedBank)
-        setColumnMapping(saved.columnMapping)
+        setColumnMapping({
+          date: saved.dateColumn,
+          description: saved.descriptionColumn,
+          amount: saved.amountColumn ?? -1,
+          debit: saved.debitColumn ?? -1,
+          credit: saved.creditColumn ?? -1,
+        })
         setDateFormat(saved.dateFormat)
-        setSkipRows(saved.skipRows)
+        setSkipRows(saved.hasHeader ? 1 : 0)
         return
       }
-      
-      // Auto-detect column mapping
+
       if (rows.length > 0) {
         const header = rows[0].map(h => h.toLowerCase())
         const dateIdx = header.findIndex(h => h.includes("date"))
@@ -1131,16 +1041,15 @@ function CSVImportModal({ onClose }: { onClose: () => void }) {
         const amountIdx = header.findIndex(h => h === "amount" || h.includes("amount"))
         const debitIdx = header.findIndex(h => h.includes("debit") || h.includes("withdrawal"))
         const creditIdx = header.findIndex(h => h.includes("credit") || h.includes("deposit"))
-        
+
         setColumnMapping({
           date: dateIdx >= 0 ? dateIdx : 0,
           description: descIdx >= 0 ? descIdx : 1,
           amount: amountIdx >= 0 ? amountIdx : -1,
           debit: debitIdx >= 0 ? debitIdx : -1,
-          credit: creditIdx >= 0 ? creditIdx : -1
+          credit: creditIdx >= 0 ? creditIdx : -1,
         })
-        
-        // Try to guess bank name from filename
+
         const fileNameLower = selectedFile.name.toLowerCase()
         if (fileNameLower.includes("anz")) setBankName("ANZ")
         else if (fileNameLower.includes("macquarie") || fileNameLower.includes("mqg")) setBankName("Macquarie")
@@ -1148,19 +1057,13 @@ function CSVImportModal({ onClose }: { onClose: () => void }) {
         else if (fileNameLower.includes("westpac") || fileNameLower.includes("wbc")) setBankName("Westpac")
         else if (fileNameLower.includes("nab")) setBankName("NAB")
         else setBankName("")
-        
-        // Auto-detect date format from first data row
+
         if (rows.length > 1) {
           const sampleDate = rows[1][dateIdx >= 0 ? dateIdx : 0]
-          if (/^\d{4}-\d{2}-\d{2}/.test(sampleDate)) {
-            setDateFormat("YYYY-MM-DD")
-          } else if (/^\d{2}-[A-Za-z]{3}-\d{2}/.test(sampleDate)) {
-            setDateFormat("DD-Mon-YY")
-          } else if (/^\d{2}-[A-Za-z]{3}-\d{4}/.test(sampleDate)) {
-            setDateFormat("DD-Mon-YYYY")
-          } else {
-            setDateFormat("DD/MM/YYYY")
-          }
+          if (/^\d{4}-\d{2}-\d{2}/.test(sampleDate)) setDateFormat("YYYY-MM-DD")
+          else if (/^\d{2}-[A-Za-z]{3}-\d{2}/.test(sampleDate)) setDateFormat("DD-Mon-YY")
+          else if (/^\d{2}-[A-Za-z]{3}-\d{4}/.test(sampleDate)) setDateFormat("DD-Mon-YYYY")
+          else setDateFormat("DD/MM/YYYY")
         }
       }
     }
@@ -1169,38 +1072,23 @@ function CSVImportModal({ onClose }: { onClose: () => void }) {
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0]
-    if (!selectedFile) return
-    processFile(selectedFile)
+    if (selectedFile) processFile(selectedFile)
   }
 
-  // Drag and drop handlers
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragging(true)
-  }
-
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragging(false)
-  }
-
+  const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); setIsDragging(true) }
+  const handleDragLeave = (e: React.DragEvent) => { e.preventDefault(); setIsDragging(false) }
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault()
     setIsDragging(false)
-    
     const droppedFile = e.dataTransfer.files?.[0]
-    if (droppedFile && droppedFile.name.endsWith(".csv")) {
-      processFile(droppedFile)
-    }
+    if (droppedFile && droppedFile.name.endsWith(".csv")) processFile(droppedFile)
   }
 
   const parseDate = (dateStr: string): string => {
-    // Normalize to DD/MM/YYYY
     const monthNames: Record<string, string> = {
       jan: "01", feb: "02", mar: "03", apr: "04", may: "05", jun: "06",
-      jul: "07", aug: "08", sep: "09", oct: "10", nov: "11", dec: "12"
+      jul: "07", aug: "08", sep: "09", oct: "10", nov: "11", dec: "12",
     }
-    
     if (dateFormat === "YYYY-MM-DD") {
       const [year, month, day] = dateStr.split("-")
       return `${day}/${month}/${year}`
@@ -1209,27 +1097,18 @@ function CSVImportModal({ onClose }: { onClose: () => void }) {
       const day = parts[0].padStart(2, "0")
       const month = monthNames[parts[1].toLowerCase().slice(0, 3)] || "01"
       let year = parts[2]
-      if (year.length === 2) {
-        year = parseInt(year) > 50 ? `19${year}` : `20${year}`
-      }
+      if (year.length === 2) year = parseInt(year) > 50 ? `19${year}` : `20${year}`
       return `${day}/${month}/${year}`
     }
-    
-    // Assume DD/MM/YYYY
     return dateStr
   }
 
   const importTransactions = () => {
     const dataRows = csvData.slice(skipRows)
-    
-    if (dataRows.length === 0) {
-      onClose()
-      return
-    }
-    
+    if (dataRows.length === 0) { onClose(); return }
+
     const newTransactions: Transaction[] = dataRows.map((row) => {
       let amount: number
-      
       if (columnMapping.amount >= 0) {
         amount = parseFloat(row[columnMapping.amount]?.replace(/[^-\d.]/g, "") || "0")
       } else {
@@ -1237,10 +1116,9 @@ function CSVImportModal({ onClose }: { onClose: () => void }) {
         const credit = parseFloat(row[columnMapping.credit]?.replace(/[^-\d.]/g, "") || "0")
         amount = credit - debit
       }
-      
+
       const description = row[columnMapping.description] || ""
-      
-      const ruleResult = applyRules(description, builtinRules, customRules)
+      const ruleResult = applyRules(description, matchingRules)
 
       return {
         transactionId: crypto.randomUUID(),
@@ -1248,38 +1126,42 @@ function CSVImportModal({ onClose }: { onClose: () => void }) {
         date: parseDate(row[columnMapping.date] || ""),
         amount: amount.toString(),
         description,
-        category: ruleResult?.category || "",
-        subcategory: ruleResult?.subcategory || "",
+        categoryId: (ruleResult && !ruleResult.isIgnore) ? ruleResult.categoryId : null,
+        subcategoryId: (ruleResult && !ruleResult.isIgnore) ? ruleResult.subcategoryId : null,
+        _ignore: ruleResult?.isIgnore ?? false,
         file: file?.name || "",
         _manual: false,
-        _business: false
+        _business: ruleResult?.isBusiness ?? false,
       }
     }).filter(t => t.description && t.date)
-    
-    const updatedTransactions = [...transactions, ...newTransactions]
-    setTransactions(updatedTransactions)
-    
-    // Save format mapping for this bank
+
+    setTransactions([...transactions, ...newTransactions])
+
     if (bankName && !savedFormats[bankName]) {
       updateSettings({
         csvFormatMappings: {
           ...savedFormats,
           [bankName]: {
-            columnMapping,
+            fingerprint: file?.name || "",
+            dateColumn: columnMapping.date,
+            descriptionColumn: columnMapping.description,
+            amountColumn: columnMapping.amount >= 0 ? columnMapping.amount : undefined,
+            debitColumn: columnMapping.debit >= 0 ? columnMapping.debit : undefined,
+            creditColumn: columnMapping.credit >= 0 ? columnMapping.credit : undefined,
             dateFormat,
-            skipRows
-          }
-        }
+            hasHeader: skipRows > 0,
+            confirmedAt: new Date().toISOString(),
+          },
+        },
       })
     }
-    
+
     onClose()
   }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
       <Card className="w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
-        {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-border">
           <div>
             <h3 className="text-lg font-semibold text-foreground">Import CSV</h3>
@@ -1293,43 +1175,30 @@ function CSVImportModal({ onClose }: { onClose: () => void }) {
             <X className="size-5" />
           </button>
         </div>
-        
-        {/* Content */}
+
         <div className="flex-1 overflow-y-auto py-4">
           {step === "upload" && (
-            <div 
+            <div
               className={cn(
                 "border-2 border-dashed rounded-xl p-8 text-center transition-colors cursor-pointer",
-                isDragging 
-                  ? "border-primary bg-primary/5" 
-                  : "border-border hover:border-primary/50"
+                isDragging ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
               )}
               onClick={() => fileInputRef.current?.click()}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
             >
-              <FileText className={cn(
-                "size-12 mx-auto mb-4 transition-colors",
-                isDragging ? "text-primary" : "text-muted-foreground"
-              )} />
+              <FileText className={cn("size-12 mx-auto mb-4 transition-colors", isDragging ? "text-primary" : "text-muted-foreground")} />
               <p className="text-foreground font-medium mb-1">
                 {isDragging ? "Drop CSV file here" : "Drag & drop or click to select"}
               </p>
               <p className="text-xs text-muted-foreground">Supports ANZ, Macquarie, CommBank, Westpac, NAB and most bank formats</p>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".csv"
-                onChange={handleFileSelect}
-                className="hidden"
-              />
+              <input ref={fileInputRef} type="file" accept=".csv" onChange={handleFileSelect} className="hidden" />
             </div>
           )}
-          
+
           {step === "preview" && csvData.length > 0 && (
             <div className="space-y-4">
-              {/* Preview Table */}
               <div>
                 <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2">File Preview (first 5 rows)</p>
                 <div className="overflow-x-auto rounded-lg border border-border">
@@ -1344,14 +1213,9 @@ function CSVImportModal({ onClose }: { onClose: () => void }) {
                           const isCredit = columnMapping.credit === i
                           const mappedAs = isDate ? "Date" : isDesc ? "Description" : isAmount ? "Amount" : isDebit ? "Debit" : isCredit ? "Credit" : null
                           return (
-                            <th key={i} className={cn(
-                              "px-3 py-2 text-left text-xs font-medium border-r border-border/50 last:border-0",
-                              mappedAs ? "text-primary" : "text-muted-foreground"
-                            )}>
+                            <th key={i} className={cn("px-3 py-2 text-left text-xs font-medium border-r border-border/50 last:border-0", mappedAs ? "text-primary" : "text-muted-foreground")}>
                               <div>{header || `Column ${i + 1}`}</div>
-                              {mappedAs && (
-                                <div className="text-[10px] font-semibold text-primary/70 mt-0.5">{mappedAs}</div>
-                              )}
+                              {mappedAs && <div className="text-[10px] font-semibold text-primary/70 mt-0.5">{mappedAs}</div>}
                             </th>
                           )
                         })}
@@ -1361,17 +1225,9 @@ function CSVImportModal({ onClose }: { onClose: () => void }) {
                       {csvData.slice(1, 6).map((row, i) => (
                         <tr key={i} className="border-b border-border/50 last:border-0">
                           {csvData[0]?.map((_, j) => {
-                            const isDate = columnMapping.date === j
-                            const isDesc = columnMapping.description === j
-                            const isAmount = columnMapping.amount === j
-                            const isDebit = columnMapping.debit === j
-                            const isCredit = columnMapping.credit === j
-                            const isMapped = isDate || isDesc || isAmount || isDebit || isCredit
+                            const isMapped = [columnMapping.date, columnMapping.description, columnMapping.amount, columnMapping.debit, columnMapping.credit].includes(j)
                             return (
-                              <td key={j} className={cn(
-                                "px-3 py-1.5 border-r border-border/50 last:border-0 max-w-[200px] truncate",
-                                isMapped ? "text-foreground bg-primary/5" : "text-muted-foreground"
-                              )}>
+                              <td key={j} className={cn("px-3 py-1.5 border-r border-border/50 last:border-0 max-w-[200px] truncate", isMapped ? "text-foreground bg-primary/5" : "text-muted-foreground")}>
                                 {row[j] || ""}
                               </td>
                             )
@@ -1382,40 +1238,23 @@ function CSVImportModal({ onClose }: { onClose: () => void }) {
                   </table>
                 </div>
               </div>
-              
-              {/* Column Mapping */}
+
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="text-[10px] uppercase tracking-wider text-muted-foreground block mb-1">Date Column</label>
-                  <select
-                    value={columnMapping.date}
-                    onChange={(e) => setColumnMapping(m => ({ ...m, date: parseInt(e.target.value) }))}
-                    className="w-full h-9 px-2 bg-surface2 border border-border rounded-lg text-sm"
-                  >
-                    {csvData[0]?.map((h, i) => (
-                      <option key={i} value={i}>{h || `Column ${i + 1}`}</option>
-                    ))}
+                  <select value={columnMapping.date} onChange={(e) => setColumnMapping(m => ({ ...m, date: parseInt(e.target.value) }))} className="w-full h-9 px-2 bg-surface2 border border-border rounded-lg text-sm">
+                    {csvData[0]?.map((h, i) => <option key={i} value={i}>{h || `Column ${i + 1}`}</option>)}
                   </select>
                 </div>
                 <div>
                   <label className="text-[10px] uppercase tracking-wider text-muted-foreground block mb-1">Description</label>
-                  <select
-                    value={columnMapping.description}
-                    onChange={(e) => setColumnMapping(m => ({ ...m, description: parseInt(e.target.value) }))}
-                    className="w-full h-9 px-2 bg-surface2 border border-border rounded-lg text-sm"
-                  >
-                    {csvData[0]?.map((h, i) => (
-                      <option key={i} value={i}>{h || `Column ${i + 1}`}</option>
-                    ))}
+                  <select value={columnMapping.description} onChange={(e) => setColumnMapping(m => ({ ...m, description: parseInt(e.target.value) }))} className="w-full h-9 px-2 bg-surface2 border border-border rounded-lg text-sm">
+                    {csvData[0]?.map((h, i) => <option key={i} value={i}>{h || `Column ${i + 1}`}</option>)}
                   </select>
                 </div>
                 <div>
                   <label className="text-[10px] uppercase tracking-wider text-muted-foreground block mb-1">Date Format</label>
-                  <select
-                    value={dateFormat}
-                    onChange={(e) => setDateFormat(e.target.value)}
-                    className="w-full h-9 px-2 bg-surface2 border border-border rounded-lg text-sm"
-                  >
+                  <select value={dateFormat} onChange={(e) => setDateFormat(e.target.value)} className="w-full h-9 px-2 bg-surface2 border border-border rounded-lg text-sm">
                     <option value="DD/MM/YYYY">DD/MM/YYYY</option>
                     <option value="DD-Mon-YY">DD-Mon-YY</option>
                     <option value="DD-Mon-YYYY">DD-Mon-YYYY</option>
@@ -1424,58 +1263,36 @@ function CSVImportModal({ onClose }: { onClose: () => void }) {
                 </div>
               </div>
 
-              {/* Amount Mapping */}
               <div>
                 <label className="text-[10px] uppercase tracking-wider text-muted-foreground block mb-2">Amount Columns</label>
                 <div className="grid grid-cols-3 gap-3">
                   <div>
                     <label className="text-xs text-muted-foreground block mb-1">Single Amount Column</label>
-                    <select
-                      value={columnMapping.amount}
-                      onChange={(e) => setColumnMapping(m => ({ ...m, amount: parseInt(e.target.value), debit: -1, credit: -1 }))}
-                      className="w-full h-9 px-2 bg-surface2 border border-border rounded-lg text-sm"
-                    >
+                    <select value={columnMapping.amount} onChange={(e) => setColumnMapping(m => ({ ...m, amount: parseInt(e.target.value), debit: -1, credit: -1 }))} className="w-full h-9 px-2 bg-surface2 border border-border rounded-lg text-sm">
                       <option value={-1}>Not used</option>
-                      {csvData[0]?.map((h, i) => (
-                        <option key={i} value={i}>{h || `Column ${i + 1}`}</option>
-                      ))}
+                      {csvData[0]?.map((h, i) => <option key={i} value={i}>{h || `Column ${i + 1}`}</option>)}
                     </select>
                   </div>
                   <div>
                     <label className="text-xs text-muted-foreground block mb-1">Debit Column (-)</label>
-                    <select
-                      value={columnMapping.debit}
-                      onChange={(e) => setColumnMapping(m => ({ ...m, debit: parseInt(e.target.value), amount: -1 }))}
-                      disabled={columnMapping.amount >= 0}
-                      className="w-full h-9 px-2 bg-surface2 border border-border rounded-lg text-sm disabled:opacity-50"
-                    >
+                    <select value={columnMapping.debit} onChange={(e) => setColumnMapping(m => ({ ...m, debit: parseInt(e.target.value), amount: -1 }))} disabled={columnMapping.amount >= 0} className="w-full h-9 px-2 bg-surface2 border border-border rounded-lg text-sm disabled:opacity-50">
                       <option value={-1}>Not used</option>
-                      {csvData[0]?.map((h, i) => (
-                        <option key={i} value={i}>{h || `Column ${i + 1}`}</option>
-                      ))}
+                      {csvData[0]?.map((h, i) => <option key={i} value={i}>{h || `Column ${i + 1}`}</option>)}
                     </select>
                   </div>
                   <div>
                     <label className="text-xs text-muted-foreground block mb-1">Credit Column (+)</label>
-                    <select
-                      value={columnMapping.credit}
-                      onChange={(e) => setColumnMapping(m => ({ ...m, credit: parseInt(e.target.value), amount: -1 }))}
-                      disabled={columnMapping.amount >= 0}
-                      className="w-full h-9 px-2 bg-surface2 border border-border rounded-lg text-sm disabled:opacity-50"
-                    >
+                    <select value={columnMapping.credit} onChange={(e) => setColumnMapping(m => ({ ...m, credit: parseInt(e.target.value), amount: -1 }))} disabled={columnMapping.amount >= 0} className="w-full h-9 px-2 bg-surface2 border border-border rounded-lg text-sm disabled:opacity-50">
                       <option value={-1}>Not used</option>
-                      {csvData[0]?.map((h, i) => (
-                        <option key={i} value={i}>{h || `Column ${i + 1}`}</option>
-                      ))}
+                      {csvData[0]?.map((h, i) => <option key={i} value={i}>{h || `Column ${i + 1}`}</option>)}
                     </select>
                   </div>
                 </div>
                 <p className="text-xs text-muted-foreground mt-2">
-                  Use <strong>Single Amount</strong> if your bank uses one column with +/- values, or <strong>Debit/Credit</strong> if amounts are in separate columns (like Macquarie).
+                  Use <strong>Single Amount</strong> if your bank uses one column with +/- values, or <strong>Debit/Credit</strong> if amounts are in separate columns.
                 </p>
               </div>
-              
-              {/* Bank Name Input */}
+
               <div>
                 <label className="text-[10px] uppercase tracking-wider text-muted-foreground block mb-1">Bank Name (to remember format)</label>
                 <input
@@ -1490,7 +1307,6 @@ function CSVImportModal({ onClose }: { onClose: () => void }) {
                 )}
               </div>
 
-              {/* Import Info */}
               <div className="p-3 bg-surface2 rounded-lg">
                 <p className="text-sm text-muted-foreground">
                   Ready to import <span className="text-foreground font-medium">{csvData.length - skipRows}</span> transactions from{" "}
@@ -1502,29 +1318,21 @@ function CSVImportModal({ onClose }: { onClose: () => void }) {
               </div>
             </div>
           )}
-          
+
           {step === "importing" && (
             <div className="py-8 text-center space-y-4">
               <div className="flex items-center justify-center gap-2 text-signal-green">
                 <Check className="size-6" />
                 <p className="font-medium">Ready to import</p>
               </div>
-              <p className="text-muted-foreground text-sm">
-                All transactions will be categorized using your existing rules.
-              </p>
+              <p className="text-muted-foreground text-sm">All transactions will be categorized using your existing rules.</p>
             </div>
           )}
         </div>
-        
-        {/* Footer */}
+
         <div className="flex items-center justify-end gap-2 pt-4 border-t border-border">
           <SecondaryButton onClick={onClose}>Cancel</SecondaryButton>
-          {step === "preview" && (
-            <PrimaryButton onClick={importTransactions}>
-              Import {csvData.length - skipRows} Transactions
-            </PrimaryButton>
-          )}
-          {step === "importing" && (
+          {(step === "preview" || step === "importing") && (
             <PrimaryButton onClick={importTransactions}>
               Import {csvData.length - skipRows} Transactions
             </PrimaryButton>

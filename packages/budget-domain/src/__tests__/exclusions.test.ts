@@ -9,6 +9,8 @@ function tx(overrides: Partial<Transaction>): Transaction {
     date: "01/01/2026",
     amount: "-100",
     description: "TEST",
+    categoryId: null,
+    subcategoryId: null,
     category: "Groceries",
     subcategory: "Supermarket",
     file: "test.csv",

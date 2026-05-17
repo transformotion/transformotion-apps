@@ -4,42 +4,51 @@ import type { AIService, ReviewTransactionsInput, AnalyseCsvFormatInput } from '
 export class MockAIService implements AIService {
   async reviewTransactions(input: ReviewTransactionsInput): Promise<AiReviewResponse> {
     await simulateDelay()
-    const categories = Object.keys(input.categories)
 
     const results: AiReviewResponse['results'] = input.transactions.map(tx => {
       const desc = tx.description.toLowerCase()
-      let category = categories[0] ?? ''
-      let subcategory = ''
 
-      if (desc.includes('woolworths') || desc.includes('coles') || desc.includes('aldi')) {
-        category = 'Groceries'
-        subcategory = 'Supermarket'
-      } else if (desc.includes('salary') || desc.includes('deposit') || desc.includes('pay')) {
-        category = 'Income'
-        subcategory = 'Your take-home pay'
-      } else if (desc.includes('shell') || desc.includes('bp') || desc.includes('petrol') || desc.includes('fuel')) {
-        category = 'Transport'
-        subcategory = 'Fuel'
-      } else if (desc.includes('restaurant') || desc.includes('cafe') || desc.includes('mcdonald') || desc.includes('hungry jack')) {
-        category = 'Eating-out & Entertainment'
-        subcategory = 'Restaurants & cafes'
-      } else if (desc.includes('netflix') || desc.includes('spotify') || desc.includes('disney')) {
-        category = 'Eating-out & Entertainment'
-        subcategory = 'Subscriptions'
-      } else if (desc.includes('transfer') || desc.includes('tfr')) {
-        category = 'Transfers'
-        subcategory = 'Transfer'
+      // Try to find a matching category/subcategory by keyword
+      let matchedCategoryId = ''
+      let matchedSubcategoryId = ''
+
+      const keywords: Array<{ pattern: RegExp; catName: string; subName: string }> = [
+        { pattern: /woolworths|coles|aldi|supermarket/, catName: 'Groceries', subName: 'Supermarket' },
+        { pattern: /salary|payroll|pay|income/, catName: 'Income', subName: 'Your take-home pay' },
+        { pattern: /netflix|spotify|disney|streaming/, catName: 'Eating-out & Entertainment', subName: 'Movies shows & music' },
+        { pattern: /restaurant|cafe|coffee/, catName: 'Eating-out & Entertainment', subName: 'Restaurants' },
+        { pattern: /transfer|tfr/, catName: 'Financial & Insurance', subName: 'Transfer' },
+      ]
+
+      for (const { pattern, catName, subName } of keywords) {
+        if (!pattern.test(desc)) continue
+        const cat = input.categories.find(c => c.name === catName)
+        if (!cat) continue
+        const sub = cat.subcategories.find(s => s.name === subName)
+        if (sub) {
+          matchedCategoryId = cat.categoryId
+          matchedSubcategoryId = sub.subcategoryId
+          break
+        }
+        // fall back to first subcategory in that category
+        if (cat.subcategories.length > 0) {
+          matchedCategoryId = cat.categoryId
+          matchedSubcategoryId = cat.subcategories[0].subcategoryId
+          break
+        }
       }
 
-      const subs = input.categories[category]
-      if (subs && !subs.includes(subcategory)) {
-        subcategory = subs[0] ?? ''
+      // Default: first available category/subcategory
+      if (!matchedCategoryId && input.categories.length > 0) {
+        const cat = input.categories[0]
+        matchedCategoryId = cat.categoryId
+        matchedSubcategoryId = cat.subcategories[0]?.subcategoryId ?? ''
       }
 
       return {
         index: tx.index,
-        category,
-        subcategory,
+        categoryId: matchedCategoryId,
+        subcategoryId: matchedSubcategoryId,
         reason: `Mock categorisation based on description keywords for "${tx.description}".`,
       }
     })

@@ -1,9 +1,32 @@
 import { describe, it, expect } from "vitest";
 import { toMonthlyAmount, getSubcategoryMonthlyBudget, buildBudgetVsActual, FREQ_FACTORS } from "../budget-tracking.js";
-import { buildEffectiveCategories } from "../category-tree.js";
-import type { Transaction, BudgetSettings } from "../contracts.js";
-import { readFileSync } from "fs";
-import { join } from "path";
+import type { BudgetData, Transaction } from "../contracts.js";
+
+const SUB_A = "sub-a-uuid";
+const SUB_B = "sub-b-uuid";
+const CAT_INCOME = "cat-income-uuid";
+const CAT_GROCERIES = "cat-groceries-uuid";
+
+const BUDGET_DATA: BudgetData = {
+  categories: [
+    {
+      categoryId: CAT_INCOME,
+      name: "Income",
+      type: "regular",
+      displayOrder: 0,
+      subcategories: [{ subcategoryId: SUB_A, name: "Pay", displayOrder: 0 }],
+    },
+    {
+      categoryId: CAT_GROCERIES,
+      name: "Groceries",
+      type: "regular",
+      displayOrder: 1,
+      subcategories: [{ subcategoryId: SUB_B, name: "Supermarket", displayOrder: 0 }],
+    },
+  ],
+  budgetAmounts: { [SUB_A]: 8000, [SUB_B]: 800 },
+  budgetFrequencies: {},
+};
 
 describe("toMonthlyAmount", () => {
   it("returns weekly amount * 52/12", () => {
@@ -17,95 +40,71 @@ describe("toMonthlyAmount", () => {
   it("returns annual amount / 12", () => {
     expect(toMonthlyAmount(1200, "annually")).toBeCloseTo(100);
   });
+
+  it("returns 0 for one-off", () => {
+    expect(toMonthlyAmount(500, "one-off")).toBe(0);
+  });
 });
 
 describe("getSubcategoryMonthlyBudget", () => {
-  const settings = { budgetOverrides: {}, budgetFreqs: {} };
-
-  it("returns default monthly budget for known subcategory", () => {
-    expect(getSubcategoryMonthlyBudget("Supermarket", settings)).toBe(800);
+  it("returns budget amount for known subcategory", () => {
+    expect(getSubcategoryMonthlyBudget(SUB_B, BUDGET_DATA)).toBe(800);
   });
 
-  it("returns 0 for unknown subcategory with no override", () => {
-    expect(getSubcategoryMonthlyBudget("Unknown Sub", settings)).toBe(0);
+  it("returns 0 for unknown subcategoryId", () => {
+    expect(getSubcategoryMonthlyBudget("unknown-uuid", BUDGET_DATA)).toBe(0);
   });
 
-  it("uses override amount when set", () => {
-    expect(getSubcategoryMonthlyBudget("Supermarket", { budgetOverrides: { "Supermarket": 600 }, budgetFreqs: {} })).toBe(600);
-  });
-
-  it("returns 0 for tombstoned subcategory (override = -1)", () => {
-    expect(getSubcategoryMonthlyBudget("Supermarket", { budgetOverrides: { "Supermarket": -1 }, budgetFreqs: {} })).toBe(0);
-  });
-
-  it("applies frequency factor to override", () => {
-    const result = getSubcategoryMonthlyBudget("Supermarket", {
-      budgetOverrides: { "Supermarket": 200 },
-      budgetFreqs: { "Supermarket": "weekly" },
-    });
-    expect(result).toBeCloseTo(200 * FREQ_FACTORS.weekly);
+  it("applies frequency factor when set", () => {
+    const bd: BudgetData = {
+      ...BUDGET_DATA,
+      budgetAmounts: { [SUB_B]: 200 },
+      budgetFrequencies: { [SUB_B]: "weekly" },
+    };
+    expect(getSubcategoryMonthlyBudget(SUB_B, bd)).toBeCloseTo(200 * FREQ_FACTORS.weekly);
   });
 });
 
-describe("buildBudgetVsActual — real export data", () => {
-  const exportData = JSON.parse(
-    readFileSync(
-      join(__dirname, "../../../../migration-artifacts/budget-tracker/budget-tracker-export-2026-04-18.json"),
-      "utf8"
-    )
-  );
-
-  const transactions: Transaction[] = exportData.transactions
-    .filter((t: Transaction) => t.category !== "_ignore")
-    .map((t: Transaction) => ({
-      ...t,
-      accountId: "acc-test",
-      _business: t._business ?? false,
-    }));
-
-  const settings: BudgetSettings = {
+describe("buildBudgetVsActual", () => {
+  const tx = (catId: string, subId: string, amount: string, date = "01/01/2026"): Transaction => ({
+    transactionId: crypto.randomUUID(),
     accountId: "acc-test",
-    budgetOverrides: exportData.budgetOverrides ?? {},
-    budgetFreqs: exportData.budgetFreqs ?? {},
-    customCategories: exportData.customCategories ?? {},
-    deletedSubs: exportData.deletedSubs ?? [],
-    projectBudgets: exportData.projectBudgets ?? {},
-    projectTasks: exportData.projectTasks ?? {},
-    customTopCategories: exportData.customTopCategories ?? [],
-    customProjectCategories: exportData.customProjectCategories ?? [],
-    deletedCategories: exportData.deletedCategories ?? [],
-    deletedProjectCategories: exportData.deletedProjectCategories ?? [],
-    disabledProjectCategories: exportData.disabledProjectCategories ?? [],
-    csvFormatMappings: exportData.csvFormatMappings,
-  };
-
-  const effectiveCategories = buildEffectiveCategories(settings);
-
-  it("processes all 726 non-ignored transactions without throwing", () => {
-    const result = buildBudgetVsActual(transactions, settings, effectiveCategories);
-    expect(result).toBeDefined();
-    expect(transactions.length).toBe(726);
+    date,
+    amount,
+    description: "test",
+    categoryId: catId,
+    subcategoryId: subId,
+    file: "test.csv",
+    _manual: false,
+    _business: false,
   });
 
-  it("returns positive totalIncome", () => {
-    const result = buildBudgetVsActual(transactions, settings, effectiveCategories);
-    expect(result.totalIncome).toBeGreaterThan(0);
+  it("computes income and expenses correctly", () => {
+    const transactions = [
+      tx(CAT_INCOME, SUB_A, "1000"),
+      tx(CAT_GROCERIES, SUB_B, "-200"),
+    ];
+    const result = buildBudgetVsActual(transactions, BUDGET_DATA);
+    expect(result.totalIncome).toBe(1000);
+    expect(result.totalExpenses).toBe(200);
+    expect(result.numMonths).toBe(1);
   });
 
-  it("returns positive totalExpenses", () => {
-    const result = buildBudgetVsActual(transactions, settings, effectiveCategories);
-    expect(result.totalExpenses).toBeGreaterThan(0);
-  });
-
-  it("spans 3 months", () => {
-    const result = buildBudgetVsActual(transactions, settings, effectiveCategories);
+  it("spans multiple months when transactions are spread", () => {
+    const transactions = [
+      tx(CAT_INCOME, SUB_A, "1000", "01/01/2026"),
+      tx(CAT_INCOME, SUB_A, "1000", "01/02/2026"),
+      tx(CAT_INCOME, SUB_A, "1000", "01/03/2026"),
+    ];
+    const result = buildBudgetVsActual(transactions, BUDGET_DATA);
     expect(result.numMonths).toBe(3);
   });
 
-  it("Groceries category has non-zero actual", () => {
-    const result = buildBudgetVsActual(transactions, settings, effectiveCategories);
-    const groceries = result.categories.find((c) => c.category === "Groceries");
-    expect(groceries).toBeDefined();
-    expect(groceries!.actual).toBeGreaterThan(0);
+  it("excludes business transactions from expenses", () => {
+    const transactions = [
+      { ...tx(CAT_GROCERIES, SUB_B, "-200"), _business: true },
+    ];
+    const result = buildBudgetVsActual(transactions, BUDGET_DATA);
+    expect(result.totalExpenses).toBe(0);
   });
 });

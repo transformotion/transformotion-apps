@@ -4,9 +4,8 @@ import { useState, useMemo } from "react"
 import { useBudgetStore } from "@/stores/budget-tracker/use-budget-store"
 import { PageHeader, Card, EmptyState, PillSelector } from "@/components/ui/design-system"
 import { BarChart3 } from "lucide-react"
-import { CATEGORY_LIST } from "../data/categories"
 import { CATEGORY_COLORS } from "../data/category-colors"
-import { isProjectCategory, isProjectSubcategory, isProjectTransaction } from "../data/project-config"
+import { getActiveCategories, getCategoryName, getSubcategoryName, isCapital, isTransfer } from "@/lib/categories"
 import { cn } from "@/lib/utils"
 import {
   LineChart,
@@ -29,33 +28,28 @@ import {
 
 type TimeRange = "3M" | "6M" | "12M" | "All"
 
-// Parse date string to Date object
 function parseDate(dateStr: string): Date {
   const [day, month, year] = dateStr.split("/").map(Number)
   return new Date(year, month - 1, day)
 }
 
-// Get month key for grouping
 function getMonthKey(dateStr: string): string {
   const date = parseDate(dateStr)
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`
 }
 
-// Format month key to short label
 function formatMonthShort(monthKey: string): string {
   const [year, month] = monthKey.split("-")
   const date = new Date(parseInt(year), parseInt(month) - 1)
   return date.toLocaleDateString("en-AU", { month: "short" })
 }
 
-// Format month key to full label
 function formatMonthFull(monthKey: string): string {
   const [year, month] = monthKey.split("-")
   const date = new Date(parseInt(year), parseInt(month) - 1)
   return date.toLocaleDateString("en-AU", { month: "long", year: "numeric" })
 }
 
-// Format currency for chart
 function formatCurrency(amount: number): string {
   if (amount >= 1000) {
     return `$${(amount / 1000).toFixed(1)}k`
@@ -63,10 +57,9 @@ function formatCurrency(amount: number): string {
   return `$${amount.toFixed(0)}`
 }
 
-// Format currency full
 function formatCurrencyFull(amount: number): string {
-  return new Intl.NumberFormat("en-AU", { 
-    style: "currency", 
+  return new Intl.NumberFormat("en-AU", {
+    style: "currency",
     currency: "AUD",
     minimumFractionDigits: 0,
     maximumFractionDigits: 0
@@ -75,66 +68,64 @@ function formatCurrencyFull(amount: number): string {
 
 export function CashflowTab() {
   const transactions = useBudgetStore((s) => s.transactions)
+  const budgetData = useBudgetStore((s) => s.budgetData)
+  const categories = budgetData.categories
   const [timeRange, setTimeRange] = useState<TimeRange>("6M")
+
+  // Expense category names (non-income, non-capital) for stacked bar chart
+  const expenseCategoryNames = useMemo(
+    () => getActiveCategories(categories).filter(c => c.name !== 'Income' && c.type !== 'capital').map(c => c.name),
+    [categories]
+  )
 
   // Calculate monthly data
   const monthlyData = useMemo(() => {
-    const byMonth: Record<string, { 
+    const byMonth: Record<string, {
       income: number
       expenses: number
       net: number
       byCategory: Record<string, number>
-      projectSpend: number
+      capitalSpend: number
     }> = {}
-    
-    // Process transactions (excluding business, transfers, and ignored)
+
     for (const tx of transactions) {
-      if (tx._business || tx.subcategory === "Transfer" || tx.category === "Ignore") continue
-      
+      const txIsTransfer = isTransfer(categories, tx.subcategoryId ?? null) || tx.subcategory === 'Transfer'
+      if (tx._business || txIsTransfer || tx._ignore) continue
+
       const monthKey = getMonthKey(tx.date)
       if (!byMonth[monthKey]) {
-        byMonth[monthKey] = { 
-          income: 0, 
-          expenses: 0, 
-          net: 0, 
+        byMonth[monthKey] = {
+          income: 0,
+          expenses: 0,
+          net: 0,
           byCategory: {},
-          projectSpend: 0
+          capitalSpend: 0
         }
       }
-      
+
       const amount = parseFloat(tx.amount) || 0
-      
-      if (isProjectTransaction(tx.category, tx.subcategory)) {
-        byMonth[monthKey].projectSpend += Math.abs(amount)
-      } else if (tx.category === "Income") {
+      const catName = getCategoryName(categories, tx.categoryId ?? null) || tx.category || ''
+
+      if (isCapital(categories, tx.categoryId ?? null)) {
+        byMonth[monthKey].capitalSpend += Math.abs(amount)
+      } else if (catName === 'Income') {
         byMonth[monthKey].income += Math.abs(amount)
-      } else if (tx.category) {
+      } else if (catName) {
         byMonth[monthKey].expenses += Math.abs(amount)
-        if (!byMonth[monthKey].byCategory[tx.category]) {
-          byMonth[monthKey].byCategory[tx.category] = 0
-        }
-        byMonth[monthKey].byCategory[tx.category] += Math.abs(amount)
+        byMonth[monthKey].byCategory[catName] = (byMonth[monthKey].byCategory[catName] || 0) + Math.abs(amount)
       }
     }
-    
-    // Calculate net for each month
+
     for (const data of Object.values(byMonth)) {
       data.net = data.income - data.expenses
     }
-    
+
     return byMonth
-  }, [transactions])
+  }, [transactions, categories])
 
-  // Get sorted month keys
-  const allMonths = useMemo(() => {
-    return Object.keys(monthlyData).sort()
-  }, [monthlyData])
+  const allMonths = useMemo(() => Object.keys(monthlyData).sort(), [monthlyData])
 
-  // Filter months by time range
   const filteredMonths = useMemo(() => {
-    const now = new Date()
-    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
-    
     let monthsToShow: number
     switch (timeRange) {
       case "3M": monthsToShow = 3; break
@@ -142,12 +133,9 @@ export function CashflowTab() {
       case "12M": monthsToShow = 12; break
       default: return allMonths
     }
-    
-    // Get last N months from available data
     return allMonths.slice(-monthsToShow)
   }, [allMonths, timeRange])
 
-  // Prepare chart data
   const trendData = useMemo(() => {
     return filteredMonths.map(month => ({
       month: formatMonthShort(month),
@@ -158,197 +146,159 @@ export function CashflowTab() {
     }))
   }, [filteredMonths, monthlyData])
 
-  // Prepare stacked bar data by category
   const categoryData = useMemo(() => {
     return filteredMonths.map(month => {
       const data: Record<string, unknown> = {
         month: formatMonthShort(month),
         monthKey: month
       }
-      
       const monthData = monthlyData[month]
       if (monthData) {
-        for (const cat of CATEGORY_LIST) {
-          if (cat !== "Income" && !isProjectCategory(cat)) {
-            data[cat] = monthData.byCategory[cat] || 0
-          }
+        for (const catName of expenseCategoryNames) {
+          data[catName] = monthData.byCategory[catName] || 0
         }
       }
-      
       return data
     })
-  }, [filteredMonths, monthlyData])
+  }, [filteredMonths, monthlyData, expenseCategoryNames])
 
-  // Project spend cumulative data
-  const projectData = useMemo(() => {
+  const capitalData = useMemo(() => {
     let cumulative = 0
     return filteredMonths.map(month => {
-      cumulative += monthlyData[month]?.projectSpend || 0
+      cumulative += monthlyData[month]?.capitalSpend || 0
       return {
         month: formatMonthShort(month),
         monthKey: month,
-        spend: monthlyData[month]?.projectSpend || 0,
+        spend: monthlyData[month]?.capitalSpend || 0,
         cumulative
       }
     })
   }, [filteredMonths, monthlyData])
 
-  // Calculate summary stats
   const stats = useMemo(() => {
     const months = filteredMonths.map(m => monthlyData[m]).filter(Boolean)
     if (months.length === 0) return null
-    
+
     const avgIncome = months.reduce((s, m) => s + m.income, 0) / months.length
     const avgExpenses = months.reduce((s, m) => s + m.expenses, 0) / months.length
-    
+
     let bestMonth = filteredMonths[0]
     let worstMonth = filteredMonths[0]
     let bestNet = monthlyData[bestMonth]?.net || 0
     let worstNet = monthlyData[worstMonth]?.net || 0
-    
+
     for (const month of filteredMonths) {
       const net = monthlyData[month]?.net || 0
-      if (net > bestNet) {
-        bestNet = net
-        bestMonth = month
-      }
-      if (net < worstNet) {
-        worstNet = net
-        worstMonth = month
-      }
+      if (net > bestNet) { bestNet = net; bestMonth = month }
+      if (net < worstNet) { worstNet = net; worstMonth = month }
     }
-    
+
     return { avgIncome, avgExpenses, bestMonth, bestNet, worstMonth, worstNet }
   }, [filteredMonths, monthlyData])
 
   const hasTransactions = transactions.length > 0
 
-  // Get categories with spending for legend
   const activeCategories = useMemo(() => {
     const cats = new Set<string>()
     for (const month of filteredMonths) {
       const data = monthlyData[month]
       if (data) {
         for (const cat of Object.keys(data.byCategory)) {
-          if (data.byCategory[cat] > 0) {
-            cats.add(cat)
-          }
+          if (data.byCategory[cat] > 0) cats.add(cat)
         }
       }
     }
     return Array.from(cats).sort()
   }, [filteredMonths, monthlyData])
 
-  // Sankey diagram data - flow from income sources to categories to subcategories
   const sankeyData = useMemo(() => {
-    // Aggregate all transactions for the filtered period
     const incomeBySource: Record<string, number> = {}
     const expensesByCategory: Record<string, number> = {}
     const expensesBySubcategory: Record<string, { amount: number; category: string }> = {}
-    
+
     for (const tx of transactions) {
-      if (tx._business || tx.subcategory === "Transfer" || tx.category === "Ignore") continue
-      
+      const txIsTransfer = isTransfer(categories, tx.subcategoryId ?? null) || tx.subcategory === 'Transfer'
+      if (tx._business || txIsTransfer || tx._ignore) continue
+
       const monthKey = getMonthKey(tx.date)
       if (!filteredMonths.includes(monthKey)) continue
-      
+
       const amount = Math.abs(parseFloat(tx.amount) || 0)
-      
-      if (tx.category === "Income" && tx.subcategory) {
-        incomeBySource[tx.subcategory] = (incomeBySource[tx.subcategory] || 0) + amount
-      } else if (tx.category && !isProjectCategory(tx.category)) {
-        expensesByCategory[tx.category] = (expensesByCategory[tx.category] || 0) + amount
-        if (tx.subcategory) {
-          if (!expensesBySubcategory[tx.subcategory]) {
-            expensesBySubcategory[tx.subcategory] = { amount: 0, category: tx.category }
+      const catName = getCategoryName(categories, tx.categoryId ?? null) || tx.category || ''
+      const subName = getSubcategoryName(categories, tx.subcategoryId ?? null) || tx.subcategory || ''
+
+      if (catName === 'Income' && subName) {
+        incomeBySource[subName] = (incomeBySource[subName] || 0) + amount
+      } else if (catName && !isCapital(categories, tx.categoryId ?? null)) {
+        expensesByCategory[catName] = (expensesByCategory[catName] || 0) + amount
+        if (subName) {
+          if (!expensesBySubcategory[subName]) {
+            expensesBySubcategory[subName] = { amount: 0, category: catName }
           }
-          expensesBySubcategory[tx.subcategory].amount += amount
+          expensesBySubcategory[subName].amount += amount
         }
       }
     }
-    
-    // Build nodes array: income sources, "Total Income", expense categories, top subcategories
+
     const nodes: Array<{ name: string }> = []
     const nodeIndex: Record<string, number> = {}
-    
-    // Add income sources
+
     const incomeSources = Object.entries(incomeBySource)
       .filter(([_, v]) => v > 100)
       .sort((a, b) => b[1] - a[1])
       .slice(0, 5)
-    
+
     incomeSources.forEach(([name]) => {
       nodeIndex[`income-${name}`] = nodes.length
       nodes.push({ name })
     })
-    
-    // Add "Total Income" node
+
     nodeIndex["total-income"] = nodes.length
     nodes.push({ name: "Total Income" })
-    
-    // Add expense categories
-    const categories = Object.entries(expensesByCategory)
+
+    const expCats = Object.entries(expensesByCategory)
       .filter(([_, v]) => v > 100)
       .sort((a, b) => b[1] - a[1])
       .slice(0, 6)
-    
-    categories.forEach(([name]) => {
+
+    expCats.forEach(([name]) => {
       nodeIndex[`cat-${name}`] = nodes.length
       nodes.push({ name })
     })
-    
-    // Add top subcategories per category
+
     const topSubcategories = Object.entries(expensesBySubcategory)
       .filter(([_, v]) => v.amount > 50)
       .sort((a, b) => b[1].amount - a[1].amount)
       .slice(0, 12)
-    
+
     topSubcategories.forEach(([name]) => {
       nodeIndex[`sub-${name}`] = nodes.length
       nodes.push({ name })
     })
-    
-    // Build links array
+
     const links: Array<{ source: number; target: number; value: number }> = []
-    
-    // Income sources → Total Income
+
     incomeSources.forEach(([name, value]) => {
-      links.push({
-        source: nodeIndex[`income-${name}`],
-        target: nodeIndex["total-income"],
-        value
-      })
+      links.push({ source: nodeIndex[`income-${name}`], target: nodeIndex["total-income"], value })
     })
-    
-    // Total Income → Expense Categories
-    const totalIncome = Object.values(incomeBySource).reduce((s, v) => s + v, 0)
-    categories.forEach(([name, value]) => {
-      links.push({
-        source: nodeIndex["total-income"],
-        target: nodeIndex[`cat-${name}`],
-        value
-      })
+
+    expCats.forEach(([name, value]) => {
+      links.push({ source: nodeIndex["total-income"], target: nodeIndex[`cat-${name}`], value })
     })
-    
-    // Expense Categories → Subcategories
+
     topSubcategories.forEach(([subName, { amount, category }]) => {
       if (nodeIndex[`cat-${category}`] !== undefined) {
-        links.push({
-          source: nodeIndex[`cat-${category}`],
-          target: nodeIndex[`sub-${subName}`],
-          value: amount
-        })
+        links.push({ source: nodeIndex[`cat-${category}`], target: nodeIndex[`sub-${subName}`], value: amount })
       }
     })
-    
-    return { nodes, links, hasData: nodes.length > 2 && links.length > 0 }
-  }, [transactions, filteredMonths])
 
-  // Custom tooltip for trend chart
+    return { nodes, links, hasData: nodes.length > 2 && links.length > 0 }
+  }, [transactions, filteredMonths, categories])
+
   const TrendTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{name: string; value: number; color: string}>; label?: string }) => {
     if (!active || !payload) return null
     const monthKey = trendData.find(d => d.month === label)?.monthKey || ""
-    
+
     return (
       <div className="bg-card border border-border rounded-lg p-3 shadow-lg">
         <p className="text-sm font-medium text-foreground mb-2">{formatMonthFull(monthKey)}</p>
@@ -366,13 +316,11 @@ export function CashflowTab() {
 
   return (
     <div className="p-4 space-y-4">
-      {/* Header */}
       <PageHeader
         title="Cashflow"
         subtitle="Visualize your income and spending trends"
       />
 
-      {/* Time Range Selector */}
       <PillSelector
         options={["3M", "6M", "12M", "All"] as TimeRange[]}
         value={timeRange}
@@ -387,7 +335,6 @@ export function CashflowTab() {
         />
       ) : (
         <>
-          {/* Key Metrics */}
           {stats && (
             <div className="grid grid-cols-2 gap-3">
               <Card>
@@ -415,7 +362,6 @@ export function CashflowTab() {
             </div>
           )}
 
-          {/* Sankey Diagram - Money Flow */}
           {sankeyData.hasData && (
             <Card>
               <h3 className="text-sm font-semibold text-foreground mb-4">Money Flow</h3>
@@ -434,10 +380,10 @@ export function CashflowTab() {
                           width={width}
                           height={height}
                           fill={
-                            payload.name === "Total Income" 
+                            payload.name === "Total Income"
                               ? "var(--signal-green)"
-                              : index < 5 
-                                ? "var(--signal-green)" 
+                              : index < 5
+                                ? "var(--signal-green)"
                                 : CATEGORY_COLORS[payload.name] || "var(--primary)"
                           }
                           fillOpacity={0.9}
@@ -466,50 +412,49 @@ export function CashflowTab() {
             </Card>
           )}
 
-          {/* Income vs Expenses Trend Chart */}
           <Card>
             <h3 className="text-sm font-semibold text-foreground mb-4">Income vs Expenses Trend</h3>
             <div className="h-56">
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart data={trendData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                  <XAxis 
-                    dataKey="month" 
+                  <XAxis
+                    dataKey="month"
                     tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
                     axisLine={{ stroke: "var(--border)" }}
                     tickLine={false}
                   />
-                  <YAxis 
+                  <YAxis
                     tickFormatter={formatCurrency}
                     tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
                     axisLine={false}
                     tickLine={false}
                   />
                   <Tooltip content={<TrendTooltip />} />
-                  <Legend 
+                  <Legend
                     wrapperStyle={{ fontSize: 11 }}
                     iconType="circle"
                     iconSize={8}
                   />
-                  <Bar 
-                    dataKey="income" 
-                    name="Income" 
-                    fill="var(--signal-green)" 
+                  <Bar
+                    dataKey="income"
+                    name="Income"
+                    fill="var(--signal-green)"
                     radius={[4, 4, 0, 0]}
                     barSize={24}
                   />
-                  <Bar 
-                    dataKey="expenses" 
-                    name="Expenses" 
-                    fill="var(--signal-red)" 
+                  <Bar
+                    dataKey="expenses"
+                    name="Expenses"
+                    fill="var(--signal-red)"
                     radius={[4, 4, 0, 0]}
                     barSize={24}
                   />
-                  <Line 
-                    type="monotone" 
-                    dataKey="net" 
-                    name="Net Savings" 
-                    stroke="var(--primary)" 
+                  <Line
+                    type="monotone"
+                    dataKey="net"
+                    name="Net Savings"
+                    stroke="var(--primary)"
                     strokeWidth={2}
                     dot={{ fill: "var(--primary)", r: 3 }}
                   />
@@ -518,7 +463,6 @@ export function CashflowTab() {
             </div>
           </Card>
 
-          {/* Category Breakdown Stacked Bar Chart */}
           {activeCategories.length > 0 && (
             <Card>
               <h3 className="text-sm font-semibold text-foreground mb-4">Monthly Expenses by Category</h3>
@@ -526,21 +470,21 @@ export function CashflowTab() {
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={categoryData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                    <XAxis 
-                      dataKey="month" 
+                    <XAxis
+                      dataKey="month"
                       tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
                       axisLine={{ stroke: "var(--border)" }}
                       tickLine={false}
                     />
-                    <YAxis 
+                    <YAxis
                       tickFormatter={formatCurrency}
                       tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
                       axisLine={false}
                       tickLine={false}
                     />
-                    <Tooltip 
-                      contentStyle={{ 
-                        backgroundColor: "var(--card)", 
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "var(--card)",
                         border: "1px solid var(--border)",
                         borderRadius: 8,
                         fontSize: 11
@@ -548,9 +492,9 @@ export function CashflowTab() {
                       formatter={(value: number) => formatCurrencyFull(value)}
                     />
                     {activeCategories.map(cat => (
-                      <Bar 
+                      <Bar
                         key={cat}
-                        dataKey={cat} 
+                        dataKey={cat}
                         stackId="a"
                         fill={CATEGORY_COLORS[cat] || CATEGORY_COLORS["default"]}
                         name={cat}
@@ -559,12 +503,11 @@ export function CashflowTab() {
                   </BarChart>
                 </ResponsiveContainer>
               </div>
-              
-              {/* Legend for categories */}
+
               <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-border">
                 {activeCategories.map(cat => (
                   <div key={cat} className="flex items-center gap-1.5">
-                    <div 
+                    <div
                       className="size-2.5 rounded-full"
                       style={{ backgroundColor: CATEGORY_COLORS[cat] || CATEGORY_COLORS["default"] }}
                     />
@@ -575,47 +518,46 @@ export function CashflowTab() {
             </Card>
           )}
 
-          {/* Project Spend Chart */}
-          {projectData.some(d => d.cumulative > 0) && (
+          {capitalData.some(d => d.cumulative > 0) && (
             <Card className="border-signal-amber/30">
-              <h3 className="text-sm font-semibold text-signal-amber mb-4">Project Spend Over Time</h3>
+              <h3 className="text-sm font-semibold text-signal-amber mb-4">Capital Spend Over Time</h3>
               <div className="h-40">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={projectData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
+                  <AreaChart data={capitalData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                    <XAxis 
-                      dataKey="month" 
+                    <XAxis
+                      dataKey="month"
                       tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
                       axisLine={{ stroke: "var(--border)" }}
                       tickLine={false}
                     />
-                    <YAxis 
+                    <YAxis
                       tickFormatter={formatCurrency}
                       tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
                       axisLine={false}
                       tickLine={false}
                     />
-                    <Tooltip 
-                      contentStyle={{ 
-                        backgroundColor: "var(--card)", 
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "var(--card)",
                         border: "1px solid var(--border)",
                         borderRadius: 8,
                         fontSize: 11
                       }}
                       formatter={(value: number) => formatCurrencyFull(value)}
                     />
-                    <Area 
-                      type="monotone" 
-                      dataKey="cumulative" 
+                    <Area
+                      type="monotone"
+                      dataKey="cumulative"
                       name="Cumulative Spend"
                       stroke="var(--signal-amber)"
                       fill="var(--signal-amber)"
                       fillOpacity={0.2}
                       strokeWidth={2}
                     />
-                    <Area 
-                      type="monotone" 
-                      dataKey="spend" 
+                    <Area
+                      type="monotone"
+                      dataKey="spend"
                       name="Monthly Spend"
                       stroke="var(--signal-amber)"
                       fill="var(--signal-amber)"
@@ -628,44 +570,43 @@ export function CashflowTab() {
             </Card>
           )}
 
-          {/* Savings Rate Over Time */}
           <Card>
             <h3 className="text-sm font-semibold text-foreground mb-4">Savings Rate Trend</h3>
             <div className="h-40">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart 
+                <LineChart
                   data={trendData.map(d => ({
                     ...d,
                     savingsRate: d.income > 0 ? ((d.income - d.expenses) / d.income) * 100 : 0
-                  }))} 
+                  }))}
                   margin={{ top: 5, right: 5, left: -20, bottom: 5 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                  <XAxis 
-                    dataKey="month" 
+                  <XAxis
+                    dataKey="month"
                     tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
                     axisLine={{ stroke: "var(--border)" }}
                     tickLine={false}
                   />
-                  <YAxis 
+                  <YAxis
                     tickFormatter={(v) => `${v.toFixed(0)}%`}
                     tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
                     axisLine={false}
                     tickLine={false}
                     domain={[-50, 50]}
                   />
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: "var(--card)", 
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "var(--card)",
                       border: "1px solid var(--border)",
                       borderRadius: 8,
                       fontSize: 11
                     }}
                     formatter={(value: number) => `${value.toFixed(1)}%`}
                   />
-                  <Line 
-                    type="monotone" 
-                    dataKey="savingsRate" 
+                  <Line
+                    type="monotone"
+                    dataKey="savingsRate"
                     name="Savings Rate"
                     stroke="var(--primary)"
                     strokeWidth={2}

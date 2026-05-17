@@ -1,16 +1,16 @@
-import type { Transaction, CategoryTree, BudgetSettings } from "./contracts.js";
-import { isExcludedFromCashflow, PROJECT_CATEGORIES } from "./exclusions.js";
+import type { Transaction, BudgetData, Category } from "./contracts.js";
 import { getSubcategoryMonthlyBudget } from "./budget-tracking.js";
 
 export interface MonthlyTrendPoint {
-  month: string;    // e.g. "Jan 26"
-  monthKey: string; // "YYYY-MM" for sorting/filtering
+  month: string;
+  monthKey: string;
   income: number;
   expenses: number;
   net: number;
 }
 
 export interface CategoryBarPoint {
+  categoryId: string;
   category: string;
   actual: number;
   budget: number;
@@ -50,22 +50,47 @@ function monthLabel(key: string): string {
   });
 }
 
+function getActiveSubs(cat: Category) {
+  return cat.subcategories.filter(s => !s.deleted);
+}
+
+function isExcludedTx(tx: Transaction, categories: Category[]): boolean {
+  if (tx._business || tx._ignore) return true;
+  if (tx.subcategoryId) {
+    const sub = categories.flatMap(c => c.subcategories).find(s => s.subcategoryId === tx.subcategoryId);
+    if (sub?.name === "Transfer") return true;
+  } else if (tx.subcategory === "Transfer") return true;
+  const cat = categories.find(c => c.categoryId === tx.categoryId);
+  if (cat?.type === "capital") return true;
+  return false;
+}
+
 /**
  * Build monthly income / expenses / net trend data.
- * Excludes transfers, business expenses, and project transactions.
+ * Uses UUID categoryId when available; falls back to legacy category string.
  */
-export function buildMonthlyTrend(transactions: Transaction[]): MonthlyTrendPoint[] {
-  const months = [...new Set(transactions.map(txMonth).filter((m): m is string => m !== null))].sort();
+export function buildMonthlyTrend(
+  transactions: Transaction[],
+  categories: Category[]
+): MonthlyTrendPoint[] {
+  const incomeCat = categories.find(c => c.name === "Income");
+  const months = [
+    ...new Set(transactions.map(txMonth).filter((m): m is string => m !== null)),
+  ].sort();
 
-  return months.map((mo) => {
-    const mtx = transactions.filter((t) => txMonth(t) === mo);
+  return months.map(mo => {
+    const mtx = transactions.filter(t => txMonth(t) === mo);
 
     const income = mtx
-      .filter((t) => t.category === "Income")
+      .filter(t => t.categoryId === incomeCat?.categoryId || (!t.categoryId && t.category === "Income"))
       .reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0);
 
     const expenses = mtx
-      .filter((t) => t.category && t.category !== "Income" && !isExcludedFromCashflow(t))
+      .filter(t => {
+        const cat = categories.find(c => c.categoryId === t.categoryId);
+        const catName = cat?.name || t.category;
+        return catName && catName !== "Income" && !isExcludedTx(t, categories);
+      })
       .reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0);
 
     return {
@@ -80,98 +105,115 @@ export function buildMonthlyTrend(transactions: Transaction[]): MonthlyTrendPoin
 
 /**
  * Build per-category actual vs budget bar chart data.
- * Covers all expense categories (excludes Income and project categories).
- * Budget is the sum of monthly subcategory budgets multiplied by the number of months.
+ * Covers all regular expense categories (excludes Income and capital).
  */
 export function buildCategoryBarData(
   transactions: Transaction[],
-  settings: Pick<BudgetSettings, "budgetOverrides" | "budgetFreqs">,
-  effectiveCategories: CategoryTree
+  budgetData: BudgetData
 ): CategoryBarPoint[] {
   const months = new Set(transactions.map(txMonth).filter(Boolean));
   const numMonths = Math.max(months.size, 1);
 
-  return Object.keys(effectiveCategories)
-    .filter((c) => c !== "Income" && !PROJECT_CATEGORIES.includes(c))
-    .map((cat) => {
-      const actual = transactions
-        .filter((t) => t.category === cat && t.subcategory !== "Transfer")
-        .reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0);
+  const regularExpenseCats = budgetData.categories.filter(
+    c => !c.deleted && c.type === "regular" && c.name !== "Income"
+  );
 
-      const budget = (effectiveCategories[cat] ?? []).reduce(
-        (s, sub) => s + getSubcategoryMonthlyBudget(sub, settings) * numMonths,
-        0
-      );
+  return regularExpenseCats.map(cat => {
+    const actual = transactions
+      .filter(t => {
+        if (isExcludedTx(t, budgetData.categories)) return false;
+        return t.categoryId === cat.categoryId || (!t.categoryId && t.category === cat.name);
+      })
+      .reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0);
 
-      return {
-        category: cat,
-        actual: Math.round(actual),
-        budget: Math.round(budget),
-        over: actual > budget,
-      };
-    })
-    .filter((d) => d.actual > 0 || d.budget > 0);
+    const budget = getActiveSubs(cat).reduce(
+      (s, sub) => s + getSubcategoryMonthlyBudget(sub.subcategoryId, budgetData) * numMonths,
+      0
+    );
+
+    return {
+      categoryId: cat.categoryId,
+      category: cat.name,
+      actual: Math.round(actual),
+      budget: Math.round(budget),
+      over: actual > budget,
+    };
+  }).filter(d => d.actual > 0 || d.budget > 0);
 }
 
 /**
- * Build Sankey diagram data from budget settings (shows planned cash flow, not actuals).
- *
- * Layout: income subcategories (col 0) → Total Income node (col 1)
- *       → expense categories (col 2) → expense subcategories (col 3)
+ * Build Sankey diagram data from budget settings (planned cash flow, not actuals).
  */
-export function buildSankeyData(
-  settings: Pick<BudgetSettings, "budgetOverrides" | "budgetFreqs">,
-  effectiveCategories: CategoryTree
-): SankeyData {
-  const getSubBudget = (sub: string) => getSubcategoryMonthlyBudget(sub, settings);
-  const getCatBudget = (cat: string) =>
-    (effectiveCategories[cat] ?? []).reduce((s, sub) => s + getSubBudget(sub), 0);
+export function buildSankeyData(budgetData: BudgetData): SankeyData {
+  const getSubBudget = (subcategoryId: string) =>
+    getSubcategoryMonthlyBudget(subcategoryId, budgetData);
 
-  const incomeSubs = (effectiveCategories["Income"] ?? []).filter((s) => getSubBudget(s) > 0);
-  const expCats = Object.keys(effectiveCategories).filter(
-    (c) => c !== "Income" && getCatBudget(c) > 0
+  const regularCats = budgetData.categories.filter(c => !c.deleted && c.type === "regular");
+  const incomeCat = regularCats.find(c => c.name === "Income");
+
+  const incomeSubs = incomeCat
+    ? getActiveSubs(incomeCat).filter(s => getSubBudget(s.subcategoryId) > 0)
+    : [];
+
+  const getCatBudget = (cat: Category) =>
+    getActiveSubs(cat).reduce((s, sub) => s + getSubBudget(sub.subcategoryId), 0);
+
+  const expCats = regularCats.filter(
+    c => c.name !== "Income" && getCatBudget(c) > 0
   );
 
-  const totalIncomeVal = incomeSubs.reduce((s, sub) => s + getSubBudget(sub), 0);
+  const totalIncomeVal = incomeSubs.reduce((s, sub) => s + getSubBudget(sub.subcategoryId), 0);
 
   const nodes: SankeyNode[] = [
-    ...incomeSubs.map((s) => ({
-      id: `inc_${s}`,
-      label: s,
-      value: getSubBudget(s),
+    ...incomeSubs.map(s => ({
+      id: `inc_${s.subcategoryId}`,
+      label: s.name,
+      value: getSubBudget(s.subcategoryId),
       col: 0,
       type: "incSub" as const,
     })),
     { id: "total_income", label: "Total Income", value: totalIncomeVal, col: 1, type: "total" as const },
-    ...expCats.map((c) => ({
-      id: `exp_cat_${c}`,
-      label: c,
+    ...expCats.map(c => ({
+      id: `exp_cat_${c.categoryId}`,
+      label: c.name,
       value: getCatBudget(c),
       col: 2,
       type: "expCat" as const,
-      category: c,
+      category: c.name,
     })),
-    ...expCats.flatMap((c) =>
-      (effectiveCategories[c] ?? [])
-        .filter((s) => getSubBudget(s) > 0)
-        .map((s) => ({
-          id: `exp_sub_${s}`,
-          label: s,
-          value: getSubBudget(s),
+    ...expCats.flatMap(c =>
+      getActiveSubs(c)
+        .filter(s => getSubBudget(s.subcategoryId) > 0)
+        .map(s => ({
+          id: `exp_sub_${s.subcategoryId}`,
+          label: s.name,
+          value: getSubBudget(s.subcategoryId),
           col: 3,
           type: "expSub" as const,
-          category: c,
+          category: c.name,
         }))
     ),
   ];
 
   const links: SankeyLink[] = [
-    ...incomeSubs.map((s) => ({ source: `inc_${s}`, target: "total_income", value: getSubBudget(s) })),
-    ...expCats.map((c) => ({ source: "total_income", target: `exp_cat_${c}`, value: getCatBudget(c) })),
-    ...expCats.flatMap((c) =>
-      (effectiveCategories[c] ?? [])
-        .filter((s) => getSubBudget(s) > 0)
-        .map((s) => ({ source: `exp_cat_${c}`, target: `exp_sub_${s}`, value: getSubBudget(s) }))
+    ...incomeSubs.map(s => ({
+      source: `inc_${s.subcategoryId}`,
+      target: "total_income",
+      value: getSubBudget(s.subcategoryId),
+    })),
+    ...expCats.map(c => ({
+      source: "total_income",
+      target: `exp_cat_${c.categoryId}`,
+      value: getCatBudget(c),
+    })),
+    ...expCats.flatMap(c =>
+      getActiveSubs(c)
+        .filter(s => getSubBudget(s.subcategoryId) > 0)
+        .map(s => ({
+          source: `exp_cat_${c.categoryId}`,
+          target: `exp_sub_${s.subcategoryId}`,
+          value: getSubBudget(s.subcategoryId),
+        }))
     ),
   ];
 

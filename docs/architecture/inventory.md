@@ -496,18 +496,34 @@ during v4 inventory production.
 
 #### 2.10.3 Budget-tracker tables
 
+**Status: Resolved by budget-data-restructure PR (data model updated)**
+
 | Table | PK | SK |
 |---|---|---|
 | `budget-tracker.transactions-{stage}` | accountId | transactionId |
 | `budget-tracker.rules-{stage}` | accountId | ruleId |
 | `budget-tracker.settings-{stage}` | accountId | settingKey |
 
-Original plan called for separate `categories` and `budgets` tables.
-These were collapsed into the `settings` table — `categoryTree` and
-`budgetOverrides` are stored as values keyed by `settingKey`. The
-deviation is reasonable (matches the BudgetSettings shape in
-`packages/budget-domain/`) but constitutes a plan-vs-actual divergence
-M3 may want to record.
+Categories, subcategories, and budget amounts are stored as a single
+`budgetData` value in the settings table (key: `budgetData`), with
+shape `{ categories: Category[], budgetAmounts: Record<subcategoryId, number>,
+budgetFrequencies: Record<subcategoryId, BudgetFrequency> }`.
+`Category` objects carry `type: 'regular'|'capital'` and support soft
+deletion (`deleted: true`). The old `categoryTree` / `budgetOverrides`
+/ `budgetFreqs` separate keys are superseded.
+
+`BudgetSettings` is now slim — only `csvFormatMappings` remains as a
+separate settings key.
+
+The `rules` table stores `MatchingRule` objects (renamed from
+`CustomRule`); rules reference `categoryId`/`subcategoryId` UUIDs
+instead of category name strings. There are no built-in rules compiled
+into the codebase.
+
+`Transaction` rows have `categoryId`/`subcategoryId` UUID FK fields;
+the deprecated `category`/`subcategory` string fields remain for
+migration fallback display until transactions are re-categorised via
+the rules engine.
 
 A `budget-tracker.accounts-{stage}` table also exists but appears
 dormant — no runtime code references it. Likely a leftover from an

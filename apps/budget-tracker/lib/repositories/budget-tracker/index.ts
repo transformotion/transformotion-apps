@@ -1,27 +1,29 @@
 import { getConfig } from '@/lib/config'
 import { getBudgetHttp } from '@/lib/api'
 import { LocalTransactionRepository } from './transaction-repository'
-import { LocalCustomRulesRepository } from './rules-repository'
+import { LocalMatchingRulesRepository } from './rules-repository'
 import { DynamoTransactionRepository } from './dynamo-transaction-repository'
-import { DynamoRulesRepository } from './dynamo-rules-repository'
-import type { TransactionRepository, CustomRulesRepository } from '@transformotion/budget-domain'
+import { DynamoMatchingRulesRepository } from './dynamo-rules-repository'
+import { DynamoBudgetDataRepository } from './dynamo-budget-data-repository'
+import { LocalBudgetDataRepository } from './budget-data-repository'
+import { DynamoSettingsRepository } from './dynamo-settings-repository'
+import { LocalSettingsRepository } from './settings-repository'
+import type { TransactionRepository, MatchingRulesRepository, BudgetDataRepository, SettingsRepository } from '@transformotion/budget-domain'
 
 export type { Transaction, TransactionRepository } from '@transformotion/budget-domain'
-export type { CustomRule, CustomRulesRepository } from '@transformotion/budget-domain'
-export type { BuiltinRule } from './rules-repository'
+export type { MatchingRule, MatchingRulesRepository } from '@transformotion/budget-domain'
+export type { BudgetData, BudgetDataRepository, Category, Subcategory, BudgetFrequency } from '@transformotion/budget-domain'
+export type { BudgetSettings, SettingsRepository } from '@transformotion/budget-domain'
 export { LocalTransactionRepository } from './transaction-repository'
-export { LocalCustomRulesRepository } from './rules-repository'
-export type {
-  BudgetSettings,
-  BudgetFrequency,
-  TransactionFilters,
-  SettingsRepository,
-} from './settings-repository'
-export { getSettingsRepository } from './settings-repository'
+export { LocalMatchingRulesRepository } from './rules-repository'
+export { getMatchingRulesRepository } from './rules-repository'
+export type { TransactionFilters } from './settings-repository'
+export { getFilters, saveFilters, clearFilters, DEFAULT_FILTERS } from './settings-repository'
 
 let _txRepo: TransactionRepository | null = null
-let _customRulesRepo: CustomRulesRepository | null = null
-let _localRulesRepo: LocalCustomRulesRepository | null = null
+let _matchingRulesRepo: MatchingRulesRepository | null = null
+let _budgetDataRepo: BudgetDataRepository | null = null
+let _settingsRepo: SettingsRepository | null = null
 
 export function getTransactionRepository(): TransactionRepository {
   if (!_txRepo) {
@@ -32,19 +34,29 @@ export function getTransactionRepository(): TransactionRepository {
   return _txRepo
 }
 
-export function getCustomRulesRepository(): CustomRulesRepository {
-  if (!_customRulesRepo) {
-    _customRulesRepo = getConfig().storage.provider === 'dynamo'
-      ? new DynamoRulesRepository(getBudgetHttp())
-      : new LocalCustomRulesRepository()
+export function getMatchingRulesRepositoryInstance(): MatchingRulesRepository {
+  if (!_matchingRulesRepo) {
+    _matchingRulesRepo = getConfig().storage.provider === 'dynamo'
+      ? new DynamoMatchingRulesRepository(getBudgetHttp())
+      : new LocalMatchingRulesRepository()
   }
-  return _customRulesRepo
+  return _matchingRulesRepo
 }
 
-// Always local — builtin rules are frontend-only, never stored in DynamoDB
-export function getRulesRepository(): LocalCustomRulesRepository {
-  if (!_localRulesRepo) {
-    _localRulesRepo = new LocalCustomRulesRepository()
+export function getBudgetDataRepository(): BudgetDataRepository {
+  if (!_budgetDataRepo) {
+    _budgetDataRepo = getConfig().storage.provider === 'dynamo'
+      ? new DynamoBudgetDataRepository(getBudgetHttp())
+      : new LocalBudgetDataRepository()
   }
-  return _localRulesRepo
+  return _budgetDataRepo
+}
+
+export function getSettingsRepository(): SettingsRepository {
+  if (!_settingsRepo) {
+    _settingsRepo = getConfig().storage.provider === 'dynamo'
+      ? new DynamoSettingsRepository(getBudgetHttp())
+      : new LocalSettingsRepository()
+  }
+  return _settingsRepo
 }

@@ -109,31 +109,31 @@ Repository interfaces are defined in `v0-reference/contracts/budget-tracker/stat
 ## Data types
 
 All types that cross the UI/backend boundary are defined in [v0-reference/contracts/budget-tracker/data-models.md](/v0-reference/contracts/budget-tracker/data-models.md). Key types:
-- `Transaction` — atomic unit; `_manual` flag prevents rules from overwriting
-- `CustomRule` — keyword or regex pattern, case-insensitive
-- `BudgetSettings` — per-account, stored key-by-key in DynamoDB
-- `BuiltinRule` — compiled into codebase, not user-editable, not stored in DynamoDB
+- `Transaction` — atomic unit; `_manual` flag prevents rules from overwriting; `categoryId`/`subcategoryId` are UUID FKs; deprecated `category`/`subcategory` string fields remain for migration fallback display
+- `MatchingRule` — user-managed keyword/regex rule referencing `categoryId`/`subcategoryId` UUIDs; sorted by `priority` (lower = higher priority); replaces the old `CustomRule` + `BuiltinRule` split (there are no built-in rules)
+- `BudgetData` — `{ categories: Category[], budgetAmounts: Record<subcategoryId, number>, budgetFrequencies: Record<subcategoryId, BudgetFrequency> }`; stored as a single `budgetData` key in the settings table
+- `BudgetSettings` — slim; only `csvFormatMappings: Record<string, CSVMapping>` remains
+- `Category` — `{ categoryId, name, type: 'regular'|'capital', subcategories: Subcategory[], deleted? }`; `type='capital'` marks project/one-off spend excluded from cashflow
 
 ## Exclusion rules (apply everywhere)
 
-A transaction is **excluded from personal P&L** if any of these are true:
-1. `subcategory === "Transfer"`
+A transaction is **excluded from personal cashflow** if any of these are true:
+1. `subcategory === "Transfer"` (checked via `isTransfer(subcategory)`)
 2. `_business === true`
-3. `category` is in `PROJECT_CATEGORIES` (default: `["Renovations"]`)
-4. `subcategory` is in `PROJECT_SUBCATEGORIES` (default: `["Capital purchases"]`)
+3. The transaction's resolved category has `type === 'capital'` (replaces the old `PROJECT_CATEGORIES` / `PROJECT_SUBCATEGORIES` string lists)
 
-These exclusions must be consistent across Summary totals, Budget view, Cashflow charts, and the Sankey diagram. Excluded transactions remain visible in the Transactions tab.
+Capital categories cover one-off or project spending (renovations, car purchases, etc.) and appear as a dedicated section in the Budget tab. These exclusions must be consistent across Summary totals, Budget view, Cashflow charts, and the Sankey diagram. Excluded transactions remain visible in the Transactions tab.
 
 ## Rules engine
 
-Custom rules override built-in rules. Most recent custom rule wins if multiple match. Process order:
+There are no built-in rules. All rules are user-managed `MatchingRule` objects with UUID category/subcategory FKs. Process order:
 
 1. If `_manual === true`: return existing category unchanged
-2. Iterate custom rules in reverse (most recent first) — case-insensitive match
-3. Iterate built-in rules
-4. Return `{ category: "", subcategory: "" }` if no match
+2. Sort enabled rules ascending by `priority` (lower number = higher priority); apply first case-insensitive match against `description`
+3. `applyRules(description, rules)` returns `{ categoryId, subcategoryId, ruleId, isBusiness? } | null`
+4. Return `null` if no match — transaction remains uncategorized
 
-**Critical ordering:** Never run the rules engine before custom rules are loaded. Load order: auth → settings → rules → transactions → run rules.
+**Critical ordering:** Never run the rules engine before rules are loaded. Load order: auth → settings → rules → transactions → run rules.
 
 ## Testing
 
@@ -149,10 +149,10 @@ Real export fixture: `migration-artifacts/budget-tracker/budget-tracker-export-2
 Key invariants to preserve in tests:
 1. `Transaction.transactionId` is always a UUID string
 2. `buildBudgetVsActual()` numMonths matches the transaction date range
-3. `isExcludedFromCashflow()` always excludes Transfer, `_business`, project categories
+3. `isExcludedFromCashflow()` always excludes Transfer, `_business`, and `type='capital'` categories
 4. `buildMonthlyTrend()` net = income − expenses (exact equality)
 5. Migration endpoint strips legacy integer `_id` from v0 export before writing to DynamoDB; Transfer subcategory transactions get `_ignore: true`
-6. `getSubcategoryMonthlyBudget()` returns 0 for tombstoned subcategories (override = -1)
+6. `getSubcategoryMonthlyBudget()` returns 0 for soft-deleted subcategories (`sub.deleted === true`)
 
 ## AI service
 

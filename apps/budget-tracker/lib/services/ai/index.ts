@@ -1,19 +1,12 @@
-/**
- * Budget Tracker AI Service Interface
- *
- * Domain-specific AI operations for budget categorisation.
- * Provider selected at startup via runtime-config (NEXT_PUBLIC_AI_OVERRIDE / NEXT_PUBLIC_RUNTIME_PROFILE).
- */
-
 import type {
-  CategoryTree,
+  Category,
   AiReviewResponse,
   AiCsvAnalysisResponse,
 } from '@transformotion/budget-domain'
 
 export interface ReviewTransactionsInput {
   transactions: Array<{ index: number; description: string; amount: string }>
-  categories: CategoryTree
+  categories: Category[]
   onBatch?: (batchResults: AiReviewResponse['results']) => void
 }
 

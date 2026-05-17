@@ -1,34 +1,14 @@
-/**
- * Settings Repository
- * 
- * Data access layer for user settings.
- * Current: localStorage
- * Future: DynamoDB via Lambda
- */
+import type { BudgetSettings, SettingsRepository } from '@transformotion/budget-domain'
 
-export type BudgetFrequency = "weekly" | "fortnightly" | "monthly" | "quarterly" | "annually"
-
-export interface BudgetSettings {
-  budgetOverrides: Record<string, number>
-  budgetFreqs: Record<string, BudgetFrequency>
-  customCategories: Record<string, string[]>
-  projectBudgets: Record<string, number>
-  deletedCategories: string[]
-  customTopCategories: string[]
-  projectTasks: Record<string, string[]>
-  customProjectCategories: string[]
-  deletedProjectCategories: string[]
-  disabledProjectCategories: string[]
-  csvFormatMappings?: Record<string, unknown>
-}
+export type { BudgetSettings, SettingsRepository }
 
 export interface TransactionFilters {
   dateRange: { start: Date; end: Date } | null
-  category: string | null
-  subcategory: string | null
+  categoryId: string | null
+  subcategoryId: string | null
   bankAccount: string | null
   source: string | null
-  businessFilter: "all" | "personal" | "business"
+  businessFilter: 'all' | 'personal' | 'business'
   uncategorizedOnly: boolean
 }
 
@@ -36,42 +16,21 @@ const SETTINGS_KEY = 'budget-tracker-settings'
 const FILTERS_KEY = 'budget-tracker-transaction-filters'
 
 const DEFAULT_SETTINGS: BudgetSettings = {
-  budgetOverrides: {},
-  budgetFreqs: {},
-  customCategories: {},
-  projectBudgets: {},
-  deletedCategories: [],
-  customTopCategories: [],
-  projectTasks: {},
-  customProjectCategories: [],
-  deletedProjectCategories: [],
-  disabledProjectCategories: [],
+  csvFormatMappings: {},
 }
 
-const DEFAULT_FILTERS: TransactionFilters = {
+export const DEFAULT_FILTERS: TransactionFilters = {
   dateRange: null,
-  category: null,
-  subcategory: null,
+  categoryId: null,
+  subcategoryId: null,
   bankAccount: null,
   source: null,
-  businessFilter: "all",
+  businessFilter: 'all',
   uncategorizedOnly: false,
 }
 
-export interface SettingsRepository {
-  getSettings(): Promise<BudgetSettings>
-  updateSettings(updates: Partial<BudgetSettings>): Promise<BudgetSettings>
-  resetSettings(): Promise<BudgetSettings>
-
-  getFilters(): Promise<TransactionFilters>
-  updateFilters(filters: TransactionFilters): Promise<TransactionFilters>
-  resetFilters(): Promise<TransactionFilters>
-}
-
-class LocalSettingsRepository implements SettingsRepository {
-  // Settings
-
-  async getSettings(): Promise<BudgetSettings> {
+export class LocalSettingsRepository implements SettingsRepository {
+  async get(_accountId: string): Promise<BudgetSettings> {
     if (typeof window === 'undefined') return DEFAULT_SETTINGS
     try {
       const stored = localStorage.getItem(SETTINGS_KEY)
@@ -81,10 +40,9 @@ class LocalSettingsRepository implements SettingsRepository {
     }
   }
 
-  async updateSettings(updates: Partial<BudgetSettings>): Promise<BudgetSettings> {
-    const current = await this.getSettings()
+  async patch(_accountId: string, updates: Partial<BudgetSettings>): Promise<BudgetSettings> {
+    const current = await this.get(_accountId)
     const updated = { ...current, ...updates }
-    
     if (typeof window !== 'undefined') {
       try {
         localStorage.setItem(SETTINGS_KEY, JSON.stringify(updated))
@@ -92,75 +50,42 @@ class LocalSettingsRepository implements SettingsRepository {
         console.error('Failed to save settings')
       }
     }
-    
     return updated
   }
+}
 
-  async resetSettings(): Promise<BudgetSettings> {
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem(SETTINGS_KEY, JSON.stringify(DEFAULT_SETTINGS))
-      } catch {
-        // Ignore
-      }
+// Filters are UI-only state; managed via localStorage directly (not part of SettingsRepository)
+
+export function getFilters(): TransactionFilters {
+  if (typeof window === 'undefined') return DEFAULT_FILTERS
+  try {
+    const stored = localStorage.getItem(FILTERS_KEY)
+    if (!stored) return DEFAULT_FILTERS
+    const parsed = JSON.parse(stored)
+    if (parsed.dateRange) {
+      parsed.dateRange.start = new Date(parsed.dateRange.start)
+      parsed.dateRange.end = new Date(parsed.dateRange.end)
     }
-    return DEFAULT_SETTINGS
-  }
-
-  // Filters
-
-  async getFilters(): Promise<TransactionFilters> {
-    if (typeof window === 'undefined') return DEFAULT_FILTERS
-    try {
-      const stored = localStorage.getItem(FILTERS_KEY)
-      if (!stored) return DEFAULT_FILTERS
-      
-      const parsed = JSON.parse(stored)
-      // Restore Date objects
-      if (parsed.dateRange) {
-        parsed.dateRange.start = new Date(parsed.dateRange.start)
-        parsed.dateRange.end = new Date(parsed.dateRange.end)
-      }
-      return { ...DEFAULT_FILTERS, ...parsed }
-    } catch {
-      return DEFAULT_FILTERS
-    }
-  }
-
-  async updateFilters(filters: TransactionFilters): Promise<TransactionFilters> {
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem(FILTERS_KEY, JSON.stringify(filters))
-      } catch {
-        console.error('Failed to save filters')
-      }
-    }
-    return filters
-  }
-
-  async resetFilters(): Promise<TransactionFilters> {
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem(FILTERS_KEY, JSON.stringify(DEFAULT_FILTERS))
-      } catch {
-        // Ignore
-      }
-    }
+    return { ...DEFAULT_FILTERS, ...parsed }
+  } catch {
     return DEFAULT_FILTERS
   }
 }
 
-// Factory function
-export function createSettingsRepository(): SettingsRepository {
-  return new LocalSettingsRepository()
+export function saveFilters(filters: TransactionFilters): void {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.setItem(FILTERS_KEY, JSON.stringify(filters))
+  } catch {
+    console.error('Failed to save filters')
+  }
 }
 
-// Singleton instance
-let _repository: SettingsRepository | null = null
-
-export function getSettingsRepository(): SettingsRepository {
-  if (!_repository) {
-    _repository = createSettingsRepository()
+export function clearFilters(): TransactionFilters {
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem(FILTERS_KEY, JSON.stringify(DEFAULT_FILTERS))
+    } catch {}
   }
-  return _repository
+  return DEFAULT_FILTERS
 }

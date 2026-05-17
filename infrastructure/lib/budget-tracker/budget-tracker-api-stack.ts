@@ -15,6 +15,8 @@ export interface BudgetTrackerApiStackProps extends cdk.StackProps {
   authoriser: apigateway.CognitoUserPoolsAuthorizer;
   /** Pre-built /api resource from PlatformApiStack — budget-tracker mounts /budget/v1 below it. */
   apiResource: apigateway.Resource;
+  /** budget-data table name — passed in to avoid cross-stack dependency issues. */
+  budgetDataTableName: string;
 }
 
 /**
@@ -40,7 +42,7 @@ export class BudgetTrackerApiStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: BudgetTrackerApiStackProps) {
     super(scope, id, props);
 
-    const { stage, authoriser, apiResource: platformApiResource } = props;
+    const { stage, authoriser, apiResource: platformApiResource, budgetDataTableName } = props;
 
     const auth = authMethodOptions(authoriser);
 
@@ -54,9 +56,10 @@ export class BudgetTrackerApiStack extends cdk.Stack {
     cdk.Tags.of(this).add('environment', stage);
 
     // ── Import shared tables by name ──────────────────────────────────────────
-    const txTable       = dynamodb.Table.fromTableName(this, 'TxTable',       `budget-tracker.transactions-${stage}`);
-    const rulesTable    = dynamodb.Table.fromTableName(this, 'RulesTable',    `budget-tracker.rules-${stage}`);
-    const settingsTable = dynamodb.Table.fromTableName(this, 'SettingsTable', `budget-tracker.settings-${stage}`);
+    const txTable         = dynamodb.Table.fromTableName(this, 'TxTable',         `budget-tracker.transactions-${stage}`);
+    const rulesTable      = dynamodb.Table.fromTableName(this, 'RulesTable',      `budget-tracker.rules-${stage}`);
+    const settingsTable   = dynamodb.Table.fromTableName(this, 'SettingsTable',   `budget-tracker.settings-${stage}`);
+    const budgetDataTable = dynamodb.Table.fromTableName(this, 'BudgetDataTable', budgetDataTableName);
 
     const claudeProxyFnName = `transformotion-claude-proxy-${stage}`;
 
@@ -124,6 +127,19 @@ export class BudgetTrackerApiStack extends cdk.Stack {
       resources: [`arn:aws:lambda:${this.region}:${this.account}:function:${claudeProxyFnName}`],
     }));
 
+    // ── budget-data-handler ───────────────────────────────────────────────────
+    const budgetDataFn = new lambdaNodejs.NodejsFunction(this, 'BudgetDataFn', {
+      functionName: `budget-data-handler-${stage}`,
+      entry:        path.join(fnDir, 'budget-data/src/index.ts'),
+      handler:      'handler',
+      runtime:      lambda.Runtime.NODEJS_20_X,
+      timeout:      cdk.Duration.seconds(30),
+      memorySize:   256,
+      environment:  { BUDGET_DATA_TABLE: budgetDataTable.tableName },
+      bundling,
+    });
+    budgetDataTable.grantReadWriteData(budgetDataFn);
+
     // ── budget-export-handler ─────────────────────────────────────────────────
     const exportFn = new lambdaNodejs.NodejsFunction(this, 'ExportFn', {
       functionName: `budget-export-handler-${stage}`,
@@ -169,6 +185,12 @@ export class BudgetTrackerApiStack extends cdk.Stack {
     aiRes.addResource('categorise').addMethod('POST',    aiInt, auth);
     aiRes.addResource('review').addMethod('POST',        aiInt, auth);
     aiRes.addResource('csv-analysis').addMethod('POST',  aiInt, auth);
+
+    // /budget-data
+    const budgetDataRes = apiResource.addResource('budget-data');
+    const budgetDataInt = new apigateway.LambdaIntegration(budgetDataFn, { proxy: true });
+    budgetDataRes.addMethod('GET',   budgetDataInt, auth);
+    budgetDataRes.addMethod('PATCH', budgetDataInt, auth);
 
     // /business-export
     apiResource.addResource('business-export').addMethod(
