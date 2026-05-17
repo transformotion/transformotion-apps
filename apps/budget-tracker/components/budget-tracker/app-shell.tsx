@@ -85,7 +85,6 @@ export function BudgetUserHeader({
   const user = useAuthStore((s) => s.user)
   const accounts = useAuthStore((s) => s.accounts)
   const currentAccount = useAuthStore((s) => s.currentAccount)
-  const authSignOut = useAuthStore((s) => s.signOut)
   const switchAccount = useAuthStore((s) => s.switchAccount)
   const [accountMenuOpen, setAccountMenuOpen] = useState(false)
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
@@ -95,7 +94,6 @@ export function BudgetUserHeader({
   const firstName = (user?.name ?? '').split(' ')[0]
 
   function handleSignOut() {
-    authSignOut()
     onSignOut?.()
   }
 
@@ -210,7 +208,6 @@ export function BudgetDesktopSidebar({
   const user = useAuthStore((s) => s.user)
   const accounts = useAuthStore((s) => s.accounts)
   const currentAccount = useAuthStore((s) => s.currentAccount)
-  const authSignOut = useAuthStore((s) => s.signOut)
   const switchAccount = useAuthStore((s) => s.switchAccount)
   const [accountMenuOpen, setAccountMenuOpen] = useState(false)
   const [signOutConfirm, setSignOutConfirm] = useState(false)
@@ -219,7 +216,6 @@ export function BudgetDesktopSidebar({
   const firstName = (user?.name ?? '').split(' ')[0]
 
   function handleSignOut() {
-    authSignOut()
     onSignOut?.()
   }
 

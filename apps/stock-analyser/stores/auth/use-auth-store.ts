@@ -41,11 +41,12 @@ export const useAuthStore = create<AuthState>()(
       },
 
       signOut: async () => {
-        set({ isLoading: true })
         try {
           await authService.signOut()
-        } finally {
-          set({ user: null, isAuthenticated: false, isLoading: false, error: null })
+          // Success: Cognito navigates the browser to /signed-out/. Page unloads.
+        } catch (error) {
+          // signOut failed — user is stuck. Reset so the auth guard redirects.
+          set({ user: null, isAuthenticated: false, error: error instanceof Error ? error.message : 'Sign out failed' })
         }
       },
 
