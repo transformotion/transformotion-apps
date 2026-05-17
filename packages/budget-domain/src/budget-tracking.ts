@@ -86,13 +86,13 @@ export function buildBudgetVsActual(
 
   const totalExpenses = activeTx
     .filter(t => {
-      if (t._business || t._ignore) return false;
+      if (t._business) return false;
       if (t.subcategoryId) {
         const sub = budgetData.categories
           .flatMap(c => c.subcategories)
           .find(s => s.subcategoryId === t.subcategoryId);
-        if (sub?.name === "Transfer") return false;
-      } else if (t.subcategory === "Transfer") return false;
+        if (sub?.excludeFromCashflow) return false;
+      }
       const cat = budgetData.categories.find(c => c.categoryId === t.categoryId);
       if (cat?.type === "capital") return false;
       const catName = cat?.name || t.category;
@@ -117,7 +117,11 @@ export function buildBudgetVsActual(
     .map(cat => {
       const activeSubs = getActiveSubs(cat);
       const catTx = activeTx.filter(t => {
-        if (t._business || t._ignore) return false;
+        if (t._business) return false;
+        if (t.subcategoryId) {
+          const sub = budgetData.categories.flatMap(c => c.subcategories).find(s => s.subcategoryId === t.subcategoryId);
+          if (sub?.excludeFromCashflow) return false;
+        }
         return t.categoryId === cat.categoryId || (!t.categoryId && t.category === cat.name);
       });
       const actual = catTx.reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0);

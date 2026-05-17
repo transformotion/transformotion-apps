@@ -8,7 +8,7 @@ export interface TransactionFilters {
   subcategoryId: string | null
   bankAccount: string | null
   source: string | null
-  businessFilter: 'all' | 'personal' | 'business'
+  businessFilter: 'all' | 'personal' | 'business' | 'excluded'
   uncategorizedOnly: boolean
 }
 

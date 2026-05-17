@@ -67,9 +67,9 @@ export function isCapital(categories: Category[], categoryId: string | null): bo
   return getCategoryById(categories, categoryId)?.type === 'capital'
 }
 
-export function isTransfer(categories: Category[], subcategoryId: string | null): boolean {
+export function excludeFromCashflow(categories: Category[], subcategoryId: string | null): boolean {
   if (!subcategoryId) return false
-  return getSubcategoryById(categories, subcategoryId)?.name === 'Transfer'
+  return getSubcategoryById(categories, subcategoryId)?.excludeFromCashflow === true
 }
 
 export const FREQUENCY_LABELS: Record<BudgetFrequency, string> = {

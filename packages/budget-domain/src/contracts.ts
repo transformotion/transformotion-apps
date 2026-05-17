@@ -8,6 +8,7 @@ export interface Subcategory {
   name: string;
   displayOrder: number;
   deleted?: boolean;              // Soft-delete — transactions continue to display
+  excludeFromCashflow?: boolean;  // When true, transactions in this subcategory excluded from cashflow analysis
 }
 
 export interface Category {
@@ -40,7 +41,6 @@ export interface Transaction {
   file: string;
   _manual: boolean;
   _business: boolean;
-  _ignore?: boolean;
 
   // DEPRECATED — present during migration window only
   category?: string;
@@ -60,7 +60,6 @@ export interface MatchingRule {
   enabled: boolean;
   priority: number;
   isBusiness: boolean;
-  isIgnore?: boolean;
   learned: boolean;
   createdAt: string;
 }

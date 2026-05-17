@@ -29,7 +29,7 @@ const CATEGORIES: Category[] = [
     name: "Financial & Insurance",
     type: "regular",
     displayOrder: 2,
-    subcategories: [{ subcategoryId: SUB_TRANSFER_ID, name: "Transfer", displayOrder: 0 }],
+    subcategories: [{ subcategoryId: SUB_TRANSFER_ID, name: "Transfer", displayOrder: 0, excludeFromCashflow: true }],
   },
 ];
 

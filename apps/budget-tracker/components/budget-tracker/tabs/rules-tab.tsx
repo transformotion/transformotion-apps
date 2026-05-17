@@ -49,7 +49,6 @@ export function RulesTab() {
     categoryId: "",
     subcategoryId: "",
     isBusiness: false,
-    isIgnore: false,
   })
 
   const testMatches = useMemo(() => {
@@ -103,7 +102,7 @@ export function RulesTab() {
 
   const addNewRule = () => {
     if (!newRule.name.trim() || !newRule.pattern.trim()) return
-    if (!newRule.isIgnore && (!newRule.categoryId || !newRule.subcategoryId)) return
+    if (!newRule.categoryId || !newRule.subcategoryId) return
 
     const rule: MatchingRule = {
       ruleId: crypto.randomUUID(),
@@ -111,10 +110,9 @@ export function RulesTab() {
       name: newRule.name.trim(),
       match: newRule.pattern.trim(),
       matchType: newRule.matchType,
-      categoryId: newRule.isIgnore ? '' : newRule.categoryId,
-      subcategoryId: newRule.isIgnore ? '' : newRule.subcategoryId,
+      categoryId: newRule.categoryId,
+      subcategoryId: newRule.subcategoryId,
       isBusiness: newRule.isBusiness,
-      isIgnore: newRule.isIgnore,
       enabled: true,
       priority: Date.now(),
       learned: false,
@@ -122,7 +120,7 @@ export function RulesTab() {
     }
 
     setMatchingRules([...matchingRules, rule])
-    setNewRule({ name: "", pattern: "", matchType: "contains", categoryId: "", subcategoryId: "", isBusiness: false, isIgnore: false })
+    setNewRule({ name: "", pattern: "", matchType: "contains", categoryId: "", subcategoryId: "", isBusiness: false })
     setAddingRule(false)
   }
 
@@ -203,7 +201,7 @@ export function RulesTab() {
                             color: CATEGORY_COLORS[catName] || CATEGORY_COLORS["default"],
                           }}
                         >
-                          {rule.isIgnore ? "Ignored" : (subName || catName)}
+                          {subName || catName}
                         </span>
                       </div>
                     </button>
@@ -304,20 +302,7 @@ export function RulesTab() {
               />
             </div>
 
-            <label className="flex items-center gap-2 text-sm text-foreground p-2 bg-surface2 rounded-lg cursor-pointer">
-              <input
-                type="checkbox"
-                checked={newRule.isIgnore}
-                onChange={(e) => setNewRule(r => ({ ...r, isIgnore: e.target.checked, categoryId: "", subcategoryId: "" }))}
-                className="rounded border-border"
-              />
-              <Ban className="size-4 text-muted-foreground" />
-              <span>Ignore this transaction</span>
-              <span className="text-xs text-muted-foreground ml-auto">Exclude from Summary &amp; Cashflow</span>
-            </label>
-
-            {!newRule.isIgnore && (
-              <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-[10px] uppercase tracking-wider text-muted-foreground block mb-1">Category</label>
                   <select
@@ -346,25 +331,21 @@ export function RulesTab() {
                   </select>
                 </div>
               </div>
-            )}
 
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-              {!newRule.isIgnore && (
-                <label className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <input
-                    type="checkbox"
-                    checked={newRule.isBusiness}
-                    onChange={(e) => setNewRule(r => ({ ...r, isBusiness: e.target.checked }))}
-                    className="rounded border-border"
-                  />
-                  Mark as business expense
-                </label>
-              )}
-              {newRule.isIgnore && <div />}
+              <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={newRule.isBusiness}
+                  onChange={(e) => setNewRule(r => ({ ...r, isBusiness: e.target.checked }))}
+                  className="rounded border-border"
+                />
+                Mark as business expense
+              </label>
 
               <PrimaryButton
                 onClick={addNewRule}
-                disabled={!newRule.name || !newRule.pattern || (!newRule.isIgnore && (!newRule.categoryId || !newRule.subcategoryId))}
+                disabled={!newRule.name || !newRule.pattern || !newRule.categoryId || !newRule.subcategoryId}
                 className="w-full sm:w-auto"
               >
                 <Check className="size-4 mr-1" />
@@ -423,25 +404,18 @@ export function RulesTab() {
                       >
                         <div className="flex items-center gap-2 min-w-0 flex-1">
                           {!rule.enabled && <Ban className="size-3 text-signal-red shrink-0" />}
-                          {rule.isIgnore && rule.enabled && <Ban className="size-3 text-muted-foreground shrink-0" />}
                           <span className="text-xs text-muted-foreground truncate">{rule.name}</span>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
-                          {rule.isIgnore ? (
-                            <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-muted/50 text-muted-foreground">
-                              Ignored
-                            </span>
-                          ) : (
-                            <span
-                              className="px-2 py-0.5 rounded text-[10px] font-medium"
-                              style={{
-                                backgroundColor: `${CATEGORY_COLORS[catName] || CATEGORY_COLORS["default"]}20`,
-                                color: CATEGORY_COLORS[catName] || CATEGORY_COLORS["default"],
-                              }}
-                            >
-                              {subName || catName}
-                            </span>
-                          )}
+                          <span
+                            className="px-2 py-0.5 rounded text-[10px] font-medium"
+                            style={{
+                              backgroundColor: `${CATEGORY_COLORS[catName] || CATEGORY_COLORS["default"]}20`,
+                              color: CATEGORY_COLORS[catName] || CATEGORY_COLORS["default"],
+                            }}
+                          >
+                            {subName || catName}
+                          </span>
                           <ChevronDown className={cn(
                             "size-3 text-muted-foreground transition-transform",
                             (isViewing || isEditing) && "rotate-180"
@@ -572,7 +546,6 @@ export function RulesTab() {
                               <select
                                 value={rule.categoryId}
                                 onChange={(e) => updateRule(rule.ruleId, { categoryId: e.target.value, subcategoryId: "" })}
-                                disabled={rule.isIgnore}
                                 className="w-full h-8 px-2 bg-background border border-border rounded text-sm disabled:opacity-50"
                               >
                                 <option value="">Select...</option>
@@ -586,7 +559,7 @@ export function RulesTab() {
                               <select
                                 value={rule.subcategoryId}
                                 onChange={(e) => updateRule(rule.ruleId, { subcategoryId: e.target.value })}
-                                disabled={rule.isIgnore || !rule.categoryId}
+                                disabled={!rule.categoryId}
                                 className="w-full h-8 px-2 bg-background border border-border rounded text-sm disabled:opacity-50"
                               >
                                 <option value="">Select...</option>
@@ -606,19 +579,6 @@ export function RulesTab() {
                                 className="rounded border-border"
                               />
                               Business expense
-                            </label>
-                            <label className="flex items-center gap-2 text-sm text-muted-foreground">
-                              <input
-                                type="checkbox"
-                                checked={rule.isIgnore || false}
-                                onChange={(e) => updateRule(rule.ruleId, {
-                                  isIgnore: e.target.checked,
-                                  categoryId: e.target.checked ? '' : rule.categoryId,
-                                  subcategoryId: e.target.checked ? '' : rule.subcategoryId,
-                                })}
-                                className="rounded border-border"
-                              />
-                              Ignore
                             </label>
                           </div>
 

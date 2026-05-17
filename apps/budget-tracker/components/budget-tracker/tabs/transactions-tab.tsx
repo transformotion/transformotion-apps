@@ -9,7 +9,7 @@ import {
 } from "lucide-react"
 import { CATEGORY_COLORS } from "../data/category-colors"
 import { applyRules } from "../data/builtin-rules"
-import { getActiveCategories, getActiveSubcategories, getCategoryName, getSubcategoryName, getDisplayLabel } from "@/lib/categories"
+import { getActiveCategories, getActiveSubcategories, getCategoryName, getSubcategoryName, getDisplayLabel, excludeFromCashflow } from "@/lib/categories"
 import type { Transaction, Category } from "@transformotion/budget-domain"
 import type { MatchingRule, CSVMapping } from "@transformotion/budget-domain"
 import { cn } from "@/lib/utils"
@@ -152,6 +152,7 @@ export function TransactionsTab() {
     return transactions.filter(t => {
       if (filters.businessFilter === "personal" && t._business) return false
       if (filters.businessFilter === "business" && !t._business) return false
+      if (filters.businessFilter === "excluded" && !(excludeFromCashflow(categories, t.subcategoryId ?? null))) return false
 
       if (filters.categoryId) {
         const txCatName = getCategoryName(categories, t.categoryId ?? null) || t.category || ''
@@ -187,6 +188,7 @@ export function TransactionsTab() {
 
   const hasTransactions = transactions.length > 0
   const businessCount = transactions.filter(t => t._business).length
+  const excludedCount = transactions.filter(t => !t._business && excludeFromCashflow(categories, t.subcategoryId ?? null)).length
 
   const bulkCat = getActiveCategories(categories).find(c => c.categoryId === bulkCategoryId)
 
@@ -434,7 +436,7 @@ export function TransactionsTab() {
           <div>
             <label className="text-[10px] uppercase tracking-wider text-muted-foreground block mb-2">Type</label>
             <div className="flex items-center gap-2 flex-wrap">
-              {(["all", "personal", "business"] as const).map((filter) => (
+              {(["all", "personal", "business", "excluded"] as const).map((filter) => (
                 <button
                   key={filter}
                   onClick={() => setFilters(f => ({ ...f, businessFilter: filter }))}
@@ -448,6 +450,7 @@ export function TransactionsTab() {
                   {filter === "all" && "All"}
                   {filter === "personal" && "Personal"}
                   {filter === "business" && <><Briefcase className="size-3" />Business {businessCount > 0 && `(${businessCount})`}</>}
+                  {filter === "excluded" && <>Excluded {excludedCount > 0 && `(${excludedCount})`}</>}
                 </button>
               ))}
             </div>
@@ -1126,9 +1129,8 @@ function CSVImportModal({
         date: parseDate(row[columnMapping.date] || ""),
         amount: amount.toString(),
         description,
-        categoryId: (ruleResult && !ruleResult.isIgnore) ? ruleResult.categoryId : null,
-        subcategoryId: (ruleResult && !ruleResult.isIgnore) ? ruleResult.subcategoryId : null,
-        _ignore: ruleResult?.isIgnore ?? false,
+        categoryId: ruleResult?.categoryId ?? null,
+        subcategoryId: ruleResult?.subcategoryId ?? null,
         file: file?.name || "",
         _manual: false,
         _business: ruleResult?.isBusiness ?? false,

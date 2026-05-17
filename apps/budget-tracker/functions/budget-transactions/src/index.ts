@@ -136,7 +136,7 @@ async function bulkUpsert(event: APIGatewayProxyEvent, accountId: string) {
 
 // ── PATCH /api/budget/v1/transactions/:id ─────────────────────────────────────
 async function updateTransaction(event: APIGatewayProxyEvent, accountId: string, transactionId: string) {
-  const body = parseBody<Partial<Pick<Transaction, 'categoryId' | 'subcategoryId' | '_manual' | '_business' | '_ignore'>>>(event);
+  const body = parseBody<Partial<Pick<Transaction, 'categoryId' | 'subcategoryId' | '_manual' | '_business'>>>(event);
 
   const expressions: string[] = [];
   const names: Record<string, string> = {};
@@ -146,7 +146,6 @@ async function updateTransaction(event: APIGatewayProxyEvent, accountId: string,
   if (body.subcategoryId !== undefined) { expressions.push('subcategoryId = :subId'); values[':subId']   = body.subcategoryId; }
   if (body._manual !== undefined)       { expressions.push('#manual = :manual');      names['#manual']   = '_manual';   values[':manual']   = body._manual; }
   if (body._business !== undefined)     { expressions.push('#business = :biz');       names['#business'] = '_business'; values[':biz']      = body._business; }
-  if (body._ignore !== undefined)       { expressions.push('#ignore = :ignore');      names['#ignore']   = '_ignore';   values[':ignore']   = body._ignore; }
   if (expressions.length === 0) throw { statusCode: 400, message: 'No fields to update' };
 
   const res = await ddb.send(new UpdateCommand({

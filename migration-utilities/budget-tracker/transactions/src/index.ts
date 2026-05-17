@@ -89,7 +89,6 @@ export const handler = withAuth(async ({ auth, account, event }) => {
       dateIso:       toIso(transformed.date),
       _manual:       transformed._manual ?? false,
       _business:     transformed._business ?? false,
-      _ignore:       transformed.subcategory === 'Transfer' ? true : (transformed._ignore ?? undefined),
     });
     txMigrated++;
   }

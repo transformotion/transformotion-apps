@@ -5,9 +5,10 @@ import { useBudgetStore } from "@/stores/budget-tracker/use-budget-store"
 import { PageHeader, Card, EmptyState } from "@/components/ui/design-system"
 import { ChevronLeft, ChevronRight, ChevronDown, PieChart, Briefcase } from "lucide-react"
 import { CATEGORY_COLORS } from "../data/category-colors"
+import { ExcludedBadge } from "../badges/excluded-badge"
 import {
   getActiveCategories, getActiveSubcategories, getCategoryName, getSubcategoryName,
-  isCapital, isTransfer, toMonthlyAmount
+  isCapital, excludeFromCashflow, toMonthlyAmount
 } from "@/lib/categories"
 import type { Transaction, BudgetFrequency } from '@transformotion/budget-domain'
 import { cn } from "@/lib/utils"
@@ -78,9 +79,7 @@ export function SummaryTab() {
 
     const personalTransactions = monthTransactions.filter(t =>
       !t._business &&
-      !isTransfer(categories, t.subcategoryId ?? null) &&
-      t.subcategory !== 'Transfer' &&
-      !t._ignore &&
+      !excludeFromCashflow(categories, t.subcategoryId ?? null) &&
       !isCapital(categories, t.categoryId ?? null)
     )
 
@@ -106,7 +105,9 @@ export function SummaryTab() {
           budget: monthlyBudget,
           transactions: []
         }
-        byCategory[cat.name].budget += monthlyBudget
+        if (!sub.excludeFromCashflow) {
+          byCategory[cat.name].budget += monthlyBudget
+        }
       }
     }
 
@@ -319,6 +320,8 @@ export function SummaryTab() {
                               const subKey = `${cat.categoryId}-${subData.subcategoryId}`
                               const isSubExpanded = expandedSubcategories.has(subKey)
                               const subOverBudget = !isIncome && subData.total > subData.budget && subData.budget > 0
+                              const subObj = categories.flatMap(c => c.subcategories).find(s => s.subcategoryId === subData.subcategoryId)
+                              const isExcluded = subObj?.excludeFromCashflow === true
 
                               return (
                                 <div key={subName}>
@@ -326,11 +329,12 @@ export function SummaryTab() {
                                     onClick={(e) => { e.stopPropagation(); toggleSubcategory(subKey) }}
                                     className="w-full flex items-center justify-between py-1 text-left group"
                                   >
-                                    <div className="flex items-center gap-1">
+                                    <div className="flex items-center gap-1.5">
                                       {subData.transactions.length > 0 && (
                                         <ChevronDown className={cn("size-3 text-muted-foreground transition-transform", isSubExpanded && "rotate-180")} />
                                       )}
-                                      <span className="text-xs text-muted-foreground group-hover:text-foreground transition-colors">{subName}</span>
+                                      <span className={cn("text-xs transition-colors", isExcluded ? "text-muted-foreground/50 italic" : "text-muted-foreground group-hover:text-foreground")}>{subName}</span>
+                                      {isExcluded && <ExcludedBadge />}
                                     </div>
                                     <div className="flex items-center gap-2">
                                       <span className={cn("text-xs font-medium", isIncome ? "text-signal-green" : subOverBudget ? "text-signal-red" : "text-foreground")}>
