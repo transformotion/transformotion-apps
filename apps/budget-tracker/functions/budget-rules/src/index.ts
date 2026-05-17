@@ -51,7 +51,6 @@ async function createRule(event: APIGatewayProxyEvent, accountId: string) {
     isBusiness: body.isBusiness ?? false,
     isIgnore: body.isIgnore,
     overridesBuiltinId: body.overridesBuiltinId,
-    projectId: body.projectId,
     learned: body.learned ?? false,
     createdAt: new Date().toISOString(),
   };
@@ -78,7 +77,6 @@ async function updateRule(event: APIGatewayProxyEvent, accountId: string, ruleId
   if (body.isBusiness !== undefined)         { expressions.push('isBusiness = :biz');                                  values[':biz'] = body.isBusiness; }
   if (body.isIgnore !== undefined)           { expressions.push('isIgnore = :ignore');                                  values[':ignore'] = body.isIgnore; }
   if (body.overridesBuiltinId !== undefined) { expressions.push('overridesBuiltinId = :obid');                          values[':obid'] = body.overridesBuiltinId; }
-  if (body.projectId !== undefined)          { expressions.push('projectId = :pid');                                    values[':pid'] = body.projectId; }
   if (expressions.length === 0) throw { statusCode: 400, message: 'No fields to update' };
 
   const res = await ddb.send(new UpdateCommand({
