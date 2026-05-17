@@ -28,7 +28,6 @@ export interface CustomRule {
   isBusiness: boolean;            // Sets _business: true on matched transactions
   isIgnore?: boolean;             // Sets _ignore: true on matched transactions
   overridesBuiltinId?: string;    // Built-in rule ID this custom rule replaces/disables
-  projectId?: string;             // Assigns matched transactions to a project category
   learned: boolean;               // true if created via "Learn" button; false if manually authored
   createdAt: string;              // ISO 8601
 }
