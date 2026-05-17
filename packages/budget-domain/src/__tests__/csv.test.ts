@@ -61,10 +61,10 @@ describe("parseCSV — ANZ headerless format", () => {
     expect(txs[0].file).toBe("ANZ Jan.csv");
   });
 
-  it("initialises category and subcategory as empty strings", () => {
+  it("initialises categoryId and subcategoryId as null", () => {
     const txs = parseCSV(ANZ_CSV, "ANZ Jan.csv");
-    expect(txs[0].category).toBe("");
-    expect(txs[0].subcategory).toBe("");
+    expect(txs[0].categoryId).toBeNull();
+    expect(txs[0].subcategoryId).toBeNull();
   });
 });
 

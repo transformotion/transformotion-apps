@@ -1,115 +1,64 @@
-import { CustomRule, CustomRulesRepository } from '@transformotion/budget-domain'
+import type { MatchingRule, MatchingRulesRepository } from '@transformotion/budget-domain'
 
-export type { CustomRule }
+export type { MatchingRule }
 
-const CUSTOM_RULES_KEY = 'budget-tracker-custom-rules'
-const BUILTIN_RULES_KEY = 'budget-tracker-builtin-rules'
+const MATCHING_RULES_KEY = 'budget-tracker-matching-rules'
 
-// BuiltinRule is frontend-only (compiled into codebase, not stored in DynamoDB).
-// It is NOT part of CustomRulesRepository.
-export interface BuiltinRule {
-  id: string
-  name: string
-  pattern: string
-  matchType: 'contains' | 'startsWith' | 'regex'
-  category: string
-  subcategory: string
-  isBusiness: boolean
-  isIgnore?: boolean
-  overrideCategory?: string
-  overrideSubcategory?: string
-  disabled?: boolean
-  priority: number
-}
-
-class LocalCustomRulesRepository implements CustomRulesRepository {
-  private getCustomRules(): CustomRule[] {
+class LocalMatchingRulesRepository implements MatchingRulesRepository {
+  private getRules(): MatchingRule[] {
     if (typeof window === 'undefined') return []
     try {
-      const stored = localStorage.getItem(CUSTOM_RULES_KEY)
+      const stored = localStorage.getItem(MATCHING_RULES_KEY)
+        // Migrate from old localStorage key if present
+        ?? localStorage.getItem('budget-tracker-custom-rules')
       return stored ? JSON.parse(stored) : []
     } catch {
       return []
     }
   }
 
-  private saveCustomRules(rules: CustomRule[]): void {
+  private saveRules(rules: MatchingRule[]): void {
     if (typeof window === 'undefined') return
     try {
-      localStorage.setItem(CUSTOM_RULES_KEY, JSON.stringify(rules))
+      localStorage.setItem(MATCHING_RULES_KEY, JSON.stringify(rules))
     } catch {
-      console.error('Failed to save custom rules')
+      console.error('Failed to save matching rules')
     }
   }
 
-  async findAll(_accountId: string): Promise<CustomRule[]> {
-    return this.getCustomRules()
+  async findAll(_accountId: string): Promise<MatchingRule[]> {
+    return this.getRules()
   }
 
-  async findById(_accountId: string, id: string): Promise<CustomRule | null> {
-    return this.getCustomRules().find(r => r.ruleId === id) ?? null
+  async findById(_accountId: string, id: string): Promise<MatchingRule | null> {
+    return this.getRules().find(r => r.ruleId === id) ?? null
   }
 
-  async save(rule: CustomRule): Promise<CustomRule> {
-    const rules = this.getCustomRules()
+  async save(rule: MatchingRule): Promise<MatchingRule> {
+    const rules = this.getRules()
     const index = rules.findIndex(r => r.ruleId === rule.ruleId)
     if (index >= 0) {
       rules[index] = rule
     } else {
       rules.push(rule)
     }
-    this.saveCustomRules(rules)
+    this.saveRules(rules)
     return rule
   }
 
   async delete(id: string, _accountId: string): Promise<void> {
-    this.saveCustomRules(this.getCustomRules().filter(r => r.ruleId !== id))
-  }
-
-  // Built-in rule persistence (frontend-only, not part of canonical interface)
-
-  getBuiltinRules(): BuiltinRule[] | null {
-    if (typeof window === 'undefined') return null
-    try {
-      const stored = localStorage.getItem(BUILTIN_RULES_KEY)
-      return stored ? JSON.parse(stored) : null
-    } catch {
-      return null
-    }
-  }
-
-  saveBuiltinRules(rules: BuiltinRule[]): void {
-    if (typeof window === 'undefined') return
-    try {
-      localStorage.setItem(BUILTIN_RULES_KEY, JSON.stringify(rules))
-    } catch {
-      console.error('Failed to save builtin rules')
-    }
-  }
-
-  updateBuiltinRule(id: string, updates: Partial<BuiltinRule>): BuiltinRule {
-    const rules = this.getBuiltinRules() || []
-    const index = rules.findIndex(r => r.id === id)
-    if (index < 0) throw new Error(`Built-in rule not found: ${id}`)
-    rules[index] = { ...rules[index], ...updates }
-    this.saveBuiltinRules(rules)
-    return rules[index]
-  }
-
-  resetBuiltinRules(defaults: BuiltinRule[]): BuiltinRule[] {
-    this.saveBuiltinRules(defaults)
-    return defaults
+    this.saveRules(this.getRules().filter(r => r.ruleId !== id))
   }
 }
 
-export { LocalCustomRulesRepository }
-export type { CustomRulesRepository }
+export { LocalMatchingRulesRepository }
+export type { MatchingRulesRepository }
 
-let _repository: LocalCustomRulesRepository | null = null
+let _repository: LocalMatchingRulesRepository | null = null
 
-export function getRulesRepository(): LocalCustomRulesRepository {
+export function getMatchingRulesRepository(): LocalMatchingRulesRepository {
   if (!_repository) {
-    _repository = new LocalCustomRulesRepository()
+    _repository = new LocalMatchingRulesRepository()
   }
   return _repository
 }

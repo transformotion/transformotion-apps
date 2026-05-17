@@ -6,15 +6,18 @@ import { useAuthStore, selectCurrentAccount } from "@/stores/auth/use-auth-store
 import { PageHeader, Card, PrimaryButton, EmptyState } from "@/components/ui/design-system"
 import { Sparkles, Check, X, ChevronRight, Pencil, AlertCircle } from "lucide-react"
 import { getCategoryBadgeClasses } from "../data/category-colors"
-import { CATEGORY_LIST, getSubcategories, BUDGET_CATEGORIES } from "../data/categories"
+import { getActiveCategories, getActiveSubcategories, getCategoryName, getSubcategoryName } from "@/lib/categories"
 import { cn } from "@/lib/utils"
 import { getAIService } from "@/lib/services/ai"
+import type { MatchingRule } from "@transformotion/budget-domain"
 
 interface ReviewResult {
   transactionId: string
   description: string
-  suggestedCategory: string
-  suggestedSubcategory: string
+  suggestedCategoryId: string
+  suggestedSubcategoryId: string
+  suggestedCategoryName: string
+  suggestedSubcategoryName: string
   reason: string
   status: "pending" | "accepted" | "rejected"
 }
@@ -23,17 +26,20 @@ export function ReviewTab() {
   const transactions = useBudgetStore((s) => s.transactions)
   const uncategorizedCount = useBudgetStore((s) => s.uncategorizedCount)
   const updateTransaction = useBudgetStore((s) => s.updateTransaction)
-  const addCustomRule = useBudgetStore((s) => s.addCustomRule)
+  const addMatchingRule = useBudgetStore((s) => s.addMatchingRule)
+  const budgetData = useBudgetStore((s) => s.budgetData)
   const currentAccount = useAuthStore(selectCurrentAccount)
+
+  const categories = budgetData.categories
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<Error | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [editCategory, setEditCategory] = useState("")
-  const [editSubcategory, setEditSubcategory] = useState("")
+  const [editCategoryId, setEditCategoryId] = useState("")
+  const [editSubcategoryId, setEditSubcategoryId] = useState("")
   const [reviewResults, setReviewResults] = useState<ReviewResult[]>([])
 
-  const uncategorizedTransactions = transactions.filter(t => !t.category)
+  const uncategorizedTransactions = transactions.filter(t => !t.categoryId && !t.category)
 
   const handleAIReview = async () => {
     setLoading(true)
@@ -48,7 +54,7 @@ export function ReviewTab() {
 
       const result = await getAIService().reviewTransactions({
         transactions: indexedTxs,
-        categories: BUDGET_CATEGORIES,
+        categories,
       })
 
       const formatted: ReviewResult[] = result.results.map(r => {
@@ -56,8 +62,10 @@ export function ReviewTab() {
         return {
           transactionId: tx?.transactionId ?? '',
           description: tx?.description ?? '',
-          suggestedCategory: r.category,
-          suggestedSubcategory: r.subcategory,
+          suggestedCategoryId: r.categoryId,
+          suggestedSubcategoryId: r.subcategoryId,
+          suggestedCategoryName: getCategoryName(categories, r.categoryId),
+          suggestedSubcategoryName: getSubcategoryName(categories, r.subcategoryId),
           reason: r.reason,
           status: "pending" as const,
         }
@@ -71,27 +79,28 @@ export function ReviewTab() {
     }
   }
 
-  const acceptResult = async (result: ReviewResult, category: string, subcategory: string) => {
+  const acceptResult = async (result: ReviewResult, categoryId: string, subcategoryId: string) => {
     await updateTransaction(result.transactionId, {
-      category,
-      subcategory,
+      categoryId,
+      subcategoryId,
       _manual: true,
     })
-    if (currentAccount && result.description && category && subcategory) {
-      await addCustomRule({
+    if (currentAccount && result.description && categoryId && subcategoryId) {
+      const rule: MatchingRule = {
         ruleId: crypto.randomUUID(),
         accountId: currentAccount.id,
         name: result.description,
         match: result.description,
         matchType: 'contains',
-        category,
-        subcategory,
-        enabled: true,
-        priority: Date.now(),
+        categoryId,
+        subcategoryId,
         isBusiness: false,
         learned: true,
+        enabled: true,
+        priority: Date.now(),
         createdAt: new Date().toISOString(),
-      })
+      }
+      await addMatchingRule(rule)
     }
     setReviewResults(prev =>
       prev.map(r => r.transactionId === result.transactionId ? { ...r, status: "accepted" } : r)
@@ -101,14 +110,14 @@ export function ReviewTab() {
   const handleAccept = (transactionId: string) => {
     const result = reviewResults.find(r => r.transactionId === transactionId)
     if (result) {
-      acceptResult(result, result.suggestedCategory, result.suggestedSubcategory)
+      acceptResult(result, result.suggestedCategoryId, result.suggestedSubcategoryId)
     }
   }
 
   const handleAcceptAll = () => {
     const pending = reviewResults.filter(r => r.status === "pending")
     for (const result of pending) {
-      acceptResult(result, result.suggestedCategory, result.suggestedSubcategory)
+      acceptResult(result, result.suggestedCategoryId, result.suggestedSubcategoryId)
     }
   }
 
@@ -120,27 +129,27 @@ export function ReviewTab() {
 
   const startEdit = (result: ReviewResult) => {
     setEditingId(result.transactionId)
-    setEditCategory(result.suggestedCategory)
-    setEditSubcategory(result.suggestedSubcategory)
+    setEditCategoryId(result.suggestedCategoryId)
+    setEditSubcategoryId(result.suggestedSubcategoryId)
   }
 
   const acceptEdited = (result: ReviewResult) => {
-    acceptResult(result, editCategory, editSubcategory)
+    acceptResult(result, editCategoryId, editSubcategoryId)
     setEditingId(null)
   }
+
+  const editingCategory = getActiveCategories(categories).find(c => c.categoryId === editCategoryId)
 
   const pendingResults = reviewResults.filter(r => r.status === "pending")
   const completedResults = reviewResults.filter(r => r.status !== "pending")
 
   return (
     <div className="p-4 space-y-4 overflow-hidden">
-      {/* Header */}
       <PageHeader
         title="Review"
         subtitle="AI-powered transaction categorization"
       />
 
-      {/* Status Card */}
       <Card>
         <div className="flex items-center justify-between mb-3">
           <div>
@@ -178,7 +187,6 @@ export function ReviewTab() {
         )}
       </Card>
 
-      {/* Empty State */}
       {uncategorizedCount === 0 && reviewResults.length === 0 && (
         <EmptyState
           icon={Sparkles}
@@ -187,7 +195,6 @@ export function ReviewTab() {
         />
       )}
 
-      {/* Review Results */}
       {pendingResults.length > 0 && (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
@@ -216,37 +223,36 @@ export function ReviewTab() {
                       {transaction.date} • ${Math.abs(parseFloat(String(transaction.amount))).toFixed(2)}
                     </p>
 
-                    {/* Editing mode */}
                     {isEditing ? (
                       <div className="space-y-2">
                         <div className="grid grid-cols-2 gap-2">
                           <div>
                             <label className="text-[10px] uppercase tracking-wider text-muted-foreground block mb-1">Category</label>
                             <select
-                              value={editCategory}
+                              value={editCategoryId}
                               onChange={(e) => {
-                                setEditCategory(e.target.value)
-                                setEditSubcategory("")
+                                setEditCategoryId(e.target.value)
+                                setEditSubcategoryId("")
                               }}
                               className="w-full h-8 px-2 bg-surface2 border border-border rounded text-sm"
                             >
                               <option value="">Select...</option>
-                              {CATEGORY_LIST.map(cat => (
-                                <option key={cat} value={cat}>{cat}</option>
+                              {getActiveCategories(categories).map(cat => (
+                                <option key={cat.categoryId} value={cat.categoryId}>{cat.name}</option>
                               ))}
                             </select>
                           </div>
                           <div>
                             <label className="text-[10px] uppercase tracking-wider text-muted-foreground block mb-1">Subcategory</label>
                             <select
-                              value={editSubcategory}
-                              onChange={(e) => setEditSubcategory(e.target.value)}
+                              value={editSubcategoryId}
+                              onChange={(e) => setEditSubcategoryId(e.target.value)}
                               className="w-full h-8 px-2 bg-surface2 border border-border rounded text-sm"
-                              disabled={!editCategory}
+                              disabled={!editCategoryId}
                             >
                               <option value="">Select...</option>
-                              {editCategory && getSubcategories(editCategory).map(sub => (
-                                <option key={sub} value={sub}>{sub}</option>
+                              {editingCategory && getActiveSubcategories(editingCategory).map(sub => (
+                                <option key={sub.subcategoryId} value={sub.subcategoryId}>{sub.name}</option>
                               ))}
                             </select>
                           </div>
@@ -254,7 +260,7 @@ export function ReviewTab() {
                         <div className="flex items-center gap-2">
                           <button
                             onClick={() => acceptEdited(result)}
-                            disabled={!editCategory || !editSubcategory}
+                            disabled={!editCategoryId || !editSubcategoryId}
                             className="flex-1 h-8 rounded-lg bg-signal-green text-white text-xs font-medium disabled:opacity-50 flex items-center justify-center gap-1"
                           >
                             <Check className="size-3" />
@@ -270,11 +276,10 @@ export function ReviewTab() {
                       </div>
                     ) : (
                       <>
-                        {/* Suggestion */}
                         <div className="flex items-center gap-2 mb-1">
                           <ChevronRight className="size-3 text-primary" />
-                          <span className={cn("px-2 py-0.5 rounded text-[10px] font-medium", getCategoryBadgeClasses(result.suggestedCategory))}>
-                            {result.suggestedSubcategory}
+                          <span className={cn("px-2 py-0.5 rounded text-[10px] font-medium", getCategoryBadgeClasses(result.suggestedCategoryName))}>
+                            {result.suggestedSubcategoryName || result.suggestedCategoryName}
                           </span>
                         </div>
                         <p className="text-xs text-muted-foreground italic">{result.reason}</p>
@@ -282,7 +287,6 @@ export function ReviewTab() {
                     )}
                   </div>
 
-                  {/* Actions - only show when not editing */}
                   {!isEditing && (
                     <div className="flex items-center gap-1">
                       <button
@@ -315,12 +319,11 @@ export function ReviewTab() {
         </div>
       )}
 
-      {/* Completed Results */}
       {completedResults.length > 0 && (
         <div className="space-y-2">
           <h3 className="text-sm font-semibold text-muted-foreground">Completed</h3>
           <p className="text-xs text-muted-foreground">
-            {completedResults.filter(r => r.status === "accepted").length} accepted, {" "}
+            {completedResults.filter(r => r.status === "accepted").length} accepted,{" "}
             {completedResults.filter(r => r.status === "rejected").length} rejected
           </p>
         </div>

@@ -19,8 +19,7 @@ import {
   Home,
 } from "lucide-react"
 import { ConfirmationModal } from "@/components/ui/design-system"
-import type { BudgetTabId } from "./data/types"
-import { useBudgetStore } from "@/stores/budget-tracker/use-budget-store"
+import { useBudgetStore, type BudgetTabId } from "@/stores/budget-tracker/use-budget-store"
 import { useAuthStore } from "@/stores/auth/use-auth-store"
 
 // ============================================================================

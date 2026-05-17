@@ -89,7 +89,7 @@ new StockAnalyserApiStack(app, 'TransformotionDev-StockAnalyserApi', {
   authoriser:  devPlatformApi.authoriser,
 });
 
-new BudgetTrackerTablesStack(app, 'TransformotionDev-BudgetTrackerTables', {
+const devBudgetTrackerTables = new BudgetTrackerTablesStack(app, 'TransformotionDev-BudgetTrackerTables', {
   env,
   stage:       'dev',
   description: 'Transformotion Apps — Dev Budget Tracker DynamoDB tables',
@@ -97,11 +97,12 @@ new BudgetTrackerTablesStack(app, 'TransformotionDev-BudgetTrackerTables', {
 
 new BudgetTrackerApiStack(app, 'TransformotionDev-BudgetTrackerApi', {
   env,
-  stage:       'dev',
-  description: 'Transformotion Apps — Dev Budget Tracker API routes',
-  api:         devPlatformApi.api,
-  authoriser:  devPlatformApi.authoriser,
-  apiResource: devPlatformApi.apiResource,
+  stage:               'dev',
+  description:         'Transformotion Apps — Dev Budget Tracker API routes',
+  api:                 devPlatformApi.api,
+  authoriser:          devPlatformApi.authoriser,
+  apiResource:         devPlatformApi.apiResource,
+  budgetDataTableName: devBudgetTrackerTables.budgetDataTable.tableName,
 });
 
 new MigrationsApiStack(app, 'TransformotionDev-MigrationsApi', {
@@ -172,7 +173,7 @@ new StockAnalyserApiStack(app, 'TransformotionProd-StockAnalyserApi', {
   authoriser:  prodPlatformApi.authoriser,
 });
 
-new BudgetTrackerTablesStack(app, 'TransformotionProd-BudgetTrackerTables', {
+const prodBudgetTrackerTables = new BudgetTrackerTablesStack(app, 'TransformotionProd-BudgetTrackerTables', {
   env,
   stage:       'prod',
   description: 'Transformotion Apps — Prod Budget Tracker DynamoDB tables',
@@ -180,11 +181,12 @@ new BudgetTrackerTablesStack(app, 'TransformotionProd-BudgetTrackerTables', {
 
 new BudgetTrackerApiStack(app, 'TransformotionProd-BudgetTrackerApi', {
   env,
-  stage:       'prod',
-  description: 'Transformotion Apps — Prod Budget Tracker API routes',
-  api:         prodPlatformApi.api,
-  authoriser:  prodPlatformApi.authoriser,
-  apiResource: prodPlatformApi.apiResource,
+  stage:               'prod',
+  description:         'Transformotion Apps — Prod Budget Tracker API routes',
+  api:                 prodPlatformApi.api,
+  authoriser:          prodPlatformApi.authoriser,
+  apiResource:         prodPlatformApi.apiResource,
+  budgetDataTableName: prodBudgetTrackerTables.budgetDataTable.tableName,
 });
 
 new MigrationsApiStack(app, 'TransformotionProd-MigrationsApi', {

@@ -57,9 +57,8 @@ async function listTransactions(event: APIGatewayProxyEvent, accountId: string) 
   }
 
   const res = await ddb.send(new QueryCommand({
-    TableName: from || to ? undefined : TABLE,
+    TableName: from || to ? TABLE : TABLE,
     IndexName: from || to ? GSI : undefined,
-    ...(from || to ? { TableName: TABLE } : {}),
     KeyConditionExpression,
     ExpressionAttributeValues,
     Limit: Math.min(limit, 5000),
@@ -109,15 +108,16 @@ async function bulkUpsert(event: APIGatewayProxyEvent, accountId: string) {
       ...tx,
       accountId,
       transactionId: randomUUID(),
-      _manual: tx._manual ?? false,
-      _business: tx._business ?? false,
+      categoryId:    tx.categoryId    ?? null,
+      subcategoryId: tx.subcategoryId ?? null,
+      _manual:       tx._manual   ?? false,
+      _business:     tx._business ?? false,
     };
     toWrite.push(full);
     resultTxs.push(full);
     created++;
   }
 
-  // BatchWriteItem in chunks of 25
   for (let i = 0; i < toWrite.length; i += 25) {
     const chunk = toWrite.slice(i, i + 25);
     await ddb.send(new BatchWriteCommand({
@@ -136,17 +136,17 @@ async function bulkUpsert(event: APIGatewayProxyEvent, accountId: string) {
 
 // ── PATCH /api/budget/v1/transactions/:id ─────────────────────────────────────
 async function updateTransaction(event: APIGatewayProxyEvent, accountId: string, transactionId: string) {
-  const body = parseBody<Partial<Pick<Transaction, 'category' | 'subcategory' | '_manual' | '_business' | '_ignore'>>>(event);
+  const body = parseBody<Partial<Pick<Transaction, 'categoryId' | 'subcategoryId' | '_manual' | '_business' | '_ignore'>>>(event);
 
   const expressions: string[] = [];
   const names: Record<string, string> = {};
   const values: Record<string, unknown> = { ':aid': accountId };
 
-  if (body.category !== undefined)    { expressions.push('category = :cat');      values[':cat'] = body.category; }
-  if (body.subcategory !== undefined) { expressions.push('subcategory = :sub');   values[':sub'] = body.subcategory; }
-  if (body._manual !== undefined)     { expressions.push('#manual = :manual');    names['#manual'] = '_manual';   values[':manual'] = body._manual; }
-  if (body._business !== undefined)   { expressions.push('#business = :biz');     names['#business'] = '_business'; values[':biz'] = body._business; }
-  if (body._ignore !== undefined)     { expressions.push('#ignore = :ignore');    names['#ignore'] = '_ignore';   values[':ignore'] = body._ignore; }
+  if (body.categoryId !== undefined)    { expressions.push('categoryId = :catId');    values[':catId']   = body.categoryId; }
+  if (body.subcategoryId !== undefined) { expressions.push('subcategoryId = :subId'); values[':subId']   = body.subcategoryId; }
+  if (body._manual !== undefined)       { expressions.push('#manual = :manual');      names['#manual']   = '_manual';   values[':manual']   = body._manual; }
+  if (body._business !== undefined)     { expressions.push('#business = :biz');       names['#business'] = '_business'; values[':biz']      = body._business; }
+  if (body._ignore !== undefined)       { expressions.push('#ignore = :ignore');      names['#ignore']   = '_ignore';   values[':ignore']   = body._ignore; }
   if (expressions.length === 0) throw { statusCode: 400, message: 'No fields to update' };
 
   const res = await ddb.send(new UpdateCommand({
@@ -160,8 +160,7 @@ async function updateTransaction(event: APIGatewayProxyEvent, accountId: string,
   }));
 
   if (!res.Attributes) throw notFound(`Transaction ${transactionId} not found`);
-  const item = res.Attributes;
-  return ok({ transaction: { ...item } });
+  return ok({ transaction: { ...res.Attributes } });
 }
 
 // ── DELETE /api/budget/v1/transactions/:id ────────────────────────────────────

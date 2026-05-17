@@ -74,6 +74,15 @@ export class MigrationsApiStack extends cdk.Stack {
     const txTable = dynamodb.Table.fromTableName(
       this, 'BudgetTrackerTxTable', `budget-tracker.transactions-${stage}`,
     );
+    const rulesTable = dynamodb.Table.fromTableName(
+      this, 'BudgetTrackerRulesTable', `budget-tracker.rules-${stage}`,
+    );
+    const settingsTable = dynamodb.Table.fromTableName(
+      this, 'BudgetTrackerSettingsTable', `budget-tracker.settings-${stage}`,
+    );
+    const budgetDataTable = dynamodb.Table.fromTableName(
+      this, 'BudgetTrackerBudgetDataTable', `budget-tracker.budget-data-${stage}`,
+    );
 
     // ── migration-budget-tracker-transactions Lambda ───────────────────────────
     const fnDir = path.join(__dirname, '..', '..', 'budget-tracker');
@@ -95,6 +104,28 @@ export class MigrationsApiStack extends cdk.Stack {
     txTable.grantReadWriteData(transactionsMigrateFn);
     uploadsBucket.grantRead(transactionsMigrateFn);
 
+    // ── migration-budget-tracker-budget-data Lambda ───────────────────────────
+    const budgetDataMigrateFn = new lambdaNodejs.NodejsFunction(this, 'BudgetTrackerBudgetDataMigrateFn', {
+      functionName: `migration-budget-tracker-budget-data-${stage}`,
+      entry:        path.join(fnDir, 'budget-data/src/index.ts'),
+      handler:      'handler',
+      runtime:      lambda.Runtime.NODEJS_20_X,
+      timeout:      cdk.Duration.minutes(15),
+      memorySize:   512,
+      environment: {
+        TRANSACTIONS_TABLE: txTable.tableName,
+        RULES_TABLE:        rulesTable.tableName,
+        SETTINGS_TABLE:     settingsTable.tableName,
+        BUDGET_DATA_TABLE:  budgetDataTable.tableName,
+      },
+      bundling,
+    });
+
+    txTable.grantReadWriteData(budgetDataMigrateFn);
+    rulesTable.grantReadWriteData(budgetDataMigrateFn);
+    settingsTable.grantReadData(budgetDataMigrateFn);
+    budgetDataTable.grantReadWriteData(budgetDataMigrateFn);
+
     // ── POST /api/migrations/budget-tracker/transactions/import ───────────────
     const budgetTrackerMigrations = this.migrationsResource.addResource('budget-tracker');
     const transactionsMigrations  = budgetTrackerMigrations.addResource('transactions');
@@ -103,6 +134,12 @@ export class MigrationsApiStack extends cdk.Stack {
       new apigateway.LambdaIntegration(transactionsMigrateFn, { proxy: true }),
       auth,
     );
+
+    // ── POST /api/migrations/budget-tracker/budget-data/run ──────────────────
+    budgetTrackerMigrations
+      .addResource('budget-data')
+      .addResource('run')
+      .addMethod('POST', new apigateway.LambdaIntegration(budgetDataMigrateFn, { proxy: true }), auth);
   }
 }
 

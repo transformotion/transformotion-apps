@@ -23,6 +23,7 @@ export class BudgetTrackerTablesStack extends cdk.Stack {
   public readonly transactionsTable: dynamodb.Table;
   public readonly rulesTable:        dynamodb.Table;
   public readonly settingsTable:     dynamodb.Table;
+  public readonly budgetDataTable:   dynamodb.Table;
 
   constructor(scope: Construct, id: string, props: BudgetTrackerTablesStackProps) {
     super(scope, id, props);
@@ -69,6 +70,18 @@ export class BudgetTrackerTablesStack extends cdk.Stack {
       removalPolicy: removal,
     });
 
+    // ── budget-tracker.budget-data ────────────────────────────────────────────
+    // Stores per-account: categories tree, budgetAmounts, budgetFrequencies.
+    // PK: accountId  SK: concept (e.g. 'categories', 'budgetAmounts', 'budgetFrequencies')
+    this.budgetDataTable = new dynamodb.Table(this, 'BudgetDataTable', {
+      tableName:            `budget-tracker.budget-data-${stage}`,
+      partitionKey:         { name: 'accountId', type: dynamodb.AttributeType.STRING },
+      sortKey:              { name: 'concept',   type: dynamodb.AttributeType.STRING },
+      billingMode:          dynamodb.BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecovery:  true,
+      removalPolicy:        cdk.RemovalPolicy.RETAIN,
+    });
+
     // ── Outputs ───────────────────────────────────────────────────────────────
     const out = (id: string, value: string, description: string) =>
       new cdk.CfnOutput(this, id, { value, description, exportName: `Transformotion-${stage}-${id}` });
@@ -76,5 +89,6 @@ export class BudgetTrackerTablesStack extends cdk.Stack {
     out('BTTransactionsTableArn', this.transactionsTable.tableArn, 'budget-tracker.transactions table ARN');
     out('BTRulesTableArn',        this.rulesTable.tableArn,        'budget-tracker.rules table ARN');
     out('BTSettingsTableArn',     this.settingsTable.tableArn,     'budget-tracker.settings table ARN');
+    out('BTBudgetDataTableArn',   this.budgetDataTable.tableArn,   'budget-tracker.budget-data table ARN');
   }
 }

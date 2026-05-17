@@ -6,30 +6,11 @@ import type { BudgetSettings } from '@transformotion/budget-domain';
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const TABLE = process.env.SETTINGS_TABLE!;
 
-// DEFAULT_SETTINGS and SETTING_KEYS below must stay in sync with
-// BudgetSettings in contracts/budget-tracker/data-models.md.
-// Drift here causes GET/PATCH to silently drop fields.
-// Phase 2 will replace this with Zod-validated schemas.
-const SETTING_KEYS: Array<keyof Omit<BudgetSettings, 'accountId'>> = [
-  'budgetOverrides', 'budgetFreqs', 'customCategories',
-  'deletedSubs', 'projectBudgets', 'projectTasks',
-  'customTopCategories', 'customProjectCategories',
-  'deletedCategories', 'deletedProjectCategories',
-  'disabledProjectCategories', 'csvFormatMappings',
-];
+// BudgetSettings now contains only csvFormatMappings.
+// All budget/category state moved to budget-tracker.budget-data table.
+const SETTING_KEYS: Array<keyof BudgetSettings> = ['csvFormatMappings'];
 
-const DEFAULT_SETTINGS: Omit<BudgetSettings, 'accountId'> = {
-  budgetOverrides: {},
-  budgetFreqs: {},
-  customCategories: {},
-  deletedSubs: [],
-  projectBudgets: {},
-  projectTasks: {},
-  customTopCategories: [],
-  customProjectCategories: [],
-  deletedCategories: [],
-  deletedProjectCategories: [],
-  disabledProjectCategories: [],
+const DEFAULT_SETTINGS: BudgetSettings = {
   csvFormatMappings: {},
 };
 
@@ -40,10 +21,10 @@ async function getSettings(accountId: string) {
     ExpressionAttributeValues: { ':aid': accountId },
   }));
 
-  const settings: BudgetSettings = { accountId, ...DEFAULT_SETTINGS };
+  const settings: BudgetSettings = { ...DEFAULT_SETTINGS };
   for (const item of res.Items ?? []) {
     const key = item['settingKey'] as keyof BudgetSettings;
-    if (SETTING_KEYS.includes(key as keyof Omit<BudgetSettings, 'accountId'>)) {
+    if (SETTING_KEYS.includes(key)) {
       (settings as unknown as Record<string, unknown>)[key] = item['value'];
     }
   }
@@ -51,7 +32,7 @@ async function getSettings(accountId: string) {
 }
 
 async function updateSettings(event: Parameters<typeof parseBody>[0], accountId: string) {
-  const patch = parseBody<Partial<Omit<BudgetSettings, 'accountId'>>>(event);
+  const patch = parseBody<Partial<BudgetSettings>>(event);
   const now = new Date().toISOString();
 
   const writes = SETTING_KEYS
