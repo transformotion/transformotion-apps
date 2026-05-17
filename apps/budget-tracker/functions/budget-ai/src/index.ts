@@ -3,7 +3,6 @@ import { withAuth, parseBody, ok, requireAppAccess, requireAccountAccess } from 
 import type { AuthClaims } from '@transformotion/lambda-middleware';
 import type {
   CategoryTree,
-  AiCategoriseResponse,
   AiReviewResponse,
   AiCsvAnalysisResponse,
 } from '@transformotion/budget-domain';
@@ -11,8 +10,7 @@ import type {
 const lambdaClient = new LambdaClient({});
 const PROXY_FN     = process.env.CLAUDE_PROXY_FUNCTION_NAME!;
 const AI_MODEL     = 'claude-sonnet-4-20250514';
-const BATCH_CATEGORISE = 50;
-const BATCH_REVIEW     = 20;
+const BATCH_REVIEW = 20;
 
 // ── Invoke the shared claude-proxy Lambda ─────────────────────────────────────
 // Formats a minimal API Gateway proxy event so the proxy's withAuth middleware
@@ -70,55 +68,6 @@ function formatCategoryList(categories: CategoryTree): string {
 
 function formatTxList(txs: Array<{ index: number; description: string; amount: string }>): string {
   return txs.map(t => `${t.index}: ${t.description} — ${t.amount}`).join('\n');
-}
-
-// ── POST /api/budget/v1/ai/categorise ────────────────────────────────────────
-async function categorise(
-  auth: AuthClaims,
-  accountId: string,
-  event: Parameters<typeof parseBody>[0]
-) {
-  const { transactions, categories } = parseBody<{
-    transactions: Array<{ index: number; description: string; amount: string }>;
-    categories: CategoryTree;
-  }>(event);
-
-  const categoryList = formatCategoryList(categories);
-  const allResults: AiCategoriseResponse['results'] = [];
-
-  for (let i = 0; i < transactions.length; i += BATCH_CATEGORISE) {
-    const batch = transactions.slice(i, i + BATCH_CATEGORISE);
-    const proxyResponse = await invokeProxy(auth, accountId, {
-      model:      AI_MODEL,
-      max_tokens: 4096,
-      system:     `You are a personal finance assistant. You categorise Australian bank transactions into household budget categories.\n\nYou will be given:\n- A list of budget categories, each with allowed subcategories\n- A list of transactions to categorise (index, description, amount)\n\nYou must:\n- Return ONLY a JSON array, one object per transaction you can confidently categorise\n- Each object has exactly: {"index": <int>, "category": <string>, "subcategory": <string>}\n- The category value must be one of the provided categories exactly\n- The subcategory value must be one of the subcategories listed under that category exactly\n- Omit any transaction you cannot confidently categorise — do not guess\n- Do not include any text outside the JSON array\n- Do not wrap the JSON in markdown code fences`,
-      messages: [{
-        role: 'user',
-        content: `BUDGET CATEGORIES AND SUBCATEGORIES:\n${categoryList}\n\nTRANSACTIONS TO CATEGORISE (index: description — amount):\n${formatTxList(batch)}`,
-      }],
-    });
-
-    // Extract text content from the proxy's Claude response
-    const content = proxyResponse['content'] as Array<{ type: string; text?: string }> | undefined;
-    const text = (content ?? []).filter(c => c.type === 'text').map(c => c.text ?? '').join('');
-
-    try {
-      const clean = text.replace(/```json|```/g, '').trim();
-      const parsed = JSON.parse(clean.slice(clean.indexOf('['), clean.lastIndexOf(']') + 1)) as AiCategoriseResponse['results'];
-      // Validate category/subcategory against provided tree; drop invalid items
-      for (const item of parsed) {
-        const validSubs = categories[item.category];
-        if (validSubs && validSubs.includes(item.subcategory)) {
-          allResults.push(item);
-        }
-      }
-    } catch {
-      // Log and continue — don't fail the whole request for one bad batch
-      console.error('[budget-ai] categorise: failed to parse batch response', text.slice(0, 200));
-    }
-  }
-
-  return ok({ results: allResults });
 }
 
 // ── POST /api/budget/v1/ai/review ─────────────────────────────────────────────
@@ -200,7 +149,6 @@ export const handler = withAuth(async ({ auth, account, event }) => {
   requireAccountAccess(auth, 'budget-tracker', account.accountId);
   const resource = event.resource ?? '';
 
-  if (resource === '/api/budget/v1/ai/categorise')    return categorise(auth, account.accountId, event);
   if (resource === '/api/budget/v1/ai/review')        return review(auth, account.accountId, event);
   if (resource === '/api/budget/v1/ai/csv-analysis')  return csvAnalysis(auth, account.accountId, event);
 

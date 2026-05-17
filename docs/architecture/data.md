@@ -177,9 +177,9 @@ Key-value store — each settings field is its own DynamoDB item.
 |---|---|---|
 | `accountId` (PK) | String | |
 | `settingKey` (SK) | String | `budgetOverrides`, `budgetFreqs`, `customCategories`, `projectBudgets`, `deletedSubs`, `csvFormatMappings`, and others |
-| `value` | Map or List | Shape depends on `settingKey` — see [contracts/budget-tracker/data-models.md](/contracts/budget-tracker/data-models.md) |
+| `value` | Map or List | Shape depends on `settingKey` — see [v0-reference/contracts/budget-tracker/data-models.md](/v0-reference/contracts/budget-tracker/data-models.md) |
 
-For full type definitions see [contracts/budget-tracker/data-models.md](/contracts/budget-tracker/data-models.md).
+For full type definitions see [v0-reference/contracts/budget-tracker/data-models.md](/v0-reference/contracts/budget-tracker/data-models.md).
 
 ---
 

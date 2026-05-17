@@ -3,16 +3,15 @@
 import { useState, useMemo, useRef } from "react"
 import { useBudgetStore } from "@/stores/budget-tracker/use-budget-store"
 import { PageHeader, Card, PrimaryButton, SecondaryButton, EmptyState } from "@/components/ui/design-system"
-import { 
-  Upload, Receipt, Filter, Download, Briefcase, X, ChevronDown, ChevronRight,
-  RotateCcw, Check, BookOpen, Calendar, Search, FileText, Sparkles, AlertCircle
+import {
+  Upload, Receipt, Filter, Download, Briefcase, X,
+  RotateCcw, Check, BookOpen, Search, FileText
 } from "lucide-react"
-import { BUDGET_CATEGORIES, CATEGORY_LIST, getSubcategories } from "../data/categories"
+import { CATEGORY_LIST, getSubcategories } from "../data/categories"
 import { CATEGORY_COLORS } from "../data/category-colors"
 import { applyRules } from "../data/builtin-rules"
-import type { Transaction, TransactionFilters } from "../data/types"
+import type { Transaction } from "../data/types"
 import { cn } from "@/lib/utils"
-import { useClaude } from "@/lib/hooks"
 
 // Date grouping helper
 function getDateGroup(dateStr: string): string {
@@ -1059,18 +1058,7 @@ function CSVImportModal({ onClose }: { onClose: () => void }) {
   const updateSettings = useBudgetStore((s) => s.updateSettings)
   const builtinRules = useBudgetStore((s) => s.builtinRules)
   const customRules = useBudgetStore((s) => s.customRules)
-  const [step, setStep] = useState<"upload" | "preview" | "categorizing" | "importing">("upload")
-  
-  // AI Smart Import
-  const { callClaude, isLoading: isCategorizingAI, error: aiError } = useClaude<{
-    categorizations: Array<{
-      description: string
-      category: string
-      subcategory: string
-      isBusiness: boolean
-    }>
-  }>()
-  const [aiCategorizations, setAiCategorizations] = useState<Map<string, { category: string; subcategory: string; isBusiness: boolean }>>(new Map())
+  const [step, setStep] = useState<"upload" | "preview" | "importing">("upload")
   const [file, setFile] = useState<File | null>(null)
   const [csvData, setCsvData] = useState<string[][]>([])
   const [columnMapping, setColumnMapping] = useState({
@@ -1231,58 +1219,6 @@ function CSVImportModal({ onClose }: { onClose: () => void }) {
     return dateStr
   }
 
-  // AI Smart Categorization
-  const runAICategorization = async () => {
-    const dataRows = csvData.slice(skipRows)
-    if (dataRows.length === 0) return
-
-    // Get unique descriptions that don't already have rules
-    const descriptions = dataRows
-      .map(row => row[columnMapping.description] || "")
-      .filter(desc => desc && !applyRules(desc, builtinRules, customRules))
-      .slice(0, 50) // Limit to 50 unique descriptions
-
-    const uniqueDescriptions = [...new Set(descriptions)]
-    if (uniqueDescriptions.length === 0) {
-      setStep("importing")
-      return
-    }
-
-    setStep("categorizing")
-
-    const result = await callClaude({
-      prompt: `Categorize these transaction descriptions. Return a JSON object with "categorizations" array.
-
-Available categories: ${CATEGORY_LIST.join(", ")}
-
-Transactions to categorize:
-${uniqueDescriptions.map(d => `- "${d}"`).join('\n')}
-
-For each transaction, return:
-- description: the exact description string
-- category: one of the available categories
-- subcategory: appropriate subcategory for that category
-- isBusiness: boolean if this looks like a business expense
-
-Return ONLY valid JSON.`,
-      systemPrompt: "You are a financial transaction categorizer. Categorize each transaction based on the description. Respond with valid JSON only.",
-    })
-
-    if (result?.categorizations) {
-      const newMap = new Map<string, { category: string; subcategory: string; isBusiness: boolean }>()
-      for (const cat of result.categorizations) {
-        newMap.set(cat.description, {
-          category: cat.category,
-          subcategory: cat.subcategory,
-          isBusiness: cat.isBusiness
-        })
-      }
-      setAiCategorizations(newMap)
-    }
-    
-    setStep("importing")
-  }
-
   const importTransactions = () => {
     const dataRows = csvData.slice(skipRows)
     
@@ -1304,23 +1240,19 @@ Return ONLY valid JSON.`,
       
       const description = row[columnMapping.description] || ""
       
-      // Auto-categorize using unified rules function (custom rules first, then built-in)
       const ruleResult = applyRules(description, builtinRules, customRules)
-      
-      // Fall back to AI categorization if no rule matched
-      const aiResult = !ruleResult ? aiCategorizations.get(description) : null
-      
+
       return {
         transactionId: crypto.randomUUID(),
         accountId: "",
         date: parseDate(row[columnMapping.date] || ""),
         amount: amount.toString(),
         description,
-        category: ruleResult?.category || aiResult?.category || "",
-        subcategory: ruleResult?.subcategory || aiResult?.subcategory || "",
+        category: ruleResult?.category || "",
+        subcategory: ruleResult?.subcategory || "",
         file: file?.name || "",
         _manual: false,
-        _business: aiResult?.isBusiness || false
+        _business: false
       }
     }).filter(t => t.description && t.date)
     
@@ -1354,7 +1286,6 @@ Return ONLY valid JSON.`,
             <p className="text-xs text-muted-foreground">
               {step === "upload" && "Select a CSV file from your bank"}
               {step === "preview" && "Preview and configure column mapping"}
-              {step === "categorizing" && "AI is categorizing your transactions..."}
               {step === "importing" && "Ready to import"}
             </p>
           </div>
@@ -1572,20 +1503,6 @@ Return ONLY valid JSON.`,
             </div>
           )}
           
-          {step === "categorizing" && (
-            <div className="py-8 text-center">
-              <Sparkles className="size-8 text-primary mx-auto mb-4 animate-pulse" />
-              <p className="text-foreground font-medium mb-2">AI Smart Categorization</p>
-              <p className="text-muted-foreground text-sm">Analysing {csvData.length - skipRows} transactions...</p>
-              {aiError && (
-                <div className="mt-4 p-3 rounded-lg bg-signal-red/10 border border-signal-red/20 flex items-start gap-2 max-w-md mx-auto">
-                  <AlertCircle className="size-4 text-signal-red mt-0.5 shrink-0" />
-                  <div className="text-sm text-signal-red text-left">{aiError?.message}</div>
-                </div>
-              )}
-            </div>
-          )}
-          
           {step === "importing" && (
             <div className="py-8 text-center space-y-4">
               <div className="flex items-center justify-center gap-2 text-signal-green">
@@ -1593,9 +1510,7 @@ Return ONLY valid JSON.`,
                 <p className="font-medium">Ready to import</p>
               </div>
               <p className="text-muted-foreground text-sm">
-                {aiCategorizations.size > 0 
-                  ? `AI categorized ${aiCategorizations.size} transactions that had no matching rules.`
-                  : "All transactions will be categorized using your existing rules."}
+                All transactions will be categorized using your existing rules.
               </p>
             </div>
           )}
@@ -1605,15 +1520,9 @@ Return ONLY valid JSON.`,
         <div className="flex items-center justify-end gap-2 pt-4 border-t border-border">
           <SecondaryButton onClick={onClose}>Cancel</SecondaryButton>
           {step === "preview" && (
-            <>
-              <SecondaryButton onClick={importTransactions}>
-                Import without AI
-              </SecondaryButton>
-              <PrimaryButton onClick={runAICategorization} disabled={isCategorizingAI}>
-                <Sparkles className="size-4 mr-2" />
-                Smart Import
-              </PrimaryButton>
-            </>
+            <PrimaryButton onClick={importTransactions}>
+              Import {csvData.length - skipRows} Transactions
+            </PrimaryButton>
           )}
           {step === "importing" && (
             <PrimaryButton onClick={importTransactions}>

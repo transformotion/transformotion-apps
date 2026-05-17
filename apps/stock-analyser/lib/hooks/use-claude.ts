@@ -133,7 +133,7 @@ export function useClaude<T = unknown>(options: UseClaudeOptions = {}): UseClaud
       // ── Call Claude (mock or real) ────────────────────────────────────────
       let result: T
 
-      if (config.features.useMockData) {
+      if (config.ai.provider === 'mock') {
         result = await mockClaudeCall<T>(claudeRequest, abortControllerRef.current.signal)
       } else {
         // Real: POST to Claude proxy Lambda (auth injected by apiClient)
@@ -455,7 +455,7 @@ export async function callClaudeAPI<T = unknown>(
 ): Promise<T> {
   const config = getConfig()
   
-  if (config.features.useMockData) {
+  if (config.ai.provider === 'mock') {
     return mockClaudeCall<T>(request, options.signal || new AbortController().signal)
   }
 
