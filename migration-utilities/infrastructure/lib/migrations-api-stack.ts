@@ -123,7 +123,7 @@ export class MigrationsApiStack extends cdk.Stack {
 
     txTable.grantReadWriteData(budgetDataMigrateFn);
     rulesTable.grantReadWriteData(budgetDataMigrateFn);
-    settingsTable.grantReadData(budgetDataMigrateFn);
+    settingsTable.grantReadWriteData(budgetDataMigrateFn);
     budgetDataTable.grantReadWriteData(budgetDataMigrateFn);
 
     // ── POST /api/migrations/budget-tracker/transactions/import ───────────────
