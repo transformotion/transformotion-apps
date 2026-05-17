@@ -1,9 +1,8 @@
 /**
  * AI Service Interface
- * 
+ *
  * Abstraction for AI model interactions.
- * Current: Mock implementation
- * Future: Anthropic Claude API (via Lambda, never direct from browser)
+ * Provider selected at startup via runtime-config (NEXT_PUBLIC_AI_OVERRIDE / NEXT_PUBLIC_RUNTIME_PROFILE).
  */
 
 export interface AIOptions {
@@ -69,5 +68,5 @@ export interface AIService {
   isAvailable(): Promise<boolean>
 }
 
-// Re-export mock implementation as default
-export { MockAIService } from './mock-ai'
+export { MockAIService, createMockAIService } from './mock-ai'
+export { ClaudeAIService, createClaudeAIService } from './claude-ai'

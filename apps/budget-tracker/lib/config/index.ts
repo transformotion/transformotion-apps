@@ -21,7 +21,7 @@ export interface AuthConfig {
 }
 
 export interface AIConfig {
-  provider: 'mock' | 'anthropic'
+  provider: 'mock' | 'claude'
   model: string
 }
 
@@ -98,8 +98,8 @@ export function loadConfig(): AppConfig {
     ai: {
       provider: selectProvider({
         override: process.env.NEXT_PUBLIC_AI_OVERRIDE,
-        profileDefaults: { mock: 'mock', live: 'anthropic' },
-        validValues: ['mock', 'anthropic'] as const,
+        profileDefaults: { mock: 'mock', live: 'claude' },
+        validValues: ['mock', 'claude'] as const,
       }),
       model: process.env.NEXT_PUBLIC_AI_MODEL || 'claude-3-sonnet',
     },

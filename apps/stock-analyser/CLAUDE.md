@@ -91,6 +91,15 @@ The `useClaude<T>()` hook handles the full async request/poll cycle:
 
 See `apps/stock-analyser/docs/claude-ai-pattern.md` for usage examples and configuration.
 
+### Adding a new AI feature
+
+Stock Analyser AI goes through `useClaude<T>()` or `callClaudeAPI<T>()` in `lib/hooks/use-claude.ts`.
+
+1. Add mock fixture data to `lib/services/ai/fixtures/index.ts` (keyword-keyed, returned by `getMockResponse()`)
+2. The `MockAIService` at `lib/services/ai/mock-ai.ts` uses `getMockResponse()` — no change needed unless the interface changes
+3. `ClaudeAIService` at `lib/services/ai/claude-ai.ts` delegates to `callClaudeAPI` — no change needed for new prompts
+4. Mock flag is `config.ai.provider === 'mock'` (set via `NEXT_PUBLIC_AI_OVERRIDE` / `NEXT_PUBLIC_RUNTIME_PROFILE`). Do not check `config.features.useMockData` for AI branching.
+
 ### Cache key conventions
 
 | Data | Cache key format | TTL |

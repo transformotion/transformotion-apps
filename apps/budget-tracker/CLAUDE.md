@@ -26,10 +26,10 @@ React + TypeScript + Tailwind CSS + shadcn/ui.
 | DynamoDB table schemas | [/docs/architecture/data.md](/docs/architecture/data.md) |
 | CDK stacks, Lambda names | [/docs/architecture/cdk.md](/docs/architecture/cdk.md) |
 | URL routing, CloudFront, deploy triggers | [/docs/architecture/urls-and-deploy.md](/docs/architecture/urls-and-deploy.md) |
-| Data models and types | [/contracts/budget-tracker/data-models.md](/contracts/budget-tracker/data-models.md) |
-| API contracts | [/contracts/budget-tracker/api-contracts.md](/contracts/budget-tracker/api-contracts.md) |
-| State management and adaptor pattern | [/contracts/budget-tracker/state-management.md](/contracts/budget-tracker/state-management.md) |
-| AWS infrastructure reference | [/contracts/budget-tracker/aws-infrastructure.md](/contracts/budget-tracker/aws-infrastructure.md) |
+| Data models and types | [/v0-reference/contracts/budget-tracker/data-models.md](/v0-reference/contracts/budget-tracker/data-models.md) |
+| API contracts | [/v0-reference/contracts/budget-tracker/api-endpoints.md](/v0-reference/contracts/budget-tracker/api-endpoints.md) |
+| State management and adaptor pattern | [/v0-reference/contracts/budget-tracker/state-management.md](/v0-reference/contracts/budget-tracker/state-management.md) |
+| AWS infrastructure reference | [/v0-reference/contracts/budget-tracker/aws-infrastructure.md](/v0-reference/contracts/budget-tracker/aws-infrastructure.md) |
 
 ## CDK stacks owned
 
@@ -93,13 +93,13 @@ The three Zustand stores:
 - `useAiStore` — AI review queue and CSV analysis
 - `useAuthStore` — current user and sign-in/out
 
-Repository interfaces are defined in `contracts/budget-tracker/state-management.md`. **Do not add methods to a repository without updating the contract file first.**
+Repository interfaces are defined in `v0-reference/contracts/budget-tracker/state-management.md`. **Do not add methods to a repository without updating the contract file in the v0 repo first, then re-running `scripts/sync-v0.sh`.**
 
 ### Forbidden patterns
 
 - `fetch()` in components or store actions
 - `localStorage` reads/writes outside `lib/repositories/`
-- Types not in `contracts/budget-tracker/data-models.md`
+- Types not in `v0-reference/contracts/budget-tracker/data-models.md`
 - `window.confirm` — use inline confirmation UI instead
 - IIFEs inside JSX — compute values above the return statement
 - `URL.createObjectURL` for CSV export — use data URI instead
@@ -108,7 +108,7 @@ Repository interfaces are defined in `contracts/budget-tracker/state-management.
 
 ## Data types
 
-All types that cross the UI/backend boundary are defined in [contracts/budget-tracker/data-models.md](/contracts/budget-tracker/data-models.md). Key types:
+All types that cross the UI/backend boundary are defined in [v0-reference/contracts/budget-tracker/data-models.md](/v0-reference/contracts/budget-tracker/data-models.md). Key types:
 - `Transaction` — atomic unit; `_manual` flag prevents rules from overwriting
 - `CustomRule` — keyword or regex pattern, case-insensitive
 - `BudgetSettings` — per-account, stored key-by-key in DynamoDB
@@ -153,6 +153,27 @@ Key invariants to preserve in tests:
 4. `buildMonthlyTrend()` net = income − expenses (exact equality)
 5. Migration endpoint strips legacy integer `_id` from v0 export before writing to DynamoDB; Transfer subcategory transactions get `_ignore: true`
 6. `getSubcategoryMonthlyBudget()` returns 0 for tombstoned subcategories (override = -1)
+
+## AI service
+
+Budget Tracker has its own AI service layer at `lib/services/ai/`:
+
+| File | Purpose |
+|---|---|
+| `index.ts` | `AIService` interface (`reviewTransactions`, `analyseCsvFormat`); `getAIService()` singleton |
+| `mock-ai.ts` | `MockAIService` — keyword-based mock for local dev |
+| `claude-ai.ts` | `ClaudeAIService` — calls `budget-ai` Lambda routes (`/api/budget/v1/ai/*`) via `getBudgetHttp()` |
+
+Provider is selected via `config.ai.provider` (`'mock'` or `'claude'`), resolved from `NEXT_PUBLIC_AI_OVERRIDE` / `NEXT_PUBLIC_RUNTIME_PROFILE`.
+
+**Adding a new AI feature:**
+1. Add the method to the `AIService` interface in `lib/services/ai/index.ts`
+2. Update the contract in the v0 repo (`transformotion-apps-b8/contracts/budget-tracker/state-management.md`) and re-run `scripts/sync-v0.sh`
+3. Add a matching Lambda route to `functions/budget-ai/src/index.ts` with `requireAppAccess` + `requireAccountAccess`
+4. Implement the method in `MockAIService` (mock-ai.ts) and `ClaudeAIService` (claude-ai.ts)
+5. Add prompt text in the Lambda (server-side only — never in client code)
+
+AI flows use `getAIService()` directly from components (not `useClaude`). The `useClaude` hook in `lib/hooks/use-claude.ts` is legacy and should not be used for new features.
 
 ## v0 origins
 

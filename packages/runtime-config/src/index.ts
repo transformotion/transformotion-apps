@@ -10,6 +10,11 @@
  * an optional NEXT_PUBLIC_<CONCERN>_OVERRIDE env var, if set with a valid value,
  * overrides the profile's default for that concern.
  *
+ * Canonical concern → override env var mapping:
+ *   auth  → NEXT_PUBLIC_AUTH_OVERRIDE   (values: 'mock' | 'cognito')
+ *   data  → NEXT_PUBLIC_DATA_OVERRIDE   (values: 'mock' | 'dynamo')
+ *   ai    → NEXT_PUBLIC_AI_OVERRIDE     (values: 'mock' | 'claude')
+ *
  * @see CONTRIBUTING.md Section 5.8 for the canonical pattern documentation.
  */
 
