@@ -60,7 +60,8 @@ async function createRule(event: APIGatewayProxyEvent, accountId: string) {
 
 // ── PATCH /api/budget/v1/rules/:id ───────────────────────────────────────────
 async function updateRule(event: APIGatewayProxyEvent, accountId: string, ruleId: string) {
-  const body = parseBody<Partial<Omit<MatchingRule, 'ruleId' | 'accountId' | 'createdAt'>>>(event);
+  // Include createdAt and learned in the parse so they're available for the upsert fallback
+  const body = parseBody<Partial<Omit<MatchingRule, 'ruleId' | 'accountId'>>>(event);
 
   const expressions: string[] = [];
   const names: Record<string, string> = {};
@@ -76,18 +77,39 @@ async function updateRule(event: APIGatewayProxyEvent, accountId: string, ruleId
   if (body.isBusiness !== undefined)    { expressions.push('isBusiness = :biz');                                   values[':biz']  = body.isBusiness; }
   if (expressions.length === 0) throw { statusCode: 400, message: 'No fields to update' };
 
-  const res = await ddb.send(new UpdateCommand({
-    TableName: TABLE,
-    Key: { accountId, ruleId },
-    UpdateExpression: `SET ${expressions.join(', ')}`,
-    ExpressionAttributeNames: Object.keys(names).length ? names : undefined,
-    ExpressionAttributeValues: values,
-    ConditionExpression: 'accountId = :aid',
-    ReturnValues: 'ALL_NEW',
-  }));
-
-  if (!res.Attributes) throw notFound(`Rule ${ruleId} not found`);
-  return ok({ rule: { ...res.Attributes } });
+  try {
+    const res = await ddb.send(new UpdateCommand({
+      TableName: TABLE,
+      Key: { accountId, ruleId },
+      UpdateExpression: `SET ${expressions.join(', ')}`,
+      ExpressionAttributeNames: Object.keys(names).length ? names : undefined,
+      ExpressionAttributeValues: values,
+      ConditionExpression: 'accountId = :aid',
+      ReturnValues: 'ALL_NEW',
+    }));
+    if (!res.Attributes) throw notFound(`Rule ${ruleId} not found`);
+    return ok({ rule: { ...res.Attributes } });
+  } catch (err: unknown) {
+    // Frontend save() routes new rules (with client-generated ruleId+createdAt) to PATCH.
+    // Fall back to a full PutItem so the rule is created rather than 500ing.
+    if ((err as { name?: string }).name !== 'ConditionalCheckFailedException') throw err;
+    const rule: MatchingRule = {
+      ruleId,
+      accountId,
+      name:          body.name?.trim() ?? body.match?.trim() ?? '',
+      match:         body.match?.trim() ?? '',
+      matchType:     body.matchType ?? 'contains',
+      categoryId:    body.categoryId?.trim() ?? '',
+      subcategoryId: body.subcategoryId?.trim() ?? '',
+      enabled:       body.enabled ?? true,
+      priority:      body.priority ?? 100,
+      isBusiness:    body.isBusiness ?? false,
+      learned:       body.learned ?? false,
+      createdAt:     body.createdAt ?? new Date().toISOString(),
+    };
+    await ddb.send(new PutCommand({ TableName: TABLE, Item: rule }));
+    return ok({ rule });
+  }
 }
 
 // ── DELETE /api/budget/v1/rules/:id ──────────────────────────────────────────
