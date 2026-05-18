@@ -17,6 +17,12 @@ export interface BudgetTrackerApiStackProps extends cdk.StackProps {
   apiResource: apigateway.Resource;
   /** budget-data table name — passed in to avoid cross-stack dependency issues. */
   budgetDataTableName: string;
+  /** AI jobs table name from BudgetTrackerTablesStack. */
+  aiJobsTableName: string;
+  /** WebSocket connections table name from BudgetTrackerWsStack. */
+  wsConnectionsTableName: string;
+  /** WebSocket API ID from BudgetTrackerWsStack (used to build the management API endpoint). */
+  wsApiId: string;
 }
 
 /**
@@ -42,7 +48,7 @@ export class BudgetTrackerApiStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: BudgetTrackerApiStackProps) {
     super(scope, id, props);
 
-    const { stage, authoriser, apiResource: platformApiResource, budgetDataTableName } = props;
+    const { stage, authoriser, apiResource: platformApiResource, budgetDataTableName, aiJobsTableName, wsConnectionsTableName, wsApiId } = props;
 
     const auth = authMethodOptions(authoriser);
 
@@ -56,10 +62,12 @@ export class BudgetTrackerApiStack extends cdk.Stack {
     cdk.Tags.of(this).add('environment', stage);
 
     // ── Import shared tables by name ──────────────────────────────────────────
-    const txTable         = dynamodb.Table.fromTableName(this, 'TxTable',         `budget-tracker.transactions-${stage}`);
-    const rulesTable      = dynamodb.Table.fromTableName(this, 'RulesTable',      `budget-tracker.rules-${stage}`);
-    const settingsTable   = dynamodb.Table.fromTableName(this, 'SettingsTable',   `budget-tracker.settings-${stage}`);
-    const budgetDataTable = dynamodb.Table.fromTableName(this, 'BudgetDataTable', budgetDataTableName);
+    const txTable           = dynamodb.Table.fromTableName(this, 'TxTable',           `budget-tracker.transactions-${stage}`);
+    const rulesTable        = dynamodb.Table.fromTableName(this, 'RulesTable',        `budget-tracker.rules-${stage}`);
+    const settingsTable     = dynamodb.Table.fromTableName(this, 'SettingsTable',     `budget-tracker.settings-${stage}`);
+    const budgetDataTable   = dynamodb.Table.fromTableName(this, 'BudgetDataTable',   budgetDataTableName);
+    const aiJobsTable       = dynamodb.Table.fromTableName(this, 'AiJobsTable',       aiJobsTableName);
+    const wsConnectionsTable = dynamodb.Table.fromTableName(this, 'WsConnectionsTable', wsConnectionsTableName);
 
     const claudeProxyFnName = `transformotion-claude-proxy-${stage}`;
 
@@ -111,21 +119,38 @@ export class BudgetTrackerApiStack extends cdk.Stack {
     });
     settingsTable.grantReadWriteData(settingsFn);
 
-    // ── budget-ai-handler (categorise + review + csv-analysis) ───────────────
+    // ── budget-ai-handler (categorise + review-start + review-worker + csv-analysis) ──
+    const aiFnName = `budget-ai-handler-${stage}`;
     const aiFn = new lambdaNodejs.NodejsFunction(this, 'AiFn', {
-      functionName: `budget-ai-handler-${stage}`,
+      functionName: aiFnName,
       entry:        path.join(fnDir, 'budget-ai/src/index.ts'),
       handler:      'handler',
       runtime:      lambda.Runtime.NODEJS_20_X,
       timeout:      cdk.Duration.seconds(300),
       memorySize:   512,
-      environment:  { CLAUDE_PROXY_FUNCTION_NAME: claudeProxyFnName },
+      environment:  {
+        CLAUDE_PROXY_FUNCTION_NAME: claudeProxyFnName,
+        AI_JOBS_TABLE:              aiJobsTableName,
+        WS_CONNECTIONS_TABLE:       wsConnectionsTableName,
+        WS_API_ID:                  wsApiId,
+        WS_STAGE:                   stage,
+        AWS_REGION_NAME:            this.region,
+      },
       bundling,
     });
     aiFn.addToRolePolicy(new iam.PolicyStatement({
       actions:   ['lambda:InvokeFunction'],
-      resources: [`arn:aws:lambda:${this.region}:${this.account}:function:${claudeProxyFnName}`],
+      resources: [
+        `arn:aws:lambda:${this.region}:${this.account}:function:${claudeProxyFnName}`,
+        `arn:aws:lambda:${this.region}:${this.account}:function:${aiFnName}`,
+      ],
     }));
+    aiFn.addToRolePolicy(new iam.PolicyStatement({
+      actions:   ['execute-api:ManageConnections'],
+      resources: [`arn:aws:execute-api:${this.region}:${this.account}:${wsApiId}/${stage}/*`],
+    }));
+    aiJobsTable.grantReadWriteData(aiFn);
+    wsConnectionsTable.grantReadData(aiFn);
 
     // ── budget-data-handler ───────────────────────────────────────────────────
     const budgetDataFn = new lambdaNodejs.NodejsFunction(this, 'BudgetDataFn', {

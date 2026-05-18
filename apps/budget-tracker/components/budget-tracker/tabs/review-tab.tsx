@@ -9,6 +9,7 @@ import { getCategoryBadgeClasses } from "../data/category-colors"
 import { getActiveCategories, getActiveSubcategories, getCategoryName, getSubcategoryName } from "@/lib/categories"
 import { cn } from "@/lib/utils"
 import { getAIService } from "@/lib/services/ai"
+import type { ReviewResult as AIReviewResult } from "@/lib/services/ai"
 import type { MatchingRule } from "@transformotion/budget-domain"
 
 interface ReviewResult {
@@ -44,34 +45,39 @@ export function ReviewTab() {
   const handleAIReview = async () => {
     setLoading(true)
     setError(null)
+    setReviewResults([])
     try {
-      const batch = uncategorizedTransactions.slice(0, 20)
+      const batch = uncategorizedTransactions.slice(0, 100)
       const indexedTxs = batch.map((t, i) => ({
         index: i,
         description: t.description,
         amount: String(t.amount),
       }))
 
-      const result = await getAIService().reviewTransactions({
+      await getAIService().reviewTransactions({
         transactions: indexedTxs,
         categories,
+        onBatch: (batchResults: AIReviewResult[]) => {
+          const formatted: ReviewResult[] = batchResults.flatMap(r => {
+            const tx = batch[r.index]
+            if (!tx?.transactionId) return []
+            return [{
+              transactionId: tx.transactionId,
+              description: tx.description,
+              suggestedCategoryId: r.categoryId,
+              suggestedSubcategoryId: r.subcategoryId,
+              suggestedCategoryName: getCategoryName(categories, r.categoryId),
+              suggestedSubcategoryName: getSubcategoryName(categories, r.subcategoryId),
+              reason: r.reason,
+              status: "pending" as const,
+            }]
+          })
+          setReviewResults(prev => {
+            const existing = new Set(prev.map(r => r.transactionId))
+            return [...prev, ...formatted.filter(r => !existing.has(r.transactionId))]
+          })
+        },
       })
-
-      const formatted: ReviewResult[] = result.results.map(r => {
-        const tx = batch[r.index]
-        return {
-          transactionId: tx?.transactionId ?? '',
-          description: tx?.description ?? '',
-          suggestedCategoryId: r.categoryId,
-          suggestedSubcategoryId: r.subcategoryId,
-          suggestedCategoryName: getCategoryName(categories, r.categoryId),
-          suggestedSubcategoryName: getSubcategoryName(categories, r.subcategoryId),
-          reason: r.reason,
-          status: "pending" as const,
-        }
-      }).filter(r => r.transactionId)
-
-      setReviewResults(formatted)
     } catch (err) {
       setError(err instanceof Error ? err : new Error("AI review failed"))
     } finally {

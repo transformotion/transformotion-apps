@@ -75,7 +75,7 @@ jobs:
 
       - name: CDK Deploy — Budget Tracker stacks (dev)
         working-directory: infrastructure
-        run: pnpm exec cdk deploy 'TransformotionDev-BudgetTrackerTables' 'TransformotionDev-BudgetTrackerApi' 'TransformotionDev-BudgetTrackerWs' --require-approval never
+        run: pnpm exec cdk deploy 'TransformotionDev-BudgetTrackerTables' 'TransformotionDev-BudgetTrackerWs' 'TransformotionDev-BudgetTrackerApi' --require-approval never
 
       - name: Extract WebSocket URL from CDK output
         run: |
@@ -153,7 +153,7 @@ jobs:
 
       - name: CDK Deploy — Budget Tracker stacks (prod)
         working-directory: infrastructure
-        run: pnpm exec cdk deploy 'TransformotionProd-BudgetTrackerTables' 'TransformotionProd-BudgetTrackerApi' 'TransformotionProd-BudgetTrackerWs' --require-approval never
+        run: pnpm exec cdk deploy 'TransformotionProd-BudgetTrackerTables' 'TransformotionProd-BudgetTrackerWs' 'TransformotionProd-BudgetTrackerApi' --require-approval never
 
       - name: Extract WebSocket URL from CDK output
         run: |
