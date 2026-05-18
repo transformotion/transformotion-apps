@@ -9,6 +9,7 @@
     "lint": "echo \"lint: ai-ws-default\""
   },
   "devDependencies": {
+    "@aws-sdk/client-apigatewaymanagementapi": "^3",
     "@types/aws-lambda": "^8",
     "@types/node": "^22",
     "typescript": "*"

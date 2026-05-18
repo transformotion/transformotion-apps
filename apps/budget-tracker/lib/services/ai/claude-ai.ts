@@ -24,6 +24,7 @@ export class ClaudeAIService implements AIService {
 
     const connectionId = await new Promise<string>((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error('WebSocket connect timeout')), 10_000)
+      ws.onopen  = () => { ws.send(JSON.stringify({ action: 'init' })) }
       ws.onmessage = (event) => {
         const msg = JSON.parse(event.data as string) as WsMessage
         if (msg.type === 'connected') {

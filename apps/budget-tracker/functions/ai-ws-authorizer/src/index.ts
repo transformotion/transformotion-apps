@@ -56,11 +56,13 @@ export const handler = async (event: WsAuthorizerEvent): Promise<AuthorizerResul
   try {
     const { payload } = await jose.jwtVerify(token, JWKS, { issuer: ISSUER });
 
-    const userId   = payload.sub as string;
-    const accounts = JSON.parse((payload['accounts'] as string | undefined) ?? '[]') as string[];
+    const userId      = payload.sub as string;
+    const accountsRaw = JSON.parse((payload['accounts'] as string | undefined) ?? '{}') as
+      Record<string, Array<{ accountId: string; role: string }>>;
+    const btAccountIds = (accountsRaw['budget-tracker'] ?? []).map(a => a.accountId);
 
-    if (accountId && !accounts.includes(accountId)) {
-      console.log(`[ai-ws-authorizer] rejected: accountId ${accountId} not in user's accounts`);
+    if (accountId && !btAccountIds.includes(accountId)) {
+      console.log(`[ai-ws-authorizer] rejected: accountId ${accountId} not in user's budget-tracker accounts`);
       return makePolicy('Deny', event.methodArn, userId);
     }
 

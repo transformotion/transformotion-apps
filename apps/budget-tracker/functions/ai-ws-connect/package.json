@@ -9,7 +9,6 @@
     "lint": "echo \"lint: ai-ws-connect\""
   },
   "devDependencies": {
-    "@aws-sdk/client-apigatewaymanagementapi": "^3",
     "@aws-sdk/client-dynamodb": "^3",
     "@aws-sdk/lib-dynamodb": "^3",
     "@types/aws-lambda": "^8",

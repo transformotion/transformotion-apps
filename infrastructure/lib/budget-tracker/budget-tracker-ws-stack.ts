@@ -137,10 +137,8 @@ export class BudgetTrackerWsStack extends cdk.Stack {
       runtime:      lambda.Runtime.NODEJS_20_X,
       timeout:      cdk.Duration.seconds(10),
       memorySize:   256,
-      environment:  { CONNECTIONS_TABLE: this.connectionsTable.tableName },
       bundling,
     });
-    this.connectionsTable.grantReadData(defaultFn);
 
     // ── WebSocket API + routes ────────────────────────────────────────────────
 
@@ -164,8 +162,8 @@ export class BudgetTrackerWsStack extends cdk.Stack {
       autoDeploy:   true,
     });
 
-    // Allow $connect to push the 'connected' message back to the new client
-    connectFn.addToRolePolicy(new iam.PolicyStatement({
+    // Allow $default to push messages back to connected clients (e.g. 'connected' reply to init ping)
+    defaultFn.addToRolePolicy(new iam.PolicyStatement({
       actions:   ['execute-api:ManageConnections'],
       resources: [`arn:aws:execute-api:${this.region}:${this.account}:${this.webSocketApi.apiId}/${stage}/*`],
     }));
