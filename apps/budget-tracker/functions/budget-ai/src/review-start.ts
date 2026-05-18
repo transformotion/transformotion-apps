@@ -1,12 +1,12 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, PutCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
 import { ok, parseBody } from '@transformotion/lambda-middleware';
 import type { AuthClaims } from '@transformotion/lambda-middleware';
 import type { Category } from '@transformotion/budget-domain';
 import type { ReviewWorkerPayload } from './review-worker';
 
-const ddb         = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+const ddb          = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const lambdaClient = new LambdaClient({});
 
 const JOBS_TABLE  = process.env.AI_JOBS_TABLE!;
@@ -18,21 +18,25 @@ export async function reviewStart(
   accountId: string,
   event: Parameters<typeof parseBody>[0],
 ): Promise<ReturnType<typeof ok>> {
-  const { connectionId, transactions, categories, settings } = parseBody<{
-    connectionId: string;
+  const { transactions, categories, settings } = parseBody<{
     transactions: Array<{ index: number; description: string; amount: string }>;
     categories: Category[];
     settings?: { batchSize?: number; parallelLimit?: number; confidenceThreshold?: 'low' | 'medium' };
   }>(event);
 
-  // Verify the connectionId belongs to this user
-  const connItem = await ddb.send(new GetCommand({
+  // Resolve connectionId from the connections table by userId (most recent active connection)
+  const connQuery = await ddb.send(new QueryCommand({
     TableName: CONN_TABLE,
-    Key: { connectionId },
+    IndexName: 'userId-index',
+    KeyConditionExpression: 'userId = :uid',
+    ExpressionAttributeValues: { ':uid': auth.userId },
+    ScanIndexForward: false,
+    Limit: 1,
   }));
-  if (!connItem.Item || connItem.Item['userId'] !== auth.userId) {
-    throw { statusCode: 400, message: 'Invalid or expired WebSocket connection' };
+  if (!connQuery.Items || connQuery.Items.length === 0) {
+    throw { statusCode: 400, message: 'No active WebSocket connection found. Open the Review tab and try again.' };
   }
+  const connectionId = connQuery.Items[0]['connectionId'] as string;
 
   const jobId    = crypto.randomUUID();
   const now      = Math.floor(Date.now() / 1000);

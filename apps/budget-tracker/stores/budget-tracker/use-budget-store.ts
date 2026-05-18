@@ -14,7 +14,7 @@ import {
   type TransactionFilters,
 } from '@/lib/repositories/budget-tracker'
 
-export type BudgetTabId = 'transactions' | 'summary' | 'budget' | 'cashflow' | 'rules' | 'review'
+export type BudgetTabId = 'transactions' | 'summary' | 'budget' | 'cashflow' | 'rules' | 'review' | 'settings'
 
 interface BudgetState {
   activeTab: BudgetTabId

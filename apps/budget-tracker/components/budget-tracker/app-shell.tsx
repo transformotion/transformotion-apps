@@ -33,6 +33,7 @@ export const BUDGET_NAV_ITEMS: { id: BudgetTabId; icon: typeof Receipt; label: s
   { id: "cashflow", icon: TrendingUp, label: "Cashflow" },
   { id: "rules", icon: Wand2, label: "Rules" },
   { id: "review", icon: Sparkles, label: "Review" },
+  { id: "settings", icon: Settings, label: "Settings" },
 ]
 
 // ============================================================================

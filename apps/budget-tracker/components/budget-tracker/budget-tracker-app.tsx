@@ -8,6 +8,7 @@ import { BudgetTab } from "./tabs/budget-tab"
 import { CashflowTab } from "./tabs/cashflow-tab"
 import { RulesTab } from "./tabs/rules-tab"
 import { ReviewTab } from "./tabs/review-tab"
+import { SettingsTab } from "./tabs/settings-tab"
 import { useBudgetStore } from "@/stores/budget-tracker/use-budget-store"
 import { useAuthStore } from "@/stores/auth/use-auth-store"
 import { authService } from "@/lib/services/auth"
@@ -32,6 +33,8 @@ function BudgetTabContent() {
       return <RulesTab />
     case "review":
       return <ReviewTab />
+    case "settings":
+      return <SettingsTab />
     default:
       return <TransactionsTab />
   }
