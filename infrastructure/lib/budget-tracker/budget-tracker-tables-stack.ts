@@ -24,6 +24,7 @@ export class BudgetTrackerTablesStack extends cdk.Stack {
   public readonly rulesTable:        dynamodb.Table;
   public readonly settingsTable:     dynamodb.Table;
   public readonly budgetDataTable:   dynamodb.Table;
+  public readonly aiJobsTable:       dynamodb.Table;
 
   constructor(scope: Construct, id: string, props: BudgetTrackerTablesStackProps) {
     super(scope, id, props);
@@ -82,6 +83,23 @@ export class BudgetTrackerTablesStack extends cdk.Stack {
       removalPolicy:        cdk.RemovalPolicy.RETAIN,
     });
 
+    // ── budget-tracker.ai-jobs ────────────────────────────────────────────────
+    // Tracks async AI review jobs. PK: jobId. GSI: userId-index for user queries.
+    // TTL: expiresAt (24h after creation) for automatic cleanup.
+    this.aiJobsTable = new dynamodb.Table(this, 'AiJobsTable', {
+      tableName:           `budget-tracker.ai-jobs-${stage}`,
+      partitionKey:        { name: 'jobId', type: dynamodb.AttributeType.STRING },
+      billingMode:         dynamodb.BillingMode.PAY_PER_REQUEST,
+      timeToLiveAttribute: 'expiresAt',
+      removalPolicy:       removal,
+    });
+
+    this.aiJobsTable.addGlobalSecondaryIndex({
+      indexName:    'userId-index',
+      partitionKey: { name: 'userId', type: dynamodb.AttributeType.STRING },
+      projectionType: dynamodb.ProjectionType.ALL,
+    });
+
     // ── Outputs ───────────────────────────────────────────────────────────────
     const out = (id: string, value: string, description: string) =>
       new cdk.CfnOutput(this, id, { value, description, exportName: `Transformotion-${stage}-${id}` });
@@ -90,5 +108,6 @@ export class BudgetTrackerTablesStack extends cdk.Stack {
     out('BTRulesTableArn',        this.rulesTable.tableArn,        'budget-tracker.rules table ARN');
     out('BTSettingsTableArn',     this.settingsTable.tableArn,     'budget-tracker.settings table ARN');
     out('BTBudgetDataTableArn',   this.budgetDataTable.tableArn,   'budget-tracker.budget-data table ARN');
+    out('BTAiJobsTableArn',       this.aiJobsTable.tableArn,       'budget-tracker.ai-jobs table ARN');
   }
 }

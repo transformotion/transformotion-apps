@@ -6,12 +6,18 @@ import type { BudgetSettings } from '@transformotion/budget-domain';
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const TABLE = process.env.SETTINGS_TABLE!;
 
-// BudgetSettings now contains only csvFormatMappings.
-// All budget/category state moved to budget-tracker.budget-data table.
-const SETTING_KEYS: Array<keyof BudgetSettings> = ['csvFormatMappings'];
+const SETTING_KEYS: Array<keyof BudgetSettings> = [
+  'csvFormatMappings',
+  'aiReviewBatchSize',
+  'aiReviewParallelLimit',
+  'aiReviewConfidenceThreshold',
+];
 
 const DEFAULT_SETTINGS: BudgetSettings = {
   csvFormatMappings: {},
+  aiReviewBatchSize: 5,
+  aiReviewParallelLimit: 4,
+  aiReviewConfidenceThreshold: 'low',
 };
 
 async function getSettings(accountId: string) {

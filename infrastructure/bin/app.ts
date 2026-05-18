@@ -96,21 +96,24 @@ const devBudgetTrackerTables = new BudgetTrackerTablesStack(app, 'Transformotion
   description: 'Transformotion Apps — Dev Budget Tracker DynamoDB tables',
 });
 
-new BudgetTrackerApiStack(app, 'TransformotionDev-BudgetTrackerApi', {
-  env,
-  stage:               'dev',
-  description:         'Transformotion Apps — Dev Budget Tracker API routes',
-  api:                 devPlatformApi.api,
-  authoriser:          devPlatformApi.authoriser,
-  apiResource:         devPlatformApi.apiResource,
-  budgetDataTableName: devBudgetTrackerTables.budgetDataTable.tableName,
-});
-
-new BudgetTrackerWsStack(app, 'TransformotionDev-BudgetTrackerWs', {
+const devBudgetTrackerWs = new BudgetTrackerWsStack(app, 'TransformotionDev-BudgetTrackerWs', {
   env,
   stage:       'dev',
   description: 'Transformotion Apps — Dev Budget Tracker WebSocket API (AI Review)',
   userPool:    devAuth.userPool,
+});
+
+new BudgetTrackerApiStack(app, 'TransformotionDev-BudgetTrackerApi', {
+  env,
+  stage:                  'dev',
+  description:            'Transformotion Apps — Dev Budget Tracker API routes',
+  api:                    devPlatformApi.api,
+  authoriser:             devPlatformApi.authoriser,
+  apiResource:            devPlatformApi.apiResource,
+  budgetDataTableName:    devBudgetTrackerTables.budgetDataTable.tableName,
+  aiJobsTableName:        devBudgetTrackerTables.aiJobsTable.tableName,
+  wsConnectionsTableName: devBudgetTrackerWs.connectionsTable.tableName,
+  wsApiId:                devBudgetTrackerWs.webSocketApi.apiId,
 });
 
 new MigrationsApiStack(app, 'TransformotionDev-MigrationsApi', {
@@ -187,21 +190,24 @@ const prodBudgetTrackerTables = new BudgetTrackerTablesStack(app, 'Transformotio
   description: 'Transformotion Apps — Prod Budget Tracker DynamoDB tables',
 });
 
-new BudgetTrackerApiStack(app, 'TransformotionProd-BudgetTrackerApi', {
-  env,
-  stage:               'prod',
-  description:         'Transformotion Apps — Prod Budget Tracker API routes',
-  api:                 prodPlatformApi.api,
-  authoriser:          prodPlatformApi.authoriser,
-  apiResource:         prodPlatformApi.apiResource,
-  budgetDataTableName: prodBudgetTrackerTables.budgetDataTable.tableName,
-});
-
-new BudgetTrackerWsStack(app, 'TransformotionProd-BudgetTrackerWs', {
+const prodBudgetTrackerWs = new BudgetTrackerWsStack(app, 'TransformotionProd-BudgetTrackerWs', {
   env,
   stage:       'prod',
   description: 'Transformotion Apps — Prod Budget Tracker WebSocket API (AI Review)',
   userPool:    prodAuth.userPool,
+});
+
+new BudgetTrackerApiStack(app, 'TransformotionProd-BudgetTrackerApi', {
+  env,
+  stage:                  'prod',
+  description:            'Transformotion Apps — Prod Budget Tracker API routes',
+  api:                    prodPlatformApi.api,
+  authoriser:             prodPlatformApi.authoriser,
+  apiResource:            prodPlatformApi.apiResource,
+  budgetDataTableName:    prodBudgetTrackerTables.budgetDataTable.tableName,
+  aiJobsTableName:        prodBudgetTrackerTables.aiJobsTable.tableName,
+  wsConnectionsTableName: prodBudgetTrackerWs.connectionsTable.tableName,
+  wsApiId:                prodBudgetTrackerWs.webSocketApi.apiId,
 });
 
 new MigrationsApiStack(app, 'TransformotionProd-MigrationsApi', {

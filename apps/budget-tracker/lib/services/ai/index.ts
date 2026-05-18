@@ -1,13 +1,16 @@
 import type {
   Category,
-  AiReviewResponse,
   AiCsvAnalysisResponse,
+  WsMessageBatchResult,
 } from '@transformotion/budget-domain'
+
+export type ReviewResult = WsMessageBatchResult['results'][number]
 
 export interface ReviewTransactionsInput {
   transactions: Array<{ index: number; description: string; amount: string }>
   categories: Category[]
-  onBatch?: (batchResults: AiReviewResponse['results']) => void
+  settings?: { batchSize?: number; parallelLimit?: number; confidenceThreshold?: 'low' | 'medium' }
+  onBatch?: (results: ReviewResult[], pass: 1 | 2) => void
 }
 
 export interface AnalyseCsvFormatInput {
@@ -15,8 +18,12 @@ export interface AnalyseCsvFormatInput {
   possibleHeaders?: string[]
 }
 
+export interface ReviewTransactionsResult {
+  jobId: string
+}
+
 export interface AIService {
-  reviewTransactions(input: ReviewTransactionsInput): Promise<AiReviewResponse>
+  reviewTransactions(input: ReviewTransactionsInput): Promise<ReviewTransactionsResult>
   analyseCsvFormat(input: AnalyseCsvFormatInput): Promise<AiCsvAnalysisResponse>
 }
 

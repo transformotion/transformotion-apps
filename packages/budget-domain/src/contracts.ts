@@ -68,6 +68,9 @@ export interface MatchingRule {
 
 export interface BudgetSettings {
   csvFormatMappings: Record<string, CSVMapping>;
+  aiReviewBatchSize?: number;
+  aiReviewParallelLimit?: number;
+  aiReviewConfidenceThreshold?: 'low' | 'medium';
 }
 
 export interface CSVMapping {
@@ -128,12 +131,38 @@ export interface AccountMember {
 // ── AI response schemas ───────────────────────────────────────────────────────
 
 export interface AiReviewResponse {
+  jobId: string;
+}
+
+export interface WsMessageConnected {
+  type: 'connected';
+  connectionId: string;
+}
+
+export interface WsMessageBatchResult {
+  type: 'batch_result';
+  jobId: string;
+  pass: 1 | 2;
   results: Array<{
     index: number;
     categoryId: string;
     subcategoryId: string;
     reason: string;
+    confidence: 'high' | 'medium' | 'low';
   }>;
+  completedCount: number;
+  totalCount: number;
+}
+
+export interface WsMessageComplete {
+  type: 'complete';
+  jobId: string;
+}
+
+export interface WsMessageError {
+  type: 'error';
+  jobId: string;
+  message: string;
 }
 
 export interface AiCsvAnalysisResponse {

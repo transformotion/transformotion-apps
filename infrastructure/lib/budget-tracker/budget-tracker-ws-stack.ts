@@ -5,6 +5,7 @@ import * as integrations from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import * as authorizers from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as lambdaNodejs from 'aws-cdk-lib/aws-lambda-nodejs';
 import { Construct } from 'constructs';
@@ -162,6 +163,12 @@ export class BudgetTrackerWsStack extends cdk.Stack {
       stageName:    stage,
       autoDeploy:   true,
     });
+
+    // Allow $connect to push the 'connected' message back to the new client
+    connectFn.addToRolePolicy(new iam.PolicyStatement({
+      actions:   ['execute-api:ManageConnections'],
+      resources: [`arn:aws:execute-api:${this.region}:${this.account}:${this.webSocketApi.apiId}/${stage}/*`],
+    }));
 
     // ── Stack outputs ─────────────────────────────────────────────────────────
 

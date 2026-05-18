@@ -23,6 +23,7 @@ export interface AuthConfig {
 export interface AIConfig {
   provider: 'mock' | 'claude'
   model: string
+  wssUrl: string
 }
 
 export interface StorageConfig {
@@ -102,6 +103,7 @@ export function loadConfig(): AppConfig {
         validValues: ['mock', 'claude'] as const,
       }),
       model: process.env.NEXT_PUBLIC_AI_MODEL || 'claude-3-sonnet',
+      wssUrl: process.env.NEXT_PUBLIC_BUDGET_WSS_URL || '',
     },
     storage: {
       provider: selectProvider({
