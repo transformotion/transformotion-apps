@@ -4,27 +4,27 @@ function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-/**
- * Apply matching rules to a transaction description.
- * Returns the first matching rule's categoryId/subcategoryId, or null.
- */
+function buildRegex(matchType: string, pattern: string): RegExp {
+  if (matchType === "regex") return new RegExp(pattern, "i");
+  if (matchType === "startsWith") return new RegExp(`^${escapeRegex(pattern)}`, "i");
+  return new RegExp(escapeRegex(pattern), "i");
+}
+
+// Priority ASC, then createdAt DESC (newer wins equal-priority ties)
+function ruleComparator(a: MatchingRule, b: MatchingRule): number {
+  if (a.priority !== b.priority) return a.priority - b.priority;
+  return b.createdAt.localeCompare(a.createdAt);
+}
+
 export function applyRules(
   description: string,
   rules: MatchingRule[]
 ): { categoryId: string; subcategoryId: string; ruleId: string; isBusiness: boolean } | null {
-  const sorted = [...rules].sort((a, b) => a.priority - b.priority);
+  const sorted = [...rules].sort(ruleComparator);
   for (const rule of sorted) {
     if (!rule.enabled) continue;
     try {
-      let regex: RegExp;
-      if (rule.matchType === "regex") {
-        regex = new RegExp(rule.match, "i");
-      } else if (rule.matchType === "startsWith") {
-        regex = new RegExp(`^${escapeRegex(rule.match)}`, "i");
-      } else {
-        regex = new RegExp(escapeRegex(rule.match), "i");
-      }
-      if (regex.test(description)) {
+      if (buildRegex(rule.matchType, rule.match).test(description)) {
         return {
           categoryId: rule.categoryId,
           subcategoryId: rule.subcategoryId,
@@ -37,4 +37,25 @@ export function applyRules(
     }
   }
   return null;
+}
+
+export function previewRuleMatches(
+  description: string,
+  rules: MatchingRule[]
+): Array<{ rule: MatchingRule; isWinner: boolean }> {
+  const sorted = [...rules].sort(ruleComparator);
+  const matches: Array<{ rule: MatchingRule; isWinner: boolean }> = [];
+  let foundWinner = false;
+  for (const rule of sorted) {
+    if (!rule.enabled) continue;
+    try {
+      if (buildRegex(rule.matchType, rule.match).test(description)) {
+        matches.push({ rule, isWinner: !foundWinner });
+        foundWinner = true;
+      }
+    } catch {
+      // Invalid regex — skip
+    }
+  }
+  return matches;
 }

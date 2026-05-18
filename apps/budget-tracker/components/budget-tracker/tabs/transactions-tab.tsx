@@ -8,7 +8,7 @@ import {
   RotateCcw, Check, BookOpen, Search, FileText
 } from "lucide-react"
 import { CATEGORY_COLORS } from "../data/category-colors"
-import { applyRules } from "../data/builtin-rules"
+import { applyRules } from "@transformotion/budget-domain"
 import { getActiveCategories, getActiveSubcategories, getCategoryName, getSubcategoryName, getDisplayLabel, excludeFromCashflow } from "@/lib/categories"
 import type { Transaction, Category } from "@transformotion/budget-domain"
 import type { MatchingRule, CSVMapping } from "@transformotion/budget-domain"
