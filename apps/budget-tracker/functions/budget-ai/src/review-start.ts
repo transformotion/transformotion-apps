@@ -1,7 +1,7 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
-import { ok, parseBody } from '@transformotion/lambda-middleware';
+import { ok, parseBody, requireAccountAccess } from '@transformotion/lambda-middleware';
 import type { AuthClaims } from '@transformotion/lambda-middleware';
 import type { Category } from '@transformotion/budget-domain';
 import type { ReviewWorkerPayload } from './review-worker';
@@ -18,6 +18,8 @@ export async function reviewStart(
   accountId: string,
   event: Parameters<typeof parseBody>[0],
 ): Promise<ReturnType<typeof ok>> {
+  requireAccountAccess(auth, 'budget-tracker', accountId);
+
   const { transactions, categories, settings } = parseBody<{
     transactions: Array<{ index: number; description: string; amount: string }>;
     categories: Category[];
