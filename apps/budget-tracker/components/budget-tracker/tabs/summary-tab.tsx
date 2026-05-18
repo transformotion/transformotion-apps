@@ -128,6 +128,17 @@ export function SummaryTab() {
       }
     }
 
+    // Accumulate excluded subcategories from non-business transactions (shown greyed; not added to category total)
+    for (const tx of monthTransactions.filter(t => !t._business)) {
+      if (!excludeFromCashflow(categories, tx.subcategoryId ?? null)) continue
+      const catName = getCategoryName(categories, tx.categoryId ?? null) || tx.category || ''
+      const subName = getSubcategoryName(categories, tx.subcategoryId ?? null) || tx.subcategory || ''
+      if (catName && byCategory[catName]?.bySubcategory[subName]) {
+        byCategory[catName].bySubcategory[subName].total += Math.abs(parseFloat(tx.amount) || 0)
+        byCategory[catName].bySubcategory[subName].transactions.push(tx)
+      }
+    }
+
     const netSavings = totalIncome - totalExpenses
     const savingsRate = totalIncome > 0 ? (netSavings / totalIncome) * 100 : 0
     return { totalIncome, totalExpenses, netSavings, savingsRate, byCategory }
@@ -314,7 +325,11 @@ export function SummaryTab() {
                       {isExpanded && (
                         <div className="mt-3 pt-3 border-t border-border/50 space-y-2">
                           {Object.entries(data.bySubcategory)
-                            .filter(([_, subData]) => subData.total > 0 || subData.budget > 0)
+                            .filter(([_, subData]) => {
+                              if (subData.total > 0 || subData.budget > 0) return true
+                              const subObj = categories.flatMap(c => c.subcategories).find(s => s.subcategoryId === subData.subcategoryId)
+                              return subObj?.excludeFromCashflow === true
+                            })
                             .sort((a, b) => b[1].total - a[1].total)
                             .map(([subName, subData]) => {
                               const subKey = `${cat.categoryId}-${subData.subcategoryId}`
@@ -337,7 +352,7 @@ export function SummaryTab() {
                                       {isExcluded && <ExcludedBadge />}
                                     </div>
                                     <div className="flex items-center gap-2">
-                                      <span className={cn("text-xs font-medium", isIncome ? "text-signal-green" : subOverBudget ? "text-signal-red" : "text-foreground")}>
+                                      <span className={cn("text-xs font-medium", isIncome ? "text-signal-green" : isExcluded ? "text-muted-foreground/50" : subOverBudget ? "text-signal-red" : "text-foreground")}>
                                         {formatCurrency(subData.total)}
                                       </span>
                                       {subData.budget > 0 && !isIncome && (
