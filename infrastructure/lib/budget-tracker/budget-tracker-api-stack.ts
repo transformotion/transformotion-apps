@@ -151,6 +151,11 @@ export class BudgetTrackerApiStack extends cdk.Stack {
     }));
     aiJobsTable.grantReadWriteData(aiFn);
     wsConnectionsTable.grantReadData(aiFn);
+    // grantReadData covers the table ARN only; querying the userId-index GSI needs an explicit grant
+    aiFn.addToRolePolicy(new iam.PolicyStatement({
+      actions:   ['dynamodb:Query'],
+      resources: [`arn:aws:dynamodb:${this.region}:${this.account}:table/budget-tracker.ai-connections-${stage}/index/userId-index`],
+    }));
 
     // ── budget-data-handler ───────────────────────────────────────────────────
     const budgetDataFn = new lambdaNodejs.NodejsFunction(this, 'BudgetDataFn', {
