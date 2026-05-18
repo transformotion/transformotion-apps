@@ -17,6 +17,7 @@ import { StockAnalyserTablesStack } from '../lib/stock-analyser/stock-analyser-t
 // ── Budget Tracker stacks ─────────────────────────────────────────────────────
 import { BudgetTrackerTablesStack } from '../lib/budget-tracker/budget-tracker-tables-stack';
 import { BudgetTrackerApiStack }    from '../lib/budget-tracker/budget-tracker-api-stack';
+import { BudgetTrackerWsStack }     from '../lib/budget-tracker/budget-tracker-ws-stack';
 
 // ── Migration Utilities stacks ────────────────────────────────────────────────
 import { MigrationsApiStack } from '../../migration-utilities/infrastructure/lib/migrations-api-stack';
@@ -105,6 +106,13 @@ new BudgetTrackerApiStack(app, 'TransformotionDev-BudgetTrackerApi', {
   budgetDataTableName: devBudgetTrackerTables.budgetDataTable.tableName,
 });
 
+new BudgetTrackerWsStack(app, 'TransformotionDev-BudgetTrackerWs', {
+  env,
+  stage:       'dev',
+  description: 'Transformotion Apps — Dev Budget Tracker WebSocket API (AI Review)',
+  userPool:    devAuth.userPool,
+});
+
 new MigrationsApiStack(app, 'TransformotionDev-MigrationsApi', {
   env,
   stage:       'dev',
@@ -187,6 +195,13 @@ new BudgetTrackerApiStack(app, 'TransformotionProd-BudgetTrackerApi', {
   authoriser:          prodPlatformApi.authoriser,
   apiResource:         prodPlatformApi.apiResource,
   budgetDataTableName: prodBudgetTrackerTables.budgetDataTable.tableName,
+});
+
+new BudgetTrackerWsStack(app, 'TransformotionProd-BudgetTrackerWs', {
+  env,
+  stage:       'prod',
+  description: 'Transformotion Apps — Prod Budget Tracker WebSocket API (AI Review)',
+  userPool:    prodAuth.userPool,
 });
 
 new MigrationsApiStack(app, 'TransformotionProd-MigrationsApi', {
