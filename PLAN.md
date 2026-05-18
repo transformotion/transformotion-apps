@@ -934,6 +934,12 @@ reconciliation.
     invitation `perApp` shape.
   - Per-app accounts created based on which apps the invitation grants
     (per M2.2's per-app account model).
+  - New budget-tracker accounts seeded with default `budget-data` rows
+    (categories, empty budget amounts/frequencies) and default settings
+    (`csvFormatMappings: {}`) so the app is immediately usable without
+    manual setup. Identified as a gap during M6's inert-settings cleanup:
+    the existing account has data from migration, but invitation-created
+    accounts would otherwise start empty.
 - Multi-user platform functional end-to-end: an admin user invites
   another email; the invitee receives an email; clicking the link signs
   them up and gives them the granted access.

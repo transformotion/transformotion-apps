@@ -1,4 +1,4 @@
-import type { RawTransaction, CSVMapping } from "./contracts.js";
+import type { RawTransaction, CSVMapping } from "./contracts";
 
 export function parseCSVLine(line: string): string[] {
   const cols: string[] = [];

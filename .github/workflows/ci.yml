@@ -58,6 +58,44 @@ jobs:
           fi
           echo "Baseline growth check passed."
 
+  build:
+    name: Build (${{ matrix.app.name }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        app:
+          - { name: budget-tracker, dir: apps/budget-tracker }
+          - { name: stock-analyser, dir: apps/stock-analyser }
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '10.33.0'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build ${{ matrix.app.name }}
+        working-directory: ${{ matrix.app.dir }}
+        env:
+          NEXT_PUBLIC_RUNTIME_PROFILE: mock
+          NEXT_PUBLIC_COGNITO_USER_POOL_ID: ap-southeast-2_placeholder
+          NEXT_PUBLIC_COGNITO_CLIENT_ID: placeholder-client-id
+          NEXT_PUBLIC_COGNITO_REGION: ap-southeast-2
+          NEXT_PUBLIC_COGNITO_DOMAIN: placeholder.auth.ap-southeast-2.amazoncognito.com
+          NEXT_PUBLIC_API_URL: https://placeholder.execute-api.ap-southeast-2.amazonaws.com/dev
+          NEXT_PUBLIC_CLAUDE_API_URL: https://placeholder.execute-api.ap-southeast-2.amazonaws.com/dev/api/claude
+          NEXT_PUBLIC_CLAUDE_CACHE_URL: https://placeholder.execute-api.ap-southeast-2.amazonaws.com/dev/analysis-cache
+          NEXT_PUBLIC_CALLBACK_URL: http://localhost:3000/callback
+          NEXT_PUBLIC_APP_URL: http://localhost:3000
+          NEXT_PUBLIC_USE_MOCK_DATA: 'true'
+        run: pnpm build
+
   infra-synth:
     name: CDK Synth (validate templates)
     runs-on: ubuntu-latest
