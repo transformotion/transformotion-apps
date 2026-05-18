@@ -1,4 +1,4 @@
-import type { Transaction, BudgetData, BudgetFrequency, Category } from "./contracts.js";
+import type { Transaction, BudgetData, BudgetFrequency, Category } from "./contracts";
 
 export const FREQ_FACTORS: Record<BudgetFrequency, number> = {
   weekly: 52 / 12,

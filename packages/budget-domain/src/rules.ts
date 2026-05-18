@@ -1,4 +1,4 @@
-import type { MatchingRule } from "./contracts.js";
+import type { MatchingRule } from "./contracts";
 
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

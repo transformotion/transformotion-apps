@@ -1128,6 +1128,100 @@ The goals are not aesthetic preferences; they are the criteria by which
 the platform's success is measured. Decisions made without reference to
 them tend to drift toward whoever spoke last.
 
+### 7.4 Source-reference packages must use bare specifiers, not `.js` extensions
+
+Packages in `/packages/` that are consumed directly from source (via
+`"main": "./src/index.ts"` in `package.json`, no compiled `dist/`) must
+use bare specifiers for internal imports:
+
+```typescript
+// Correct — source-reference package
+import type { Transaction } from "./contracts";
+
+// Wrong — correct only for published ESM packages with compiled dist/
+import type { Transaction } from "./contracts.js";
+```
+
+The `.js` extension is the ESM convention for *published packages* where
+the emitted `.js` files exist in `dist/`. In source-reference packages
+there are no `.js` files; `tsc --noEmit` resolves `.js` → `.ts` via
+`moduleResolution: "bundler"` and passes, but Turbopack does not apply
+that mapping and fails with a module-not-found error at build time.
+
+This failure mode is silent at typecheck (passes) and loud only at
+`next build`. The root cause PR is #228. The fix is in PR (M6 cleanup).
+
+The rule: if a package has `"main": "./src/index.ts"` and no build step,
+every internal import in that package uses a bare specifier.
+
+### 7.5 `ignoreBuildErrors: true` must never be re-added without a tracking issue
+
+`typescript.ignoreBuildErrors: true` in `next.config.mjs` suppresses all
+TypeScript errors from `next build`. It is an escape hatch for situations
+where a build must ship despite known errors — not a setting to leave in
+place. The specific risk: it hides regressions introduced by subsequent
+changes.
+
+If you are tempted to add it, the required steps are:
+
+1. Identify the specific TS errors it would suppress.
+2. Open a GitHub Issue documenting each error, its root cause, and the
+   remediation plan.
+3. Add the setting with a comment that references the issue: e.g.,
+   `// ignoreBuildErrors: true — tracked in #NNN`.
+4. Set a gate in PLAN.md: the setting must be removed before the relevant
+   milestone closes.
+
+`ignoreBuildErrors: false` (the default) is the required state for apps
+that have passed their initial stabilisation. Removing the setting and
+finding it was hiding nothing (as in the M6 cleanup for budget-tracker)
+is the expected outcome when stabilisation is done correctly.
+
+### 7.6 Lambda-to-Lambda interface contracts must be verified against the target handler's actual API
+
+When one Lambda invokes another (e.g., `budget-ai` → `claude-proxy`),
+the request body field names and response shape must match the *target
+Lambda's handler code*, not the documentation or prior mental model.
+
+The failure mode: the calling Lambda uses field names that the target
+does not recognise, the target silently ignores them, returns an error,
+and the caller's middleware wraps it as a 500. All three bugs in the
+AI Review Lambda (PR #229) followed this pattern:
+
+- `max_tokens` sent, `maxTokens` expected → request rejected silently
+- `messages: [...]` sent, `prompt: string` expected → request rejected silently
+- Response parsed as content-blocks array, actual response was a string → TypeError at runtime
+
+The rule: whenever a Lambda calls another Lambda directly (not via HTTP),
+read the target Lambda's handler source before writing the invocation
+code. The interface contract lives in the target's code, not in any
+external document.
+
+### 7.7 DynamoDB settings table keys must be cleaned up when removed from the whitelist
+
+The `budget-tracker.settings` table is a key-value store where each
+`settingKey` corresponds to a field in `BudgetSettings`. When a field is
+removed from `BudgetSettings` (and therefore from the Lambda's
+`SETTING_KEYS` whitelist), the corresponding DynamoDB rows do not delete
+themselves — they remain in the table, invisible to the application but
+present in every full scan.
+
+When removing a field from `BudgetSettings`, the required steps are:
+
+1. Remove from `SETTING_KEYS` and `DEFAULT_SETTINGS` in the settings
+   Lambda.
+2. Remove from the `BudgetSettings` type in `packages/budget-domain/src/contracts.ts`
+   and `v0-reference/contracts/budget-tracker/data-models.md`.
+3. Create a one-shot migration script in
+   `scripts/migrations/budget-tracker/` to delete the orphaned rows.
+   Use `DRY_RUN=true` by default.
+4. Run the script and verify the final row count equals the number of
+   live setting keys.
+
+The M6 cleanup (PR this text landed in) removed 10 orphaned keys left
+over from the budget-data restructure (PR #225). The migration script is
+`scripts/migrations/budget-tracker/delete-inert-settings.ts`.
+
 ---
 
 ## 8. The status-tag system

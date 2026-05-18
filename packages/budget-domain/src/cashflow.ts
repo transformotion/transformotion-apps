@@ -1,5 +1,5 @@
-import type { Transaction, BudgetData, Category } from "./contracts.js";
-import { getSubcategoryMonthlyBudget } from "./budget-tracking.js";
+import type { Transaction, BudgetData, Category } from "./contracts";
+import { getSubcategoryMonthlyBudget } from "./budget-tracking";
 
 export interface MonthlyTrendPoint {
   month: string;

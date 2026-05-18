@@ -10,11 +10,6 @@ const nextConfig = {
     '@transformotion/auth-client',
     '@transformotion/runtime-config',
   ],
-  typescript: {
-    // Pre-existing v0 type errors (React 19 LegacyRef incompatibilities in
-    // shadcn/ui generated components). Do not remove until these are fixed.
-    ignoreBuildErrors: true,
-  },
 }
 
 export default nextConfig
