@@ -4,7 +4,7 @@ import { useState, useRef, useMemo, useEffect } from "react"
 import { useBudgetStore } from "@/stores/budget-tracker/use-budget-store"
 import { PageHeader, Card, PrimaryButton, SecondaryButton } from "@/components/ui/design-system"
 import { Search, Plus, RotateCcw, ChevronDown, Check, X, Pencil, Trash2, Ban, HelpCircle } from "lucide-react"
-import { applyRules } from "../data/builtin-rules"
+import { applyRules, previewRuleMatches } from "@transformotion/budget-domain"
 import { CATEGORY_COLORS } from "../data/category-colors"
 import { getActiveCategories, getActiveSubcategories, getCategoryName, getSubcategoryName } from "@/lib/categories"
 import type { MatchingRule } from "@transformotion/budget-domain"
@@ -52,28 +52,8 @@ export function RulesTab() {
   })
 
   const testMatches = useMemo(() => {
-    if (!testInput) return []
-    const results: Array<{ rule: MatchingRule; isWinner: boolean }> = []
-    for (const rule of matchingRulesRef.current) {
-      if (!rule.enabled) continue
-      try {
-        let regex: RegExp
-        if (rule.matchType === "regex") {
-          regex = new RegExp(rule.match, "i")
-        } else if (rule.matchType === "startsWith") {
-          regex = new RegExp(`^${rule.match}`, "i")
-        } else {
-          regex = new RegExp(rule.match, "i")
-        }
-        if (regex.test(testInput)) {
-          results.push({ rule, isWinner: false })
-        }
-      } catch {
-        // Invalid regex
-      }
-    }
-    if (results.length > 0) results[0].isWinner = true
-    return results
+    if (!testInput.trim()) return []
+    return previewRuleMatches(testInput, matchingRulesRef.current)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [testInput, matchingRules])
 

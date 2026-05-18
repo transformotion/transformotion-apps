@@ -40,3 +40,40 @@ pnpm tsx scripts/migrations/budget-tracker/import-transactions.ts
 - `migrated.transactions: 732`, `alreadyPresent.transactions: 0`
 - DynamoDB row count: 732
 - `_ignore: true` count: 39 (33 pre-existing transfers + 6 Hawkins payments)
+
+---
+
+### import-rules.ts
+
+Imports matching rules from the v0 prototype localStorage export into
+`budget-tracker.budget-data-dev` (stored as a rules list on the account item).
+
+**Source:** `migration-artifacts/budget-tracker/matching-rules/exports/export.json` (73 rules)
+
+**Mechanism:**
+1. Reads export file from disk
+2. Prompts for Cognito ID token (interactive)
+3. Resolves each rule's string category/subcategory labels to canonical UUIDs via `GET /api/budget/v1/categories`
+4. Detects `matchType` from pattern syntax (`contains` / `startsWith` / `regex`); converts bare `*` → `.*`
+5. In dry-run mode: prints resolution table, matchType summary, conflict report, and simulated transaction diff — then exits
+6. In execute mode: POSTs each rule to `POST /api/budget/v1/rules` and verifies final DynamoDB count
+
+**Usage:**
+
+```bash
+# Dry-run (default — no writes)
+pnpm tsx scripts/migrations/budget-tracker/import-rules.ts
+
+# Execute: set DRY_RUN = false at the top of the file, then run
+pnpm tsx scripts/migrations/budget-tracker/import-rules.ts
+```
+
+**Pre-conditions:**
+- Cognito ID token for Steve's account (`aed9dcdf-81b5-47a1-a0d5-5afbae940e93`)
+- Rules table must be empty (script does not deduplicate)
+- Deployed API accessible at the configured `API_BASE`
+
+**Expected output after execute:**
+- 73 rules POSTed successfully
+- DynamoDB rule count: 73
+- Design decisions (conflict resolution, matchType detection, `_ignore` handling): see PR description
