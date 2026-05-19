@@ -630,7 +630,7 @@ deduplication of duplicated runtime code.
 - Rate-limits rename: rename `platform-rate-limits-{stage}` to
   `platform.rate-limits-{stage}` to match the canonical separator rule
   (`{scope}.{entity}-{stage}`). Rate-limit data loss acceptable
-  (counters self-heal). Per M2.1 #106.
+  (counters self-heal). Per M2.1 #106. Tracked: #246.
 - Layered-architecture migration: all non-conforming code restructured
   to go through domain interfaces in contracts (per M2.1 #103). Existing
   service-layer code (stock-analyser portfolio/watchlist) migrates to
@@ -638,7 +638,21 @@ deduplication of duplicated runtime code.
   behind domain interfaces. Implementations named for their physical
   store (e.g., `DynamoTransactionRepository`,
   `LocalStorageTransactionRepository`). Selection by build-time config
-  client-side, deployment-time config server-side.
+  client-side, deployment-time config server-side. Parent gate: #253.
+  Requires deduplication inventory (#247) first.
+- Remove hardcoded built-in rules: the previous `BuiltinRule` type and
+  hardcoded rule list have been removed from code but the `removeBuiltinRules`
+  migration path and any remaining references to the concept should be
+  confirmed clean. Migrated to M7 from M6 as architectural cleanup that
+  fits the deduplication theme. Tracked: #201.
+- Auth store refactor: split stable identity (`userId`, `email`,
+  `groups`) from reactive current account (`currentAccountId`) in
+  `useAuthStore`. Prevents unnecessary re-renders when account context
+  changes. Migrated to M7 from M6. Tracked: #210.
+- Deduplication scoping/inventory: enumerate all type, utility, and
+  service-layer duplicates across apps before filing per-concern child
+  issues. This inventory gates all O4+O5+O6 deduplication PRs. Tracked:
+  #247.
 - Drift refinement of the 60/40 split: within the drifted 40%,
   *semantic* drift (real behavioural differences, e.g., `Transaction._id`
   string-vs-number) distinguished from *cosmetic* drift (1-line deltas,
@@ -656,28 +670,34 @@ deduplication of duplicated runtime code.
 - Lint re-enablement to prevent regression. Pre-condition: ESLint 10 /
   eslint-plugin-boundaries incompatibility resolved upstream first.
   Once lint is re-enabled, future cross-app file copies fail CI.
+  Tracked: #248 (blocked-by-external pending upstream fix).
 - Shared CDK construct library at `packages/cdk-constructs/` populated
   with the shared infrastructure constructs identified during the lift
-  (the missing library from inventory finding 5.6 #4).
+  (the missing library from inventory finding 5.6 #4). Tracked: #249.
 - Infrastructure reorganisation per `CONTRIBUTING.md` Section 3.7:
   per-app stacks moved to `apps/<app>/infrastructure/`, platform stacks
   moved to `platform/infrastructure/`, root `infrastructure/` reduced to
-  CDK app entrypoint only.
+  CDK app entrypoint only. Tracked: #250.
 - `platform/` top-level directory created. Platform Lambdas moved
   from root `functions/` to `platform/functions/` (with `auth/`,
   `accounts/`, `claude-proxy/`, `user/` substructure preserved).
   Platform infrastructure moved to `platform/infrastructure/` per
   the line above. CDK path constants and `pnpm-workspace.yaml` globs
-  updated.
+  updated. **Partial: `platform/` exists and Lambda dirs are at
+  `platform/{name}/` (not `platform/functions/{name}/`). Target
+  sub-structure and pnpm-workspace.yaml cleanup are #250 scope.**
 - `MONOREPO.md` updated to reflect the new structure: `platform/`
   documented as a top-level directory, `apps/<app>/infrastructure/`
   documented in per-app structure, root `infrastructure/` reduced
   scope documented, deploy workflow path filters updated. Per
   `CONTRIBUTING.md` Section 2.1 discipline rule, structural
-  migrations touch this document in the same PR.
+  migrations touch this document in the same PR. Tracked: #250.
 - The `apps/web/` 0-LOC shell cleanup (if not done in M3) folded in
-  here.
+  here. Tracked: #250 (`apps/web-vite-backup/` deletion).
 - Stock-analyser migrated from S3 root to `/stock-signal/` prefix:
+  **Code complete (landed M6).** Remaining M7 work: formal verification
+  against the dev deployment (basePath routing, sub-app behaviors,
+  sign-in URLs). Tracked: #251.
   - `apps/stock-analyser/next.config.mjs` gains `basePath: '/stock-signal'`
     (`output: 'export'` already present)
   - `deploy-stock-analyser.yml` syncs to `s3://transformotion-web-{stage}-{account}/stock-signal/`
@@ -689,6 +709,9 @@ deduplication of duplicated runtime code.
   - Stock-analyser sign-in, launchpad tile, and budget-tracker tile URLs
     verified post-migration
 - Launchpad promoted to root deployment:
+  **Code complete (landed M6).** Remaining M7 work: formal verification
+  against the dev deployment (root behavior, sub-app path isolation,
+  deploy workflow trigger correctness). Tracked: #251.
   - `apps/launchpad/next.config.mjs` gains `output: 'export'` and
     `trailingSlash: true` (currently not static-export-ready)
   - New deploy workflow `deploy-launchpad.yml` mirroring
@@ -714,7 +737,7 @@ deduplication of duplicated runtime code.
   Each sub-app extraction then becomes a single helper invocation rather
   than ~10 lines of repeated configuration. Pattern emerged through
   PRs #194 and the launchpad routing fix; the third recurrence triggers
-  the abstraction.
+  the abstraction. Tracked: #249.
 - Post-deploy app-identity verification: extend `verify-deploy.sh` (or
   equivalent per-workflow check) to assert the deployed URL returns HTML
   containing the expected app's identity marker in addition to the
@@ -723,7 +746,8 @@ deduplication of duplicated runtime code.
   S3 returns the wrong app's HTML with a 200 status, making the commit
   hash check pass while the wrong content is served. Verification should
   run as the final step of every deploy workflow after CloudFront
-  invalidation completes.
+  invalidation completes. Also extend with repository-operations smoke
+  check. Tracked: #252.
 
 ### Goals served
 
