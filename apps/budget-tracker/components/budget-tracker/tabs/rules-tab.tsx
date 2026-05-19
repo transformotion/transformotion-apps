@@ -4,12 +4,64 @@ import { useState, useRef, useMemo, useEffect } from "react"
 import { useBudgetStore } from "@/stores/budget-tracker/use-budget-store"
 import { useAuthStore, selectCurrentAccount } from "@/stores/auth/use-auth-store"
 import { PageHeader, Card, PrimaryButton, SecondaryButton } from "@/components/ui/design-system"
-import { Search, Plus, RotateCcw, ChevronDown, Check, X, Pencil, Trash2, Ban, HelpCircle } from "lucide-react"
+import { Search, Plus, RotateCcw, ChevronDown, Check, X, Pencil, Trash2, Ban, HelpCircle, GripVertical } from "lucide-react"
 import { applyRules, previewRuleMatches } from "@transformotion/budget-domain"
 import { CATEGORY_COLORS } from "../data/category-colors"
 import { getActiveCategories, getActiveSubcategories, getCategoryName, getSubcategoryName } from "@/lib/categories"
 import type { MatchingRule } from "@transformotion/budget-domain"
 import { cn } from "@/lib/utils"
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core"
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove,
+} from "@dnd-kit/sortable"
+import { CSS } from "@dnd-kit/utilities"
+
+function SortableRuleWrapper({
+  id,
+  disabled,
+  children,
+}: {
+  id: string
+  disabled: boolean
+  children: (dragHandle: React.ReactNode) => React.ReactNode
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id, disabled })
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+    position: isDragging ? 'relative' as const : undefined,
+    zIndex: isDragging ? 1 : undefined,
+  }
+  const dragHandle = (
+    <button
+      {...attributes}
+      {...listeners}
+      className="p-1 mt-1.5 text-muted-foreground/30 hover:text-muted-foreground/60 cursor-grab active:cursor-grabbing shrink-0 touch-none"
+      aria-label="Drag to reorder rule"
+      tabIndex={-1}
+    >
+      <GripVertical className="size-3.5" />
+    </button>
+  )
+  return (
+    <div ref={setNodeRef} style={style}>
+      {children(dragHandle)}
+    </div>
+  )
+}
 
 export function RulesTab() {
   const matchingRules = useBudgetStore((s) => s.matchingRules)
@@ -25,6 +77,42 @@ export function RulesTab() {
 
   const matchingRulesRef = useRef<MatchingRule[]>([])
   matchingRulesRef.current = matchingRules
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+
+    const oldIndex = matchingRules.findIndex(r => r.ruleId === active.id)
+    const newIndex = matchingRules.findIndex(r => r.ruleId === over.id)
+    if (oldIndex === -1 || newIndex === -1) return
+
+    const newOrder = arrayMove(matchingRules, oldIndex, newIndex)
+    const above = newOrder[newIndex - 1]
+    const below = newOrder[newIndex + 1]
+
+    const newPriority = !above
+      ? below.priority / 2
+      : !below
+      ? above.priority + 1000
+      : (above.priority + below.priority) / 2
+
+    const previousRules = matchingRules
+    useBudgetStore.setState({
+      matchingRules: newOrder.map(r =>
+        r.ruleId === active.id ? { ...r, priority: newPriority } : r
+      ),
+    })
+
+    updateMatchingRule(String(active.id), { priority: newPriority }).catch(err => {
+      useBudgetStore.setState({ matchingRules: previousRules })
+      setRuleOpError(err instanceof Error ? err.message : 'Failed to reorder rule — check your connection and try again')
+    })
+  }
 
   const [testInput, setTestInput] = useState("")
   const [showRules, setShowRules] = useState(true)
@@ -401,27 +489,33 @@ export function RulesTab() {
                 No rules yet. Create rules using the &quot;Learn&quot; button when categorizing transactions, or click &quot;Add rule&quot; above.
               </p>
             ) : (
-              <div className="space-y-1">
-                {matchingRules.map((rule) => {
-                  const isViewing = viewingRule === rule.ruleId
-                  const isEditing = editingRule === rule.ruleId
-                  const catName = getCategoryName(categories, rule.categoryId)
-                  const subName = getSubcategoryName(categories, rule.subcategoryId)
-                  const editCat = isEditing ? getActiveCategories(categories).find(c => c.categoryId === rule.categoryId) : undefined
+              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                <SortableContext items={matchingRules.map(r => r.ruleId)} strategy={verticalListSortingStrategy}>
+                  <div className="space-y-1">
+                    {matchingRules.map((rule) => {
+                      const isViewing = viewingRule === rule.ruleId
+                      const isEditing = editingRule === rule.ruleId
+                      const catName = getCategoryName(categories, rule.categoryId)
+                      const subName = getSubcategoryName(categories, rule.subcategoryId)
+                      const editCat = isEditing ? getActiveCategories(categories).find(c => c.categoryId === rule.categoryId) : undefined
 
-                  return (
-                    <div key={rule.ruleId}>
-                      <button
-                        onClick={() => {
-                          if (isEditing) return
-                          setViewingRule(isViewing ? null : rule.ruleId)
-                        }}
-                        className={cn(
-                          "w-full flex items-center justify-between py-2 px-2 hover:bg-surface2 rounded transition-colors text-left",
-                          !rule.enabled && "opacity-40",
-                          (isViewing || isEditing) && "bg-surface2"
-                        )}
-                      >
+                      return (
+                        <SortableRuleWrapper key={rule.ruleId} id={rule.ruleId} disabled={isEditing}>
+                          {(dragHandle) => (
+                            <>
+                              <div className="flex items-start">
+                                {dragHandle}
+                                <button
+                                  onClick={() => {
+                                    if (isEditing) return
+                                    setViewingRule(isViewing ? null : rule.ruleId)
+                                  }}
+                                  className={cn(
+                                    "flex-1 flex items-center justify-between py-2 px-2 hover:bg-surface2 rounded transition-colors text-left min-w-0",
+                                    !rule.enabled && "opacity-40",
+                                    (isViewing || isEditing) && "bg-surface2"
+                                  )}
+                                >
                         <div className="flex items-center gap-2 min-w-0 flex-1">
                           {!rule.enabled && <Ban className="size-3 text-signal-red shrink-0" />}
                           <span className="text-xs text-muted-foreground truncate">{rule.name}</span>
@@ -440,10 +534,11 @@ export function RulesTab() {
                             "size-3 text-muted-foreground transition-transform",
                             (isViewing || isEditing) && "rotate-180"
                           )} />
-                        </div>
-                      </button>
+                                </div>
+                                </button>
+                              </div>
 
-                      {/* View mode */}
+                              {/* View mode */}
                       {isViewing && !isEditing && (
                         <div className="mt-1 mb-2 p-3 bg-surface2 rounded-lg border border-border space-y-3">
                           <div>
@@ -627,10 +722,14 @@ export function RulesTab() {
                           </div>
                         </div>
                       )}
-                    </div>
-                  )
-                })}
-              </div>
+                    </>
+                  )}
+                </SortableRuleWrapper>
+                      )
+                    })}
+                  </div>
+                </SortableContext>
+              </DndContext>
             )}
           </div>
         )}

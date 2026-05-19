@@ -317,3 +317,57 @@ describe("normalise-rule-priorities migration logic", () => {
     expect(result.map(r => r.match)).toEqual(["Amazon Prime", "apple pay", "Zebra Store"]);
   });
 });
+
+// Priority midpoint math used by the drag-and-drop handleDragEnd
+function computeDragPriority(
+  above: number | undefined,
+  below: number | undefined,
+): number {
+  if (above === undefined && below !== undefined) return below / 2;
+  if (below === undefined && above !== undefined) return above + 1000;
+  if (above !== undefined && below !== undefined) return (above + below) / 2;
+  return 1000; // single-item list (degenerate case)
+}
+
+describe("drag-and-drop priority midpoint math", () => {
+  it("drop at top: priority = below / 2", () => {
+    expect(computeDragPriority(undefined, 2000)).toBe(1000);
+    expect(computeDragPriority(undefined, 1000)).toBe(500);
+  });
+
+  it("drop at bottom: priority = above + 1000", () => {
+    expect(computeDragPriority(5000, undefined)).toBe(6000);
+    expect(computeDragPriority(78000, undefined)).toBe(79000);
+  });
+
+  it("drop between two rules: priority = midpoint", () => {
+    expect(computeDragPriority(1000, 3000)).toBe(2000);
+    expect(computeDragPriority(1000, 2000)).toBe(1500);
+    expect(computeDragPriority(1000, 1001)).toBeCloseTo(1000.5);
+  });
+
+  it("midpoint result is between the neighbours", () => {
+    const above = 5000;
+    const below = 7000;
+    const result = computeDragPriority(above, below);
+    expect(result).toBeGreaterThan(above);
+    expect(result).toBeLessThan(below);
+  });
+
+  it("result is always finite and positive", () => {
+    [
+      computeDragPriority(undefined, 1000),
+      computeDragPriority(78000, undefined),
+      computeDragPriority(1000, 2000),
+    ].forEach(p => {
+      expect(isFinite(p)).toBe(true);
+      expect(p).toBeGreaterThan(0);
+    });
+  });
+
+  it("drop at top of list with minimum post-migration priority: result stays positive", () => {
+    // Minimum priority after migration is 1000; halved = 500, still positive ✓
+    expect(computeDragPriority(undefined, 1000)).toBe(500);
+    expect(computeDragPriority(undefined, 500)).toBe(250);
+  });
+});
