@@ -2,10 +2,11 @@
 
 import { useState, useMemo, useRef } from "react"
 import { useBudgetStore } from "@/stores/budget-tracker/use-budget-store"
+import { useAuthStore, selectCurrentAccount } from "@/stores/auth/use-auth-store"
 import { PageHeader, Card, PrimaryButton, SecondaryButton, EmptyState } from "@/components/ui/design-system"
 import {
   Upload, Receipt, Filter, Download, Briefcase, X,
-  RotateCcw, Check, BookOpen, Search, FileText
+  RotateCcw, Check, BookOpen, Search, FileText, AlertCircle
 } from "lucide-react"
 import { CATEGORY_COLORS } from "../data/category-colors"
 import { applyRules } from "@transformotion/budget-domain"
@@ -90,6 +91,7 @@ export function TransactionsTab() {
   const uncategorizedCount = useBudgetStore((s) => s.uncategorizedCount)
   const filters = useBudgetStore((s) => s.filters)
   const setFilters = useBudgetStore((s) => s.setFilters)
+  const currentAccount = useAuthStore(selectCurrentAccount)
 
   const categories = budgetData.categories
 
@@ -104,6 +106,7 @@ export function TransactionsTab() {
   const [editSubcategoryId, setEditSubcategoryId] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
 
+  const [learnError, setLearnError] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkCategoryId, setBulkCategoryId] = useState("")
   const [bulkSubcategoryId, setBulkSubcategoryId] = useState("")
@@ -229,23 +232,34 @@ export function TransactionsTab() {
     if (editingId === null) return
     const tx = transactions.find(t => t.transactionId === editingId)
     if (!tx) return
+    if (!currentAccount) {
+      setLearnError('Cannot create rule: no account loaded. Try signing out and back in.')
+      return
+    }
+    setLearnError(null)
 
     const words = tx.description.split(/\s+/).slice(0, 3).join(" ")
     const newMatchingRule: MatchingRule = {
-      ruleId: crypto.randomUUID(),
-      accountId: "",
-      name: words,
-      match: words,
-      matchType: 'contains',
-      categoryId: editCategoryId,
+      ruleId:       crypto.randomUUID(),
+      accountId:    currentAccount.id,
+      name:         words,
+      match:        words,
+      matchType:    'contains',
+      categoryId:   editCategoryId,
       subcategoryId: editSubcategoryId,
-      isBusiness: false,
-      enabled: true,
-      priority: Date.now(),
-      learned: true,
-      createdAt: new Date().toISOString(),
+      isBusiness:   false,
+      enabled:      true,
+      priority:     Date.now(),
+      learned:      true,
+      createdAt:    new Date().toISOString(),
     }
-    await addMatchingRule(newMatchingRule)
+
+    try {
+      await addMatchingRule(newMatchingRule)
+    } catch (err) {
+      setLearnError(err instanceof Error ? err.message : 'Failed to save rule — check your connection and try again')
+      return
+    }
 
     const allRules = [...matchingRules, newMatchingRule]
     setTransactions(transactions.map(t => {
@@ -323,6 +337,13 @@ export function TransactionsTab() {
           : "Import and manage your transactions"
         }
       />
+
+      {learnError && (
+        <div className="p-3 rounded-lg bg-signal-red/10 border border-signal-red/20 flex items-start gap-2">
+          <AlertCircle className="size-4 text-signal-red mt-0.5 shrink-0" />
+          <span className="text-sm text-signal-red">{learnError}</span>
+        </div>
+      )}
 
       {/* Action Bar */}
       <div className="flex items-center gap-2">
