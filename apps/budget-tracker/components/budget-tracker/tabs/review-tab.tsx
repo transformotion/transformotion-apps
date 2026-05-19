@@ -44,6 +44,8 @@ export function ReviewTab() {
   const { setReviewState, setError, setReviewResults, setProgress, updateProgress, updateResultStatus } = useReviewStore.getState()
 
   // Ephemeral interaction state (local — intentionally lost on navigation)
+  // forceFullSearch is local (resets per page session) — a per-run override, not a setting
+  const [forceFullSearch, setForceFullSearch] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editCategoryId, setEditCategoryId] = useState("")
   const [editSubcategoryId, setEditSubcategoryId] = useState("")
@@ -104,6 +106,7 @@ export function ReviewTab() {
           parallelLimit:       settings.aiReviewParallelLimit,
           confidenceThreshold: settings.aiReviewConfidenceThreshold,
         },
+        forceFullSearch,
         onBatch: (batchResults: AIReviewResult[], pass: 1 | 2) => {
           setReviewResults(prev => mergeResults(prev, batchResults, pass, batch))
           if (pass === 1) {
@@ -238,6 +241,20 @@ export function ReviewTab() {
             </>
           )}
         </PrimaryButton>
+
+        {/* Full search toggle — per-run override; does not modify Settings */}
+        <label className="flex items-center gap-2 mt-2 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={forceFullSearch}
+            onChange={(e) => setForceFullSearch(e.target.checked)}
+            disabled={isReviewing || isAcceptingAll}
+            className="rounded border-border disabled:opacity-50"
+          />
+          <span className="text-xs text-muted-foreground">
+            Full search (slower, more accurate — uses web search for every transaction)
+          </span>
+        </label>
 
         {/* AI Review progress bar */}
         {isReviewing && progress.total > 0 && (

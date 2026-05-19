@@ -60,9 +60,10 @@ export class ClaudeAIService implements AIService {
     // Step 3: start job — server resolves connectionId from userId via connections table
     const http = getBudgetHttp()
     const { jobId } = await http.post<{ jobId: string }>(REVIEW_URL, {
-      transactions: input.transactions,
-      categories:   input.categories,
-      settings:     input.settings,
+      transactions:    input.transactions,
+      categories:      input.categories,
+      settings:        input.settings,
+      forceFullSearch: input.forceFullSearch ?? false,
     })
 
     // Step 4: wait for streaming to complete
