@@ -2,6 +2,7 @@
 
 import { useState, useRef, useMemo, useEffect } from "react"
 import { useBudgetStore } from "@/stores/budget-tracker/use-budget-store"
+import { useAuthStore, selectCurrentAccount } from "@/stores/auth/use-auth-store"
 import { PageHeader, Card, PrimaryButton, SecondaryButton } from "@/components/ui/design-system"
 import { Search, Plus, RotateCcw, ChevronDown, Check, X, Pencil, Trash2, Ban, HelpCircle } from "lucide-react"
 import { applyRules, previewRuleMatches } from "@transformotion/budget-domain"
@@ -13,9 +14,11 @@ import { cn } from "@/lib/utils"
 export function RulesTab() {
   const matchingRules = useBudgetStore((s) => s.matchingRules)
   const setMatchingRules = useBudgetStore((s) => s.setMatchingRules)
+  const addMatchingRule = useBudgetStore((s) => s.addMatchingRule)
   const transactions = useBudgetStore((s) => s.transactions)
   const setTransactions = useBudgetStore((s) => s.setTransactions)
   const budgetData = useBudgetStore((s) => s.budgetData)
+  const currentAccount = useAuthStore(selectCurrentAccount)
 
   const categories = budgetData.categories
 
@@ -25,6 +28,7 @@ export function RulesTab() {
   const [testInput, setTestInput] = useState("")
   const [showRules, setShowRules] = useState(true)
   const [reapplyFeedback, setReapplyFeedback] = useState<string | null>(null)
+  const [ruleAddError, setRuleAddError] = useState<string | null>(null)
   const [editingRule, setEditingRule] = useState<string | null>(null)
   const [viewingRule, setViewingRule] = useState<string | null>(null)
   const [addingRule, setAddingRule] = useState(false)
@@ -80,28 +84,37 @@ export function RulesTab() {
     setTimeout(() => setReapplyFeedback(null), 3000)
   }
 
-  const addNewRule = () => {
+  const addNewRule = async () => {
     if (!newRule.name.trim() || !newRule.pattern.trim()) return
     if (!newRule.categoryId || !newRule.subcategoryId) return
+    if (!currentAccount) {
+      setRuleAddError('Cannot create rule: no account loaded. Try signing out and back in.')
+      return
+    }
+    setRuleAddError(null)
 
     const rule: MatchingRule = {
-      ruleId: crypto.randomUUID(),
-      accountId: "",
-      name: newRule.name.trim(),
-      match: newRule.pattern.trim(),
-      matchType: newRule.matchType,
-      categoryId: newRule.categoryId,
+      ruleId:       crypto.randomUUID(),
+      accountId:    currentAccount.id,
+      name:         newRule.name.trim(),
+      match:        newRule.pattern.trim(),
+      matchType:    newRule.matchType,
+      categoryId:   newRule.categoryId,
       subcategoryId: newRule.subcategoryId,
-      isBusiness: newRule.isBusiness,
-      enabled: true,
-      priority: Date.now(),
-      learned: false,
-      createdAt: new Date().toISOString(),
+      isBusiness:   newRule.isBusiness,
+      enabled:      true,
+      priority:     Date.now(),
+      learned:      false,
+      createdAt:    new Date().toISOString(),
     }
 
-    setMatchingRules([...matchingRules, rule])
-    setNewRule({ name: "", pattern: "", matchType: "contains", categoryId: "", subcategoryId: "", isBusiness: false })
-    setAddingRule(false)
+    try {
+      await addMatchingRule(rule)
+      setNewRule({ name: "", pattern: "", matchType: "contains", categoryId: "", subcategoryId: "", isBusiness: false })
+      setAddingRule(false)
+    } catch (err) {
+      setRuleAddError(err instanceof Error ? err.message : 'Failed to create rule — check your connection and try again')
+    }
   }
 
   const deleteRule = (id: string) => {
@@ -208,6 +221,12 @@ export function RulesTab() {
       {reapplyFeedback && (
         <div className="p-3 bg-signal-green/10 border border-signal-green/30 rounded-lg">
           <p className="text-sm text-signal-green">{reapplyFeedback}</p>
+        </div>
+      )}
+
+      {ruleAddError && (
+        <div className="p-3 bg-signal-red/10 border border-signal-red/30 rounded-lg flex items-start gap-2">
+          <span className="text-sm text-signal-red">{ruleAddError}</span>
         </div>
       )}
 

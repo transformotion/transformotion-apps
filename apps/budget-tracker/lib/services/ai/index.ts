@@ -9,7 +9,8 @@ export type ReviewResult = WsMessageBatchResult['results'][number]
 export interface ReviewTransactionsInput {
   transactions: Array<{ index: number; description: string; amount: string }>
   categories: Category[]
-  settings?: { batchSize?: number; parallelLimit?: number; confidenceThreshold?: 'low' | 'medium' }
+  settings?: { batchSize?: number; parallelLimit?: number; confidenceThreshold?: 'low' | 'medium' | 'high' }
+  forceFullSearch?: boolean
   onBatch?: (results: ReviewResult[], pass: 1 | 2) => void
 }
 

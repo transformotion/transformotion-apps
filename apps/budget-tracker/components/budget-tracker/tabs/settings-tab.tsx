@@ -18,7 +18,7 @@ export function SettingsTab() {
 
   const [batchSize, setBatchSize] = useState(String(settings.aiReviewBatchSize ?? DEFAULT_AI_SETTINGS.aiReviewBatchSize))
   const [parallelLimit, setParallelLimit] = useState(String(settings.aiReviewParallelLimit ?? DEFAULT_AI_SETTINGS.aiReviewParallelLimit))
-  const [confidenceThreshold, setConfidenceThreshold] = useState<'low' | 'medium'>(
+  const [confidenceThreshold, setConfidenceThreshold] = useState<'low' | 'medium' | 'high'>(
     settings.aiReviewConfidenceThreshold ?? DEFAULT_AI_SETTINGS.aiReviewConfidenceThreshold
   )
   const [saving, setSaving] = useState(false)
@@ -142,14 +142,15 @@ export function SettingsTab() {
             </label>
             <select
               value={confidenceThreshold}
-              onChange={(e) => { setSaved(false); setConfidenceThreshold(e.target.value as 'low' | 'medium') }}
+              onChange={(e) => { setSaved(false); setConfidenceThreshold(e.target.value as 'low' | 'medium' | 'high') }}
               className="w-full h-9 px-3 rounded-lg bg-surface2 border border-border text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
             >
               <option value="low">Low — only re-run low-confidence results</option>
               <option value="medium">Medium — re-run low and medium-confidence results</option>
+              <option value="high">High — re-run everything except high-confidence results (slowest, highest API cost)</option>
             </select>
             <p className="text-[11px] text-muted-foreground mt-1">
-              Which confidence levels trigger re-categorisation with web search. &apos;Low&apos; is faster; &apos;Medium&apos; is more thorough.
+              Which confidence levels trigger web-search re-categorisation. &apos;Low&apos; is fastest; &apos;High&apos; uses web search for almost all transactions.
             </p>
           </div>
         </div>

@@ -10,3 +10,12 @@ export {
   selectUncategorizedCount,
   selectActiveTab,
 } from './budget-tracker/use-budget-store'
+
+export {
+  useReviewStore,
+  selectReviewState,
+  selectReviewResults,
+  selectReviewError,
+  selectReviewProgress,
+} from './budget-tracker/use-review-store'
+export type { ReviewResult, ReviewState } from './budget-tracker/use-review-store'
