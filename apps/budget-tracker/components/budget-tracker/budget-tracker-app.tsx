@@ -12,6 +12,7 @@ import { SettingsTab } from "./tabs/settings-tab"
 import { useBudgetStore } from "@/stores/budget-tracker/use-budget-store"
 import { useAuthStore } from "@/stores/auth/use-auth-store"
 import { authService } from "@/lib/services/auth"
+import { TabErrorBoundary } from "@transformotion/ui"
 
 // ============================================================================
 // TAB RENDERER
@@ -111,7 +112,9 @@ export function BudgetTrackerApp({
 
   return (
     <BudgetAppShell onGoToLaunchpad={onGoToLaunchpad} onSignOut={onSignOut}>
-      <BudgetTabContent />
+      <TabErrorBoundary label="Budget Tracker">
+        <BudgetTabContent />
+      </TabErrorBoundary>
     </BudgetAppShell>
   )
 }

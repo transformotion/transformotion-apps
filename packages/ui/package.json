@@ -9,7 +9,15 @@
     "lint": "eslint .",
     "test": "vitest run"
   },
+  "peerDependencies": {
+    "react": "*"
+  },
   "devDependencies": {
-    "typescript": "*"
+    "@types/react": "*",
+    "@types/react-dom": "*",
+    "jsdom": "*",
+    "react-dom": "*",
+    "typescript": "*",
+    "vitest": "*"
   }
 }
