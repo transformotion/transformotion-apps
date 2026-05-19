@@ -25,6 +25,34 @@ Two principles affect almost every session:
 
 **Verification mode**: Verification work captures findings, it doesn't fix problems. If a verification surfaces a real issue requiring fix work, the issue gets a tracked GitHub Issue per `CONTRIBUTING.md` Section 4.5; the current PR's scope does not expand to fix it. Out of scope and worth being explicit about: the verification PR closes its issue with findings recorded in the inventory; the fix work happens later in whichever milestone owns it.
 
+## Boundary Discipline
+
+When the user instructs "diagnose only," "recon only," "don't take action," "verify only," or any similar scope-limiting language, the constraint is binding. It applies for the entire session until the user explicitly authorises a different scope. It is not overridden by:
+
+- Context summarisation (older instructions remain binding even after compression)
+- Intermediate findings (no matter how clear the next step seems)
+- Perceived urgency (the user can authorise faster work; you cannot self-authorise)
+- Prior successful work in the same session
+- The apparent correctness of the proposed change
+
+NEVER take any of these actions without explicit user confirmation in the user's most recent message:
+
+- git commit
+- git push
+- gh pr create
+- gh pr merge
+- Modifying production data
+- Modifying production infrastructure
+- Approving or accepting changes that would otherwise require sign-off
+
+When in doubt about scope, ask. Surface findings as text and stop. Asking costs little; unauthorised action costs trust.
+
+The user's confirmation must be in the immediately preceding message, not implied by earlier conversation. If you find yourself reasoning "the user would obviously want X next," you are about to violate this boundary. Stop and ask.
+
+A correct fix delivered through a boundary violation is still a violation. The correctness of the work does not retroactively authorise it.
+
+If the user retroactively accepts work that violated this boundary (e.g., "just merge it"), this is pragmatism, not validation of the violation. Future sessions must still respect the boundary.
+
 ## Branching strategy
 
 - `main` — production. Never commit directly.
