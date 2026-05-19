@@ -138,3 +138,57 @@ describe("buildRegex whitespace normalisation", () => {
     expect(matches[0].isWinner).toBe(true);
   });
 });
+
+// The priority formula used in all three rule-creation paths (rules-tab, transactions-tab, review-tab):
+//   matchingRules.length > 0 ? Math.min(...matchingRules.map(r => r.priority)) - 1000 : 1000
+function computeNewTopPriority(rules: MatchingRule[]): number {
+  return rules.length > 0 ? Math.min(...rules.map(r => r.priority)) - 1000 : 1000;
+}
+
+describe("computeNewTopPriority (rule-creation priority formula)", () => {
+  it("returns 1000 when no rules exist (empty list)", () => {
+    expect(computeNewTopPriority([])).toBe(1000);
+  });
+
+  it("returns min(existing) - 1000 when rules exist", () => {
+    const rules = [
+      makeRule({ match: "a", categoryId: "c", subcategoryId: "s", priority: 5000 }),
+      makeRule({ match: "b", categoryId: "c", subcategoryId: "s", priority: 3000 }),
+      makeRule({ match: "c", categoryId: "c", subcategoryId: "s", priority: 8000 }),
+    ];
+    expect(computeNewTopPriority(rules)).toBe(2000); // 3000 - 1000
+  });
+
+  it("result is less than the current minimum priority", () => {
+    const rules = [
+      makeRule({ match: "a", categoryId: "c", subcategoryId: "s", priority: 100 }),
+      makeRule({ match: "b", categoryId: "c", subcategoryId: "s", priority: 200 }),
+    ];
+    const result = computeNewTopPriority(rules);
+    const currentMin = Math.min(...rules.map(r => r.priority));
+    expect(result).toBeLessThan(currentMin);
+  });
+
+  it("result is numeric, finite, and positive", () => {
+    const rules = [
+      makeRule({ match: "a", categoryId: "c", subcategoryId: "s", priority: 2000 }),
+    ];
+    const result = computeNewTopPriority(rules);
+    expect(typeof result).toBe("number");
+    expect(isFinite(result)).toBe(true);
+    expect(result).toBeGreaterThan(0);
+  });
+
+  it("single existing rule: result is that rule's priority minus 1000", () => {
+    const rules = [makeRule({ match: "woolworths", categoryId: "c", subcategoryId: "s", priority: 4000 })];
+    expect(computeNewTopPriority(rules)).toBe(3000);
+  });
+
+  it("Date.now()-scale priorities still produce a positive result", () => {
+    const bigPriority = 1_780_000_000_000;
+    const rules = [makeRule({ match: "a", categoryId: "c", subcategoryId: "s", priority: bigPriority })];
+    const result = computeNewTopPriority(rules);
+    expect(result).toBe(bigPriority - 1000);
+    expect(result).toBeGreaterThan(0);
+  });
+});

@@ -249,7 +249,7 @@ export function TransactionsTab() {
       subcategoryId: editSubcategoryId,
       isBusiness:   false,
       enabled:      true,
-      priority:     Date.now(),
+      priority:     matchingRules.length > 0 ? Math.min(...matchingRules.map(r => r.priority)) - 1000 : 1000,
       learned:      true,
       createdAt:    new Date().toISOString(),
     }

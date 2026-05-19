@@ -103,7 +103,7 @@ export function RulesTab() {
       subcategoryId: newRule.subcategoryId,
       isBusiness:   newRule.isBusiness,
       enabled:      true,
-      priority:     Date.now(),
+      priority:     matchingRules.length > 0 ? Math.min(...matchingRules.map(r => r.priority)) - 1000 : 1000,
       learned:      false,
       createdAt:    new Date().toISOString(),
     }
