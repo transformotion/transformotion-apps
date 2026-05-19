@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { applyRules, previewRuleMatches } from "../rules.js";
+import { applyRules, previewRuleMatches, ruleComparator } from "../rules.js";
 import type { MatchingRule } from "../contracts.js";
 
 function makeRule(overrides: Partial<MatchingRule> & { match: string; categoryId: string; subcategoryId: string }): MatchingRule {
@@ -190,5 +190,37 @@ describe("computeNewTopPriority (rule-creation priority formula)", () => {
     const result = computeNewTopPriority(rules);
     expect(result).toBe(bigPriority - 1000);
     expect(result).toBeGreaterThan(0);
+  });
+});
+
+describe("ruleComparator sort (store load order)", () => {
+  it("sorts rules by priority ascending", () => {
+    const rules = [
+      makeRule({ match: "c", categoryId: "c", subcategoryId: "s", priority: 3000 }),
+      makeRule({ match: "a", categoryId: "c", subcategoryId: "s", priority: 1000 }),
+      makeRule({ match: "b", categoryId: "c", subcategoryId: "s", priority: 2000 }),
+    ];
+    const sorted = [...rules].sort(ruleComparator);
+    expect(sorted.map(r => r.priority)).toEqual([1000, 2000, 3000]);
+  });
+
+  it("ties broken by createdAt descending (newer wins)", () => {
+    const older = makeRule({ match: "old", categoryId: "c", subcategoryId: "s", priority: 100, createdAt: "2026-01-01T00:00:00.000Z" });
+    const newer = makeRule({ match: "new", categoryId: "c", subcategoryId: "s", priority: 100, createdAt: "2026-06-01T00:00:00.000Z" });
+    const sorted = [older, newer].sort(ruleComparator);
+    expect(sorted[0].match).toBe("new");
+  });
+
+  it("API order (random UUIDs) is normalised to priority order after sort", () => {
+    // Simulate rules returned in arbitrary API order
+    const rules = [
+      makeRule({ match: "z-rule", categoryId: "c", subcategoryId: "s", priority: 9000 }),
+      makeRule({ match: "a-rule", categoryId: "c", subcategoryId: "s", priority: 1000 }),
+      makeRule({ match: "m-rule", categoryId: "c", subcategoryId: "s", priority: 5000 }),
+    ];
+    const sorted = [...rules].sort(ruleComparator);
+    expect(sorted[0].match).toBe("a-rule");
+    expect(sorted[1].match).toBe("m-rule");
+    expect(sorted[2].match).toBe("z-rule");
   });
 });
