@@ -2,6 +2,8 @@
 
 import { useState } from "react"
 import { useBudgetStore } from "@/stores/budget-tracker/use-budget-store"
+import { useReviewStore } from "@/stores/budget-tracker/use-review-store"
+import type { ReviewResult } from "@/stores/budget-tracker/use-review-store"
 import { useAuthStore, selectCurrentAccount } from "@/stores/auth/use-auth-store"
 import { PageHeader, Card, PrimaryButton, EmptyState } from "@/components/ui/design-system"
 import { Sparkles, Check, X, ChevronRight, Pencil, AlertCircle, RefreshCw } from "lucide-react"
@@ -11,21 +13,6 @@ import { cn } from "@/lib/utils"
 import { getAIService } from "@/lib/services/ai"
 import type { ReviewResult as AIReviewResult } from "@/lib/services/ai"
 import type { MatchingRule } from "@transformotion/budget-domain"
-
-type ReviewState = 'idle' | 'reviewing' | 'complete' | 'error'
-
-interface ReviewResult {
-  transactionId: string
-  description: string
-  suggestedCategoryId: string
-  suggestedSubcategoryId: string
-  suggestedCategoryName: string
-  suggestedSubcategoryName: string
-  reason: string
-  confidence: 'high' | 'medium' | 'low'
-  pass: 1 | 2
-  status: "pending" | "accepted" | "rejected"
-}
 
 function ConfidenceBadge({ confidence }: { confidence: 'high' | 'medium' | 'low' }) {
   const cls = {
@@ -49,16 +36,21 @@ export function ReviewTab() {
   const settings = useBudgetStore((s) => s.settings)
   const currentAccount = useAuthStore(selectCurrentAccount)
 
-  const categories = budgetData.categories
+  // Persistent across tab navigation (Zustand)
+  const reviewState    = useReviewStore((s) => s.reviewState)
+  const error          = useReviewStore((s) => s.error)
+  const reviewResults  = useReviewStore((s) => s.reviewResults)
+  const progress       = useReviewStore((s) => s.progress)
+  const { setReviewState, setError, setReviewResults, setProgress, updateProgress, updateResultStatus } = useReviewStore.getState()
 
-  const [reviewState, setReviewState] = useState<ReviewState>('idle')
-  const [error, setError] = useState<string | null>(null)
+  // Ephemeral interaction state (local — intentionally lost on navigation)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editCategoryId, setEditCategoryId] = useState("")
   const [editSubcategoryId, setEditSubcategoryId] = useState("")
-  const [reviewResults, setReviewResults] = useState<ReviewResult[]>([])
-  const [progress, setProgress] = useState({ completed: 0, total: 0 })
+  const [acceptError, setAcceptError] = useState<string | null>(null)
+  const [acceptAllProgress, setAcceptAllProgress] = useState<{ current: number; total: number } | null>(null)
 
+  const categories = budgetData.categories
   const uncategorizedTransactions = transactions.filter(t => !t.categoryId && !t.category)
 
   function mergeResults(prev: ReviewResult[], incoming: AIReviewResult[], pass: 1 | 2, batch: typeof uncategorizedTransactions): ReviewResult[] {
@@ -76,7 +68,7 @@ export function ReviewTab() {
         reason: r.reason,
         confidence: r.confidence,
         pass,
-        status: "pending",
+        status: 'pending',
       }
       const idx = next.findIndex(x => x.transactionId === tx.transactionId)
       if (idx >= 0) {
@@ -92,6 +84,7 @@ export function ReviewTab() {
   const handleAIReview = async () => {
     setReviewState('reviewing')
     setError(null)
+    setAcceptError(null)
     setReviewResults([])
     const batch = uncategorizedTransactions.slice(0, 100)
     setProgress({ completed: 0, total: batch.length })
@@ -107,68 +100,79 @@ export function ReviewTab() {
         transactions: indexedTxs,
         categories,
         settings: {
-          batchSize:            settings.aiReviewBatchSize,
-          parallelLimit:        settings.aiReviewParallelLimit,
-          confidenceThreshold:  settings.aiReviewConfidenceThreshold,
+          batchSize:           settings.aiReviewBatchSize,
+          parallelLimit:       settings.aiReviewParallelLimit,
+          confidenceThreshold: settings.aiReviewConfidenceThreshold,
         },
         onBatch: (batchResults: AIReviewResult[], pass: 1 | 2) => {
           setReviewResults(prev => mergeResults(prev, batchResults, pass, batch))
           if (pass === 1) {
-            setProgress(p => ({ ...p, completed: Math.min(p.completed + batchResults.length, p.total) }))
+            updateProgress(p => ({ ...p, completed: Math.min(p.completed + batchResults.length, p.total) }))
           }
         },
       })
       setReviewState('complete')
     } catch (err) {
       setReviewState('error')
-      setError(err instanceof Error ? err.message : "AI review failed")
+      setError(err instanceof Error ? err.message : 'AI review failed')
     }
   }
 
   const acceptResult = async (result: ReviewResult, categoryId: string, subcategoryId: string) => {
-    await updateTransaction(result.transactionId, {
-      categoryId,
-      subcategoryId,
-      _manual: true,
-    })
+    await updateTransaction(result.transactionId, { categoryId, subcategoryId, _manual: true })
     if (currentAccount && result.description && categoryId && subcategoryId) {
       const rule: MatchingRule = {
-        ruleId: crypto.randomUUID(),
-        accountId: currentAccount.id,
-        name: result.description,
-        match: result.description,
-        matchType: 'contains',
+        ruleId:       crypto.randomUUID(),
+        accountId:    currentAccount.id,
+        name:         result.description,
+        match:        result.description,
+        matchType:    'contains',
         categoryId,
         subcategoryId,
-        isBusiness: false,
-        learned: true,
-        enabled: true,
-        priority: Date.now(),
-        createdAt: new Date().toISOString(),
+        isBusiness:   false,
+        learned:      true,
+        enabled:      true,
+        priority:     Date.now(),
+        createdAt:    new Date().toISOString(),
       }
       await addMatchingRule(rule)
     }
-    setReviewResults(prev =>
-      prev.map(r => r.transactionId === result.transactionId ? { ...r, status: "accepted" } : r)
-    )
+    updateResultStatus(result.transactionId, 'accepted')
   }
 
-  const handleAccept = (transactionId: string) => {
+  const handleAccept = async (transactionId: string) => {
     const result = reviewResults.find(r => r.transactionId === transactionId)
-    if (result) acceptResult(result, result.suggestedCategoryId, result.suggestedSubcategoryId)
+    if (!result) return
+    setAcceptError(null)
+    try {
+      await acceptResult(result, result.suggestedCategoryId, result.suggestedSubcategoryId)
+    } catch (err) {
+      setAcceptError(err instanceof Error ? err.message : 'Failed to save — check your connection and try again')
+    }
   }
 
-  const handleAcceptAll = () => {
-    const pending = reviewResults.filter(r => r.status === "pending")
-    for (const result of pending) {
-      acceptResult(result, result.suggestedCategoryId, result.suggestedSubcategoryId)
+  const handleAcceptAll = async () => {
+    const pending = reviewResults.filter(r => r.status === 'pending')
+    if (pending.length === 0) return
+    setAcceptError(null)
+    setAcceptAllProgress({ current: 0, total: pending.length })
+    let failCount = 0
+    for (let i = 0; i < pending.length; i++) {
+      setAcceptAllProgress({ current: i + 1, total: pending.length })
+      try {
+        await acceptResult(pending[i], pending[i].suggestedCategoryId, pending[i].suggestedSubcategoryId)
+      } catch {
+        failCount++
+      }
+    }
+    setAcceptAllProgress(null)
+    if (failCount > 0) {
+      setAcceptError(`${failCount} suggestion${failCount !== 1 ? 's' : ''} could not be saved — check your connection and try again`)
     }
   }
 
   const handleReject = (transactionId: string) => {
-    setReviewResults(prev =>
-      prev.map(r => r.transactionId === transactionId ? { ...r, status: "rejected" } : r)
-    )
+    updateResultStatus(transactionId, 'rejected')
   }
 
   const startEdit = (result: ReviewResult) => {
@@ -177,17 +181,27 @@ export function ReviewTab() {
     setEditSubcategoryId(result.suggestedSubcategoryId)
   }
 
-  const acceptEdited = (result: ReviewResult) => {
-    acceptResult(result, editCategoryId, editSubcategoryId)
-    setEditingId(null)
+  const acceptEdited = async (result: ReviewResult) => {
+    setAcceptError(null)
+    try {
+      await acceptResult(result, editCategoryId, editSubcategoryId)
+      setEditingId(null)
+    } catch (err) {
+      setAcceptError(err instanceof Error ? err.message : 'Failed to save — check your connection and try again')
+    }
   }
 
   const editingCategory = getActiveCategories(categories).find(c => c.categoryId === editCategoryId)
 
-  const pendingResults = reviewResults.filter(r => r.status === "pending")
-  const completedResults = reviewResults.filter(r => r.status !== "pending")
-  const progressPct = progress.total > 0 ? Math.round((progress.completed / progress.total) * 100) : 0
-  const isReviewing = reviewState === 'reviewing'
+  const pendingResults   = reviewResults.filter(r => r.status === 'pending')
+  const completedResults = reviewResults.filter(r => r.status !== 'pending')
+  const progressPct      = progress.total > 0 ? Math.round((progress.completed / progress.total) * 100) : 0
+  const isReviewing      = reviewState === 'reviewing'
+  const isAcceptingAll   = acceptAllProgress !== null
+
+  const bannerText = pendingResults.length > 0
+    ? `Review complete — ${pendingResults.length} suggestion${pendingResults.length !== 1 ? 's' : ''} remaining`
+    : 'Review complete — all suggestions processed'
 
   return (
     <div className="p-4 space-y-4 overflow-hidden">
@@ -209,7 +223,7 @@ export function ReviewTab() {
 
         <PrimaryButton
           onClick={handleAIReview}
-          disabled={uncategorizedCount === 0 || isReviewing}
+          disabled={uncategorizedCount === 0 || isReviewing || isAcceptingAll}
           className="w-full"
         >
           {isReviewing ? (
@@ -225,7 +239,7 @@ export function ReviewTab() {
           )}
         </PrimaryButton>
 
-        {/* Progress bar */}
+        {/* AI Review progress bar */}
         {isReviewing && progress.total > 0 && (
           <div className="mt-3">
             <div className="flex items-center justify-between mb-1">
@@ -243,11 +257,26 @@ export function ReviewTab() {
           </div>
         )}
 
+        {/* Accept All progress */}
+        {isAcceptingAll && acceptAllProgress && (
+          <div className="mt-3">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs text-muted-foreground">
+                Accepting... {acceptAllProgress.current} of {acceptAllProgress.total}
+              </span>
+            </div>
+            <div className="h-1.5 bg-surface2 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-signal-green rounded-full transition-all duration-300"
+                style={{ width: `${Math.round((acceptAllProgress.current / acceptAllProgress.total) * 100)}%` }}
+              />
+            </div>
+          </div>
+        )}
+
         {reviewState === 'complete' && reviewResults.length > 0 && (
           <div className="mt-3 p-2.5 rounded-lg bg-signal-green/10 border border-signal-green/20">
-            <p className="text-xs text-signal-green font-medium">
-              Review complete — {reviewResults.length} suggestion{reviewResults.length !== 1 ? 's' : ''} ready
-            </p>
+            <p className="text-xs text-signal-green font-medium">{bannerText}</p>
           </div>
         )}
 
@@ -258,6 +287,14 @@ export function ReviewTab() {
           </div>
         )}
       </Card>
+
+      {/* Accept error (separate from AI review error) */}
+      {acceptError && (
+        <div className="p-3 rounded-lg bg-signal-red/10 border border-signal-red/20 flex items-start gap-2">
+          <AlertCircle className="size-4 text-signal-red mt-0.5 shrink-0" />
+          <div className="text-sm text-signal-red">{acceptError}</div>
+        </div>
+      )}
 
       {uncategorizedCount === 0 && reviewResults.length === 0 && (
         <EmptyState
@@ -276,9 +313,10 @@ export function ReviewTab() {
             </h3>
             <button
               onClick={handleAcceptAll}
-              className="text-xs text-primary hover:text-primary/80 transition-colors"
+              disabled={isAcceptingAll}
+              className="text-xs text-primary hover:text-primary/80 transition-colors disabled:opacity-50"
             >
-              Accept all
+              {isAcceptingAll ? 'Accepting...' : 'Accept all'}
             </button>
           </div>
 
@@ -381,14 +419,16 @@ export function ReviewTab() {
                       </button>
                       <button
                         onClick={() => handleAccept(result.transactionId)}
-                        className="size-8 rounded-lg bg-signal-green/15 text-signal-green hover:bg-signal-green/25 flex items-center justify-center transition-colors"
+                        disabled={isAcceptingAll}
+                        className="size-8 rounded-lg bg-signal-green/15 text-signal-green hover:bg-signal-green/25 flex items-center justify-center transition-colors disabled:opacity-50"
                         title="Accept"
                       >
                         <Check className="size-4" />
                       </button>
                       <button
                         onClick={() => handleReject(result.transactionId)}
-                        className="size-8 rounded-lg bg-signal-red/15 text-signal-red hover:bg-signal-red/25 flex items-center justify-center transition-colors"
+                        disabled={isAcceptingAll}
+                        className="size-8 rounded-lg bg-signal-red/15 text-signal-red hover:bg-signal-red/25 flex items-center justify-center transition-colors disabled:opacity-50"
                         title="Reject"
                       >
                         <X className="size-4" />
@@ -406,8 +446,8 @@ export function ReviewTab() {
         <div className="space-y-2">
           <h3 className="text-sm font-semibold text-muted-foreground">Completed</h3>
           <p className="text-xs text-muted-foreground">
-            {completedResults.filter(r => r.status === "accepted").length} accepted,{" "}
-            {completedResults.filter(r => r.status === "rejected").length} rejected
+            {completedResults.filter(r => r.status === 'accepted').length} accepted,{" "}
+            {completedResults.filter(r => r.status === 'rejected').length} rejected
           </p>
         </div>
       )}
