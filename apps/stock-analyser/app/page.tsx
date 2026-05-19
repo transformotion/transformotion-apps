@@ -11,6 +11,7 @@ import { PortfolioTab } from "@/components/stock-signal/tabs/portfolio-tab"
 import { WatchlistTab } from "@/components/stock-signal/tabs/watchlist-tab"
 import { AuthGuard } from "@/components/providers/auth-guard"
 import { useAuthStore } from "@/stores/auth/use-auth-store"
+import { TabErrorBoundary } from "@transformotion/ui"
 
 function TabRouter() {
   const { activeTab, analyserTicker, analyserSource } = useNavigation()
@@ -54,7 +55,9 @@ function StockSignalContent() {
       onGoToLaunchpad={handleGoToLaunchpad}
     >
       <AppShell>
-        <TabRouter />
+        <TabErrorBoundary label="Stock Analyser">
+          <TabRouter />
+        </TabErrorBoundary>
       </AppShell>
     </NavigationProvider>
   )

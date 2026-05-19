@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@transformotion/api-client": "workspace:*",
+    "@transformotion/ui": "workspace:*",
     "@transformotion/auth-client": "workspace:*",
     "aws-amplify": "^6.16.4",
     "@transformotion/runtime-config": "workspace:*",
