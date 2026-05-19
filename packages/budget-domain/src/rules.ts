@@ -19,7 +19,7 @@ function buildRegex(matchType: string, pattern: string): RegExp {
 }
 
 // Priority ASC, then createdAt DESC (newer wins equal-priority ties)
-function ruleComparator(a: MatchingRule, b: MatchingRule): number {
+export function ruleComparator(a: MatchingRule, b: MatchingRule): number {
   if (a.priority !== b.priority) return a.priority - b.priority;
   return b.createdAt.localeCompare(a.createdAt);
 }

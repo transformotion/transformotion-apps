@@ -29,6 +29,7 @@ function ConfidenceBadge({ confidence }: { confidence: 'high' | 'medium' | 'low'
 
 export function ReviewTab() {
   const transactions = useBudgetStore((s) => s.transactions)
+  const matchingRules = useBudgetStore((s) => s.matchingRules)
   const uncategorizedCount = useBudgetStore((s) => s.uncategorizedCount)
   const updateTransaction = useBudgetStore((s) => s.updateTransaction)
   const addMatchingRule = useBudgetStore((s) => s.addMatchingRule)
@@ -135,7 +136,7 @@ export function ReviewTab() {
         isBusiness:   false,
         learned:      true,
         enabled:      true,
-        priority:     Date.now(),
+        priority:     matchingRules.length > 0 ? Math.min(...matchingRules.map(r => r.priority)) - 1000 : 1000,
         createdAt:    new Date().toISOString(),
       }
       await addMatchingRule(rule)

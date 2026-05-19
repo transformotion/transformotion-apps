@@ -13,6 +13,7 @@ import {
   type BudgetSettings,
   type TransactionFilters,
 } from '@/lib/repositories/budget-tracker'
+import { ruleComparator } from '@transformotion/budget-domain'
 
 export type BudgetTabId = 'transactions' | 'summary' | 'budget' | 'cashflow' | 'rules' | 'review' | 'settings'
 
@@ -109,14 +110,14 @@ export const useBudgetStore = create<BudgetState>()((set, get) => ({
   },
 
   loadMatchingRules: async () => {
-    const matchingRules = await getMatchingRulesRepositoryInstance().findAll('')
-    set({ matchingRules })
+    const raw = await getMatchingRulesRepositoryInstance().findAll('')
+    set({ matchingRules: [...raw].sort(ruleComparator) })
   },
 
   addMatchingRule: async (rule) => {
     await getMatchingRulesRepositoryInstance().save(rule)
-    const matchingRules = await getMatchingRulesRepositoryInstance().findAll('')
-    set({ matchingRules })
+    const raw = await getMatchingRulesRepositoryInstance().findAll('')
+    set({ matchingRules: [...raw].sort(ruleComparator) })
   },
 
   updateMatchingRule: async (id, updates) => {
@@ -124,15 +125,15 @@ export const useBudgetStore = create<BudgetState>()((set, get) => ({
     const existing = await repo.findById('', id)
     if (existing) {
       await repo.save({ ...existing, ...updates })
-      const matchingRules = await repo.findAll('')
-      set({ matchingRules })
+      const raw = await repo.findAll('')
+      set({ matchingRules: [...raw].sort(ruleComparator) })
     }
   },
 
   deleteMatchingRule: async (id) => {
     await getMatchingRulesRepositoryInstance().delete(id, '')
-    const matchingRules = await getMatchingRulesRepositoryInstance().findAll('')
-    set({ matchingRules })
+    const raw = await getMatchingRulesRepositoryInstance().findAll('')
+    set({ matchingRules: [...raw].sort(ruleComparator) })
   },
 
   setMatchingRules: (matchingRules) => {
