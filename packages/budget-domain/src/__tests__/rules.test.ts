@@ -224,3 +224,96 @@ describe("ruleComparator sort (store load order)", () => {
     expect(sorted[2].match).toBe("z-rule");
   });
 });
+
+// Pure-function equivalents of the classification and assignment logic in
+// scripts/migrations/budget-tracker/normalise-rule-priorities.ts — tested here
+// because budget-domain is the only package with a vitest runner.
+const PRIORITY_BATCH_DEFAULT   = 100;
+const PRIORITY_DATE_NOW_FLOOR  = 1_000_000_000;
+const PRIORITY_STEP            = 1000;
+
+function needsMigration(priority: number): boolean {
+  return priority === PRIORITY_BATCH_DEFAULT || priority > PRIORITY_DATE_NOW_FLOOR;
+}
+
+function computeMigratedPriorities(rules: MatchingRule[]): Array<{ ruleId: string; match: string; newPriority: number }> {
+  const sorted = [...rules].sort((a, b) =>
+    a.match.toLowerCase().localeCompare(b.match.toLowerCase())
+  );
+  return sorted.map((r, idx) => ({
+    ruleId: r.ruleId,
+    match: r.match,
+    newPriority: (idx + 1) * PRIORITY_STEP,
+  }));
+}
+
+describe("normalise-rule-priorities migration logic", () => {
+  it("needsMigration: priority=100 returns true (Population A)", () => {
+    expect(needsMigration(100)).toBe(true);
+  });
+
+  it("needsMigration: priority > 10⁹ returns true (Population B — Date.now())", () => {
+    expect(needsMigration(1_780_000_000_000)).toBe(true);
+    expect(needsMigration(1_000_000_001)).toBe(true);
+  });
+
+  it("needsMigration: priority in normal range returns false (already migrated)", () => {
+    expect(needsMigration(1000)).toBe(false);
+    expect(needsMigration(5000)).toBe(false);
+    expect(needsMigration(78000)).toBe(false);
+    expect(needsMigration(1_000_000_000)).toBe(false); // exactly the floor — not a Date.now() value
+  });
+
+  it("empty input → no output", () => {
+    expect(computeMigratedPriorities([])).toHaveLength(0);
+  });
+
+  it("assigns priorities 1000, 2000, 3000... in alphabetical order", () => {
+    const rules = [
+      makeRule({ match: "woolworths", categoryId: "c", subcategoryId: "s", priority: 100 }),
+      makeRule({ match: "aldi",       categoryId: "c", subcategoryId: "s", priority: 100 }),
+      makeRule({ match: "netflix",    categoryId: "c", subcategoryId: "s", priority: 100 }),
+    ];
+    const result = computeMigratedPriorities(rules);
+    expect(result.map(r => r.match)).toEqual(["aldi", "netflix", "woolworths"]);
+    expect(result.map(r => r.newPriority)).toEqual([1000, 2000, 3000]);
+  });
+
+  it("mixed Population A (100) and Population B (Date.now()) sorted and assigned together", () => {
+    const rules = [
+      makeRule({ match: "zebra",  categoryId: "c", subcategoryId: "s", priority: 100 }),
+      makeRule({ match: "apple",  categoryId: "c", subcategoryId: "s", priority: 1_780_000_000_000 }),
+      makeRule({ match: "mango",  categoryId: "c", subcategoryId: "s", priority: 100 }),
+    ];
+    const result = computeMigratedPriorities(rules);
+    expect(result.map(r => r.match)).toEqual(["apple", "mango", "zebra"]);
+    expect(result.map(r => r.newPriority)).toEqual([1000, 2000, 3000]);
+  });
+
+  it("all resulting priorities are distinct multiples of 1000", () => {
+    const rules = Array.from({ length: 10 }, (_, i) =>
+      makeRule({ match: `rule-${i}`, categoryId: "c", subcategoryId: "s", priority: 100 })
+    );
+    const result = computeMigratedPriorities(rules);
+    const priorities = result.map(r => r.newPriority);
+    expect(new Set(priorities).size).toBe(10);
+    expect(priorities.every(p => p % PRIORITY_STEP === 0)).toBe(true);
+  });
+
+  it("second run is a no-op: already-migrated rules have needsMigration=false", () => {
+    // After migration, priorities are 1000, 2000, ..., N*1000
+    [1000, 2000, 10000, 78000].forEach(p => {
+      expect(needsMigration(p)).toBe(false);
+    });
+  });
+
+  it("case-insensitive alphabetical sort for match values", () => {
+    const rules = [
+      makeRule({ match: "Zebra Store",  categoryId: "c", subcategoryId: "s", priority: 100 }),
+      makeRule({ match: "apple pay",    categoryId: "c", subcategoryId: "s", priority: 100 }),
+      makeRule({ match: "Amazon Prime", categoryId: "c", subcategoryId: "s", priority: 100 }),
+    ];
+    const result = computeMigratedPriorities(rules);
+    expect(result.map(r => r.match)).toEqual(["Amazon Prime", "apple pay", "Zebra Store"]);
+  });
+});
