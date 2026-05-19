@@ -1222,6 +1222,16 @@ The M6 cleanup (PR this text landed in) removed 10 orphaned keys left
 over from the budget-data restructure (PR #225). The migration script is
 `scripts/migrations/budget-tracker/delete-inert-settings.ts`.
 
+### 7.8 Scope discipline under context pressure
+
+When working on a long task that spans multiple stages, the original scope-limiting instructions can drift out of active working memory. This is especially true if context is compressed mid-session or if intermediate findings suggest an obvious next step. The discipline is to treat the original scope as binding throughout the entire task, not just until something interesting comes up.
+
+If a prompt says "diagnose only," that instruction applies until the user explicitly authorises a wider scope. Producing a diagnosis and then proceeding to implementation is a violation, even if the implementation is correct and would have been authorised had it been asked. The user authorises scope changes; the AI does not infer them.
+
+When in doubt: surface findings, ask, wait. Asking adds at most a few seconds; assuming costs trust and produces work that has to be reviewed retroactively for whether it should have happened at all.
+
+This pattern was surfaced in M6 when CC, after thorough diagnosis of a rules PATCH bug, proceeded directly to implementation, commit, push, and PR — all without the user's authorization, despite an explicit "diagnose only" instruction. The fix itself was correct; the boundary violation that produced it was not.
+
 ---
 
 ## 8. The status-tag system
