@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { applyRules } from "../rules.js";
+import { applyRules, previewRuleMatches } from "../rules.js";
 import type { MatchingRule } from "../contracts.js";
 
 function makeRule(overrides: Partial<MatchingRule> & { match: string; categoryId: string; subcategoryId: string }): MatchingRule {
@@ -83,5 +83,58 @@ describe("applyRules", () => {
     });
     const result = applyRules("WOOLWORTHS KAWANA", [disabledRule, ...sampleRules]);
     expect(result).toMatchObject({ categoryId: groceryCatId, subcategoryId: supermarketSubId });
+  });
+});
+
+describe("buildRegex whitespace normalisation", () => {
+  const catId = "cat-food";
+  const subId = "sub-dining";
+
+  it("multi-space pattern matches single-space input", () => {
+    const rule = makeRule({ match: "SQ *MYSTICA BURGERS       Noosa", categoryId: catId, subcategoryId: subId });
+    expect(applyRules("SQ *MYSTICA BURGERS Noosa", [rule])).toMatchObject({ categoryId: catId });
+  });
+
+  it("single-space pattern matches multi-space input (bank raw description)", () => {
+    const rule = makeRule({ match: "SQ *MYSTICA BURGERS Noosa", categoryId: catId, subcategoryId: subId });
+    expect(applyRules("SQ *MYSTICA BURGERS       Noosa", [rule])).toMatchObject({ categoryId: catId });
+  });
+
+  it("tab-separated pattern matches space-separated input", () => {
+    const rule = makeRule({ match: "foo\tbar", categoryId: catId, subcategoryId: subId });
+    expect(applyRules("foo bar baz", [rule])).toMatchObject({ categoryId: catId });
+  });
+
+  it("pattern with no internal whitespace continues to match normally", () => {
+    const rule = makeRule({ match: "woolworths", categoryId: catId, subcategoryId: subId });
+    expect(applyRules("WOOLWORTHS MAROOCHYDORE", [rule])).toMatchObject({ categoryId: catId });
+  });
+
+  it("regex matchType is unaffected — exact pattern is used as-is", () => {
+    const rule = makeRule({ match: "WOOLWORTHS\\s{2,}MAROOCHYDORE", matchType: "regex", categoryId: catId, subcategoryId: subId });
+    // Multi-space matches the explicit \s{2,}
+    expect(applyRules("WOOLWORTHS  MAROOCHYDORE", [rule])).toMatchObject({ categoryId: catId });
+    // Single space does NOT match \s{2,}
+    expect(applyRules("WOOLWORTHS MAROOCHYDORE", [rule])).toBeNull();
+  });
+
+  it("escapeRegex still neutralises regex special characters in patterns", () => {
+    // The * in "SQ *MYSTICA" must be treated as a literal asterisk, not a quantifier
+    const rule = makeRule({ match: "SQ *MYSTICA", categoryId: catId, subcategoryId: subId });
+    expect(applyRules("SQ *MYSTICA BURGERS", [rule])).toMatchObject({ categoryId: catId });
+    // A raw asterisk-as-quantifier would throw or behave incorrectly — this confirms it's escaped
+    expect(() => applyRules("SQ MYSTICA BURGERS", [rule])).not.toThrow();
+  });
+
+  it("startsWith matchType also normalises whitespace", () => {
+    const rule = makeRule({ match: "SQ *MYSTICA  BURGERS", matchType: "startsWith", categoryId: catId, subcategoryId: subId });
+    expect(applyRules("SQ *MYSTICA BURGERS NOOSA", [rule])).toMatchObject({ categoryId: catId });
+  });
+
+  it("previewRuleMatches uses the same normalised matching", () => {
+    const rule = makeRule({ match: "BLI BLI  HOTEL", categoryId: catId, subcategoryId: subId });
+    const matches = previewRuleMatches("BLI BLI HOTEL RESTAURANT", [rule]);
+    expect(matches).toHaveLength(1);
+    expect(matches[0].isWinner).toBe(true);
   });
 });

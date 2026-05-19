@@ -4,10 +4,18 @@ function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+function normalisePattern(pattern: string): string {
+  // Collapse whitespace runs to \s+ so multi-space bank descriptions match
+  // single-space user input (and vice-versa). Applies after escapeRegex so
+  // the literal space characters in the escaped string are safe to replace.
+  return escapeRegex(pattern).replace(/\s+/g, "\\s+");
+}
+
 function buildRegex(matchType: string, pattern: string): RegExp {
   if (matchType === "regex") return new RegExp(pattern, "i");
-  if (matchType === "startsWith") return new RegExp(`^${escapeRegex(pattern)}`, "i");
-  return new RegExp(escapeRegex(pattern), "i");
+  const p = normalisePattern(pattern);
+  if (matchType === "startsWith") return new RegExp(`^${p}`, "i");
+  return new RegExp(p, "i");
 }
 
 // Priority ASC, then createdAt DESC (newer wins equal-priority ties)
