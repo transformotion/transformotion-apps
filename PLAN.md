@@ -643,8 +643,7 @@ deduplication of duplicated runtime code.
 - Remove hardcoded built-in rules: the previous `BuiltinRule` type and
   hardcoded rule list have been removed from code but the `removeBuiltinRules`
   migration path and any remaining references to the concept should be
-  confirmed clean. Migrated to M7 from M6 as architectural cleanup that
-  fits the deduplication theme. Tracked: #201.
+  confirmed clean. Tracked: #201 (moved to Backlog — not blocking M7).
 - Auth store refactor: split stable identity (`userId`, `email`,
   `groups`) from reactive current account (`currentAccountId`) in
   `useAuthStore`. Prevents unnecessary re-renders when account context
@@ -683,9 +682,10 @@ deduplication of duplicated runtime code.
   `accounts/`, `claude-proxy/`, `user/` substructure preserved).
   Platform infrastructure moved to `platform/infrastructure/` per
   the line above. CDK path constants and `pnpm-workspace.yaml` globs
-  updated. **Partial: `platform/` exists and Lambda dirs are at
-  `platform/{name}/` (not `platform/functions/{name}/`). Target
-  sub-structure and pnpm-workspace.yaml cleanup are #250 scope.**
+  updated. **Partial: `platform/` exists with Lambda dirs at
+  `platform/{name}/` (no `functions/` subdirectory). Target is
+  `platform/functions/{name}/` — migration to this structure plus
+  pnpm-workspace.yaml cleanup are #250 scope.**
 - `MONOREPO.md` updated to reflect the new structure: `platform/`
   documented as a top-level directory, `apps/<app>/infrastructure/`
   documented in per-app structure, root `infrastructure/` reduced
