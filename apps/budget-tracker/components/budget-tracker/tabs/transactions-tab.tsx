@@ -712,6 +712,7 @@ export function TransactionsTab() {
       {showImport && (
         <CSVImportModal
           onClose={() => setShowImport(false)}
+          accountId={currentAccount?.id ?? ""}
           matchingRules={matchingRules}
           settings={settings}
           updateSettings={updateSettings}
@@ -984,6 +985,7 @@ function TransactionRow({
 
 function CSVImportModal({
   onClose,
+  accountId,
   matchingRules,
   settings,
   updateSettings,
@@ -991,6 +993,7 @@ function CSVImportModal({
   setTransactions,
 }: {
   onClose: () => void
+  accountId: string
   matchingRules: MatchingRule[]
   settings: { csvFormatMappings?: Record<string, CSVMapping> }
   updateSettings: (u: { csvFormatMappings: Record<string, CSVMapping> }) => void
@@ -1007,6 +1010,7 @@ function CSVImportModal({
   const [skipRows, setSkipRows] = useState(1)
   const [bankName, setBankName] = useState("")
   const [isDragging, setIsDragging] = useState(false)
+  const [importError, setImportError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const savedFormats = settings.csvFormatMappings || {}
@@ -1128,6 +1132,11 @@ function CSVImportModal({
   }
 
   const importTransactions = () => {
+    if (!accountId) {
+      setImportError('Cannot import: no account loaded. Try signing out and back in.')
+      return
+    }
+    setImportError(null)
     const dataRows = csvData.slice(skipRows)
     if (dataRows.length === 0) { onClose(); return }
 
@@ -1146,7 +1155,7 @@ function CSVImportModal({
 
       return {
         transactionId: crypto.randomUUID(),
-        accountId: "",
+        accountId,
         date: parseDate(row[columnMapping.date] || ""),
         amount: amount.toString(),
         description,
@@ -1352,6 +1361,12 @@ function CSVImportModal({
             </div>
           )}
         </div>
+
+        {importError && (
+          <div className="p-3 bg-signal-red/10 border border-signal-red/30 rounded-lg">
+            <span className="text-sm text-signal-red">{importError}</span>
+          </div>
+        )}
 
         <div className="flex items-center justify-end gap-2 pt-4 border-t border-border">
           <SecondaryButton onClick={onClose}>Cancel</SecondaryButton>
