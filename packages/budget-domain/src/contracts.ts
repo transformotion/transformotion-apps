@@ -70,7 +70,7 @@ export interface BudgetSettings {
   csvFormatMappings: Record<string, CSVMapping>;
   aiReviewBatchSize?: number;
   aiReviewParallelLimit?: number;
-  aiReviewConfidenceThreshold?: 'low' | 'medium';
+  aiReviewConfidenceThreshold?: 'low' | 'medium' | 'high';
 }
 
 export interface CSVMapping {

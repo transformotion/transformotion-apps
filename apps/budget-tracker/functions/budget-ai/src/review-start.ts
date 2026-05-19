@@ -20,10 +20,11 @@ export async function reviewStart(
 ): Promise<ReturnType<typeof ok>> {
   requireAccountAccess(auth, 'budget-tracker', accountId);
 
-  const { transactions, categories, settings } = parseBody<{
+  const { transactions, categories, settings, forceFullSearch } = parseBody<{
     transactions: Array<{ index: number; description: string; amount: string }>;
     categories: Category[];
-    settings?: { batchSize?: number; parallelLimit?: number; confidenceThreshold?: 'low' | 'medium' };
+    settings?: { batchSize?: number; parallelLimit?: number; confidenceThreshold?: 'low' | 'medium' | 'high' };
+    forceFullSearch?: boolean;
   }>(event);
 
   // Resolve connectionId from the connections table by userId (most recent active connection)
@@ -71,6 +72,7 @@ export async function reviewStart(
     batchSize,
     parallelLimit,
     confidenceThreshold,
+    forceFullSearch: forceFullSearch === true,
     auth,
   };
 
