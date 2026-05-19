@@ -13,8 +13,9 @@ import { cn } from "@/lib/utils"
 
 export function RulesTab() {
   const matchingRules = useBudgetStore((s) => s.matchingRules)
-  const setMatchingRules = useBudgetStore((s) => s.setMatchingRules)
   const addMatchingRule = useBudgetStore((s) => s.addMatchingRule)
+  const updateMatchingRule = useBudgetStore((s) => s.updateMatchingRule)
+  const deleteMatchingRule = useBudgetStore((s) => s.deleteMatchingRule)
   const transactions = useBudgetStore((s) => s.transactions)
   const setTransactions = useBudgetStore((s) => s.setTransactions)
   const budgetData = useBudgetStore((s) => s.budgetData)
@@ -29,6 +30,7 @@ export function RulesTab() {
   const [showRules, setShowRules] = useState(true)
   const [reapplyFeedback, setReapplyFeedback] = useState<string | null>(null)
   const [ruleAddError, setRuleAddError] = useState<string | null>(null)
+  const [ruleOpError, setRuleOpError] = useState<string | null>(null)
   const [editingRule, setEditingRule] = useState<string | null>(null)
   const [viewingRule, setViewingRule] = useState<string | null>(null)
   const [addingRule, setAddingRule] = useState(false)
@@ -117,22 +119,35 @@ export function RulesTab() {
     }
   }
 
-  const deleteRule = (id: string) => {
-    setMatchingRules(matchingRules.filter(r => r.ruleId !== id))
-    setEditingRule(null)
-    setViewingRule(null)
+  const deleteRule = async (id: string) => {
+    setRuleOpError(null)
+    try {
+      await deleteMatchingRule(id)
+      setEditingRule(null)
+      setViewingRule(null)
+    } catch (err) {
+      setRuleOpError(err instanceof Error ? err.message : 'Failed to delete rule — check your connection and try again')
+    }
   }
 
-  const toggleRuleEnabled = (id: string) => {
-    setMatchingRules(matchingRules.map(r =>
-      r.ruleId === id ? { ...r, enabled: !r.enabled } : r
-    ))
+  const toggleRuleEnabled = async (id: string) => {
+    const rule = matchingRules.find(r => r.ruleId === id)
+    if (!rule) return
+    setRuleOpError(null)
+    try {
+      await updateMatchingRule(id, { enabled: !rule.enabled })
+    } catch (err) {
+      setRuleOpError(err instanceof Error ? err.message : 'Failed to update rule — check your connection and try again')
+    }
   }
 
-  const updateRule = (id: string, updates: Partial<MatchingRule>) => {
-    setMatchingRules(matchingRules.map(r =>
-      r.ruleId === id ? { ...r, ...updates } : r
-    ))
+  const updateRule = async (id: string, updates: Partial<MatchingRule>) => {
+    setRuleOpError(null)
+    try {
+      await updateMatchingRule(id, updates)
+    } catch (err) {
+      setRuleOpError(err instanceof Error ? err.message : 'Failed to update rule — check your connection and try again')
+    }
   }
 
   const newRuleCat = getActiveCategories(categories).find(c => c.categoryId === newRule.categoryId)
@@ -227,6 +242,12 @@ export function RulesTab() {
       {ruleAddError && (
         <div className="p-3 bg-signal-red/10 border border-signal-red/30 rounded-lg flex items-start gap-2">
           <span className="text-sm text-signal-red">{ruleAddError}</span>
+        </div>
+      )}
+
+      {ruleOpError && (
+        <div className="p-3 bg-signal-red/10 border border-signal-red/30 rounded-lg flex items-start gap-2">
+          <span className="text-sm text-signal-red">{ruleOpError}</span>
         </div>
       )}
 
