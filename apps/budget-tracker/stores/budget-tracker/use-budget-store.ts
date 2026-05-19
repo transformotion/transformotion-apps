@@ -121,11 +121,10 @@ export const useBudgetStore = create<BudgetState>()((set, get) => ({
   },
 
   updateMatchingRule: async (id, updates) => {
-    const repo = getMatchingRulesRepositoryInstance()
-    const existing = await repo.findById('', id)
+    const existing = get().matchingRules.find(r => r.ruleId === id)
     if (existing) {
-      await repo.save({ ...existing, ...updates })
-      const raw = await repo.findAll('')
+      await getMatchingRulesRepositoryInstance().save({ ...existing, ...updates })
+      const raw = await getMatchingRulesRepositoryInstance().findAll('')
       set({ matchingRules: [...raw].sort(ruleComparator) })
     }
   },
