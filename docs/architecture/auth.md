@@ -418,7 +418,7 @@ Five platform Lambdas have explicit permission models. Each is documented here f
 | `user` | `withAuthOnly` | None — user owns their own data | `platform.users` RW |
 | `auth/account-provisioning` | `withAuthOnly` | None — first-login flow; user has JWT but no app group memberships yet | `platform.accounts` RW + `platform.account-members` RW + `AdminUpdateUserAttributes` on user pool ARN |
 | `auth/invitations` | `withAuth` | Account-context guards | `platform.accounts` R + `platform.invitations` RW |
-| `auth/forgot-provider` | None (raw handler — pre-authentication) | None | `platform-rate-limits` RW + `AdminGetUser` on user pool ARN + SES `SendEmail` (scoped to verified sender identity ARN, pending tightening in M8) |
+| `auth/forgot-provider` | None (raw handler — pre-authentication) | None | `platform.rate-limits` RW + `AdminGetUser` on user pool ARN + SES `SendEmail` (scoped to verified sender identity ARN, pending tightening in M8) |
 
 **`accounts`, `user`, `auth/account-provisioning`, `auth/invitations`** are user-facing API endpoints. Each uses the appropriate middleware wrapper based on whether account context is required, and authorization helpers based on what the operation needs to verify.
 
@@ -632,7 +632,7 @@ The handler is pre-authentication by necessity. It uses no `withAuth` / `withAut
 
 ### Abuse-resistance posture
 
-Current state has Lambda-side IP-based rate limiting (5 requests per IP per 15 minutes, stored in `platform-rate-limits-{stage}`). The rate limiter currently fails open: if the rate-limit table is unavailable, requests proceed without limiting.
+Current state has Lambda-side IP-based rate limiting (5 requests per IP per 15 minutes, stored in `platform.rate-limits-{stage}`). The rate limiter currently fails open: if the rate-limit table is unavailable, requests proceed without limiting.
 
 The following tightenings are scheduled for M8:
 
