@@ -98,7 +98,7 @@ jobs:
       - name: Verify deployment
         run: |
           bash scripts/ci/verify-deploy.sh \
-            "${{ vars.NEXT_PUBLIC_APP_URL }}" \
+            "${{ vars.NEXT_PUBLIC_APP_URL }}/stock-signal" \
             apps/stock-analyser/.env.example \
             "${{ github.sha }}"
 
@@ -170,6 +170,6 @@ jobs:
       - name: Verify deployment
         run: |
           bash scripts/ci/verify-deploy.sh \
-            "${{ vars.NEXT_PUBLIC_APP_URL }}" \
+            "${{ vars.NEXT_PUBLIC_APP_URL }}/stock-signal" \
             apps/stock-analyser/.env.example \
             "${{ github.sha }}"
