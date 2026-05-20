@@ -6,7 +6,12 @@ on:
     paths:
       - 'apps/budget-tracker/**'
       - 'infrastructure/lib/budget-tracker/**'
-      - 'packages/**'
+      - 'packages/api-client/**'
+      - 'packages/ui/**'
+      - 'packages/auth-client/**'
+      - 'packages/runtime-config/**'
+      - 'packages/lambda-middleware/**'
+      - 'packages/budget-domain/**'
   workflow_dispatch:
     inputs:
       target:

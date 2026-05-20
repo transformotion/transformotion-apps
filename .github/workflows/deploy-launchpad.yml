@@ -5,7 +5,8 @@ on:
     branches: [develop, main]
     paths:
       - 'apps/launchpad/**'
-      - 'packages/**'
+      - 'packages/auth-client/**'
+      - 'packages/runtime-config/**'
   workflow_dispatch:
     inputs:
       target:
