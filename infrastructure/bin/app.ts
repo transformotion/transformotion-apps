@@ -3,12 +3,13 @@ import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
 
 // ── Platform stacks ───────────────────────────────────────────────────────────
-import { NetworkStack }        from '../lib/platform/network-stack';
-import { AuthStack }           from '../lib/platform/auth-stack';
-import { AuthApiStack }        from '../lib/platform/auth-api-stack';
-import { PlatformApiStack }    from '../lib/platform/platform-api-stack';
-import { PlatformTablesStack } from '../lib/platform/platform-tables-stack';
-import { StorageStack }        from '../lib/platform/storage-stack';
+import { NetworkStack }           from '../lib/platform/network-stack';
+import { AuthStack }              from '../lib/platform/auth-stack';
+import { AuthApiStack }           from '../lib/platform/auth-api-stack';
+import { PlatformApiStack }       from '../lib/platform/platform-api-stack';
+import { PlatformTablesStack }    from '../lib/platform/platform-tables-stack';
+import { StorageStack }           from '../lib/platform/storage-stack';
+import { GithubActionsRoleStack } from '../lib/platform/github-actions-role-stack';
 
 // ── Stock Analyser stacks ─────────────────────────────────────────────────────
 import { StockAnalyserApiStack }    from '../lib/stock-analyser/stock-analyser-api-stack';
@@ -28,6 +29,13 @@ const env = {
   account: '959516291617',
   region: 'ap-southeast-2',
 };
+
+// ── Account-level stacks (not stage-specific) ─────────────────────────────────
+
+new GithubActionsRoleStack(app, 'Transformotion-GithubActionsRole', {
+  env,
+  description: 'Transformotion Apps — GitHubActionsDeployRole inline IAM policies (#262, #263)',
+});
 
 // ── Dev stacks ────────────────────────────────────────────────────────────────
 
