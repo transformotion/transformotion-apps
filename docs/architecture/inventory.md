@@ -1035,11 +1035,13 @@ The `NetworkStack` CloudFront distribution has three configured behaviors plus t
 
 | Behavior pattern | S3 occupant | Function | Status |
 |---|---|---|---|
-| Default (`*`) | Launchpad (root) | `IndexRewrite` | Implemented — Launchpad owns `/`, `/sign-in/`, `/signed-out/`, `/launchpad/callback/` |
-| `/budget-tracker/*` | BT (`budget-tracker/` prefix) | `IndexRewrite` | Implemented |
-| `/stock-signal/*` | SA (`stock-signal/` prefix) | `IndexRewrite` | Implemented |
+| Default (`*`) | Launchpad (root) | `IndexRewrite` | Implemented — Launchpad owns `/`, `/sign-in/`, `/signed-out/`, `/launchpad/callback/` — verified M7 #251 |
+| `/budget-tracker/*` | BT (`budget-tracker/` prefix) | `IndexRewrite` | Implemented — verified M7 #251 |
+| `/stock-signal/*` | SA (`stock-signal/` prefix) | `IndexRewrite` | Implemented — verified M7 #251 |
 
 Launchpad deploy syncs to S3 root (excluding `stock-signal/*` and `budget-tracker/*`). Stock Analyser deploys to the `stock-signal/` prefix. Budget Tracker deploys to `budget-tracker/` prefix. The SPA fallback (403/404 → `/index.html`) serves Launchpad's root page.
+
+**Verified 2026-05-21 (M7 #251):** All three behaviors confirmed live on CloudFront distribution `E1128DYYBLMWYK` (dev.apps.transformotion.com.au). Launchpad confirmed at root — issue #203 closed as resolved.
 
 ### 5.7 Environment variables
 
