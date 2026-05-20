@@ -465,7 +465,7 @@ removing the dependency-cycle workaround.
 | `platform.account-members-{stage}` | accountId | userId | Has `userId-index` GSI for reverse lookup. |
 | `platform.invitations-{stage}` | invitationId | — | Used by invitation flow (M11). |
 | `platform.users-{stage}` | userId | — | |
-| `platform-rate-limits-{stage}` | pk | — | Owned by `AuthApiStack` (not PlatformTablesStack). PK: `lookup-provider#<ip>`. Used for rate-limiting by `forgot-provider` Lambda. Note: uses hyphen not dot — does NOT follow `{scope}.{entity}` convention. |
+| `platform.rate-limits-{stage}` | pk | — | Owned by `AuthApiStack` (not PlatformTablesStack). PK: `lookup-provider#<ip>`. Used for rate-limiting by `forgot-provider` Lambda. |
 | `platform.analysis-cache-{stage}` | accountId | cacheKey | Misnamed — see Section 2.7. |
 
 #### 2.10.2 Stock-analyser tables

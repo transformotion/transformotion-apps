@@ -41,7 +41,7 @@ export class AuthApiStack extends cdk.Stack {
     // ── DynamoDB — rate-limit table ─────────────────────────────────────────
     // PK: "lookup-provider#<ip>", TTL attribute "ttl" enables auto-expiry
     const rateLimitTable = new dynamodb.Table(this, 'RateLimits', {
-      tableName:       `platform-rate-limits-${stage}`,
+      tableName:       `platform.rate-limits-${stage}`,
       partitionKey:    { name: 'pk', type: dynamodb.AttributeType.STRING },
       timeToLiveAttribute: 'ttl',
       billingMode:     dynamodb.BillingMode.PAY_PER_REQUEST,
