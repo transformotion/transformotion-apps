@@ -76,7 +76,15 @@ jobs:
         run: aws s3 sync apps/launchpad/out s3://transformotion-web-dev-959516291617 --delete --exclude "stock-signal/*" --exclude "budget-tracker/*"
 
       - name: Invalidate CloudFront
-        run: aws cloudfront create-invalidation --distribution-id E1128DYYBLMWYK --paths "/*"
+        run: |
+          INVALIDATION_ID=$(aws cloudfront create-invalidation \
+            --distribution-id E1128DYYBLMWYK \
+            --paths "/*" \
+            --query 'Invalidation.Id' \
+            --output text)
+          aws cloudfront wait invalidation-completed \
+            --distribution-id E1128DYYBLMWYK \
+            --id "$INVALIDATION_ID"
 
       - name: Verify deployment
         run: |
@@ -133,7 +141,15 @@ jobs:
         run: aws s3 sync apps/launchpad/out s3://transformotion-prod-bucket --delete --exclude "stock-signal/*" --exclude "budget-tracker/*"
 
       - name: Invalidate CloudFront
-        run: aws cloudfront create-invalidation --distribution-id ${{ vars.CLOUDFRONT_DISTRIBUTION_ID_PROD }} --paths "/*"
+        run: |
+          INVALIDATION_ID=$(aws cloudfront create-invalidation \
+            --distribution-id ${{ vars.CLOUDFRONT_DISTRIBUTION_ID_PROD }} \
+            --paths "/*" \
+            --query 'Invalidation.Id' \
+            --output text)
+          aws cloudfront wait invalidation-completed \
+            --distribution-id ${{ vars.CLOUDFRONT_DISTRIBUTION_ID_PROD }} \
+            --id "$INVALIDATION_ID"
 
       - name: Verify deployment
         run: |

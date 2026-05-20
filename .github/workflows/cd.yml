@@ -78,8 +78,22 @@ jobs:
         run: |
           if [ "${{ github.event.inputs.target }}" = "dev" ]; then
             aws s3 sync apps/stock-analyser/out s3://$S3_BUCKET_DEV --delete
-            aws cloudfront create-invalidation --distribution-id $CF_DIST_DEV --paths "/*"
+            INVALIDATION_ID=$(aws cloudfront create-invalidation \
+              --distribution-id $CF_DIST_DEV \
+              --paths "/*" \
+              --query 'Invalidation.Id' \
+              --output text)
+            aws cloudfront wait invalidation-completed \
+              --distribution-id $CF_DIST_DEV \
+              --id "$INVALIDATION_ID"
           else
             aws s3 sync apps/stock-analyser/out s3://${{ vars.S3_BUCKET_PROD }} --delete
-            aws cloudfront create-invalidation --distribution-id ${{ vars.CLOUDFRONT_DISTRIBUTION_ID_PROD }} --paths "/*"
+            INVALIDATION_ID=$(aws cloudfront create-invalidation \
+              --distribution-id ${{ vars.CLOUDFRONT_DISTRIBUTION_ID_PROD }} \
+              --paths "/*" \
+              --query 'Invalidation.Id' \
+              --output text)
+            aws cloudfront wait invalidation-completed \
+              --distribution-id ${{ vars.CLOUDFRONT_DISTRIBUTION_ID_PROD }} \
+              --id "$INVALIDATION_ID"
           fi
