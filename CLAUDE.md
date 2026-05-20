@@ -25,6 +25,8 @@ Two principles affect almost every session:
 
 **Verification mode**: Verification work captures findings, it doesn't fix problems. If a verification surfaces a real issue requiring fix work, the issue gets a tracked GitHub Issue per `CONTRIBUTING.md` Section 4.5; the current PR's scope does not expand to fix it. Out of scope and worth being explicit about: the verification PR closes its issue with findings recorded in the inventory; the fix work happens later in whichever milestone owns it.
 
+**Issue filing at time of discovery**: When recon and fix happen in the same session — which is common and fine — a GitHub issue is still required, created *before the fix code is written*. The issue is the audit trail. PR bodies are not searchable by topic; future contributors need to be able to search GitHub for "matcher whitespace bug" and find the diagnosis, not trawl every PR body from a six-month window. The sequence is: discover bug during recon → file issue → write fix → reference issue number in PR → issue closes on merge. Example: a recon surfaces a whitespace-normalisation gap in the rules matcher. The fix is two lines and will land in the same session. File the issue first, write the fix, reference the issue in the PR body. This adds thirty seconds and creates a permanent, searchable record. See `CONTRIBUTING.md` Section 4.5 for the full issue-filing convention.
+
 ## Boundary Discipline
 
 When the user instructs "diagnose only," "recon only," "don't take action," "verify only," or any similar scope-limiting language, the constraint is binding. It applies for the entire session until the user explicitly authorises a different scope. It is not overridden by:
