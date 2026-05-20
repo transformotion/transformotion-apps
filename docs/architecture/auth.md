@@ -632,14 +632,13 @@ The handler is pre-authentication by necessity. It uses no `withAuth` / `withAut
 
 ### Abuse-resistance posture
 
-Current state has Lambda-side IP-based rate limiting (5 requests per IP per 15 minutes, stored in `platform.rate-limits-{stage}`). The rate limiter currently fails open: if the rate-limit table is unavailable, requests proceed without limiting.
+Lambda-side IP-based rate limiting (5 requests per IP per 15 minutes, stored in `platform.rate-limits-{stage}`). The rate limiter fails closed: if the rate-limit table is unavailable, requests are blocked rather than bypassed. The availability trade-off is accepted for this endpoint — it is not critical-path for active users; legitimate users can retry after DDB recovers; the abuse window stays closed during outages.
 
-The following tightenings are scheduled for M8:
+M8 deployed the following additional tightenings (all active):
 
-- **SES grant scoping.** Current grant is `ses:SendEmail` on `Resource: ['*']` — broader than necessary. M8 scopes the grant to the specific verified sender identity ARN.
-- **API Gateway throttling.** A second layer independent of the Lambda's DDB-based limiter. Specific throttle parameters decided during M8 implementation.
-- **CORS allowlist.** Current configuration is `ALL_ORIGINS`; M8 restricts to the sign-in page origin so browser-based requests from other origins are blocked.
-- **Rate-limiter fail-closed.** The current fail-open behaviour is changed to fail-closed: if the rate-limit table is unavailable, requests are blocked rather than bypassed. The availability trade-off is accepted for this endpoint — it is not critical-path for active users; legitimate users can retry after DDB recovers; the abuse window stays closed during outages.
+- **SES grant scoped** to the specific verified sender identity ARN (no longer `Resource: ['*']`).
+- **API Gateway throttling** active as a second layer independent of the Lambda's DDB-based limiter.
+- **CORS allowlist** restricts to the sign-in page origin (no longer `ALL_ORIGINS`).
 
 **Known limitation:** For federated users, `AdminGetUser(Username=email)` fails because their Cognito username is `Google_{sub}` (not email). The fix using `ListUsersCommand` resolves this. See sub-phase `7e-forgot-provider-fix` in `docs/sub-phase-7e-plan.md`.
 

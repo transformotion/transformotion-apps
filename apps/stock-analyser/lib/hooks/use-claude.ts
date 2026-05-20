@@ -1,15 +1,14 @@
 /**
  * useClaude Hook
- * 
+ *
  * Async Claude API integration with polling pattern.
- * 
+ *
  * Flow:
  * 1. POST /api/claude { prompt, asyncMode: true } -> { jobId }
  * 2. Poll GET /analysis-cache/job-{jobId} every 2.5s
  * 3. When complete, return parsed JSON content
- * 
- * Current: Mock implementation for development
- * Future: Real AWS Lambda proxy with DynamoDB polling
+ *
+ * Provider selected via config.ai.provider: 'mock' (local) or 'claude' (deployed).
  */
 
 import { useState, useCallback, useRef } from 'react'
@@ -26,7 +25,7 @@ export interface ClaudeRequest {
   /**
    * DynamoDB cache key (e.g. 'MARKET#ASX', 'ANALYSIS#CBA.AX').
    * When provided: checks DynamoDB before calling Claude, saves result after.
-   * Cache is always checked regardless of useMockData flag.
+   * Cache is always checked regardless of AI provider.
    */
   cacheKey?: string
   /**

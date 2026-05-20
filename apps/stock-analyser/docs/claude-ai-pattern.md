@@ -69,10 +69,10 @@ async function categorizeTransactions() {
 Set environment variables to control behavior:
 
 ```env
-# Mock or Real API
-NEXT_PUBLIC_USE_MOCK_DATA=true              # true = mock, false = real
+# Provider profile: mock (default, local dev) or live (deployed environments)
+NEXT_PUBLIC_RUNTIME_PROFILE=mock
 
-# API Endpoints (change when deploying to real Lambda)
+# API Endpoints
 NEXT_PUBLIC_CLAUDE_API_URL=/api/claude      # Where to POST prompt
 NEXT_PUBLIC_CLAUDE_CACHE_URL=/analysis-cache # Where to poll results
 
@@ -155,13 +155,13 @@ const analysis = await call({
 ## Development vs. Production
 
 ### Development (Mock Mode)
-- `NEXT_PUBLIC_USE_MOCK_DATA=true`
+- `NEXT_PUBLIC_RUNTIME_PROFILE=mock` (default; no env var needed locally)
 - Simulates the async polling pattern
 - Instant results with small delay
 - No API keys needed
 
 ### Production (Real Claude)
-- `NEXT_PUBLIC_USE_MOCK_DATA=false`
+- `NEXT_PUBLIC_RUNTIME_PROFILE=live` (set by deploy workflows)
 - Calls actual Lambda + Claude API
 - Requires real polling
 - API key in Lambda (server-side only)
@@ -197,13 +197,13 @@ abort()
 
 ## Implementation Details
 
-### Mock Implementation (`NEXT_PUBLIC_USE_MOCK_DATA=true`)
+### Mock Implementation (`config.ai.provider === 'mock'`)
 1. Simulates `POST /api/claude` immediately with a mock jobId
 2. Simulates `GET /analysis-cache/job-{jobId}` polling
 3. Returns result after a short delay
 
-### Real Implementation (`NEXT_PUBLIC_USE_MOCK_DATA=false`)
-1. `POST /api/claude` with prompt (your Lambda proxy endpoint)
+### Real Implementation (`config.ai.provider === 'claude'`)
+1. `POST /api/claude` with prompt (Lambda proxy endpoint)
 2. Lambda returns `{ jobId }`
 3. Polls `GET /analysis-cache/job-{jobId}` (analysis-cache Lambda)
 4. When complete, returns typed result
@@ -239,8 +239,8 @@ const result = await call({ prompt })
 
 ## Next Steps
 
-When developers take over:
+When integrating with a deployed Claude backend:
 1. Create a Lambda function that calls Anthropic Claude API
 2. Expose it via API Gateway at `NEXT_PUBLIC_CLAUDE_API_URL`
-3. Set `NEXT_PUBLIC_USE_MOCK_DATA=false`
+3. Deploy with `NEXT_PUBLIC_RUNTIME_PROFILE=live` (already set in deploy workflows)
 4. All component code stays the same ✨

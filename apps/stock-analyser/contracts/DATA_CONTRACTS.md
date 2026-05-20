@@ -9,13 +9,13 @@ This document is the single source of truth for interface contracts between the 
 
 ## Architecture Rule: Mock/Real Separation
 
-The `NEXT_PUBLIC_USE_MOCK_DATA` environment variable controls whether the app uses real AWS backends or in-memory mock data.
+Provider selection uses the runtime-config pattern (per CONTRIBUTING.md §5.8): `NEXT_PUBLIC_RUNTIME_PROFILE` sets the profile (`mock` locally, `live` in deployed environments), with optional per-concern override env vars. The resolved provider for each concern is on the config object (e.g. `config.storage.provider`, `config.ai.provider`).
 
 **Critical rule for UI components:**
-- Components NEVER check `useMockData` directly
+- Components NEVER check provider flags directly
 - Components call service methods (e.g. `portfolioService.getHoldings()`) or hooks (e.g. `useClaude()`)
 - The service/hook handles mock vs real internally
-- This means the same component code runs in v0 preview (mock) and production (real AWS)
+- This means the same component code runs locally (mock profile) and in deployed environments (live profile)
 
 If a new UI feature needs new data, the pattern is:
 1. Add the field to the relevant type
