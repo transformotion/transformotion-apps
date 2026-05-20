@@ -68,5 +68,4 @@ export interface AIService {
   isAvailable(): Promise<boolean>
 }
 
-export { MockAIService, createMockAIService } from './mock-ai'
 export { ClaudeAIService, createClaudeAIService } from './claude-ai'

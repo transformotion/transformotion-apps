@@ -71,7 +71,7 @@ const mockPortfolioService = {
 }
 
 export const portfolioService = {
-  ...(getConfig().features.useMockData ? mockPortfolioService : realPortfolioService),
+  ...(getConfig().storage.provider === 'local' ? mockPortfolioService : realPortfolioService),
 
   /**
    * Enrich each ticker with Claude analysis.

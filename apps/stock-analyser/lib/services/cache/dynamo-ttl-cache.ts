@@ -2,7 +2,7 @@
  * DynamoDB TTL Cache Service
  *
  * Implements CacheService using the analysis-cache Lambda via API Gateway.
- * Replaces MemoryCacheService in production (NEXT_PUBLIC_USE_MOCK_DATA=false).
+ * Replaces MemoryCacheService when storage.provider is 'dynamo' (NEXT_PUBLIC_RUNTIME_PROFILE=live).
  *
  * Key format:  DATATYPE#identifier  e.g. MARKET#ASX, ANALYSIS#CBA.AX
  * AccountId:   SHARED for market/public data, user accountId for private data
@@ -96,6 +96,6 @@ export class DynamoTTLCacheService implements CacheService {
 
 // ── Singleton — DynamoDB in production, in-memory in mock mode ────────────────
 
-export const dynamoCache: CacheService = getConfig().features.useMockData
+export const dynamoCache: CacheService = getConfig().storage.provider === 'local'
   ? new MemoryCacheService({ defaultTTL: 8 * 3600, prefix: '' })
   : new DynamoTTLCacheService()

@@ -49,8 +49,6 @@ export interface ClaudeConfig {
 }
 
 export interface FeaturesConfig {
-  /** Use mock data instead of real API calls */
-  useMockData: boolean
   /** Enable debug logging */
   debugMode: boolean
 }
@@ -124,7 +122,6 @@ export function loadConfig(): AppConfig {
       maxPollTime: parseInt(process.env.NEXT_PUBLIC_CLAUDE_MAX_POLL_TIME || '500000', 10),
     },
     features: {
-      useMockData: process.env.NEXT_PUBLIC_USE_MOCK_DATA !== 'false', // Default to true for dev
       debugMode: process.env.NEXT_PUBLIC_DEBUG_MODE === 'true',
     },
     apps: {

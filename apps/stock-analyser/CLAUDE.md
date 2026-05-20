@@ -75,7 +75,7 @@ Call `requireAppAccess` at the top of every handler, then `requireAccountAccess`
 
 ## Service layer and data contracts
 
-The app uses a service-adaptor pattern: components call service methods → service handles mock vs real internally. Components never check `NEXT_PUBLIC_USE_MOCK_DATA` directly.
+The app uses a service-adaptor pattern: components call service methods → service handles mock vs real internally. Components never check provider flags directly.
 
 Key service methods defined in [contracts/DATA_CONTRACTS.md](./contracts/DATA_CONTRACTS.md):
 - `portfolioService.getHoldings()` / `saveHoldings()` / `enrichHoldings()`
@@ -144,7 +144,6 @@ Required env vars marked `[REQUIRED]` in `.env.example` must be set before the d
 | `NEXT_PUBLIC_COGNITO_USER_POOL_ID` | Shared Cognito user pool ID |
 | `NEXT_PUBLIC_COGNITO_DOMAIN` | Hosted UI domain |
 | `NEXT_PUBLIC_RUNTIME_PROFILE` | `mock` (default; local development) or `live` (deployed environments). Determines defaults for auth, data, AI, and future concerns. See root `CLAUDE.md` for the design map. |
-| `NEXT_PUBLIC_USE_MOCK_DATA` | `true` = mock services, `false` = real AWS |
 | `NEXT_PUBLIC_API_BASE_URL` | Platform API base URL |
 
 **Cognito client variable rebind:** The GitHub Actions variable `NEXT_PUBLIC_STOCK_ANALYSER_COGNITO_CLIENT_ID` is mapped to the generic runtime env var `NEXT_PUBLIC_COGNITO_CLIENT_ID` in the deploy workflow's env block. This allows each app to have its own Cognito App Client (established in sub-phase 7b.5-alpha) while the runtime code (`@transformotion/auth-client`) reads a single generic name. Local development reads `NEXT_PUBLIC_COGNITO_CLIENT_ID` directly from `.env.local`.

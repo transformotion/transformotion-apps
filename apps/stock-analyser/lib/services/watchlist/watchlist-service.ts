@@ -44,6 +44,6 @@ const mockService = {
 
 // ── Export ────────────────────────────────────────────────────────────────────
 
-export const watchlistService = getConfig().features.useMockData
+export const watchlistService = getConfig().storage.provider === 'local'
   ? mockService
   : realService

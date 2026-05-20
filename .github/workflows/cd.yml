@@ -68,7 +68,6 @@ jobs:
           NEXT_PUBLIC_COGNITO_USER_POOL_ID: ${{ vars.NEXT_PUBLIC_COGNITO_USER_POOL_ID }}
           NEXT_PUBLIC_COGNITO_CLIENT_ID: ${{ vars.NEXT_PUBLIC_COGNITO_CLIENT_ID }}
           NEXT_PUBLIC_COGNITO_REGION: ${{ vars.NEXT_PUBLIC_COGNITO_REGION }}
-          NEXT_PUBLIC_USE_MOCK_DATA: ${{ vars.NEXT_PUBLIC_USE_MOCK_DATA }}
         run: pnpm build
 
       - name: Deploy Stock Analyser to S3
