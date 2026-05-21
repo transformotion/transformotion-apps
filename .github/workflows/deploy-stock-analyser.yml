@@ -6,8 +6,11 @@ on:
     paths:
       - 'apps/stock-analyser/**'
       - 'infrastructure/lib/stock-analyser/**'
-      - 'packages/**'
-      - 'functions/**'
+      - 'packages/api-client/**'
+      - 'packages/ui/**'
+      - 'packages/auth-client/**'
+      - 'packages/runtime-config/**'
+      - 'packages/lambda-middleware/**'
   workflow_dispatch:
     inputs:
       target:
