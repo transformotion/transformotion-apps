@@ -47,9 +47,9 @@ The repository contains the following top-level directories:
 
 - `apps/` — four subdirectories: `budget-tracker/`, `launchpad/`,
   `stock-analyser/`, `web/` (0-LOC shell, M3 cleanup)
-- `packages/` — five subdirectories: `api-client/`, `auth-client/` (stub),
-  `budget-domain/`, `lambda-middleware/`, `ui/` (stub). `cycle-engine/`
-  was removed in this PR — see Section 1.5.
+- `packages/` — six subdirectories: `api-client/`, `auth-client/`,
+  `budget-domain/`, `lambda-middleware/`, `runtime-config/`, `ui/` (stub).
+  `cycle-engine/` was removed — see Section 1.5.
 - `infrastructure/` — CDK app with `bin/app.ts` entrypoint and
   `lib/{platform,stock-analyser,budget-tracker}/` per-scope subdirs
 - `platform/functions/` — platform Lambda source: `accounts/`, `auth/` (with
@@ -128,11 +128,20 @@ frontend, persistence, contracts, and build pipeline.
 
 **Status: Confirmed (updated by M7 cycle-data PR)**
 
-Two packages remain in `packages/` as stubs:
+One package remains in `packages/` as a stub:
 
-- `packages/auth-client/` — single `src/index.ts`, type definitions
-  only, no dependencies beyond TypeScript
-- `packages/ui/` — minimal stub
+- `packages/ui/` — minimal stub (single `@transformotion/ui` package;
+  §3.4-compliant split into sub-packages tracked in M7 #298)
+
+Two packages were previously described as stubs but are fully
+implemented:
+
+- `packages/auth-client/` — full `CognitoAuthService` +
+  `createMockAuthService` implementations; `aws-amplify ^6` dependency;
+  4 source files. Not a stub. Description corrected by M7 / PR #304.
+- `packages/runtime-config/` — `selectProvider()`, `resolveProfile()`,
+  `normaliseCrossAppUrl()`, `RuntimeProfile` exports. Previously absent
+  from this section; added by M7 / PR #304.
 
 `packages/cycle-engine/` was deleted in this PR. Its RSI/MACD/cycle
 scoring implementation was app-specific (Stock Analyser only), so it
