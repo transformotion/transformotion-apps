@@ -39,9 +39,10 @@ transformotion-apps/
 │
 ├── packages/                              # Shared code consumed by 2+ apps
 │   ├── api-client/                        # Typed HTTP client (@transformotion/api-client)
-│   ├── auth-client/                       # Auth type definitions (stub — single file)
+│   ├── auth-client/                       # Cognito + mock auth service implementations (@transformotion/auth-client)
 │   ├── budget-domain/                     # Budget Tracker domain types and helpers
 │   ├── lambda-middleware/                 # Shared withAuth/withAuthOnly wrappers
+│   ├── runtime-config/                    # Runtime profile + provider resolution (@transformotion/runtime-config)
 │   └── ui/                                # Shared UI components (stub — minimal)
 │
 ├── infrastructure/                        # AWS CDK
@@ -276,8 +277,7 @@ organisational, not itself a package.
   `platform.` prefix it is functionally stock-analyser data; M2.1
   ratifies the reclassification as a Stage 0b decision.
 
-- **Stub packages.** `packages/auth-client/` and `packages/ui/` are
-  minimal stubs. Their disposition (build out, retire as orphans, or
-  leave as type-only contracts) is unresolved; consider before importing
-  anything substantive from them. `packages/cycle-engine/` was deleted
-  in this PR — its implementation migrated to `apps/stock-analyser/lib/cycle/`.
+- **Stub packages.** `packages/ui/` is a minimal stub. Its disposition
+  (build out or retire as orphan) is unresolved; consider before importing
+  anything substantive from it. `packages/cycle-engine/` was deleted —
+  its implementation migrated to `apps/stock-analyser/lib/cycle/`.
