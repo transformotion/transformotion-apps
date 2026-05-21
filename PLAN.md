@@ -1276,9 +1276,9 @@ out of the Backlog milestone.
   in a dead error state with no redirect to sign-in. Raised in
   Issue #18's comments and deferred to Phase 4 UX work.
 
-- **NEXT_PUBLIC_USE_MOCK_DATA default-flip.** Long-term flip of code
-  defaults to production values. Issue #18 short-term fix
-  reclassified as `[REQUIRED]`; this is the long-term fix.
+- **NEXT_PUBLIC_RUNTIME_PROFILE default-flip.** Long-term flip of code
+  defaults to production values (`live` profile). Issue #18 short-term
+  fix reclassified as `[REQUIRED]`; this is the long-term fix.
 
 - **Recommendations sector filter bug.** Issue #33 — the Stock Signal
   Recommendations tab computes a sector-filtered list but renders the
