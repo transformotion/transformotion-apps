@@ -1050,9 +1050,6 @@ Launchpad deploy syncs to S3 root (excluding `stock-signal/*` and `budget-tracke
 Approximately 22 environment variables are exposed to the client side
 (`NEXT_PUBLIC_*`). Notable:
 
-- `NEXT_PUBLIC_USE_MOCK_DATA` — defaults to mock-mode in code,
-  reclassified as `[REQUIRED]` in PR #23. Long-term default-flip to
-  production values is in PLAN.md Section 19 (Backlog).
 - `NEXT_PUBLIC_RUNTIME_PROFILE` — profile + override pattern (M6 #189).
   Set to `mock` (default; local dev) or `live` (deployed). Per-concern
   overrides allow targeted swaps: `NEXT_PUBLIC_AUTH_OVERRIDE` (wired
