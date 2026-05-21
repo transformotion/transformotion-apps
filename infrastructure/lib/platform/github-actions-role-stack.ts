@@ -37,6 +37,18 @@ export class GithubActionsRoleStack extends cdk.Stack {
             Action:   'cloudformation:DescribeStacks',
             Resource: `arn:aws:cloudformation:${this.region}:${this.account}:stack/Transformotion*`,
           },
+          {
+            // Required for #252 O17 CI smoke check (admin-initiate-auth, ADMIN_USER_PASSWORD_AUTH flow).
+            // Pool ARNs are hardcoded because GithubActionsRole deploys before AuthStack in
+            // deploy-platform.yml, so Fn::ImportValue on AuthStack exports is unavailable at
+            // first deploy. TODO(#263): migrate to cross-stack reference once deploy ordering allows.
+            Effect:   'Allow',
+            Action:   'cognito-idp:AdminInitiateAuth',
+            Resource: [
+              `arn:aws:cognito-idp:${this.region}:${this.account}:userpool/ap-southeast-2_7QhxUvefw`,
+              `arn:aws:cognito-idp:${this.region}:${this.account}:userpool/ap-southeast-2_8hHCARUWq`,
+            ],
+          },
         ],
       },
     });

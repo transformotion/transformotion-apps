@@ -361,7 +361,8 @@ export class AuthStack extends cdk.Stack {
         logoutUrls:   options.logoutUrls,
       },
       supportedIdentityProviders: options.supportedIdentityProviders,
-      authFlows:            { userSrp: true },
+      // Required for #252 O17 CI smoke check; only callable via IAM (cognito-idp:AdminInitiateAuth on deploy role).
+      authFlows:            { userSrp: true, adminUserPassword: true },
       accessTokenValidity:  cdk.Duration.hours(1),
       idTokenValidity:      cdk.Duration.hours(1),
       refreshTokenValidity: cdk.Duration.days(30),
