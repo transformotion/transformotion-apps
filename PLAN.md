@@ -593,10 +593,21 @@ infrastructure). M15 can begin once M6 is in progress or complete.
 
 ### Purpose
 
-The architectural inventory found that 75% of stock-analyser's codebase
-exists as duplicate code in budget-tracker (60% byte-identical, 40%
-drifted). The drifted 40% is connective tissue — layouts, app-shells,
-integration tabs — exactly the files where coordination matters most.
+The architectural inventory found that approximately 75% of
+stock-analyser's codebase exists as duplicate code in budget-tracker.
+The M7 census recon (2026-05-21) refined this framing with current
+evidence:
+
+- **The 58-component `components/ui/` shadcn set** is byte-for-byte
+  identical across both apps and constitutes the single largest
+  duplication class — larger than all service-layer/utility/type
+  concerns combined. Tracked: #300.
+- **Service-layer, utility, and type concerns** (cache, logger,
+  repository base, config, hooks, useClaude orphan) are the
+  O4+O5+O6 deduplication inventory from #247 — these are the second
+  tier and roughly match the original 60% "byte-identical" framing.
+- **The connective-tissue drift** (design-system, config shapes,
+  app shells) corresponds to the original "40% drifted" framing.
 
 The bilateral duplication is the primary structural barrier to Goal 1
 ("work on one app without affecting another"). This milestone is the
@@ -651,7 +662,9 @@ deduplication of duplicated runtime code.
 - Deduplication scoping/inventory: enumerate all type, utility, and
   service-layer duplicates across apps before filing per-concern child
   issues. This inventory gates all O4+O5+O6 deduplication PRs. Tracked:
-  #247.
+  #247. **The M7 census recon (2026-05-21) expanded scope beyond
+  O4+O5+O6 — see "Census-expanded scope" subsection below for the full
+  picture including #300-#305.**
 - Drift refinement of the 60/40 split: within the drifted 40%,
   *semantic* drift (real behavioural differences, e.g., `Transaction._id`
   string-vs-number) distinguished from *cosmetic* drift (1-line deltas,
@@ -680,12 +693,11 @@ deduplication of duplicated runtime code.
 - `platform/` top-level directory created. Platform Lambdas moved
   from root `functions/` to `platform/functions/` (with `auth/`,
   `accounts/`, `claude-proxy/`, `user/` substructure preserved).
-  Platform infrastructure moved to `platform/infrastructure/` per
-  the line above. CDK path constants and `pnpm-workspace.yaml` globs
-  updated. **Partial: `platform/` exists with Lambda dirs at
-  `platform/{name}/` (no `functions/` subdirectory). Target is
-  `platform/functions/{name}/` — migration to this structure plus
-  pnpm-workspace.yaml cleanup are #250 scope.**
+  **Lambda migration complete** — `platform/functions/` has the full
+  correct structure; root `functions/` is now an empty ghost (cleanup
+  tracked in #303). Platform infrastructure migration to
+  `platform/infrastructure/` remains pending — stacks still live at
+  `infrastructure/lib/platform/`. CDK migration is #250 scope.
 - `MONOREPO.md` updated to reflect the new structure: `platform/`
   documented as a top-level directory, `apps/<app>/infrastructure/`
   documented in per-app structure, root `infrastructure/` reduced
@@ -695,9 +707,10 @@ deduplication of duplicated runtime code.
 - The `apps/web/` 0-LOC shell cleanup (if not done in M3) folded in
   here. Tracked: #250 (`apps/web-vite-backup/` deletion).
 - Stock-analyser migrated from S3 root to `/stock-signal/` prefix:
-  **Code complete (landed M6).** Remaining M7 work: formal verification
-  against the dev deployment (basePath routing, sub-app behaviors,
-  sign-in URLs). Tracked: #251.
+  **Complete (M6 code + M7 #251 verification).** Verified 2026-05-21
+  against dev deployment — basePath routing, CloudFront behavior,
+  sign-in URLs all confirmed live on CloudFront distribution
+  `E1128DYYBLMWYK` (dev.apps.transformotion.com.au). Tracked: #251.
   - `apps/stock-analyser/next.config.mjs` gains `basePath: '/stock-signal'`
     (`output: 'export'` already present)
   - `deploy-stock-analyser.yml` syncs to `s3://transformotion-web-{stage}-{account}/stock-signal/`
@@ -709,19 +722,19 @@ deduplication of duplicated runtime code.
   - Stock-analyser sign-in, launchpad tile, and budget-tracker tile URLs
     verified post-migration
 - Launchpad promoted to root deployment:
-  **Code complete (landed M6).** Remaining M7 work: formal verification
-  against the dev deployment (root behavior, sub-app path isolation,
-  deploy workflow trigger correctness). Tracked: #251.
+  **Complete (M6 code + M7 #251 verification).** Verified 2026-05-21
+  — default CloudFront behavior confirmed serving launchpad at root;
+  `/stock-signal/*` and `/budget-tracker/*` sub-app path isolation
+  confirmed live. Tracked: #251.
   - `apps/launchpad/next.config.mjs` gains `output: 'export'` and
-    `trailingSlash: true` (currently not static-export-ready)
+    `trailingSlash: true`
   - New deploy workflow `deploy-launchpad.yml` mirroring
     `deploy-stock-analyser.yml`'s pattern but syncing to S3 root
     (`--exclude "stock-signal/*" --exclude "budget-tracker/*"`)
   - Default CloudFront behavior verified to serve launchpad correctly
     (root `index.html` resolves directly; no `SubAppIndexRewrite` needed)
-  - Atomic swap concern: stock-analyser must be moved off root in the same
-    milestone window; CloudFront cache invalidation for `/*` required at
-    swap time to flush stale stock-analyser content from edge nodes
+  - CloudFront cache invalidation for `/*` executed at atomic swap;
+    stale stock-analyser content flushed from edge nodes
 - Cross-cutting deployment verification for all migrated apps:
   - Smoke check per app post-deploy: `data-commit` hash matches the
     deploying commit; sign-in completes; repository operations succeed
@@ -748,6 +761,55 @@ deduplication of duplicated runtime code.
   run as the final step of every deploy workflow after CloudFront
   invalidation completes. Also extend with repository-operations smoke
   check. Tracked: #252.
+
+### Census-expanded scope
+
+The M7 census recon (2026-05-21) identified the following items not in
+the original M7 framing. All are M7 scope:
+
+- **#300** — Lift 58-file shadcn `components/ui/` set to
+  `packages/ui/primitives/`. The single largest duplication class.
+  Blocks on #298 (packages/ui/ structure correction).
+- **#301** — Move contracts to canonical locations. `contracts/budget-tracker/`
+  is empty; `apps/budget-tracker/contracts/` has 8 files at the forbidden
+  location. Same inversion for SA. Open §3.5 violation deferred from M3.
+- **#302** — Document BT WebSocket AI infrastructure in normative docs
+  (MONOREPO.md, inventory.md, BT CLAUDE.md). 4 WS Lambdas, 1 WS CDK
+  stack, 1 ai-connections table were shipped without §2.1 updates.
+  Lands before #295 (SA→WSS migration).
+- **#303** — Orphan cleanup: `packages/cycle-engine/` (0 consumers),
+  root `functions/` ghost, empty app dirs, dead shadcn hook copies in
+  `components/ui/`.
+- **#304** — Update `CONTRIBUTING.md` §3.4 and MONOREPO.md: add
+  `runtime-config` and `auth-client` to the packages listing; remove
+  stale "stub" description of auth-client.
+- **#305** — Architecture decision: where do per-app `stores/` belong?
+  All three apps have `stores/` at app root; §3.2 does not document it.
+  Decision gates a §3.2 update.
+
+### Remaining work — rank-ordered by structural impact
+
+1. **#250** — Infrastructure split (per-app and platform stacks to canonical homes). Largest structural item; not started.
+2. **#300** — 58-component `components/ui/` lift. Largest dedup item. Blocks on #298.
+3. **#298** — Correct `packages/ui/` structure. Gates #300 and #299.
+4. **#301** — Contracts inversion fix. Open §3.5 violation.
+5. **#302** — BT WebSocket infrastructure documentation. Open §2.1 violation. Lands before #295.
+6. **#290** — Cache service lift to `packages/cache/`.
+7. **#291** — Logger service lift to `packages/logger/`.
+8. **#292** — Repository base lift to `packages/data-access/`.
+9. **#293** — Shared config sub-types lift to `packages/runtime-config/`.
+10. **#294** — Delete BT legacy useClaude orphan.
+11. **#303** — Orphan cleanup.
+12. **#295** — SA polling→WebSocket migration. Lands after #302.
+13. **#297** — SA design-system type leakage in BT (Signal, Verdict, TrendSignal etc. confirmed in BT design-system.tsx).
+14. **#304** — Package listing doc updates.
+15. **#305** — Stores/ decision.
+16. **#246** — Rate-limits rename.
+17. **#249** — Shared CDK construct library (`packages/cdk-constructs/`).
+18. **#252** — Post-deploy app-identity verification.
+19. **#210** — Auth store refactor.
+20. **#248** — Lint re-enablement (blocked-by-external).
+21. **#299** — Dedupe useIsMobile/useToast hooks (Backlog, blocks on #298).
 
 ### Goals served
 
