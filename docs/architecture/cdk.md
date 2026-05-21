@@ -52,9 +52,7 @@ Deployed by `deploy-budget-tracker.yml`. Source in `infrastructure/lib/budget-tr
 | Stack name | Class | Contents |
 |---|---|---|
 | `Transformotion{Stage}-BudgetTrackerTables` | `BudgetTrackerTablesStack` | `budget-tracker.accounts`, `budget-tracker.transactions`, `budget-tracker.rules`, `budget-tracker.settings` |
-| `Transformotion{Stage}-BudgetTrackerApi` | `BudgetTrackerApiStack` | Budget Tracker Lambda functions + its own API Gateway (`budget-tracker-api-{stage}`) |
-
-> **Note:** Budget Tracker has its own API Gateway rather than sharing the platform gateway. This is an architectural divergence from the intended model. It is functional and not blocking; consolidation to the platform gateway is tracked as sub-phase 7f (optional).
+| `Transformotion{Stage}-BudgetTrackerApi` | `BudgetTrackerApiStack` | Budget Tracker Lambda functions + routes on the shared platform API Gateway |
 
 ---
 
@@ -116,7 +114,9 @@ Stacks receive constructs via `props` in `bin/app.ts`. Cross-stack references ge
 | `PlatformApiStack` | `AuthStack` | `userPool` (construct) |
 | `PlatformApiStack` | `StockAnalyserTablesStack` | `analysisCacheTable` (construct) |
 | `StockAnalyserApiStack` | `PlatformApiStack` | `api` and `authoriser` (constructs) |
-| `BudgetTrackerApiStack` | `AuthStack` | `userPool` (construct — for its own authoriser) |
+| `BudgetTrackerApiStack` | `PlatformApiStack` | `api`, `authoriser`, `apiResource` (constructs — mounts onto the shared platform gateway) |
+| `BudgetTrackerApiStack` | `BudgetTrackerTablesStack` | `budgetDataTableName`, `aiJobsTableName` (strings) |
+| `BudgetTrackerApiStack` | `BudgetTrackerWsStack` | `wsConnectionsTableName`, `wsApiId` (strings) |
 
 ---
 
