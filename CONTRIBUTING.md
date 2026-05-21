@@ -221,6 +221,7 @@ apps/<app>/
 ├── app/                   # Next.js routing
 ├── components/            # App-specific React components
 ├── lib/                   # App-specific TypeScript modules
+├── stores/                # App-specific Zustand stores (auth, domain state)
 ├── functions/             # App-specific Lambda handlers
 ├── infrastructure/        # App-specific CDK stacks
 ├── contracts/             # Forbidden — see Section 2.3 (contracts root only)
