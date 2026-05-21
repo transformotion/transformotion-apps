@@ -253,7 +253,7 @@
       "reason": "PRE-FREEZE: legacy unused binding, no specific owner — eligible for cleanup when the file is next touched"
     },
     {
-      "file": "functions/accounts/src/index.ts",
+      "file": "platform/functions/accounts/src/index.ts",
       "rule": "@typescript-eslint/no-unused-vars",
       "count": 1,
       "reason": "PRE-FREEZE: legacy unused binding, no specific owner — eligible for cleanup when the file is next touched"

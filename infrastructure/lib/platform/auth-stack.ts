@@ -232,7 +232,7 @@ export class AuthStack extends cdk.Stack {
 
     const preTokenFn = new lambdaNodejs.NodejsFunction(this, 'PreTokenGenerationFn', {
       functionName: `transformotion-pre-token-generation-${stage}`,
-      entry:        path.join(__dirname, '../../../functions/auth/pre-token-generation/src/index.ts'),
+      entry:        path.join(__dirname, '../../../platform/functions/auth/pre-token-generation/src/index.ts'),
       handler:      'handler',
       runtime:      lambda.Runtime.NODEJS_20_X,
       timeout:      cdk.Duration.seconds(10),

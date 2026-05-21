@@ -35,8 +35,7 @@ transformotion-apps/
 │   │   ├── stores/                        # Zustand stores
 │   │   ├── CLAUDE.md
 │   │   └── package.json                   # @transformotion/stock-analyser
-│   ├── web/                               # 0-LOC shell from earlier rename (M3 cleanup)
-│   └── web-vite-backup/                   # Backup directory (M3 cleanup; excluded from workspaces)
+│   └── web/                               # 0-LOC shell from earlier rename (M3 cleanup)
 │
 ├── packages/                              # Shared code consumed by 2+ apps
 │   ├── api-client/                        # Typed HTTP client (@transformotion/api-client)
@@ -63,15 +62,16 @@ transformotion-apps/
 │           ├── budget-tracker-api-stack.ts
 │           └── budget-tracker-tables-stack.ts
 │
-├── functions/                             # Platform Lambda source (shared across apps)
-│   ├── auth/                              # Auth-related Lambdas (own pnpm workspace glob)
-│   │   ├── account-provisioning/          # First-sign-in account creation
-│   │   ├── pre-token-generation/          # Cognito pre-token trigger (claims)
-│   │   ├── invitations/                   # Invitation flow
-│   │   └── forgot-provider/               # Federated identity recovery
-│   ├── accounts/                          # Account management
-│   ├── claude-proxy/                      # Anthropic API proxy
-│   └── user/                              # Platform user data
+├── platform/                              # Platform-owned deployable artefacts
+│   └── functions/                         # Platform Lambda source (shared across apps)
+│       ├── auth/                          # Auth-related Lambdas (own pnpm workspace glob)
+│       │   ├── account-provisioning/      # First-sign-in account creation
+│       │   ├── pre-token-generation/      # Cognito pre-token trigger (claims)
+│       │   ├── invitations/               # Invitation flow
+│       │   └── forgot-provider/           # Federated identity recovery
+│       ├── accounts/                      # Account management
+│       ├── claude-proxy/                  # Anthropic API proxy
+│       └── user/                          # Platform user data
 │
 ├── contracts/                             # Per-scope normative contracts
 │   └── budget-tracker/                    # (M2.3 will add platform/ and stock-analyser/)
@@ -101,7 +101,7 @@ transformotion-apps/
 │   ├── workflows/
 │   │   ├── ci.yml                         # PR typecheck + lint + CDK synth
 │   │   ├── cd.yml                         # Manual full-platform redeploy
-│   │   ├── deploy-platform.yml            # Triggered by infrastructure/lib/platform/** changes
+│   │   ├── deploy-platform.yml            # Triggered by infrastructure/lib/platform/** and platform/functions/** changes
 │   │   ├── deploy-stock-analyser.yml      # Triggered by apps/stock-analyser/** changes
 │   │   ├── deploy-budget-tracker.yml      # Triggered by apps/budget-tracker/** changes
 │   │   └── deploy-migration-utilities.yml # Triggered by migration-utilities/** changes
@@ -119,13 +119,11 @@ transformotion-apps/
 Several directories above are migrating to different homes per
 `CONTRIBUTING.md` Section 3:
 
-- `functions/` will move to `platform/functions/` (M7 covers this).
 - `infrastructure/lib/platform/` will move to `platform/infrastructure/`
   (M7).
 - `infrastructure/lib/<app>/` will move to `apps/<app>/infrastructure/`
   (M7).
 - `apps/web/` will be deleted (M3).
-- `apps/web-vite-backup/` will be deleted (M3).
 - `contracts/platform/` and `contracts/stock-analyser/` will be created
   (M2.3 ratifies the contracts policy; subsequent work creates them).
 
@@ -148,8 +146,8 @@ that lands them.
 - `apps/budget-tracker/functions/*` — explicit nested glob for budget
   tracker Lambdas
 - `packages/*`
-- `functions/*`
-- `functions/auth/*` — explicit nested glob because `functions/auth/`
+- `platform/functions/*`
+- `platform/functions/auth/*` — explicit nested glob because `platform/functions/auth/`
   contains its own per-Lambda workspaces
 - `infrastructure` (single workspace at root)
 - `migration-utilities/infrastructure` — CDK stack package for the
@@ -157,7 +155,6 @@ that lands them.
 - `migration-utilities/**` — pre-registered glob for future Lambda
   packages within the namespace (e.g. `migration-utilities/budget-tracker/transactions/`)
 
-`apps/web-vite-backup` is explicitly excluded from workspaces.
 
 ## Import rules
 
@@ -171,9 +168,9 @@ compatibility fix; M7 re-enables it.
 | `apps/stock-analyser/` | `packages/*` | `apps/budget-tracker/`, `apps/launchpad/` |
 | `apps/budget-tracker/` | `packages/*` | `apps/stock-analyser/`, `apps/launchpad/` |
 | `apps/launchpad/` | `packages/*` | `apps/stock-analyser/`, `apps/budget-tracker/` |
-| `packages/*` | Other `packages/*` | `apps/*`, `functions/*`, `infrastructure/*` |
-| `infrastructure/*` | `functions/*` (via file paths), `apps/*/functions/*` (via file paths) | `apps/*` source code |
-| `functions/*` | `packages/*` | `apps/*`, other `functions/*` (each Lambda is independent) |
+| `packages/*` | Other `packages/*` | `apps/*`, `platform/functions/*`, `infrastructure/*` |
+| `infrastructure/*` | `platform/functions/*` (via file paths), `apps/*/functions/*` (via file paths) | `apps/*` source code |
+| `platform/functions/*` | `packages/*` | `apps/*`, other `platform/functions/*` (each Lambda is independent) |
 
 **Valid imports:**
 
@@ -212,7 +209,7 @@ the other app's deployment.
 | `apps/launchpad/**` | `deploy-platform.yml` |
 | `infrastructure/lib/platform/**` | `deploy-platform.yml` |
 | `infrastructure/bin/**` | `deploy-platform.yml` |
-| `functions/**` | `deploy-platform.yml` |
+| `platform/functions/**` | `deploy-platform.yml` |
 | `migration-utilities/**` | `deploy-migration-utilities.yml` |
 | `packages/**` | `deploy-stock-analyser.yml` only (gap: `deploy-budget-tracker.yml` and `deploy-migration-utilities.yml` missing this filter — tracked for M14 fix; currently latent because budget-tracker workflow is a no-op placeholder pending Issue #17/M5) |
 
@@ -267,7 +264,7 @@ organisational, not itself a package.
 
 - **pnpm workspace globs.** `apps/*` matches direct children only.
   Nested workspaces (like `apps/stock-analyser/functions/*` and
-  `functions/auth/*`) need explicit globs in `pnpm-workspace.yaml`.
+  `platform/functions/auth/*`) need explicit globs in `pnpm-workspace.yaml`.
 
 - **Shared API Gateway (mostly).** `apps/stock-analyser` and
   `apps/launchpad` use the shared API Gateway from `PlatformApiStack`.
