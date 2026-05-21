@@ -7,9 +7,13 @@
 # deployed URL is reachable.
 #
 # Usage:
-#   scripts/ci/verify-deploy.sh <deployed-url> <path-to-.env.example> <expected-commit-hash>
+#   scripts/ci/verify-deploy.sh <deployed-url> <path-to-.env.example> <expected-commit-hash> [<app-identity>]
 #
-# The [REQUIRED] var substitution check (check 3) reads each var's value
+# The optional 4th argument is the expected app identity string (e.g. "launchpad",
+# "stock-analyser", "budget-tracker"). When provided, the script checks that the
+# deployed HTML's <html> element contains a matching data-app attribute.
+#
+# The [REQUIRED] var substitution check (check 4) reads each var's value
 # from the current shell environment. In CI the job-level env block
 # provides all NEXT_PUBLIC_* vars automatically. Locally, export them
 # before running this script.
@@ -21,6 +25,7 @@ set -euo pipefail
 DEPLOYED_URL="${1:?first arg must be deployed URL (e.g. https://dev.apps.transformotion.com.au)}"
 ENV_EXAMPLE="${2:?second arg must be path to .env.example}"
 EXPECTED_HASH="${3:?third arg must be expected commit hash}"
+EXPECTED_APP="${4:-}"
 
 # Strip trailing slash from URL if present.
 DEPLOYED_URL="${DEPLOYED_URL%/}"
@@ -35,7 +40,7 @@ echo "Expected commit hash: $EXPECTED_HASH"
 echo
 
 # ── Check 1: root document returns 200 ────────────────────────────────────────
-echo "[1/3] Probing root document..."
+echo "[1/4] Probing root document..."
 root_code=$(curl -s -o /dev/null -w "%{http_code}" "$DEPLOYED_URL/")
 if [[ "$root_code" != "200" ]]; then
   echo "FAIL: root document returned HTTP $root_code (expected 200)" >&2
@@ -68,8 +73,36 @@ done <<< "$chunk_paths"
 echo "[info] All $chunk_count chunks reachable"
 echo
 
-# ── Check 2: commit hash present in the deployed artefact ─────────────────────
-echo "[2/3] Checking commit hash presence..."
+# ── Check 2: app identity marker present in root HTML ─────────────────────────
+echo "[2/4] Checking app identity marker..."
+if [[ -n "$EXPECTED_APP" ]]; then
+  if (set +o pipefail; echo "$root_html" | grep -qF "data-app=\"$EXPECTED_APP\""); then
+    echo "      OK: data-app=\"$EXPECTED_APP\" found in root HTML"
+  else
+    cat >&2 <<EOF
+
+FAIL: app identity marker data-app="$EXPECTED_APP" NOT found in root HTML.
+
+This means the deployed HTML came from a different app, or the marker
+was not injected during the build. URL fetched: $DEPLOYED_URL/
+
+Possible causes:
+  - The verify-deploy.sh URL arg points at the wrong app's endpoint
+  - The APP_IDENTITY constant in lib/build-info.ts does not match
+    the expected value "$EXPECTED_APP"
+  - The data-app attribute was not added to the <html> element in
+    app/layout.tsx
+
+EOF
+    exit 1
+  fi
+else
+  echo "      SKIP: no expected app identity provided (4th arg empty)"
+fi
+echo
+
+# ── Check 3: commit hash present in the deployed artefact ─────────────────────
+echo "[3/4] Checking commit hash presence..."
 # Run in a subshell with pipefail disabled: when grep -q finds a match early it
 # exits 0 and closes the pipe, causing echo/printf to receive SIGPIPE (exit 141).
 # With pipefail the pipeline would return 141 even on a successful match.
@@ -94,8 +127,8 @@ EOF
 fi
 echo
 
-# ── Check 3: every [REQUIRED] NEXT_PUBLIC_* var was substituted ───────────────
-echo "[3/3] Checking [REQUIRED] var substitution in bundle..."
+# ── Check 4: every [REQUIRED] NEXT_PUBLIC_* var was substituted ───────────────
+echo "[4/4] Checking [REQUIRED] var substitution in bundle..."
 
 required_vars=()
 current_tag=""

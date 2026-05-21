@@ -103,7 +103,8 @@ jobs:
           bash scripts/ci/verify-deploy.sh \
             "${{ vars.NEXT_PUBLIC_APP_URL }}/stock-signal" \
             apps/stock-analyser/.env.example \
-            "${{ github.sha }}"
+            "${{ github.sha }}" \
+            "stock-analyser"
 
   deploy-prod:
     name: Stock Analyser → Prod
@@ -175,4 +176,5 @@ jobs:
           bash scripts/ci/verify-deploy.sh \
             "${{ vars.NEXT_PUBLIC_APP_URL }}/stock-signal" \
             apps/stock-analyser/.env.example \
-            "${{ github.sha }}"
+            "${{ github.sha }}" \
+            "stock-analyser"

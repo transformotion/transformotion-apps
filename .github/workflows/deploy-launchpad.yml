@@ -92,7 +92,8 @@ jobs:
           bash scripts/ci/verify-deploy.sh \
             "https://dev.apps.transformotion.com.au/" \
             apps/launchpad/.env.example \
-            "${{ github.sha }}"
+            "${{ github.sha }}" \
+            "launchpad"
 
   deploy-prod:
     name: Launchpad → Prod
@@ -157,4 +158,5 @@ jobs:
           bash scripts/ci/verify-deploy.sh \
             "https://apps.transformotion.com.au/" \
             apps/launchpad/.env.example \
-            "${{ github.sha }}"
+            "${{ github.sha }}" \
+            "launchpad"
