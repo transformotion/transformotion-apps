@@ -45,18 +45,16 @@ relevant finding in this document in the same PR.
 
 The repository contains the following top-level directories:
 
-- `apps/` — five subdirectories: `budget-tracker/`, `launchpad/`,
-  `stock-analyser/`, `web/` (0-LOC shell, M3 cleanup), `web-vite-backup/`
-  (M3 cleanup, excluded from workspaces)
+- `apps/` — four subdirectories: `budget-tracker/`, `launchpad/`,
+  `stock-analyser/`, `web/` (0-LOC shell, M3 cleanup)
 - `packages/` — six subdirectories: `api-client/`, `auth-client/` (stub),
   `budget-domain/`, `cycle-engine/` (stub), `lambda-middleware/`, `ui/`
   (stub)
 - `infrastructure/` — CDK app with `bin/app.ts` entrypoint and
   `lib/{platform,stock-analyser,budget-tracker}/` per-scope subdirs
-- `functions/` — platform Lambda source: `accounts/`, `auth/` (with
+- `platform/functions/` — platform Lambda source: `accounts/`, `auth/` (with
   `account-provisioning/`, `pre-token-generation/`, `invitations/`,
-  `forgot-provider/`), `claude-proxy/`, `user/`. Migrating to
-  `platform/functions/` per M7.
+  `forgot-provider/`), `claude-proxy/`, `user/`. Resolved by M7 / PR #250.
 - `contracts/` — only `budget-tracker/` exists. M2.3 ratifies the
   contracts policy; subsequent work creates `platform/` and
   `stock-analyser/` siblings.
@@ -71,13 +69,11 @@ missing one (M3 outcome).
 
 `pnpm-workspace.yaml` covers `apps/*`,
 `apps/stock-analyser/functions/*`, `apps/budget-tracker/functions/*`,
-`packages/*`, `functions/*`, `functions/auth/*`, `infrastructure`.
-`apps/web-vite-backup` is explicitly excluded.
+`packages/*`, `platform/functions/*`, `platform/functions/auth/*`, `infrastructure`.
 
 The migration toward the canonical structure documented in
 `CONTRIBUTING.md` Section 3 is tracked across PLAN.md milestones — M3
-removes `apps/web/` and `apps/web-vite-backup/`; M7 creates `platform/`
-and reorganises `infrastructure/`.
+removes `apps/web/`; M7 creates `platform/` and reorganises `infrastructure/`.
 
 ### 1.2 Import boundaries
 
@@ -344,7 +340,7 @@ proposal.
 
 **Status uncertain — verify (M1 issue #80, partial)**
 
-Platform Lambdas (`functions/`):
+Platform Lambdas (`platform/functions/`):
 
 - `accounts/` — account management
 - `auth/account-provisioning/` — first-sign-in account creation
@@ -533,7 +529,7 @@ earlier design (Inferred). M3 may resolve.
 
 **Status: Confirmed (Resolved by M1 #84)**
 
-`functions/claude-proxy/` proxies requests to the Anthropic API.
+`platform/functions/claude-proxy/` proxies requests to the Anthropic API.
 It is a platform Lambda mounted at `POST /api/claude` on the shared
 API Gateway behind the JWT authoriser.
 
@@ -775,7 +771,7 @@ already in use.
 
 **Status: Confirmed (open; addressed in M12)**
 
-Per Issue #49: `functions/auth/forgot-provider/` uses
+Per Issue #49: `platform/functions/auth/forgot-provider/` uses
 `AdminGetUserCommand(Username=email)` which works for native Cognito
 users but fails for federated users because Cognito indexes federated
 users by sub, not email. M12 fixes.
@@ -931,7 +927,7 @@ GitHub Actions workflows in `.github/workflows/`:
 - `ci.yml` — PR typecheck, lint, CDK synth
 - `cd.yml` — manual full-platform redeploy
 - `deploy-platform.yml` — triggers on `infrastructure/lib/platform/**`,
-  `infrastructure/bin/**`, `functions/**`
+  `infrastructure/bin/**`, `platform/functions/**`
 - `deploy-stock-analyser.yml` — triggers on `apps/stock-analyser/**`,
   `infrastructure/lib/stock-analyser/**`, `packages/**`, `functions/**`
 - `deploy-budget-tracker.yml` — triggers on `apps/budget-tracker/**`,
@@ -947,11 +943,10 @@ Verified gaps (M1 #81):
    budget-tracker deployment, a shared package change would not
    trigger budget-tracker redeploy. Currently latent (no-op
    workflow); becomes live bug at activation.
-2. **`functions/**` asymmetry.** Stock-analyser deploy triggers on
-   `functions/**` (platform Lambda changes); budget-tracker does
-   not. Whether budget-tracker Lambdas depend on `functions/**`
-   changes is worth investigating in M14 — could be intentional
-   asymmetry or a gap.
+2. **`platform/functions/**` asymmetry.** Platform Lambda source moved to
+   `platform/functions/**` (M7 / PR #250). `deploy-platform.yml` path
+   filter updated accordingly. Whether app deploy workflows should also
+   trigger on `platform/functions/**` changes is worth investigating in M14.
 3. **`.github/workflows/**` not in any deploy workflow.** Changes
    to a deploy workflow don't trigger that workflow itself.
    Changes to CI machinery (`ci.yml` etc.) don't propagate to
@@ -981,7 +976,7 @@ actual state).
 **Status: Confirmed (current state, partial)**
 
 Test files exist in approximately 8 places across the monorepo (~951
-total LOC of tests). Notable: `functions/auth/pre-token-generation/`
+total LOC of tests). Notable: `platform/functions/auth/pre-token-generation/`
 has tests; other auth Lambdas (`account-provisioning`, `accounts`,
 `user`, `forgot-provider`) do not. Tests are non-uniform.
 
@@ -1116,8 +1111,9 @@ The documents are broadly accurate. Gaps and inconsistencies found:
 **urls-and-deploy.md gaps:**
 
 4. Deploy trigger table for `deploy-stock-analyser.yml` lists three
-   path filters but omits `functions/**`. The actual workflow (confirmed
-   by M1 #81) includes `functions/**`. Table is incomplete. M3 reconciles.
+   path filters but omits `platform/functions/**`. The actual workflow (confirmed
+   by M1 #81) included `functions/**` at verification time; that path moved to
+   `platform/functions/**` per M7 / PR #250. Table completeness review deferred to M3.
 
 5. Deploy trigger table describes `deploy-budget-tracker.yml` as doing
    real CDK + S3 deployment. The workflow is currently a no-op
@@ -1128,7 +1124,7 @@ The documents are broadly accurate. Gaps and inconsistencies found:
 
 6. `auth.md` documents an `invitations-reconcile` Lambda
    (`POST /auth/reconcile-invitation`) in detail. This Lambda does not
-   exist in `functions/auth/` or in any CDK stack — it is part of the
+   exist in `platform/functions/auth/` or in any CDK stack — it is part of the
    M11 forward-scope. auth.md describes future design; cdk.md correctly
    omits it. No action until M11.
 

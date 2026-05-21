@@ -6,7 +6,7 @@ on:
     paths:
       - 'infrastructure/lib/platform/**'
       - 'infrastructure/bin/**'
-      - 'functions/**'
+      - 'platform/functions/**'
   workflow_dispatch:
     inputs:
       target:

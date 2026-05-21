@@ -88,7 +88,7 @@ Note: some paths are migrating per `CONTRIBUTING.md` Section 3 — see `MONOREPO
 |---|---|
 | Cross-app contracts | `/contracts/<scope>/` |
 | Shared packages | `/packages/` |
-| Platform Lambda handlers | `/functions/` (migrating to `/platform/functions/` per M7) |
+| Platform Lambda handlers | `/platform/functions/` |
 | Platform infrastructure | `/infrastructure/lib/platform/` (migrating to `/platform/infrastructure/` per M7) |
 | Per-app infrastructure | `/infrastructure/lib/<app>/` (migrating to `apps/<app>/infrastructure/` per M7) |
 | Migration data artefacts | `/migration-artifacts/<app>/` |

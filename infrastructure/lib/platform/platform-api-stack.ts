@@ -92,7 +92,7 @@ export class PlatformApiStack extends cdk.Stack {
 
     const firstLoginFn = new lambdaNodejs.NodejsFunction(this, 'AccountProvisioningFn', {
       functionName: `transformotion-account-provisioning-${stage}`,
-      entry:        path.join(__dirname, '../../../functions/auth/account-provisioning/src/index.ts'),
+      entry:        path.join(__dirname, '../../../platform/functions/auth/account-provisioning/src/index.ts'),
       handler:      'handler',
       runtime:      lambda.Runtime.NODEJS_20_X,
       timeout:      cdk.Duration.seconds(15),
@@ -128,7 +128,7 @@ export class PlatformApiStack extends cdk.Stack {
 
     const userFn = new lambdaNodejs.NodejsFunction(this, 'UserFn', {
       functionName: `transformotion-user-${stage}`,
-      entry:        path.join(__dirname, '../../../functions/user/src/index.ts'),
+      entry:        path.join(__dirname, '../../../platform/functions/user/src/index.ts'),
       handler:      'handler',
       runtime:      lambda.Runtime.NODEJS_20_X,
       timeout:      cdk.Duration.seconds(15),
@@ -151,7 +151,7 @@ export class PlatformApiStack extends cdk.Stack {
 
     const claudeProxyFn = new lambdaNodejs.NodejsFunction(this, 'ClaudeProxyFn', {
       functionName: `transformotion-claude-proxy-${stage}`,
-      entry:        path.join(__dirname, '../../../functions/claude-proxy/src/index.ts'),
+      entry:        path.join(__dirname, '../../../platform/functions/claude-proxy/src/index.ts'),
       handler:      'handler',
       runtime:      lambda.Runtime.NODEJS_20_X,
       timeout:      cdk.Duration.seconds(600),
@@ -186,7 +186,7 @@ export class PlatformApiStack extends cdk.Stack {
 
     const accountsFn = new lambdaNodejs.NodejsFunction(this, 'AccountsFn', {
       functionName: `transformotion-accounts-${stage}`,
-      entry:        path.join(__dirname, '../../../functions/accounts/src/index.ts'),
+      entry:        path.join(__dirname, '../../../platform/functions/accounts/src/index.ts'),
       handler:      'handler',
       runtime:      lambda.Runtime.NODEJS_20_X,
       timeout:      cdk.Duration.seconds(15),
@@ -221,7 +221,7 @@ export class PlatformApiStack extends cdk.Stack {
 
     const invitationsFn = new lambdaNodejs.NodejsFunction(this, 'InvitationsFn', {
       functionName: `transformotion-invitations-${stage}`,
-      entry:        path.join(__dirname, '../../../functions/auth/invitations/src/index.ts'),
+      entry:        path.join(__dirname, '../../../platform/functions/auth/invitations/src/index.ts'),
       handler:      'handler',
       runtime:      lambda.Runtime.NODEJS_20_X,
       timeout:      cdk.Duration.seconds(15),
