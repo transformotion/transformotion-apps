@@ -53,6 +53,7 @@ Deployed by `deploy-budget-tracker.yml`. Source in `infrastructure/lib/budget-tr
 |---|---|---|
 | `Transformotion{Stage}-BudgetTrackerTables` | `BudgetTrackerTablesStack` | `budget-tracker.accounts`, `budget-tracker.transactions`, `budget-tracker.rules`, `budget-tracker.settings` |
 | `Transformotion{Stage}-BudgetTrackerApi` | `BudgetTrackerApiStack` | Budget Tracker Lambda functions + routes on the shared platform API Gateway |
+| `Transformotion{Stage}-BudgetTrackerWs` | `BudgetTrackerWsStack` | WebSocket API Gateway `budget-tracker-ai-ws-{stage}`, 4 WS Lambdas, `budget-tracker.ai-connections-{stage}` table |
 
 ---
 
@@ -102,6 +103,17 @@ Deployed by `deploy-budget-tracker.yml`. Source in `infrastructure/lib/budget-tr
 | `budget-export-handler-{stage}` | Budget Tracker export Lambda | `GET /api/budget/v1/business-export` |
 | `budget-migrate-handler-{stage}` | Budget Tracker migrate Lambda | `POST /api/budget/v1/migrate-from-localstorage` |
 
+### Budget Tracker WS Lambda functions (`Transformotion{Stage}-BudgetTrackerWs`)
+
+API Gateway v2 WebSocket — does not use `CognitoUserPoolsAuthorizer`; uses a custom Lambda authoriser instead.
+
+| Function name | Handler | Route / trigger |
+|---|---|---|
+| `budget-ai-ws-authorizer-{stage}` | `apps/budget-tracker/functions/ai-ws-authorizer` | Custom Lambda authoriser for `$connect`; validates Cognito ID token from `?token=` query string; identity source: `route.request.querystring.token` |
+| `budget-ai-ws-connect-{stage}` | `apps/budget-tracker/functions/ai-ws-connect` | `$connect` route — writes `{ connectionId, userId, accountId, expiresAt }` to `budget-tracker.ai-connections-{stage}` |
+| `budget-ai-ws-disconnect-{stage}` | `apps/budget-tracker/functions/ai-ws-disconnect` | `$disconnect` route — deletes connection record |
+| `budget-ai-ws-default-{stage}` | `apps/budget-tracker/functions/ai-ws-default` | `$default` route — receives client messages; has `execute-api:ManageConnections` IAM grant |
+
 ---
 
 ## Cross-stack dependencies
@@ -116,6 +128,7 @@ Stacks receive constructs via `props` in `bin/app.ts`. Cross-stack references ge
 | `StockAnalyserApiStack` | `PlatformApiStack` | `api` and `authoriser` (constructs) |
 | `BudgetTrackerApiStack` | `PlatformApiStack` | `api`, `authoriser`, `apiResource` (constructs — mounts onto the shared platform gateway) |
 | `BudgetTrackerApiStack` | `BudgetTrackerTablesStack` | `budgetDataTableName`, `aiJobsTableName` (strings) |
+| `BudgetTrackerWsStack` | `AuthStack` | `userPool` (construct — for custom authoriser JWKS validation) |
 | `BudgetTrackerApiStack` | `BudgetTrackerWsStack` | `wsConnectionsTableName`, `wsApiId` (strings) |
 
 ---
@@ -161,6 +174,13 @@ Platform Lambda environment variables:
 | `ANTHROPIC_SECRET_NAME` | claude-proxy | `{stage}/anthropic/api-key` (Secrets Manager) |
 | `USER_POOL_ID` | account-provisioning, pre-token-generation | Cognito user pool ID |
 | `ACCOUNTS_TABLE` | pre-token-generation | `platform.accounts-{stage}` (read for appSlug resolution) |
+
+Budget Tracker WS Lambda environment variables:
+
+| Variable | Lambda | Value |
+|---|---|---|
+| `COGNITO_USER_POOL_ID` | `budget-ai-ws-authorizer-{stage}` | Cognito user pool ID (for JWKS verification) |
+| `CONNECTIONS_TABLE` | `budget-ai-ws-connect-{stage}`, `budget-ai-ws-disconnect-{stage}` | `budget-tracker.ai-connections-{stage}` |
 
 ---
 

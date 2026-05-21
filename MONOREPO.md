@@ -60,7 +60,8 @@ transformotion-apps/
 │       │   └── stock-analyser-tables-stack.ts
 │       └── budget-tracker/                # Budget Tracker-specific stacks
 │           ├── budget-tracker-api-stack.ts
-│           └── budget-tracker-tables-stack.ts
+│           ├── budget-tracker-tables-stack.ts
+│           └── budget-tracker-ws-stack.ts
 │
 ├── platform/                              # Platform-owned deployable artefacts
 │   └── functions/                         # Platform Lambda source (shared across apps)
