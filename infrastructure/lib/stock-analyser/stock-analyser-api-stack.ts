@@ -25,6 +25,7 @@ export interface StockAnalyserApiStackProps extends cdk.StackProps {
  *   GET  /analysis-cache/{key}   — analysis-cache Lambda
  *   PUT  /analysis-cache/{key}
  *   DELETE /analysis-cache/{key}
+ *   GET  /cycle/ohlcv        — cycle-data Lambda
  *
  * Lambda source: apps/stock-analyser/functions/
  */
@@ -81,6 +82,11 @@ export class StockAnalyserApiStack extends cdk.Stack {
     watchlist.addMethod('GET', watchlistIntegration, auth);
     watchlist.addMethod('PUT', watchlistIntegration, auth);
 
+    // Shared table used by both analysis-cache and cycle-data Lambdas
+    const analysisCacheTable = dynamodb.Table.fromTableName(
+      this, 'AnalysisCacheTable', `stock-analyser.analysis-cache-${stage}`,
+    );
+
     // ── /analysis-cache/{key} — Analysis Cache Lambda ─────────────────────
     const cacheFn = new lambdaNodejs.NodejsFunction(this, 'CacheFn', {
       functionName: `transformotion-analysis-cache-${stage}`,
@@ -89,13 +95,10 @@ export class StockAnalyserApiStack extends cdk.Stack {
       runtime:      lambda.Runtime.NODEJS_20_X,
       timeout:      cdk.Duration.seconds(15),
       memorySize:   256,
-      environment:  { CACHE_TABLE: `stock-analyser.analysis-cache-${stage}` },
+      environment:  { CACHE_TABLE: analysisCacheTable.tableName },
       bundling:     { externalModules: ['@aws-sdk/*'], minify: true, sourceMap: false, forceDockerBundling: false },
     });
 
-    const analysisCacheTable = dynamodb.Table.fromTableName(
-      this, 'AnalysisCacheTable', `stock-analyser.analysis-cache-${stage}`,
-    );
     analysisCacheTable.grantReadWriteData(cacheFn);
 
     const cacheIntegration = new apigateway.LambdaIntegration(cacheFn, { proxy: true });
@@ -105,6 +108,24 @@ export class StockAnalyserApiStack extends cdk.Stack {
     cacheKey.addMethod('GET',    cacheIntegration, auth);
     cacheKey.addMethod('PUT',    cacheIntegration, auth);
     cacheKey.addMethod('DELETE', cacheIntegration, auth);
+
+    // ── /cycle/ohlcv — Cycle Data Lambda ──────────────────────────────────
+    const cycleDataFn = new lambdaNodejs.NodejsFunction(this, 'CycleDataFn', {
+      functionName: `transformotion-cycle-data-${stage}`,
+      entry:        path.join(__dirname, '../../../apps/stock-analyser/functions/cycle-data/src/index.ts'),
+      handler:      'handler',
+      runtime:      lambda.Runtime.NODEJS_20_X,
+      timeout:      cdk.Duration.seconds(15),
+      memorySize:   512,
+      environment:  { ANALYSIS_CACHE_TABLE: analysisCacheTable.tableName },
+      bundling:     { externalModules: ['@aws-sdk/*'], minify: true, sourceMap: false, forceDockerBundling: false },
+    });
+
+    analysisCacheTable.grantReadWriteData(cycleDataFn);
+
+    const cycleDataIntegration = new apigateway.LambdaIntegration(cycleDataFn, { proxy: true });
+    const cycle = api.root.addResource('cycle');
+    cycle.addResource('ohlcv').addMethod('GET', cycleDataIntegration, auth);
   }
 }
 

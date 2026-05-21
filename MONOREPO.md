@@ -41,7 +41,6 @@ transformotion-apps/
 │   ├── api-client/                        # Typed HTTP client (@transformotion/api-client)
 │   ├── auth-client/                       # Auth type definitions (stub — single file)
 │   ├── budget-domain/                     # Budget Tracker domain types and helpers
-│   ├── cycle-engine/                      # Market cycle computation (stub — single file)
 │   ├── lambda-middleware/                 # Shared withAuth/withAuthOnly wrappers
 │   └── ui/                                # Shared UI components (stub — minimal)
 │
@@ -277,7 +276,8 @@ organisational, not itself a package.
   `platform.` prefix it is functionally stock-analyser data; M2.1
   ratifies the reclassification as a Stage 0b decision.
 
-- **Stub packages.** `packages/auth-client/`, `packages/cycle-engine/`,
-  and `packages/ui/` are minimal stubs. Their disposition (build out,
-  retire as orphans, or leave as type-only contracts) is unresolved;
-  consider before importing anything substantive from them.
+- **Stub packages.** `packages/auth-client/` and `packages/ui/` are
+  minimal stubs. Their disposition (build out, retire as orphans, or
+  leave as type-only contracts) is unresolved; consider before importing
+  anything substantive from them. `packages/cycle-engine/` was deleted
+  in this PR — its implementation migrated to `apps/stock-analyser/lib/cycle/`.
