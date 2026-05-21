@@ -99,12 +99,19 @@ jobs:
             --id "$INVALIDATION_ID"
 
       - name: Verify deployment
+        env:
+          CI_COGNITO_USERNAME: ${{ secrets.CI_COGNITO_USERNAME }}
+          CI_COGNITO_PASSWORD: ${{ secrets.CI_COGNITO_PASSWORD }}
+          COGNITO_USER_POOL_ID: ${{ vars.NEXT_PUBLIC_COGNITO_USER_POOL_ID }}
+          COGNITO_APP_CLIENT_ID: ${{ vars.NEXT_PUBLIC_STOCK_ANALYSER_COGNITO_CLIENT_ID }}
+          API_BASE_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
         run: |
           bash scripts/ci/verify-deploy.sh \
             "${{ vars.NEXT_PUBLIC_APP_URL }}/stock-signal" \
             apps/stock-analyser/.env.example \
             "${{ github.sha }}" \
-            "stock-analyser"
+            "stock-analyser" \
+            "/api/user/profile"
 
   deploy-prod:
     name: Stock Analyser → Prod
@@ -172,9 +179,16 @@ jobs:
             --id "$INVALIDATION_ID"
 
       - name: Verify deployment
+        env:
+          CI_COGNITO_USERNAME: ${{ secrets.CI_COGNITO_USERNAME }}
+          CI_COGNITO_PASSWORD: ${{ secrets.CI_COGNITO_PASSWORD }}
+          COGNITO_USER_POOL_ID: ${{ vars.NEXT_PUBLIC_COGNITO_USER_POOL_ID }}
+          COGNITO_APP_CLIENT_ID: ${{ vars.NEXT_PUBLIC_STOCK_ANALYSER_COGNITO_CLIENT_ID }}
+          API_BASE_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
         run: |
           bash scripts/ci/verify-deploy.sh \
             "${{ vars.NEXT_PUBLIC_APP_URL }}/stock-signal" \
             apps/stock-analyser/.env.example \
             "${{ github.sha }}" \
-            "stock-analyser"
+            "stock-analyser" \
+            "/api/user/profile"

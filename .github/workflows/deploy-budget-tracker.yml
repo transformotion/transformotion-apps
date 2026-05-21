@@ -114,12 +114,19 @@ jobs:
             --id "$INVALIDATION_ID"
 
       - name: Verify deployment
+        env:
+          CI_COGNITO_USERNAME: ${{ secrets.CI_COGNITO_USERNAME }}
+          CI_COGNITO_PASSWORD: ${{ secrets.CI_COGNITO_PASSWORD }}
+          COGNITO_USER_POOL_ID: ${{ vars.NEXT_PUBLIC_COGNITO_USER_POOL_ID }}
+          COGNITO_APP_CLIENT_ID: ${{ vars.NEXT_PUBLIC_BUDGET_TRACKER_COGNITO_CLIENT_ID }}
+          API_BASE_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
         run: |
           bash scripts/ci/verify-deploy.sh \
             "${{ vars.NEXT_PUBLIC_BUDGET_TRACKER_APP_URL }}" \
             apps/budget-tracker/.env.example \
             "${{ github.sha }}" \
-            "budget-tracker"
+            "budget-tracker" \
+            "/api/user/profile"
 
   deploy-prod:
     name: Budget Tracker → Prod
@@ -201,9 +208,16 @@ jobs:
             --id "$INVALIDATION_ID"
 
       - name: Verify deployment
+        env:
+          CI_COGNITO_USERNAME: ${{ secrets.CI_COGNITO_USERNAME }}
+          CI_COGNITO_PASSWORD: ${{ secrets.CI_COGNITO_PASSWORD }}
+          COGNITO_USER_POOL_ID: ${{ vars.NEXT_PUBLIC_COGNITO_USER_POOL_ID }}
+          COGNITO_APP_CLIENT_ID: ${{ vars.NEXT_PUBLIC_BUDGET_TRACKER_COGNITO_CLIENT_ID }}
+          API_BASE_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
         run: |
           bash scripts/ci/verify-deploy.sh \
             "${{ vars.NEXT_PUBLIC_BUDGET_TRACKER_APP_URL }}" \
             apps/budget-tracker/.env.example \
             "${{ github.sha }}" \
-            "budget-tracker"
+            "budget-tracker" \
+            "/api/user/profile"
