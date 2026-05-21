@@ -19,7 +19,7 @@ When working on a specific app, read that app's `CLAUDE.md` first:
 
 ## Operating mode
 
-Two principles affect almost every session:
+Several principles affect almost every session:
 
 **The discipline rule** (`CONTRIBUTING.md` Section 2.1): PRs that change what a normative document describes update that document in the same PR. PLAN.md, CONTRIBUTING.md, MONOREPO.md, README.md, and `inventory.md` are all normative. GitHub Milestone descriptions are also paired with PLAN.md content.
 
@@ -28,6 +28,10 @@ Two principles affect almost every session:
 **Issue filing at time of discovery**: When recon and fix happen in the same session — which is common and fine — a GitHub issue is still required, created *before the fix code is written*. The issue is the audit trail. PR bodies are not searchable by topic; future contributors need to be able to search GitHub for "matcher whitespace bug" and find the diagnosis, not trawl every PR body from a six-month window. The sequence is: discover bug during recon → file issue → write fix → reference issue number in PR → issue closes on merge. Example: a recon surfaces a whitespace-normalisation gap in the rules matcher. The fix is two lines and will land in the same session. File the issue first, write the fix, reference the issue in the PR body. This adds thirty seconds and creates a permanent, searchable record. See `CONTRIBUTING.md` Section 4.5 for the full issue-filing convention.
 
 **Deploy watch rule**: After merging a PR to `develop`, check whether any changed files match an `on.push.paths` filter in a deploy workflow (`.github/workflows/deploy-*.yml`). If yes, a deploy run has been triggered automatically — find it with `gh run list --workflow=<deploy-workflow.yml> --limit=1`, watch it with `gh run watch <run_id>`, and report final status before ending the session. The session does not end at merge; it ends after deploy confirmation. If the PR's changed files do not match any `on.push.paths` filter (e.g. the PR only changes CLAUDE.md, docs, or other excluded paths), no deploy workflow triggers and the session ends at merge confirmation.
+
+**Recon completeness on artifacts being modified**: When a recon precedes a modification to an AWS resource, an IAM policy, a workflow file, or any other artifact with sibling state, enumerate the full state of the artifact, not just the named attribute being changed. For an inline IAM policy named X on role Y, also list all *other* inline policies on role Y. For a workflow file's env block, also report the full workflow trigger and other env blocks on the same file. The goal is to surface sibling state the change might collide with or be misled by.
+
+This rule emerged from M7 recons where the named attribute checked out cleanly but a sibling attribute affected the fix sequence (e.g., #264 captured TransformotionDevDeploy's policy state but not the sibling CDKAssumeBootstrapRoles policy on the same role, which had to be verified before the delete-and-recreate sequence could run).
 
 ## Boundary Discipline
 
