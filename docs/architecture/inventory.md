@@ -47,9 +47,9 @@ The repository contains the following top-level directories:
 
 - `apps/` — four subdirectories: `budget-tracker/`, `launchpad/`,
   `stock-analyser/`, `web/` (0-LOC shell, M3 cleanup)
-- `packages/` — six subdirectories: `api-client/`, `auth-client/` (stub),
-  `budget-domain/`, `cycle-engine/` (stub), `lambda-middleware/`, `ui/`
-  (stub)
+- `packages/` — five subdirectories: `api-client/`, `auth-client/` (stub),
+  `budget-domain/`, `lambda-middleware/`, `ui/` (stub). `cycle-engine/`
+  was removed in this PR — see Section 1.5.
 - `infrastructure/` — CDK app with `bin/app.ts` entrypoint and
   `lib/{platform,stock-analyser,budget-tracker}/` per-scope subdirs
 - `platform/functions/` — platform Lambda source: `accounts/`, `auth/` (with
@@ -126,20 +126,20 @@ frontend, persistence, contracts, and build pipeline.
 
 ### 1.5 Stub packages
 
-**Status: Confirmed (current state)**
+**Status: Confirmed (updated by M7 cycle-data PR)**
 
-Three packages exist in `packages/` as stubs (single-file or
-near-single-file with no runtime dependencies):
+Two packages remain in `packages/` as stubs:
 
 - `packages/auth-client/` — single `src/index.ts`, type definitions
   only, no dependencies beyond TypeScript
-- `packages/cycle-engine/` — single `src/index.ts`, has vitest test
-  script but no runtime dependencies declared
 - `packages/ui/` — minimal stub
 
-The disposition of each (build out as canonical, retire as orphan, or
-leave as type-only contracts) is unresolved. M7 (deduplication)
-should resolve this in the course of lifting duplicated code.
+`packages/cycle-engine/` was deleted in this PR. Its RSI/MACD/cycle
+scoring implementation was app-specific (Stock Analyser only), so it
+was migrated to `apps/stock-analyser/lib/cycle/` per `CONTRIBUTING.md`
+§3.6 (app-specific code lives in `apps/<app>/lib/`), and the empty
+package deleted. The cycle lib now has 25 vitest tests in
+`apps/stock-analyser/lib/cycle/cycle.test.ts`.
 
 ### 1.6 Launchpad as platform shell
 
@@ -358,7 +358,11 @@ Stock-analyser Lambdas (`apps/stock-analyser/functions/`):
 - `portfolio/`
 - `watchlist/`
 - `analysis-cache/`
-- `cycle-check/`
+- `cycle-check/` (EventBridge scheduled — no HTTP route)
+- `cycle-data/` — `GET /cycle/ohlcv?ticker=` — fetches OHLCV from
+  Yahoo Finance, computes RSI/MACD cycle position, caches result under
+  `OHLCV#{ticker}` in the analysis-cache table (1h TTL). Added in this
+  PR as part of SA Live mode cycle computation.
 
 Budget-tracker Lambdas (`apps/budget-tracker/functions/`):
 
@@ -1009,7 +1013,8 @@ CDK stacks under `infrastructure/lib/`:
 - `platform-tables-stack.ts` — platform DynamoDB tables
 
 **Stock-analyser stacks:**
-- `stock-analyser-api-stack.ts`
+- `stock-analyser-api-stack.ts` — portfolio, watchlist, analysis-cache,
+  and cycle-data Lambdas + routes on shared platform API Gateway
 - `stock-analyser-tables-stack.ts`
 
 **Budget-tracker stacks:**

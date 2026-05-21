@@ -28,6 +28,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useClaude } from "@/lib/hooks"
+import { useCycleData } from "@/lib/hooks/use-cycle-data"
 
 interface SignalMetric {
   name: string
@@ -79,6 +80,7 @@ export function AnalyserTab({
   const [result, setResult] = useState<AnalysisResult | null>(null)
 
   const { callClaude, isLoading: isAnalyzing, error } = useClaude<AnalysisResult>()
+  const { data: liveData, isLoading: isLoadingLive, error: liveError, fetch: fetchLive } = useCycleData()
 
   // Auto-analyse only if navigated from another tab (source is set)
   useEffect(() => {
@@ -88,6 +90,14 @@ export function AnalyserTab({
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialTicker, source])
+
+  // Fetch live OHLCV cycle data whenever live mode is active and we have a result
+  useEffect(() => {
+    if (isLive && result?.ticker) {
+      fetchLive(result.ticker)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLive, result?.ticker])
 
   const runAnalysis = async (ticker: string, forceRefresh = false) => {
     if (!ticker || isAnalyzing) return
@@ -257,15 +267,16 @@ Return ONLY valid JSON.`,
           {/* Cycle Position Gauge */}
           <Card>
             <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4">
-              Cycle Position
+              Cycle Position{isLive && isLoadingLive && <span className="ml-2 text-[10px] font-normal normal-case text-muted-foreground">Loading live data…</span>}
+              {isLive && liveData && <span className="ml-2 text-[10px] font-normal normal-case text-signal-green">Live</span>}
             </h3>
             <FullCycleGauge
-              score={result.cyclePosition}
-              stage={result.cycleStage}
-              rsiDivergence={result.rsiDivergence}
-              macdMomentum={result.macdMomentum}
-              volumeTrend={result.volumeTrend}
-              summary={result.cycleSummary}
+              score={isLive && liveData ? liveData.cyclePosition : result.cyclePosition}
+              stage={isLive && liveData ? liveData.cycleStage   : result.cycleStage}
+              rsiDivergence={isLive && liveData ? liveData.rsiDivergence : result.rsiDivergence}
+              macdMomentum={isLive  && liveData ? liveData.macdMomentum  : result.macdMomentum}
+              volumeTrend={isLive   && liveData ? liveData.volumeTrend   : result.volumeTrend}
+              summary={isLive       && liveData ? liveData.cycleSummary  : result.cycleSummary}
             />
           </Card>
 
@@ -322,7 +333,15 @@ Return ONLY valid JSON.`,
 
           {/* Disclaimer */}
           <div className="text-xs text-muted-foreground space-y-1 pt-3 border-t border-border">
-            <p>AI-generated analysis · {isLive ? "Live mode" : "Standard mode"}</p>
+            <p>
+              {isLive && liveData
+                ? "Live computed analysis · Live mode"
+                : isLive && liveError
+                  ? "AI-generated analysis · Live mode unavailable"
+                  : isLive
+                    ? "AI-generated analysis · Live mode"
+                    : "AI-generated analysis · Standard mode"}
+            </p>
             <p>Not financial advice. Always consult a licensed financial adviser.</p>
             <p>Data as of April 15, 2026, source Yahoo Finance/TradingView</p>
           </div>

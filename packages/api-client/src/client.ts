@@ -22,6 +22,7 @@ import type {
   GetUserProfileResponse,
   PutUserPreferencesRequest,
   PutUserPreferencesResponse,
+  CycleDataResponse,
 } from './types';
 
 /**
@@ -147,5 +148,12 @@ export class ApiClient {
   /** POST /accounts/{accountId}/invitations — send an invitation email. */
   async createInvitation(accountId: string, req: CreateInvitationRequest): Promise<CreateInvitationResponse> {
     return this.http.post<CreateInvitationResponse>(`accounts/${accountId}/invitations`, req);
+  }
+
+  // ── Cycle data ─────────────────────────────────────────────────────────────
+
+  /** GET /cycle/ohlcv?ticker={ticker} — fetch OHLCV-computed cycle position for a ticker. */
+  async getCycleData(ticker: string): Promise<CycleDataResponse> {
+    return this.http.get<CycleDataResponse>(`cycle/ohlcv?ticker=${encodeURIComponent(ticker)}`);
   }
 }

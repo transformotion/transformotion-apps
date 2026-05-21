@@ -1,8 +1,7 @@
 /**
- * @transformotion/cycle-engine
- *
- * Pure TypeScript RSI, MACD, volume analysis and cycle position scoring.
- * Extracted verbatim from stock-signal-analyser.html (S3.2).
+ * Cycle position computation. RSI/MACD/EMA pure functions plus
+ * composite cycle scoring. Migrated from packages/cycle-engine
+ * per §3.6 (app-specific code lives in apps/<app>/lib/).
  *
  * No DOM, no fetch, no side effects — safe for use in Node.js, browser,
  * Lambda, or unit tests.
@@ -50,7 +49,8 @@ export function calcRSI(data: number[], period: number): number[] {
       const diff = data[j] - data[j - 1];
       if (diff > 0) gains += diff; else losses -= diff;
     }
-    const rs = losses === 0 ? 100 : gains / losses;
+    if (losses === 0) { rsis.push(100); continue; }
+    const rs = gains / losses;
     rsis.push(100 - 100 / (1 + rs));
   }
   return rsis;
@@ -80,7 +80,6 @@ export interface CycleInputs {
 /**
  * Compute a CyclePosition from raw OHLCV arrays.
  *
- * Mirrors the `computeLiveCycle` algorithm in stock-signal-analyser.html.
  * Returns null if there is insufficient data (< 30 closes).
  */
 export function computeCyclePosition(inputs: CycleInputs): CyclePosition | null {
@@ -195,7 +194,7 @@ export function computeCyclePosition(inputs: CycleInputs): CyclePosition | null 
   };
 }
 
-// ── Ticker normalisation (mirrors normaliseTicker in the HTML app) ─────────────
+// ── Ticker normalisation ──────────────────────────────────────────────────────
 
 /**
  * Normalise a raw ticker string (as CMC Markets exports it) into a Yahoo
@@ -227,7 +226,6 @@ export function normaliseTicker(raw: string): string {
 
 /**
  * Convert a ticker + exchange string to a Yahoo Finance ticker.
- * Mirrors `toYahooTicker` in the HTML app.
  */
 export function toYahooTicker(ticker: string, exchange?: string): string {
   const t  = (ticker  || '').toUpperCase().trim();

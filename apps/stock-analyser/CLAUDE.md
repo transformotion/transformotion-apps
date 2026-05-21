@@ -48,6 +48,7 @@ All Stock Analyser Lambdas share the platform API Gateway and Cognito JWT author
 | `transformotion-watchlist-{stage}` | `apps/stock-analyser/functions/watchlist` | `GET/POST/PATCH/DELETE /api/watchlist` |
 | `transformotion-analysis-cache-{stage}` | `apps/stock-analyser/functions/analysis-cache` | `GET /api/analysis-cache/*` |
 | `transformotion-cycle-check-{stage}` | `apps/stock-analyser/functions/cycle-check` | EventBridge scheduled (no HTTP route) |
+| `transformotion-cycle-data-{stage}` | `apps/stock-analyser/functions/cycle-data` | `GET /cycle/ohlcv?ticker=` |
 
 ## DynamoDB tables
 
@@ -110,6 +111,26 @@ Stock Analyser AI goes through `useClaude<T>()` or `callClaudeAPI<T>()` in `lib/
 | Metals | `METALS#all` | 2h |
 | Stock Analysis | `ANALYSIS#{ticker}` | 8h |
 | Market Cycle | `CYCLE#{geography}` | 8h |
+| OHLCV Cycle Data | `OHLCV#{ticker}` | 1h |
+
+## Cycle computation
+
+### Fast mode (Standard)
+Claude estimates `cyclePosition` (0–100), `cycleStage`, RSI divergence,
+MACD momentum, and volume trend signals as part of the stock analysis
+prompt. No OHLCV data is fetched; the values are AI-synthesised.
+
+### Live mode
+When the user toggles "Live mode" in the Analyser tab, the frontend calls
+`GET /cycle/ohlcv?ticker=` via `useCycleData()` (in `lib/hooks/use-cycle-data.ts`).
+The `cycle-data` Lambda fetches 1y of daily OHLCV from Yahoo Finance
+(`yahoo-finance2`), runs `computeCyclePosition` (in `lib/cycle/index.ts`),
+and caches the result under `OHLCV#{ticker}` with a 1h TTL.
+The computed values overlay the AI estimates in `FullCycleGauge`. On 503 or
+error the component falls back to the AI estimates with a "Live mode
+unavailable" notice.
+
+Both paths use the same `FullCycleGauge` component — do not modify it.
 
 ## Migration invariants (Phase 4)
 

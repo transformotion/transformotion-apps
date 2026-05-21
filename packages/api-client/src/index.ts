@@ -59,4 +59,12 @@ export type {
   GetUserProfileResponse,
   PutUserPreferencesRequest,
   PutUserPreferencesResponse,
+
+  // Cycle data
+  CycleDataResponse,
+  CycleSignal,
+  CycleStage,
+  RsiDivergence,
+  MacdMomentum,
+  VolumeTrend,
 } from './types';

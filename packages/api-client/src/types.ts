@@ -104,6 +104,31 @@ export interface GetUserProfileResponse {
 export interface PutUserPreferencesRequest  extends Partial<UserPreferences> {}
 export interface PutUserPreferencesResponse { preferences: UserPreferences }
 
+// ── Cycle data ────────────────────────────────────────────────────────────────
+
+export interface CycleSignal {
+  type: 'ok' | 'warn' | 'danger';
+  text: string;
+}
+
+export type CycleStage       = 'early' | 'mid' | 'late' | 'peak';
+export type RsiDivergence    = 'none' | 'bullish' | 'bearish';
+export type MacdMomentum     = 'strengthening' | 'weakening' | 'flat';
+export type VolumeTrend      = 'confirming' | 'diverging' | 'neutral';
+
+export interface CycleDataResponse {
+  cyclePosition:  number;
+  cycleStage:     CycleStage;
+  rsiDivergence:  RsiDivergence;
+  macdMomentum:   MacdMomentum;
+  volumeTrend:    VolumeTrend;
+  weekHigh52Pct:  number;
+  signals:        CycleSignal[];
+  cycleSummary:   string;
+  computedAt:     string;
+  source:         'live' | 'cache';
+}
+
 // ── Claude proxy ──────────────────────────────────────────────────────────────
 
 export interface ClaudeProxyRequest {
