@@ -33,6 +33,18 @@ Several principles affect almost every session:
 
 This rule emerged from M7 recons where the named attribute checked out cleanly but a sibling attribute affected the fix sequence (e.g., #264 captured TransformotionDevDeploy's policy state but not the sibling CDKAssumeBootstrapRoles policy on the same role, which had to be verified before the delete-and-recreate sequence could run).
 
+**Normative-doc impact check before implementation**: Before any implementation prompt's recon completes, enumerate which normative documents (per `CONTRIBUTING.md` §2.3) and accompanying artifacts will need updating in the same PR if the change lands. Section 2.1's discipline rule requires these updates to be paired with the code change; this principle moves the check from review-time catch to recon-time anticipation.
+
+Categories to consider in the impact check:
+- IAM policies, infrastructure resources → `cdk.md`, `inventory.md`
+- Auth flows, identity providers, claims → `auth.md`
+- Lambda handlers, API endpoints → `MONOREPO.md`, `CONTRIBUTING.md` §3, `contracts/<scope>/`, `inventory.md`
+- Build patterns, env vars, runtime config → `CONTRIBUTING.md` §5, `inventory.md`, deploy workflow env blocks, GH Actions variables/secrets
+- Repository structure → `CONTRIBUTING.md` §3, `MONOREPO.md`
+- Operating mode, agent behaviour → `CLAUDE.md`
+
+This rule emerged from cumulative M7 evidence. PRs #259, #261 (multiple rounds), the M6 launchpad-at-root work, the budget-tracker gateway consolidation, and the platform-functions migration all shipped code without their accompanying §2.1 obligations, requiring downstream cleanup PRs (#262, #266, #267, #269, #279, #283 among others) to make up the gap.
+
 ## Boundary Discipline
 
 When the user instructs "diagnose only," "recon only," "don't take action," "verify only," or any similar scope-limiting language, the constraint is binding. It applies for the entire session until the user explicitly authorises a different scope. It is not overridden by:
