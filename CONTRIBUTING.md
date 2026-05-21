@@ -692,7 +692,7 @@ The decision of which implementation gets wired in is made at the environment la
 
 **Client-side selection: build-time config.** The build mode (`MODE` in Vite, equivalent in Next.js) determines which implementation is bundled. Production builds include only the production implementation; v0 builds include only the mock implementation. The unused implementation is tree-shaken out — production bundles do not carry mock code.
 
-The build-time config is typically driven by an environment variable like `NEXT_PUBLIC_USE_MOCK_DATA`, set per build environment. The variable is consumed at the module level where the implementation is wired into the domain interface.
+The build-time config is typically driven by an environment variable like `NEXT_PUBLIC_RUNTIME_PROFILE`, set per build environment. The variable is consumed at the module level where the implementation is wired into the domain interface. See §5.8 for the canonical pattern documentation.
 
 **Server-side selection: deployment-time config via CDK.** Lambdas receive their physical-store choice via environment variables defined in their CDK stack definition. A Lambda using `CacheService` reads (for example) `CACHE_BACKEND=dynamodb` at startup and wires the corresponding implementation.
 
