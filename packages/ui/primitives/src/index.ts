@@ -1,1 +1,1 @@
-// stub — populated by #300
+export { useIsMobile } from './hooks/use-mobile'

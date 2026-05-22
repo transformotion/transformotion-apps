@@ -131,8 +131,9 @@ frontend, persistence, contracts, and build pipeline.
 
 One sub-package in `packages/ui/` remains a stub:
 
-- `packages/ui/primitives/` (`@transformotion/ui-primitives`) — stub;
-  populated by M7 #300.
+- `packages/ui/primitives/` (`@transformotion/ui-primitives`) — partially
+  populated by M7 #299; `useToast` deferred to #300 (type dependency on
+  `ToastProps`/`ToastActionElement` from `toast.tsx` blocks independent lift).
 
 `packages/ui/` is now an organisational directory per §3.4, not itself a
 package. Split landed in M7 / PR #298:

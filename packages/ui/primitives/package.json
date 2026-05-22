@@ -10,6 +10,7 @@
     "react": "*"
   },
   "devDependencies": {
+    "@types/react": "*",
     "typescript": "*"
   }
 }
