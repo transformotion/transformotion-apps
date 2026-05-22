@@ -36,7 +36,7 @@ React + TypeScript + Tailwind CSS.
 | `Transformotion{Stage}-StockAnalyserTables` | `stock-analyser.portfolio-{stage}`, `stock-analyser.watchlist-{stage}`, `stock-analyser.analysis-cache-{stage}` |
 | `Transformotion{Stage}-StockAnalyserApi` | All Stock Analyser Lambda functions + routes on the platform API Gateway |
 
-Source: `infrastructure/lib/stock-analyser/`
+Source: `apps/stock-analyser/infrastructure/`
 
 ## Lambda functions
 

@@ -39,7 +39,7 @@ React + TypeScript + Tailwind CSS + shadcn/ui.
 | `Transformotion{Stage}-BudgetTrackerApi` | All Budget Tracker Lambda functions, mounted on the shared platform API Gateway |
 | `Transformotion{Stage}-BudgetTrackerWs` | WebSocket API Gateway `budget-tracker-ai-ws-{stage}`, custom Lambda authoriser (Cognito ID token via `?token=`), 4 WS Lambdas, `budget-tracker.ai-connections-{stage}` table |
 
-Source: `infrastructure/lib/budget-tracker/`
+Source: `apps/budget-tracker/infrastructure/`
 
 > Note: Budget Tracker shares the platform API Gateway (`transformotion-api-{stage}`). Routes are mounted under `/api/budget/v1` on the shared gateway's `/api` resource, using the same Cognito authoriser as all other platform routes. The previous note about a separate `budget-tracker-api-{stage}` gateway was incorrect — the CDK stack (`BudgetTrackerApiStack`) accepts the shared `RestApi` and `apiResource` as props and mounts onto them.
 

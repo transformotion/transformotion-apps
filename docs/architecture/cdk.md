@@ -25,7 +25,7 @@ The Storage stack is independent of other stacks (no cross-stack exports or impo
 
 ### Platform stacks
 
-Deployed by `deploy-platform.yml`. Source in `infrastructure/lib/platform/`.
+Deployed by `deploy-platform.yml`. Source in `platform/infrastructure/`.
 
 | Stack name | Class | Contents |
 |---|---|---|
@@ -38,7 +38,7 @@ Deployed by `deploy-platform.yml`. Source in `infrastructure/lib/platform/`.
 
 ### Stock Analyser stacks
 
-Deployed by `deploy-stock-analyser.yml`. Source in `infrastructure/lib/stock-analyser/`.
+Deployed by `deploy-stock-analyser.yml`. Source in `apps/stock-analyser/infrastructure/`.
 
 | Stack name | Class | Contents |
 |---|---|---|
@@ -47,7 +47,7 @@ Deployed by `deploy-stock-analyser.yml`. Source in `infrastructure/lib/stock-ana
 
 ### Budget Tracker stacks
 
-Deployed by `deploy-budget-tracker.yml`. Source in `infrastructure/lib/budget-tracker/`.
+Deployed by `deploy-budget-tracker.yml`. Source in `apps/budget-tracker/infrastructure/`.
 
 | Stack name | Class | Contents |
 |---|---|---|
@@ -245,8 +245,8 @@ Both checks cover the same scope:
 
 When a new app is added to the platform:
 
-1. Create `infrastructure/lib/{app-name}/{app-name}-tables-stack.ts` — DynamoDB tables
-2. Create `infrastructure/lib/{app-name}/{app-name}-api-stack.ts` — Lambda functions, routes added to the shared platform API Gateway (`api` and `authoriser` props from `PlatformApiStack`)
+1. Create `apps/{app-name}/infrastructure/{app-name}-tables-stack.ts` — DynamoDB tables
+2. Create `apps/{app-name}/infrastructure/{app-name}-api-stack.ts` — Lambda functions, routes added to the shared platform API Gateway (`api` and `authoriser` props from `PlatformApiStack`)
 3. Register both stacks in `infrastructure/bin/app.ts` for both `dev` and `prod`
 4. Update `deploy-platform.yml` if tables need to deploy before other stacks
 5. Add a Cognito app client for the new app in `auth-stack.ts`

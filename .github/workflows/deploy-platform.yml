@@ -4,7 +4,7 @@ on:
   push:
     branches: [develop, main]
     paths:
-      - 'infrastructure/lib/platform/**'
+      - 'platform/infrastructure/**'
       - 'infrastructure/bin/**'
       - 'platform/functions/**'
   workflow_dispatch:

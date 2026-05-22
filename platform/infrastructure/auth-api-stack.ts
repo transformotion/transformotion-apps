@@ -51,7 +51,7 @@ export class AuthApiStack extends cdk.Stack {
     // ── Lambda — forgot-provider ─────────────────────────────────────────────
     const fn = new lambdaNodejs.NodejsFunction(this, 'ForgotProviderFn', {
       functionName: `transformotion-forgot-provider-${stage}`,
-      entry: path.join(__dirname, '../../../platform/functions/auth/forgot-provider/src/index.ts'),
+      entry: path.join(__dirname, '../functions/auth/forgot-provider/src/index.ts'),
       handler: 'handler',
       runtime: lambda.Runtime.NODEJS_20_X,
       timeout: cdk.Duration.seconds(15),

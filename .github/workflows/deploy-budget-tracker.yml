@@ -5,7 +5,7 @@ on:
     branches: [develop, main]
     paths:
       - 'apps/budget-tracker/**'
-      - 'infrastructure/lib/budget-tracker/**'
+      - 'apps/budget-tracker/infrastructure/**'
       - 'packages/api-client/**'
       - 'packages/ui/**'
       - 'packages/auth-client/**'

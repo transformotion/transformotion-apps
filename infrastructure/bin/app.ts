@@ -3,22 +3,22 @@ import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
 
 // ── Platform stacks ───────────────────────────────────────────────────────────
-import { NetworkStack }           from '../lib/platform/network-stack';
-import { AuthStack }              from '../lib/platform/auth-stack';
-import { AuthApiStack }           from '../lib/platform/auth-api-stack';
-import { PlatformApiStack }       from '../lib/platform/platform-api-stack';
-import { PlatformTablesStack }    from '../lib/platform/platform-tables-stack';
-import { StorageStack }           from '../lib/platform/storage-stack';
-import { GithubActionsRoleStack } from '../lib/platform/github-actions-role-stack';
+import { NetworkStack }           from '../../platform/infrastructure/network-stack';
+import { AuthStack }              from '../../platform/infrastructure/auth-stack';
+import { AuthApiStack }           from '../../platform/infrastructure/auth-api-stack';
+import { PlatformApiStack }       from '../../platform/infrastructure/platform-api-stack';
+import { PlatformTablesStack }    from '../../platform/infrastructure/platform-tables-stack';
+import { StorageStack }           from '../../platform/infrastructure/storage-stack';
+import { GithubActionsRoleStack } from '../../platform/infrastructure/github-actions-role-stack';
 
 // ── Stock Analyser stacks ─────────────────────────────────────────────────────
-import { StockAnalyserApiStack }    from '../lib/stock-analyser/stock-analyser-api-stack';
-import { StockAnalyserTablesStack } from '../lib/stock-analyser/stock-analyser-tables-stack';
+import { StockAnalyserApiStack }    from '../../apps/stock-analyser/infrastructure/stock-analyser-api-stack';
+import { StockAnalyserTablesStack } from '../../apps/stock-analyser/infrastructure/stock-analyser-tables-stack';
 
 // ── Budget Tracker stacks ─────────────────────────────────────────────────────
-import { BudgetTrackerTablesStack } from '../lib/budget-tracker/budget-tracker-tables-stack';
-import { BudgetTrackerApiStack }    from '../lib/budget-tracker/budget-tracker-api-stack';
-import { BudgetTrackerWsStack }     from '../lib/budget-tracker/budget-tracker-ws-stack';
+import { BudgetTrackerTablesStack } from '../../apps/budget-tracker/infrastructure/budget-tracker-tables-stack';
+import { BudgetTrackerApiStack }    from '../../apps/budget-tracker/infrastructure/budget-tracker-api-stack';
+import { BudgetTrackerWsStack }     from '../../apps/budget-tracker/infrastructure/budget-tracker-ws-stack';
 
 // ── Migration Utilities stacks ────────────────────────────────────────────────
 import { MigrationsApiStack } from '../../migration-utilities/infrastructure/lib/migrations-api-stack';

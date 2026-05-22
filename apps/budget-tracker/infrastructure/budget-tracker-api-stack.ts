@@ -78,7 +78,7 @@ export class BudgetTrackerApiStack extends cdk.Stack {
       forceDockerBundling: false,
     };
 
-    const fnDir = path.join(__dirname, '../../../apps/budget-tracker/functions');
+    const fnDir = path.join(__dirname, '../functions');
 
     // ── budget-transactions-handler ──────────────────────────────────────────
     const txFn = new lambdaNodejs.NodejsFunction(this, 'TransactionsFn', {

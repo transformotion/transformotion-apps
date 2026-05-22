@@ -1,6 +1,5 @@
 packages:
   - 'apps/*'
-  - '!apps/web-vite-backup'
   - 'apps/stock-analyser/functions/*'
   - 'apps/budget-tracker/functions/*'
   - 'packages/*'
