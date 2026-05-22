@@ -13,6 +13,7 @@
   "dependencies": {
     "@transformotion/api-client": "workspace:*",
     "@transformotion/cache": "workspace:*",
+    "@transformotion/data-access": "workspace:*",
     "@transformotion/logger": "workspace:*",
     "@transformotion/ui-error-boundaries": "workspace:*",
     "@transformotion/ui-primitives": "workspace:*",

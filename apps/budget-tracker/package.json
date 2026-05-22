@@ -43,6 +43,7 @@
     "@radix-ui/react-tooltip": "1.2.8",
     "@transformotion/api-client": "workspace:*",
     "@transformotion/cache": "workspace:*",
+    "@transformotion/data-access": "workspace:*",
     "@transformotion/logger": "workspace:*",
     "@transformotion/ui-error-boundaries": "workspace:*",
     "@transformotion/ui-primitives": "workspace:*",

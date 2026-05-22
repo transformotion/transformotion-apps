@@ -47,8 +47,8 @@ The repository contains the following top-level directories:
 
 - `apps/` — four subdirectories: `budget-tracker/`, `launchpad/`,
   `stock-analyser/`, `web/` (0-LOC shell, M3 cleanup)
-- `packages/` — eight subdirectories: `api-client/`, `auth-client/`,
-  `budget-domain/`, `cache/`, `lambda-middleware/`, `logger/`, `runtime-config/`, `ui/`
+- `packages/` — nine subdirectories: `api-client/`, `auth-client/`,
+  `budget-domain/`, `cache/`, `data-access/`, `lambda-middleware/`, `logger/`, `runtime-config/`, `ui/`
   (organisational directory; two sub-packages: `ui-error-boundaries`,
   `ui-primitives`). `cycle-engine/` was removed — see Section 1.5.
 - `infrastructure/` — CDK app with `bin/app.ts` entrypoint and
@@ -150,6 +150,12 @@ package. Split landed in M7 / PR #298:
 - `packages/ui/error-boundaries/` (`@transformotion/ui-error-boundaries`) —
   houses `TabErrorBoundary`; 6 vitest tests; 2 consumers
   (`budget-tracker-app.tsx`, `apps/stock-analyser/app/page.tsx`).
+
+`packages/data-access/` (`@transformotion/data-access`) was created by M7 / PR #292:
+- Exports: `Repository<T,ID>`, `RepositoryOptions`, `QueryOptions<T>`, `PaginatedResult<T>` interfaces
+- Lifted from `apps/*/lib/repositories/base-repository.ts` (byte-identical in both apps)
+- BT's concrete implementations use domain-specific interfaces from `@transformotion/budget-domain`; none directly implement `Repository<T,ID>`
+- Both apps' `lib/repositories/index.ts` now re-exports types from the package
 
 `packages/logger/` (`@transformotion/logger`) was created by M7 / PR #291:
 - Exports: `Logger`, `LogLevel`, `LogContext`, `LogEntry`, `LoggerConfig` interfaces; `ConsoleLogger`, `createLogger`, `getLogger`
