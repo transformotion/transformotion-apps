@@ -18,7 +18,7 @@ import {
   Check,
   Home,
 } from "lucide-react"
-import { ConfirmationModal } from "@/components/ui/design-system"
+import { ConfirmationModal } from "@transformotion/ui-primitives"
 import { useBudgetStore, type BudgetTabId } from "@/stores/budget-tracker/use-budget-store"
 import { useAuthStore } from "@/stores/auth/use-auth-store"
 

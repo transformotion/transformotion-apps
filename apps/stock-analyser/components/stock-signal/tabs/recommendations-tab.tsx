@@ -17,7 +17,7 @@ import {
   TextToggle,
   type Verdict,
   type CycleStage,
-} from "@/components/ui/design-system"
+} from "@transformotion/ui-primitives"
 import { ChevronRight, ChevronDown, Sparkles, Search, Loader2, Stars, AlertCircle } from "lucide-react"
 import { useClaude } from "@/lib/hooks"
 import { cn } from "@/lib/utils"

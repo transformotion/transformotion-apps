@@ -129,11 +129,20 @@ frontend, persistence, contracts, and build pipeline.
 
 **Status: Confirmed (updated by M7 cycle-data PR)**
 
-One sub-package in `packages/ui/` remains a stub:
+No sub-packages in `packages/ui/` remain as stubs; both are fully populated:
 
-- `packages/ui/primitives/` (`@transformotion/ui-primitives`) — partially
-  populated by M7 #299; `useToast` deferred to #300 (type dependency on
-  `ToastProps`/`ToastActionElement` from `toast.tsx` blocks independent lift).
+- `packages/ui/primitives/` (`@transformotion/ui-primitives`) — fully populated
+  by M7 #298/#299/#300. Contains: 56 shadcn/ui components (lifted from
+  `apps/*/components/ui/`), `useIsMobile` hook, `useToast`/`toast` hooks
+  (co-lifted with `toast.tsx` by #300). All 28 Radix UI packages, plus
+  `clsx`, `tailwind-merge`, `lucide-react`, `class-variance-authority`,
+  `sonner`, `vaul`, `recharts`, and other UI deps are direct dependencies.
+  Note: `cn()` exists in both this package (`src/lib/utils.ts`) and in each
+  app's `lib/utils.ts` by design — the package copy serves lifted components;
+  the app copies serve app-level code and the v0 sync workflow.
+- `packages/ui/error-boundaries/` (`@transformotion/ui-error-boundaries`) —
+  houses `TabErrorBoundary`; 6 vitest tests; 2 consumers
+  (`budget-tracker-app.tsx`, `apps/stock-analyser/app/page.tsx`).
 
 `packages/ui/` is now an organisational directory per §3.4, not itself a
 package. Split landed in M7 / PR #298:

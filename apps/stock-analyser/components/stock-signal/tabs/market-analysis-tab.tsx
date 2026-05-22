@@ -12,8 +12,8 @@ import {
   ModeToggle,
   TextToggle,
   type Signal,
-} from "@/components/ui/design-system"
-import { Spinner } from "@/components/ui/spinner"
+} from "@transformotion/ui-primitives"
+import { Spinner } from "@transformotion/ui-primitives"
 import { 
   TrendingUp, 
   BarChart3, 

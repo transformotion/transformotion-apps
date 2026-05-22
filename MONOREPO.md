@@ -45,7 +45,7 @@ transformotion-apps/
 │   ├── runtime-config/                    # Runtime profile + provider resolution (@transformotion/runtime-config)
 │   └── ui/                                # Organisational directory (not itself a package; §3.4)
 │       ├── error-boundaries/              # @transformotion/ui-error-boundaries
-│       └── primitives/                    # @transformotion/ui-primitives (stub — populated by #300)
+│       └── primitives/                    # @transformotion/ui-primitives (56 shadcn components + hooks)
 │
 ├── infrastructure/                        # AWS CDK
 │   ├── bin/
@@ -285,6 +285,6 @@ organisational, not itself a package.
 
 - **`packages/ui/` sub-packages.** `packages/ui/` is an organisational
   directory, not itself a package. Sub-packages: `@transformotion/ui-error-boundaries`
-  (houses `TabErrorBoundary`) and `@transformotion/ui-primitives` (stub —
-  populated by #300). `packages/cycle-engine/` was deleted —
+  (houses `TabErrorBoundary`) and `@transformotion/ui-primitives` (56 shadcn
+  components + hooks; fully populated by M7 #298/#299/#300). `packages/cycle-engine/` was deleted —
   its implementation migrated to `apps/stock-analyser/lib/cycle/`.

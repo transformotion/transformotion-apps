@@ -24,7 +24,7 @@ import {
   type Verdict,
   type TrendSignal,
   type CycleStage,
-} from "@/components/ui/design-system"
+} from "@transformotion/ui-primitives"
 import { Wordmark, BrandMark } from "@/components/brand/wordmark"
 import { useState } from "react"
 import {

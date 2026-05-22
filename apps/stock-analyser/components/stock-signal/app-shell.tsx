@@ -21,7 +21,7 @@ import {
   Home,
   FileText,
 } from "lucide-react"
-import { ConfirmationModal } from "@/components/ui/design-system"
+import { ConfirmationModal } from "@transformotion/ui-primitives"
 
 // ============================================================================
 // TYPES

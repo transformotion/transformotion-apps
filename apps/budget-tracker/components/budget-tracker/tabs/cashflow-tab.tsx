@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react"
 import { useBudgetStore } from "@/stores/budget-tracker/use-budget-store"
-import { PageHeader, Card, EmptyState, PillSelector } from "@/components/ui/design-system"
+import { PageHeader, Card, EmptyState, PillSelector } from "@transformotion/ui-primitives"
 import { BarChart3 } from "lucide-react"
 import { CATEGORY_COLORS } from "../data/category-colors"
 import { getActiveCategories, getCategoryName, getSubcategoryName, isCapital, excludeFromCashflow } from "@/lib/categories"
