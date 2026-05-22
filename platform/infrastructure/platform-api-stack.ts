@@ -179,7 +179,11 @@ export class PlatformApiStack extends cdk.Stack {
     if (wsApiEndpoint && wsApiId) {
       claudeProxyFn.addToRolePolicy(new iam.PolicyStatement({
         actions:   ['execute-api:ManageConnections'],
-        resources: [`arn:aws:execute-api:${this.region}:${this.account}:${wsApiId}/${stage}/@connections/*`],
+        // Resource pattern matches all method+route combinations under the stage.
+        // The @connections management API is reached via POST /<stage>/@connections/{connectionId},
+        // so the pattern must cover the HTTP method segment.
+        // Matches the same pattern used by budget-ai-handler in budget-tracker-api-stack.ts.
+        resources: [`arn:aws:execute-api:${this.region}:${this.account}:${wsApiId}/${stage}/*`],
       }));
     }
 
