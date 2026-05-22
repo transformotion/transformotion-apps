@@ -82,12 +82,24 @@ jobs:
 
       - name: Wait for PlatformWs stack (handles first-deploy race; see #295)
         run: |
-          if aws cloudformation describe-stacks --stack-name TransformotionDev-PlatformWs >/dev/null 2>&1; then
-            echo "PlatformWs exists, proceeding"
+          STACK=TransformotionDev-PlatformWs
+          if aws cloudformation describe-stacks --stack-name "$STACK" >/dev/null 2>&1; then
+            echo "$STACK exists, proceeding"
           else
-            echo "PlatformWs not found, waiting..."
-            aws cloudformation wait stack-exists --stack-name TransformotionDev-PlatformWs
-            aws cloudformation wait stack-create-complete --stack-name TransformotionDev-PlatformWs
+            echo "$STACK not found, waiting up to 20 min..."
+            ATTEMPTS=0
+            until aws cloudformation describe-stacks --stack-name "$STACK" >/dev/null 2>&1; do
+              ATTEMPTS=$((ATTEMPTS + 1))
+              if [ "$ATTEMPTS" -ge 40 ]; then
+                echo "ERROR: $STACK not found after $((ATTEMPTS * 30))s"
+                exit 1
+              fi
+              echo "Attempt $ATTEMPTS/40: waiting 30s..."
+              sleep 30
+            done
+            echo "$STACK found, waiting for CREATE_COMPLETE..."
+            aws cloudformation wait stack-create-complete --stack-name "$STACK"
+            echo "$STACK is ready"
           fi
 
       - name: Extract WebSocket URL from CDK output
@@ -185,12 +197,24 @@ jobs:
 
       - name: Wait for PlatformWs stack (handles first-deploy race; see #295)
         run: |
-          if aws cloudformation describe-stacks --stack-name TransformotionProd-PlatformWs >/dev/null 2>&1; then
-            echo "PlatformWs exists, proceeding"
+          STACK=TransformotionProd-PlatformWs
+          if aws cloudformation describe-stacks --stack-name "$STACK" >/dev/null 2>&1; then
+            echo "$STACK exists, proceeding"
           else
-            echo "PlatformWs not found, waiting..."
-            aws cloudformation wait stack-exists --stack-name TransformotionProd-PlatformWs
-            aws cloudformation wait stack-create-complete --stack-name TransformotionProd-PlatformWs
+            echo "$STACK not found, waiting up to 20 min..."
+            ATTEMPTS=0
+            until aws cloudformation describe-stacks --stack-name "$STACK" >/dev/null 2>&1; do
+              ATTEMPTS=$((ATTEMPTS + 1))
+              if [ "$ATTEMPTS" -ge 40 ]; then
+                echo "ERROR: $STACK not found after $((ATTEMPTS * 30))s"
+                exit 1
+              fi
+              echo "Attempt $ATTEMPTS/40: waiting 30s..."
+              sleep 30
+            done
+            echo "$STACK found, waiting for CREATE_COMPLETE..."
+            aws cloudformation wait stack-create-complete --stack-name "$STACK"
+            echo "$STACK is ready"
           fi
 
       - name: Extract WebSocket URL from CDK output
