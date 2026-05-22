@@ -11,7 +11,7 @@ import { PortfolioTab } from "@/components/stock-signal/tabs/portfolio-tab"
 import { WatchlistTab } from "@/components/stock-signal/tabs/watchlist-tab"
 import { AuthGuard } from "@/components/providers/auth-guard"
 import { useAuthStore } from "@/stores/auth/use-auth-store"
-import { TabErrorBoundary } from "@transformotion/ui"
+import { TabErrorBoundary } from "@transformotion/ui-error-boundaries"
 
 function TabRouter() {
   const { activeTab, analyserTicker, analyserSource } = useNavigation()

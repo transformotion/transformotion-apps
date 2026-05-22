@@ -48,8 +48,9 @@ The repository contains the following top-level directories:
 - `apps/` — four subdirectories: `budget-tracker/`, `launchpad/`,
   `stock-analyser/`, `web/` (0-LOC shell, M3 cleanup)
 - `packages/` — six subdirectories: `api-client/`, `auth-client/`,
-  `budget-domain/`, `lambda-middleware/`, `runtime-config/`, `ui/` (stub).
-  `cycle-engine/` was removed — see Section 1.5.
+  `budget-domain/`, `lambda-middleware/`, `runtime-config/`, `ui/`
+  (organisational directory; two sub-packages: `ui-error-boundaries`,
+  `ui-primitives`). `cycle-engine/` was removed — see Section 1.5.
 - `infrastructure/` — CDK app with `bin/app.ts` entrypoint and
   `lib/{platform,stock-analyser,budget-tracker}/` per-scope subdirs
 - `platform/functions/` — platform Lambda source: `accounts/`, `auth/` (with
@@ -128,10 +129,17 @@ frontend, persistence, contracts, and build pipeline.
 
 **Status: Confirmed (updated by M7 cycle-data PR)**
 
-One package remains in `packages/` as a stub:
+One sub-package in `packages/ui/` remains a stub:
 
-- `packages/ui/` — minimal stub (single `@transformotion/ui` package;
-  §3.4-compliant split into sub-packages tracked in M7 #298)
+- `packages/ui/primitives/` (`@transformotion/ui-primitives`) — stub;
+  populated by M7 #300.
+
+`packages/ui/` is now an organisational directory per §3.4, not itself a
+package. Split landed in M7 / PR #298:
+
+- `packages/ui/error-boundaries/` (`@transformotion/ui-error-boundaries`) —
+  houses `TabErrorBoundary`; 6 vitest tests; 2 consumers
+  (`budget-tracker-app.tsx`, `apps/stock-analyser/app/page.tsx`).
 
 Two packages were previously described as stubs but are fully
 implemented:

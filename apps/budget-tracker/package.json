@@ -42,7 +42,7 @@
     "@radix-ui/react-toggle-group": "1.1.11",
     "@radix-ui/react-tooltip": "1.2.8",
     "@transformotion/api-client": "workspace:*",
-    "@transformotion/ui": "workspace:*",
+    "@transformotion/ui-error-boundaries": "workspace:*",
     "@transformotion/auth-client": "workspace:*",
     "@transformotion/budget-domain": "workspace:*",
     "@transformotion/runtime-config": "workspace:*",

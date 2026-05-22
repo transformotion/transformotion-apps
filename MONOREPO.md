@@ -43,7 +43,9 @@ transformotion-apps/
 │   ├── budget-domain/                     # Budget Tracker domain types and helpers
 │   ├── lambda-middleware/                 # Shared withAuth/withAuthOnly wrappers
 │   ├── runtime-config/                    # Runtime profile + provider resolution (@transformotion/runtime-config)
-│   └── ui/                                # Shared UI components (stub — minimal)
+│   └── ui/                                # Organisational directory (not itself a package; §3.4)
+│       ├── error-boundaries/              # @transformotion/ui-error-boundaries
+│       └── primitives/                    # @transformotion/ui-primitives (stub — populated by #300)
 │
 ├── infrastructure/                        # AWS CDK
 │   ├── bin/
@@ -147,6 +149,9 @@ that lands them.
 - `apps/budget-tracker/functions/*` — explicit nested glob for budget
   tracker Lambdas
 - `packages/*`
+- `packages/ui/*` — explicit nested glob for `packages/ui/` sub-packages
+  (`ui-error-boundaries`, `ui-primitives`); `packages/ui/` is an org directory,
+  not itself a package, so its children are not covered by `packages/*`
 - `platform/functions/*`
 - `platform/functions/auth/*` — explicit nested glob because `platform/functions/auth/`
   contains its own per-Lambda workspaces
@@ -278,7 +283,8 @@ organisational, not itself a package.
   `platform.` prefix it is functionally stock-analyser data; M2.1
   ratifies the reclassification as a Stage 0b decision.
 
-- **Stub packages.** `packages/ui/` is a minimal stub. Its disposition
-  (build out or retire as orphan) is unresolved; consider before importing
-  anything substantive from it. `packages/cycle-engine/` was deleted —
+- **`packages/ui/` sub-packages.** `packages/ui/` is an organisational
+  directory, not itself a package. Sub-packages: `@transformotion/ui-error-boundaries`
+  (houses `TabErrorBoundary`) and `@transformotion/ui-primitives` (stub —
+  populated by #300). `packages/cycle-engine/` was deleted —
   its implementation migrated to `apps/stock-analyser/lib/cycle/`.

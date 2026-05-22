@@ -155,9 +155,9 @@ importers:
       '@transformotion/runtime-config':
         specifier: workspace:*
         version: link:../../packages/runtime-config
-      '@transformotion/ui':
+      '@transformotion/ui-error-boundaries':
         specifier: workspace:*
-        version: link:../../packages/ui
+        version: link:../../packages/ui/error-boundaries
       autoprefixer:
         specifier: ^10.4.20
         version: 10.5.0(postcss@8.5.10)
@@ -653,9 +653,9 @@ importers:
       '@transformotion/runtime-config':
         specifier: workspace:*
         version: link:../../packages/runtime-config
-      '@transformotion/ui':
+      '@transformotion/ui-error-boundaries':
         specifier: workspace:*
-        version: link:../../packages/ui
+        version: link:../../packages/ui/error-boundaries
       '@vercel/analytics':
         specifier: 1.6.1
         version: 1.6.1(next@16.2.0(@babel/core@7.29.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(react@19.2.5)
@@ -997,7 +997,7 @@ importers:
         specifier: ^1
         version: 1.6.1(@types/node@22.19.17)(jsdom@29.1.1)(lightningcss@1.32.0)
 
-  packages/ui:
+  packages/ui/error-boundaries:
     dependencies:
       react:
         specifier: '*'
@@ -1021,6 +1021,16 @@ importers:
       vitest:
         specifier: '*'
         version: 1.6.1(@types/node@22.19.17)(jsdom@29.1.1)(lightningcss@1.32.0)
+
+  packages/ui/primitives:
+    dependencies:
+      react:
+        specifier: '*'
+        version: 19.2.5
+    devDependencies:
+      typescript:
+        specifier: '*'
+        version: 5.7.3
 
   platform/functions/accounts:
     dependencies:

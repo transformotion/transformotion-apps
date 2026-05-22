@@ -4,6 +4,7 @@ packages:
   - 'apps/stock-analyser/functions/*'
   - 'apps/budget-tracker/functions/*'
   - 'packages/*'
+  - 'packages/ui/*'
   - 'platform/functions/*'
   - 'platform/functions/auth/*'
   - 'infrastructure'
