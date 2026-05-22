@@ -1,12 +1,4 @@
-/**
- * Memory Cache Service
- * 
- * In-memory + localStorage TTL cache.
- * Replace with DynamoTTLCacheService for production.
- */
-
 import { CacheService, CacheConfig, CacheEntry } from './index'
-import { getConfig } from '../../config'
 
 const DEFAULT_TTL = 300 // 5 minutes
 const STORAGE_PREFIX = 'cache:'
@@ -31,8 +23,7 @@ export class MemoryCacheService implements CacheService {
 
   async get<T>(key: string): Promise<T | null> {
     const fullKey = this.getFullKey(key)
-    
-    // Check memory first
+
     const memEntry = this.memory.get(fullKey) as CacheEntry<T> | undefined
     if (memEntry) {
       if (this.isExpired(memEntry)) {
@@ -42,20 +33,18 @@ export class MemoryCacheService implements CacheService {
       return memEntry.value
     }
 
-    // Fall back to localStorage
     if (typeof window === 'undefined') return null
-    
+
     try {
       const stored = localStorage.getItem(fullKey)
       if (!stored) return null
-      
+
       const entry = JSON.parse(stored) as CacheEntry<T>
       if (this.isExpired(entry)) {
         localStorage.removeItem(fullKey)
         return null
       }
-      
-      // Promote to memory
+
       this.memory.set(fullKey, entry)
       return entry.value
     } catch {
@@ -67,17 +56,15 @@ export class MemoryCacheService implements CacheService {
     const fullKey = this.getFullKey(key)
     const now = Date.now()
     const ttlMs = (ttl || this.defaultTTL) * 1000
-    
+
     const entry: CacheEntry<T> = {
       value,
       expiresAt: now + ttlMs,
       createdAt: now,
     }
 
-    // Store in memory
     this.memory.set(fullKey, entry)
 
-    // Persist to localStorage
     if (typeof window !== 'undefined') {
       try {
         localStorage.setItem(fullKey, JSON.stringify(entry))
@@ -90,7 +77,7 @@ export class MemoryCacheService implements CacheService {
   async delete(key: string): Promise<void> {
     const fullKey = this.getFullKey(key)
     this.memory.delete(fullKey)
-    
+
     if (typeof window !== 'undefined') {
       try {
         localStorage.removeItem(fullKey)
@@ -102,15 +89,13 @@ export class MemoryCacheService implements CacheService {
 
   async deleteByPrefix(prefix: string): Promise<void> {
     const fullPrefix = this.getFullKey(prefix)
-    
-    // Clear from memory
+
     for (const key of this.memory.keys()) {
       if (key.startsWith(fullPrefix)) {
         this.memory.delete(key)
       }
     }
 
-    // Clear from localStorage
     if (typeof window !== 'undefined') {
       try {
         const keysToDelete: string[] = []
@@ -134,11 +119,10 @@ export class MemoryCacheService implements CacheService {
 
   async ttlRemaining(key: string): Promise<number> {
     const fullKey = this.getFullKey(key)
-    
+
     const entry = this.memory.get(fullKey)
     if (entry) {
-      const remaining = Math.max(0, Math.floor((entry.expiresAt - Date.now()) / 1000))
-      return remaining
+      return Math.max(0, Math.floor((entry.expiresAt - Date.now()) / 1000))
     }
 
     if (typeof window !== 'undefined') {
@@ -146,8 +130,7 @@ export class MemoryCacheService implements CacheService {
         const stored = localStorage.getItem(fullKey)
         if (stored) {
           const parsed = JSON.parse(stored) as CacheEntry<unknown>
-          const remaining = Math.max(0, Math.floor((parsed.expiresAt - Date.now()) / 1000))
-          return remaining
+          return Math.max(0, Math.floor((parsed.expiresAt - Date.now()) / 1000))
         }
       } catch {
         // Ignore
@@ -158,10 +141,8 @@ export class MemoryCacheService implements CacheService {
   }
 
   async clear(): Promise<void> {
-    // Clear memory
     this.memory.clear()
 
-    // Clear localStorage entries with our prefix
     if (typeof window !== 'undefined') {
       try {
         const keysToDelete: string[] = []
@@ -190,7 +171,6 @@ export class MemoryCacheService implements CacheService {
   }
 }
 
-// Factory function
 export function createCacheService(prefix: string, defaultTTL?: number): CacheService {
   return new MemoryCacheService({
     prefix,

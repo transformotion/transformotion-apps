@@ -152,6 +152,9 @@ importers:
       '@transformotion/budget-domain':
         specifier: workspace:*
         version: link:../../packages/budget-domain
+      '@transformotion/cache':
+        specifier: workspace:*
+        version: link:../../packages/cache
       '@transformotion/runtime-config':
         specifier: workspace:*
         version: link:../../packages/runtime-config
@@ -653,6 +656,9 @@ importers:
       '@transformotion/auth-client':
         specifier: workspace:*
         version: link:../../packages/auth-client
+      '@transformotion/cache':
+        specifier: workspace:*
+        version: link:../../packages/cache
       '@transformotion/runtime-config':
         specifier: workspace:*
         version: link:../../packages/runtime-config
@@ -975,6 +981,15 @@ importers:
       vitest:
         specifier: ^1.0.0
         version: 1.6.1(@types/node@22.19.17)(jsdom@29.1.1)(lightningcss@1.32.0)
+
+  packages/cache:
+    devDependencies:
+      '@types/node':
+        specifier: ^22
+        version: 22.19.17
+      typescript:
+        specifier: '*'
+        version: 5.7.3
 
   packages/lambda-middleware:
     devDependencies:
