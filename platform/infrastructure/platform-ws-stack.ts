@@ -10,45 +10,51 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as lambdaNodejs from 'aws-cdk-lib/aws-lambda-nodejs';
 import { Construct } from 'constructs';
 
-export interface BudgetTrackerWsStackProps extends cdk.StackProps {
+export interface PlatformWsStackProps extends cdk.StackProps {
   userPool: cognito.IUserPool;
   stage: 'dev' | 'prod';
 }
 
 /**
- * BudgetTrackerWsStack — WebSocket API Gateway for the async AI Review service.
+ * PlatformWsStack — shared WebSocket API Gateway for async AI services.
+ *
+ * Serves all apps (budget-tracker, stock-analyser, …). The custom Lambda
+ * authoriser validates a Cognito ID token from the ?token= query parameter
+ * and checks account membership for the app identified by the ?app= parameter.
  *
  * Routes:
- *   $connect    — custom Lambda authoriser validates Cognito ID token from query string
+ *   $connect    — custom Lambda authoriser validates Cognito ID token
  *   $disconnect — cleans up connection state
- *   $default    — receives client-sent messages (PR 4 will use for cancellation)
+ *   $default    — receives client-sent messages (init ping, etc.)
  *
  * DynamoDB table:
- *   budget-tracker.ai-connections-{stage}
+ *   platform.ws-connections-{stage}
  *   PK: connectionId
  *   GSI: userId-index (for cleanup queries)
  *   TTL: expiresAt (stale connection cleanup)
  *
- * Output:
- *   WssUrl — wss:// URL for the deployed stage (consumed by CI to build frontend)
+ * Outputs:
+ *   WssUrl         — wss:// URL for the deployed stage
+ *   WsApiEndpoint  — https:// management endpoint for ApiGatewayManagementApi
  */
-export class BudgetTrackerWsStack extends cdk.Stack {
+export class PlatformWsStack extends cdk.Stack {
   public readonly webSocketApi: apigatewayv2.WebSocketApi;
   public readonly webSocketStage: apigatewayv2.WebSocketStage;
   public readonly connectionsTable: dynamodb.Table;
+  public readonly wsApiEndpoint: string;
 
-  constructor(scope: Construct, id: string, props: BudgetTrackerWsStackProps) {
+  constructor(scope: Construct, id: string, props: PlatformWsStackProps) {
     super(scope, id, props);
 
     const { stage, userPool } = props;
 
-    cdk.Tags.of(this).add('app',         'budget-tracker');
+    cdk.Tags.of(this).add('app',         'platform');
     cdk.Tags.of(this).add('environment', stage);
 
     // ── Connection state table ────────────────────────────────────────────────
 
-    this.connectionsTable = new dynamodb.Table(this, 'AiConnectionsTable', {
-      tableName:     `budget-tracker.ai-connections-${stage}`,
+    this.connectionsTable = new dynamodb.Table(this, 'WsConnectionsTable', {
+      tableName:     `platform.ws-connections-${stage}`,
       partitionKey:  { name: 'connectionId', type: dynamodb.AttributeType.STRING },
       billingMode:   dynamodb.BillingMode.PAY_PER_REQUEST,
       timeToLiveAttribute: 'expiresAt',
@@ -72,26 +78,28 @@ export class BudgetTrackerWsStack extends cdk.Stack {
 
     const fnDir = path.join(__dirname, '../functions');
 
-    // ── Custom authoriser — validates Cognito ID token from query string ──────
+    // ── Custom authoriser ─────────────────────────────────────────────────────
     //
     // API Gateway v2 WebSocket does not support CognitoUserPoolsAuthorizer.
-    // A custom Lambda authoriser reads ?token= and ?accountId= from the
-    // $connect query string, verifies the JWT against Cognito JWKS, and
-    // returns an IAM policy.
+    // Reads ?token= (Cognito ID token), ?accountId=, and ?app= from the
+    // $connect query string. Validates JWT against Cognito JWKS and checks
+    // accounts[app] membership for the requested accountId.
 
     const authorizerFn = new lambdaNodejs.NodejsFunction(this, 'AuthorizerFn', {
-      functionName: `budget-ai-ws-authorizer-${stage}`,
-      entry:        path.join(fnDir, 'ai-ws-authorizer/src/index.ts'),
+      functionName: `platform-ws-authorizer-${stage}`,
+      entry:        path.join(fnDir, 'ws-authorizer/src/index.ts'),
       handler:      'handler',
       runtime:      lambda.Runtime.NODEJS_20_X,
       timeout:      cdk.Duration.seconds(10),
       memorySize:   256,
       environment: {
         COGNITO_USER_POOL_ID: userPool.userPoolId,
+        APP_NAME:             'budget-tracker',
+        PERMITTED_APPS:       'budget-tracker,stock-analyser',
       },
       bundling: {
         ...bundling,
-        // jose must be bundled — it is not available in the Lambda runtime
+        // jose must be bundled — not available in the Lambda runtime
         externalModules: ['@aws-sdk/*'],
       },
     });
@@ -103,8 +111,8 @@ export class BudgetTrackerWsStack extends cdk.Stack {
     // ── $connect Lambda ───────────────────────────────────────────────────────
 
     const connectFn = new lambdaNodejs.NodejsFunction(this, 'ConnectFn', {
-      functionName: `budget-ai-ws-connect-${stage}`,
-      entry:        path.join(fnDir, 'ai-ws-connect/src/index.ts'),
+      functionName: `platform-ws-connect-${stage}`,
+      entry:        path.join(fnDir, 'ws-connect/src/index.ts'),
       handler:      'handler',
       runtime:      lambda.Runtime.NODEJS_20_X,
       timeout:      cdk.Duration.seconds(10),
@@ -117,8 +125,8 @@ export class BudgetTrackerWsStack extends cdk.Stack {
     // ── $disconnect Lambda ────────────────────────────────────────────────────
 
     const disconnectFn = new lambdaNodejs.NodejsFunction(this, 'DisconnectFn', {
-      functionName: `budget-ai-ws-disconnect-${stage}`,
-      entry:        path.join(fnDir, 'ai-ws-disconnect/src/index.ts'),
+      functionName: `platform-ws-disconnect-${stage}`,
+      entry:        path.join(fnDir, 'ws-disconnect/src/index.ts'),
       handler:      'handler',
       runtime:      lambda.Runtime.NODEJS_20_X,
       timeout:      cdk.Duration.seconds(10),
@@ -131,8 +139,8 @@ export class BudgetTrackerWsStack extends cdk.Stack {
     // ── $default Lambda ───────────────────────────────────────────────────────
 
     const defaultFn = new lambdaNodejs.NodejsFunction(this, 'DefaultFn', {
-      functionName: `budget-ai-ws-default-${stage}`,
-      entry:        path.join(fnDir, 'ai-ws-default/src/index.ts'),
+      functionName: `platform-ws-default-${stage}`,
+      entry:        path.join(fnDir, 'ws-default/src/index.ts'),
       handler:      'handler',
       runtime:      lambda.Runtime.NODEJS_20_X,
       timeout:      cdk.Duration.seconds(10),
@@ -142,8 +150,8 @@ export class BudgetTrackerWsStack extends cdk.Stack {
 
     // ── WebSocket API + routes ────────────────────────────────────────────────
 
-    this.webSocketApi = new apigatewayv2.WebSocketApi(this, 'AiWebSocketApi', {
-      apiName: `budget-tracker-ai-ws-${stage}`,
+    this.webSocketApi = new apigatewayv2.WebSocketApi(this, 'PlatformWsApi', {
+      apiName: `platform-ws-${stage}`,
       connectRouteOptions: {
         integration: new integrations.WebSocketLambdaIntegration('ConnectInt', connectFn),
         authorizer:  wsAuthorizer,
@@ -156,30 +164,39 @@ export class BudgetTrackerWsStack extends cdk.Stack {
       },
     });
 
-    this.webSocketStage = new apigatewayv2.WebSocketStage(this, 'AiWebSocketStage', {
+    this.webSocketStage = new apigatewayv2.WebSocketStage(this, 'PlatformWsStage', {
       webSocketApi: this.webSocketApi,
       stageName:    stage,
       autoDeploy:   true,
     });
 
-    // Allow $default to push messages back to connected clients (e.g. 'connected' reply to init ping)
+    // Allow $default to push messages back to connected clients
     defaultFn.addToRolePolicy(new iam.PolicyStatement({
       actions:   ['execute-api:ManageConnections'],
       resources: [`arn:aws:execute-api:${this.region}:${this.account}:${this.webSocketApi.apiId}/${stage}/*`],
     }));
 
+    // Management endpoint for ApiGatewayManagementApiClient (https://, not wss://)
+    this.wsApiEndpoint = `https://${this.webSocketApi.apiId}.execute-api.${this.region}.amazonaws.com/${stage}`;
+
     // ── Stack outputs ─────────────────────────────────────────────────────────
 
     new cdk.CfnOutput(this, 'WssUrl', {
       value:       this.webSocketStage.url,
-      description: 'WebSocket URL for the AI Review service (used by frontend)',
-      exportName:  `BudgetTrackerWss-${stage}-Url`,
+      description: 'WebSocket URL for platform WS service (consumed by CI to build frontends)',
+      exportName:  `PlatformWs-${stage}-Url`,
+    });
+
+    new cdk.CfnOutput(this, 'WsApiEndpoint', {
+      value:       this.wsApiEndpoint,
+      description: 'HTTPS management endpoint for ApiGatewayManagementApi',
+      exportName:  `PlatformWs-${stage}-Endpoint`,
     });
 
     new cdk.CfnOutput(this, 'ConnectionsTableName', {
       value:       this.connectionsTable.tableName,
       description: 'DynamoDB table for WebSocket connection state',
-      exportName:  `BudgetTrackerWss-${stage}-ConnectionsTableName`,
+      exportName:  `PlatformWs-${stage}-ConnectionsTableName`,
     });
   }
 }

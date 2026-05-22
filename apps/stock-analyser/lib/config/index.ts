@@ -19,10 +19,10 @@ import {
   type AppsConfig,
 } from '@transformotion/runtime-config'
 
-// AIConfig stays per-app until #295 resolves the wssUrl drift between SA and BT
 export interface AIConfig {
   provider: 'mock' | 'claude'
   model: string
+  wssUrl: string
 }
 
 export interface AppConfig {
@@ -68,7 +68,8 @@ function loadConfig(): AppConfig {
         profileDefaults: { mock: 'mock', live: 'claude' },
         validValues: ['mock', 'claude'] as const,
       }),
-      model: process.env.NEXT_PUBLIC_AI_MODEL || 'claude-3-sonnet',
+      model:   process.env.NEXT_PUBLIC_AI_MODEL || 'claude-3-sonnet',
+      wssUrl:  process.env.NEXT_PUBLIC_CLAUDE_WSS_URL || '',
     },
     storage: {
       provider: selectProvider({
@@ -85,10 +86,8 @@ function loadConfig(): AppConfig {
       cloudwatchLogGroup: process.env.CLOUDWATCH_LOG_GROUP,
     },
     claude: {
-      apiUrl: process.env.NEXT_PUBLIC_CLAUDE_API_URL || '/api/claude',
+      apiUrl:   process.env.NEXT_PUBLIC_CLAUDE_API_URL || '/api/claude',
       cacheUrl: process.env.NEXT_PUBLIC_CLAUDE_CACHE_URL || '/analysis-cache',
-      pollInterval: parseInt(process.env.NEXT_PUBLIC_CLAUDE_POLL_INTERVAL || '2500', 10),
-      maxPollTime: parseInt(process.env.NEXT_PUBLIC_CLAUDE_MAX_POLL_TIME || '500000', 10),
     },
     features: {
       debugMode: process.env.NEXT_PUBLIC_DEBUG_MODE === 'true',

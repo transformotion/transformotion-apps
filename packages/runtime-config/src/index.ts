@@ -49,8 +49,6 @@ export interface LoggingConfig {
 export interface ClaudeConfig {
   apiUrl: string
   cacheUrl: string
-  pollInterval: number
-  maxPollTime: number
 }
 
 export interface FeaturesConfig {

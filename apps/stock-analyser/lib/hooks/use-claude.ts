@@ -13,9 +13,9 @@
 
 import { useState, useCallback, useRef } from 'react'
 import { getConfig } from '../config'
-import { ApiError } from '@transformotion/api-client'
 import { getStockSignalClient, stockAnalyserClient } from '../api'
 import { dynamoCache } from '../services/cache/dynamo-ttl-cache'
+import { authService } from '../services/auth'
 
 export interface ClaudeRequest {
   prompt: string
@@ -52,10 +52,6 @@ export interface ClaudeJobStatus<T = unknown> {
 }
 
 export interface UseClaudeOptions {
-  /** Polling interval in ms (default: 2500) */
-  pollInterval?: number
-  /** Maximum polling duration in ms (default: 500000 ~8min) */
-  maxPollTime?: number
   /** Cache key for storing result (optional) */
   cacheKey?: string
 }
@@ -84,13 +80,7 @@ export interface UseClaudeReturn<T = unknown> {
  *   webSearch: false
  * })
  */
-export function useClaude<T = unknown>(options: UseClaudeOptions = {}): UseClaudeReturn<T> {
-  const config = getConfig()
-  const {
-    pollInterval = config.claude.pollInterval,
-    maxPollTime = config.claude.maxPollTime,
-  } = options
-
+export function useClaude<T = unknown>(): UseClaudeReturn<T> {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<Error | null>(null)
   const [jobId, setJobId] = useState<string | null>(null)
@@ -135,24 +125,7 @@ export function useClaude<T = unknown>(options: UseClaudeOptions = {}): UseClaud
       if (config.ai.provider === 'mock') {
         result = await mockClaudeCall<T>(claudeRequest, abortControllerRef.current.signal)
       } else {
-        // Real: POST to Claude proxy Lambda (auth injected by apiClient)
-        const { jobId: newJobId } = await stockAnalyserClient.claudeAsyncStart(
-          {
-            prompt:    claudeRequest.prompt,
-            system:    claudeRequest.systemPrompt,
-            webSearch: claudeRequest.webSearch,
-            maxTokens: claudeRequest.maxTokens,
-          },
-          abortControllerRef.current.signal
-        )
-        setJobId(newJobId)
-
-        result = await pollForResult<T>(
-          newJobId,
-          pollInterval,
-          maxPollTime,
-          abortControllerRef.current.signal
-        )
+        result = await subscribeViaWss<T>(claudeRequest, config.ai.wssUrl, abortControllerRef.current.signal)
       }
 
       // ── Write to cache (fire-and-forget) ─────────────────────────────────
@@ -176,7 +149,7 @@ export function useClaude<T = unknown>(options: UseClaudeOptions = {}): UseClaud
       setJobId(null)
       abortControllerRef.current = null
     }
-  }, [abort, pollInterval, maxPollTime])
+  }, [abort])
 
   return {
     callClaude,
@@ -187,6 +160,88 @@ export function useClaude<T = unknown>(options: UseClaudeOptions = {}): UseClaud
   }
 }
 
+async function subscribeViaWss<T>(
+  request: Omit<ClaudeRequest, 'cacheKey' | 'forceRefresh'>,
+  wssUrl: string,
+  signal: AbortSignal,
+): Promise<T> {
+  if (!wssUrl) throw new Error('WSS URL not configured (NEXT_PUBLIC_CLAUDE_WSS_URL)')
+
+  const token     = await authService.getIdToken()
+  const accountId = (await authService.getAccountIdForApp('stock-signal')) ?? ''
+
+  if (!token) throw new Error('No authentication token available')
+
+  const ws = new WebSocket(
+    `${wssUrl}?token=${encodeURIComponent(token)}&app=stock-analyser&accountId=${encodeURIComponent(accountId)}`
+  )
+
+  // Phase 1: open connection and get connectionId via init handshake
+  const connectionId = await new Promise<string>((resolve, reject) => {
+    const timeout = setTimeout(() => { ws.close(); reject(new Error('WSS connection handshake timeout')) }, 10_000)
+    const onAbort = () => { clearTimeout(timeout); ws.close(); reject(new Error('Request aborted')) }
+    signal.addEventListener('abort', onAbort, { once: true })
+    ws.onerror = () => { clearTimeout(timeout); signal.removeEventListener('abort', onAbort); reject(new Error('WSS connection failed')) }
+    ws.onopen  = () => ws.send(JSON.stringify({ action: 'init' }))
+    ws.onmessage = (evt) => {
+      try {
+        const msg = JSON.parse(evt.data as string) as { type: string; connectionId?: string }
+        if (msg.type === 'connected' && msg.connectionId) {
+          clearTimeout(timeout)
+          signal.removeEventListener('abort', onAbort)
+          resolve(msg.connectionId)
+        }
+      } catch { /* ignore malformed messages */ }
+    }
+  })
+
+  // Phase 2: start the job, then wait for job_complete notification
+  const { jobId } = await stockAnalyserClient.claudeAsyncStart(
+    { prompt: request.prompt, system: request.systemPrompt, webSearch: request.webSearch, maxTokens: request.maxTokens },
+    connectionId,
+    signal,
+  )
+
+  await new Promise<void>((resolve, reject) => {
+    const timeout = setTimeout(() => { ws.close(); reject(new Error('WSS job completion timeout')) }, 600_000)
+    const onAbort = () => { clearTimeout(timeout); ws.close(); reject(new Error('Request aborted')) }
+    signal.addEventListener('abort', onAbort, { once: true })
+    ws.onerror = () => { clearTimeout(timeout); signal.removeEventListener('abort', onAbort); reject(new Error('WSS connection failed during job')) }
+    ws.onclose = (evt) => {
+      if (!evt.wasClean) { clearTimeout(timeout); signal.removeEventListener('abort', onAbort); reject(new Error('WSS connection closed unexpectedly')) }
+    }
+    ws.onmessage = (evt) => {
+      try {
+        const msg = JSON.parse(evt.data as string) as { type: string }
+        if (msg.type === 'job_complete') {
+          clearTimeout(timeout)
+          signal.removeEventListener('abort', onAbort)
+          ws.close()
+          resolve()
+        }
+      } catch { /* ignore */ }
+    }
+  })
+
+  // Phase 3: read the completed job result from DynamoDB cache
+  const item = await getStockSignalClient().getCache(`job-${jobId}`)
+  const jobStatus = JSON.parse(item.data) as { status: string; content?: string; message?: string }
+  if (jobStatus.status === 'complete' && jobStatus.content) {
+    try {
+      return JSON.parse(stripCodeFences(jobStatus.content)) as T
+    } catch {
+      throw Object.assign(
+        new Error('Claude returned a non-JSON response. Check the prompt includes explicit JSON instructions.'),
+        { __jobError: true }
+      )
+    }
+  }
+  if (jobStatus.status === 'error') {
+    throw Object.assign(new Error(jobStatus.message || 'Job failed'), { __jobError: true })
+  }
+  throw new Error('Job result was not complete after WSS notification')
+}
+
 /** Strip markdown code fences that Claude occasionally wraps around JSON responses. */
 function stripCodeFences(text: string): string {
   return text
@@ -195,72 +250,6 @@ function stripCodeFences(text: string): string {
     .trim()
 }
 
-/**
- * Poll the analysis-cache endpoint until the async Claude job completes.
- *
- * The Lambda stores job state as:
- *   DDB item.data = { data: { status, content? }, cachedAt, mode, type }
- * normaliseItem() returns:
- *   GET response.data = JSON.stringify({ status, content? })
- * So we JSON.parse(response.data) to get job status, then JSON.parse(jobStatus.content)
- * to get the structured T (since Claude returns a JSON string).
- */
-async function pollForResult<T>(
-  jobId: string,
-  pollInterval: number,
-  maxPollTime: number,
-  signal: AbortSignal
-): Promise<T> {
-  const startTime = Date.now()
-
-  while (Date.now() - startTime < maxPollTime) {
-    if (signal.aborted) throw new Error('Request aborted')
-
-    try {
-      const item = await getStockSignalClient().getCache(`job-${jobId}`)
-
-      const jobStatus = JSON.parse(item.data) as {
-        status:   string
-        content?: string   // JSON text from Claude when complete
-        message?: string   // error description when failed
-      }
-
-      if (jobStatus.status === 'complete' && jobStatus.content) {
-        try {
-          return JSON.parse(stripCodeFences(jobStatus.content)) as T
-        } catch {
-          throw Object.assign(
-            new Error('Claude returned a non-JSON response. Check the prompt includes explicit JSON instructions.'),
-            { __jobError: true }
-          )
-        }
-      }
-      if (jobStatus.status === 'error') {
-        // Job failed — throw outside try so the catch block doesn't swallow it
-        throw Object.assign(new Error(jobStatus.message || 'Job failed'), { __jobError: true })
-      }
-      // 'pending' | 'processing' | 'retrying' — keep polling
-
-    } catch (err) {
-      if (err instanceof Error && (err.name === 'AbortError' || err.message === 'Request aborted')) {
-        throw err
-      }
-      // Job terminal failure — propagate immediately, don't retry
-      if (err instanceof Error && (err as { __jobError?: boolean }).__jobError) throw err
-      // SyntaxError from JSON.parse = malformed response — throw immediately
-      if (err instanceof SyntaxError) throw err
-      // 404 = job record not written yet; other transient errors — keep polling
-      const is404 = err instanceof ApiError && err.status === 404
-      if (!is404) {
-        console.warn('[useClaude] poll error (retrying):', err instanceof Error ? err.message : err)
-      }
-    }
-
-    await new Promise(resolve => setTimeout(resolve, pollInterval))
-  }
-
-  throw new Error('Polling timeout — job did not complete in time')
-}
 
 /**
  * Mock Claude call for development
@@ -453,25 +442,11 @@ export async function callClaudeAPI<T = unknown>(
   options: { signal?: AbortSignal } = {}
 ): Promise<T> {
   const config = getConfig()
-  
+  const signal = options.signal || new AbortController().signal
+
   if (config.ai.provider === 'mock') {
-    return mockClaudeCall<T>(request, options.signal || new AbortController().signal)
+    return mockClaudeCall<T>(request, signal)
   }
 
-  const { jobId } = await stockAnalyserClient.claudeAsyncStart(
-    {
-      prompt:    request.prompt,
-      system:    request.systemPrompt,
-      webSearch: request.webSearch,
-      maxTokens: request.maxTokens,
-    },
-    options.signal
-  )
-
-  return pollForResult<T>(
-    jobId,
-    config.claude.pollInterval,
-    config.claude.maxPollTime,
-    options.signal || new AbortController().signal
-  )
+  return subscribeViaWss<T>(request, config.ai.wssUrl, signal)
 }

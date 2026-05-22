@@ -87,10 +87,8 @@ function loadConfig(): AppConfig {
       cloudwatchLogGroup: process.env.CLOUDWATCH_LOG_GROUP,
     },
     claude: {
-      apiUrl: process.env.NEXT_PUBLIC_CLAUDE_API_URL || '/api/claude',
+      apiUrl:   process.env.NEXT_PUBLIC_CLAUDE_API_URL || '/api/claude',
       cacheUrl: process.env.NEXT_PUBLIC_CLAUDE_CACHE_URL || '/analysis-cache',
-      pollInterval: parseInt(process.env.NEXT_PUBLIC_CLAUDE_POLL_INTERVAL || '2500', 10),
-      maxPollTime: parseInt(process.env.NEXT_PUBLIC_CLAUDE_MAX_POLL_TIME || '500000', 10),
     },
     features: {
       debugMode: process.env.NEXT_PUBLIC_DEBUG_MODE === 'true',

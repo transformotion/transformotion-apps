@@ -1,7 +1,9 @@
 import * as jose from 'jose';
 
-const USER_POOL_ID = process.env.COGNITO_USER_POOL_ID!;
-const REGION       = process.env.AWS_REGION ?? 'ap-southeast-2';
+const USER_POOL_ID    = process.env.COGNITO_USER_POOL_ID!;
+const REGION          = process.env.AWS_REGION ?? 'ap-southeast-2';
+const DEFAULT_APP     = process.env.APP_NAME ?? 'budget-tracker';
+const PERMITTED_APPS  = (process.env.PERMITTED_APPS ?? 'budget-tracker,stock-analyser').split(',');
 
 const JWKS_URL = `https://cognito-idp.${REGION}.amazonaws.com/${USER_POOL_ID}/.well-known/jwks.json`;
 const ISSUER   = `https://cognito-idp.${REGION}.amazonaws.com/${USER_POOL_ID}`;
@@ -45,11 +47,17 @@ function makePolicy(effect: 'Allow' | 'Deny', resource: string, principalId: str
 }
 
 export const handler = async (event: WsAuthorizerEvent): Promise<AuthorizerResult> => {
-  const token     = event.queryStringParameters?.token;
-  const accountId = event.queryStringParameters?.accountId;
+  const token        = event.queryStringParameters?.token;
+  const accountId    = event.queryStringParameters?.accountId;
+  const requestedApp = event.queryStringParameters?.app ?? DEFAULT_APP;
 
   if (!token) {
-    console.log('[ai-ws-authorizer] rejected: no token in query string');
+    console.log('[ws-authorizer] rejected: no token in query string');
+    return makePolicy('Deny', event.methodArn, 'anonymous');
+  }
+
+  if (!PERMITTED_APPS.includes(requestedApp)) {
+    console.log(`[ws-authorizer] rejected: app '${requestedApp}' not in permitted list`);
     return makePolicy('Deny', event.methodArn, 'anonymous');
   }
 
@@ -59,20 +67,21 @@ export const handler = async (event: WsAuthorizerEvent): Promise<AuthorizerResul
     const userId      = payload.sub as string;
     const accountsRaw = JSON.parse((payload['accounts'] as string | undefined) ?? '{}') as
       Record<string, Array<{ accountId: string; role: string }>>;
-    const btAccountIds = (accountsRaw['budget-tracker'] ?? []).map(a => a.accountId);
+    const appAccountIds = (accountsRaw[requestedApp] ?? []).map(a => a.accountId);
 
-    if (accountId && !btAccountIds.includes(accountId)) {
-      console.log(`[ai-ws-authorizer] rejected: accountId ${accountId} not in user's budget-tracker accounts`);
+    if (accountId && !appAccountIds.includes(accountId)) {
+      console.log(`[ws-authorizer] rejected: accountId ${accountId} not in user's ${requestedApp} accounts`);
       return makePolicy('Deny', event.methodArn, userId);
     }
 
-    console.log(`[ai-ws-authorizer] allowed: userId=${userId} accountId=${accountId ?? 'none'}`);
+    console.log(`[ws-authorizer] allowed: userId=${userId} accountId=${accountId ?? 'none'} app=${requestedApp}`);
     return makePolicy('Allow', event.methodArn, userId, {
       userId,
       accountId: accountId ?? '',
+      app:       requestedApp,
     });
   } catch (err) {
-    console.log('[ai-ws-authorizer] rejected: token verification failed:', (err as Error).message);
+    console.log('[ws-authorizer] rejected: token verification failed:', (err as Error).message);
     return makePolicy('Deny', event.methodArn, 'anonymous');
   }
 };

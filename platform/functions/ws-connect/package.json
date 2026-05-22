@@ -1,5 +1,5 @@
 {
-  "name": "@transformotion/fn-budget-ai-ws-connect",
+  "name": "@transformotion/fn-ws-connect",
   "version": "0.0.0",
   "private": true,
   "main": "./src/index.ts",

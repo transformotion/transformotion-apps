@@ -13,6 +13,7 @@
     "@transformotion/lambda-middleware": "workspace:*"
   },
   "devDependencies": {
+    "@aws-sdk/client-apigatewaymanagementapi": "^3",
     "@aws-sdk/client-dynamodb": "^3.1030.0",
     "@aws-sdk/client-lambda": "^3.1030.0",
     "@aws-sdk/client-secrets-manager": "^3",

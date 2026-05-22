@@ -35,6 +35,7 @@ Deployed by `deploy-platform.yml`. Source in `platform/infrastructure/`.
 | `Transformotion{Stage}-AuthApi` | `AuthApiStack` | `transformotion-forgot-provider-{stage}` Lambda + its own API Gateway (public — no JWT required on `/auth/lookup-provider`) |
 | `Transformotion{Stage}-PlatformTables` | `PlatformTablesStack` | `platform.users`, `platform.accounts`, `platform.account-members`, `platform.invitations` DynamoDB tables |
 | `Transformotion{Stage}-Api` | `PlatformApiStack` | Shared REST API Gateway (`transformotion-api-{stage}`), Cognito JWT authoriser, platform Lambda functions (see below) |
+| `Transformotion{Stage}-PlatformWs` | `PlatformWsStack` | WebSocket API Gateway `platform-ws-{stage}`, 4 WS Lambdas, `platform.ws-connections-{stage}` table; shared by all apps for async AI notifications |
 
 ### Stock Analyser stacks
 
@@ -53,7 +54,6 @@ Deployed by `deploy-budget-tracker.yml`. Source in `apps/budget-tracker/infrastr
 |---|---|---|
 | `Transformotion{Stage}-BudgetTrackerTables` | `BudgetTrackerTablesStack` | `budget-tracker.accounts`, `budget-tracker.transactions`, `budget-tracker.rules`, `budget-tracker.settings` |
 | `Transformotion{Stage}-BudgetTrackerApi` | `BudgetTrackerApiStack` | Budget Tracker Lambda functions + routes on the shared platform API Gateway |
-| `Transformotion{Stage}-BudgetTrackerWs` | `BudgetTrackerWsStack` | WebSocket API Gateway `budget-tracker-ai-ws-{stage}`, 4 WS Lambdas, `budget-tracker.ai-connections-{stage}` table |
 
 ---
 
@@ -103,16 +103,16 @@ Deployed by `deploy-budget-tracker.yml`. Source in `apps/budget-tracker/infrastr
 | `budget-export-handler-{stage}` | Budget Tracker export Lambda | `GET /api/budget/v1/business-export` |
 | `budget-migrate-handler-{stage}` | Budget Tracker migrate Lambda | `POST /api/budget/v1/migrate-from-localstorage` |
 
-### Budget Tracker WS Lambda functions (`Transformotion{Stage}-BudgetTrackerWs`)
+### Platform WS Lambda functions (`Transformotion{Stage}-PlatformWs`)
 
-API Gateway v2 WebSocket — does not use `CognitoUserPoolsAuthorizer`; uses a custom Lambda authoriser instead.
+API Gateway v2 WebSocket — does not use `CognitoUserPoolsAuthorizer`; uses a custom Lambda authoriser instead. Shared by all apps.
 
 | Function name | Handler | Route / trigger |
 |---|---|---|
-| `budget-ai-ws-authorizer-{stage}` | `apps/budget-tracker/functions/ai-ws-authorizer` | Custom Lambda authoriser for `$connect`; validates Cognito ID token from `?token=` query string; identity source: `route.request.querystring.token` |
-| `budget-ai-ws-connect-{stage}` | `apps/budget-tracker/functions/ai-ws-connect` | `$connect` route — writes `{ connectionId, userId, accountId, expiresAt }` to `budget-tracker.ai-connections-{stage}` |
-| `budget-ai-ws-disconnect-{stage}` | `apps/budget-tracker/functions/ai-ws-disconnect` | `$disconnect` route — deletes connection record |
-| `budget-ai-ws-default-{stage}` | `apps/budget-tracker/functions/ai-ws-default` | `$default` route — receives client messages; has `execute-api:ManageConnections` IAM grant |
+| `platform-ws-authorizer-{stage}` | `platform/functions/ws-authorizer` | Custom Lambda authoriser for `$connect`; validates Cognito ID token from `?token=` query string; checks `accounts[appName]` membership; `?app=` selects app scope |
+| `platform-ws-connect-{stage}` | `platform/functions/ws-connect` | `$connect` route — writes `{ connectionId, userId, accountId, app, expiresAt }` to `platform.ws-connections-{stage}` |
+| `platform-ws-disconnect-{stage}` | `platform/functions/ws-disconnect` | `$disconnect` route — deletes connection record |
+| `platform-ws-default-{stage}` | `platform/functions/ws-default` | `$default` route — handles `{ action: 'init' }` handshake, responds with `{ type: 'connected', connectionId }`; has `execute-api:ManageConnections` IAM grant |
 
 ---
 
@@ -125,11 +125,12 @@ Stacks receive constructs via `props` in `bin/app.ts`. Cross-stack references ge
 | `AuthApiStack` | `AuthStack` | `userPoolId` (string — avoids construct reference) |
 | `PlatformApiStack` | `AuthStack` | `userPool` (construct) |
 | `PlatformApiStack` | `StockAnalyserTablesStack` | `analysisCacheTable` (construct) |
+| `PlatformApiStack` | `PlatformWsStack` | `wsApiEndpoint`, `wsApiId` (strings — for claude-proxy WSS push permission) |
+| `PlatformWsStack` | `AuthStack` | `userPool` (construct — for custom authoriser JWKS validation) |
 | `StockAnalyserApiStack` | `PlatformApiStack` | `api` and `authoriser` (constructs) |
 | `BudgetTrackerApiStack` | `PlatformApiStack` | `api`, `authoriser`, `apiResource` (constructs — mounts onto the shared platform gateway) |
 | `BudgetTrackerApiStack` | `BudgetTrackerTablesStack` | `budgetDataTableName`, `aiJobsTableName` (strings) |
-| `BudgetTrackerWsStack` | `AuthStack` | `userPool` (construct — for custom authoriser JWKS validation) |
-| `BudgetTrackerApiStack` | `BudgetTrackerWsStack` | `wsConnectionsTableName`, `wsApiId` (strings) |
+| `BudgetTrackerApiStack` | `PlatformWsStack` | `wsConnectionsTableName`, `wsApiId` (strings) |
 
 ---
 
@@ -172,15 +173,18 @@ Platform Lambda environment variables:
 | `USERS_TABLE` | user | `platform.users-{stage}` |
 | `CACHE_TABLE` | claude-proxy | `stock-analyser.analysis-cache-{stage}` |
 | `ANTHROPIC_SECRET_NAME` | claude-proxy | `{stage}/anthropic/api-key` (Secrets Manager) |
+| `WS_API_ENDPOINT` | claude-proxy | `https://{wsApiId}.execute-api.{region}.amazonaws.com/{stage}` — management endpoint for WSS push |
 | `USER_POOL_ID` | account-provisioning, pre-token-generation | Cognito user pool ID |
 | `ACCOUNTS_TABLE` | pre-token-generation | `platform.accounts-{stage}` (read for appSlug resolution) |
 
-Budget Tracker WS Lambda environment variables:
+Platform WS Lambda environment variables:
 
 | Variable | Lambda | Value |
 |---|---|---|
-| `COGNITO_USER_POOL_ID` | `budget-ai-ws-authorizer-{stage}` | Cognito user pool ID (for JWKS verification) |
-| `CONNECTIONS_TABLE` | `budget-ai-ws-connect-{stage}`, `budget-ai-ws-disconnect-{stage}` | `budget-tracker.ai-connections-{stage}` |
+| `COGNITO_USER_POOL_ID` | `platform-ws-authorizer-{stage}` | Cognito user pool ID (for JWKS verification) |
+| `PERMITTED_APPS` | `platform-ws-authorizer-{stage}` | `budget-tracker,stock-analyser` (comma-separated allowlist) |
+| `APP_NAME` | `platform-ws-authorizer-{stage}` | Default app slug when `?app=` is absent (currently `budget-tracker`) |
+| `CONNECTIONS_TABLE` | `platform-ws-connect-{stage}`, `platform-ws-disconnect-{stage}` | `platform.ws-connections-{stage}` |
 
 ---
 

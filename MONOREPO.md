@@ -25,8 +25,7 @@ transformotion-apps/
 │   │   ├── functions/                     # App-specific Lambda source
 │   │   ├── infrastructure/                # Budget Tracker CDK stacks
 │   │   │   ├── budget-tracker-api-stack.ts
-│   │   │   ├── budget-tracker-tables-stack.ts
-│   │   │   └── budget-tracker-ws-stack.ts
+│   │   │   └── budget-tracker-tables-stack.ts
 │   │   ├── CLAUDE.md
 │   │   └── package.json                   # @transformotion/budget-tracker
 │   ├── launchpad/                         # Platform shell — sign-in, app tile rendering
@@ -68,7 +67,9 @@ transformotion-apps/
 │   │   ├── network-stack.ts               # CloudFront, S3, certificates
 │   │   ├── platform-api-stack.ts          # Shared API Gateway
 │   │   ├── platform-tables-stack.ts       # Platform DynamoDB tables
+│   │   ├── platform-ws-stack.ts           # Platform WebSocket (shared async AI notifications)
 │   │   └── storage-stack.ts              # S3 backups bucket
+│   ├── CLAUDE.md
 │   └── functions/                         # Platform Lambda source (shared across apps)
 │       ├── auth/                          # Auth-related Lambdas (own pnpm workspace glob)
 │       │   ├── account-provisioning/      # First-sign-in account creation
@@ -76,8 +77,12 @@ transformotion-apps/
 │       │   ├── invitations/               # Invitation flow
 │       │   └── forgot-provider/           # Federated identity recovery
 │       ├── accounts/                      # Account management
-│       ├── claude-proxy/                  # Anthropic API proxy
-│       └── user/                          # Platform user data
+│       ├── claude-proxy/                  # Anthropic API proxy (WSS push when connectionId provided)
+│       ├── user/                          # Platform user data
+│       ├── ws-authorizer/                 # WS $connect custom authoriser (Cognito JWT + accounts claim)
+│       ├── ws-connect/                    # WS $connect handler (writes connection record)
+│       ├── ws-default/                    # WS $default handler (init handshake → connectionId)
+│       └── ws-disconnect/                 # WS $disconnect handler (deletes connection record)
 │
 ├── contracts/                             # Per-scope normative contracts
 │   ├── budget-tracker/                    # 8 contract files (data-models.md, ui-patterns.md, etc.)
