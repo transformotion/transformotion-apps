@@ -158,6 +158,9 @@ importers:
       '@transformotion/ui-error-boundaries':
         specifier: workspace:*
         version: link:../../packages/ui/error-boundaries
+      '@transformotion/ui-primitives':
+        specifier: workspace:*
+        version: link:../../packages/ui/primitives
       autoprefixer:
         specifier: ^10.4.20
         version: 10.5.0(postcss@8.5.10)
@@ -656,6 +659,9 @@ importers:
       '@transformotion/ui-error-boundaries':
         specifier: workspace:*
         version: link:../../packages/ui/error-boundaries
+      '@transformotion/ui-primitives':
+        specifier: workspace:*
+        version: link:../../packages/ui/primitives
       '@vercel/analytics':
         specifier: 1.6.1
         version: 1.6.1(next@16.2.0(@babel/core@7.29.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(react@19.2.5)
