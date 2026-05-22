@@ -12,7 +12,7 @@ import { SettingsTab } from "./tabs/settings-tab"
 import { useBudgetStore } from "@/stores/budget-tracker/use-budget-store"
 import { useAuthStore } from "@/stores/auth/use-auth-store"
 import { authService } from "@/lib/services/auth"
-import { TabErrorBoundary } from "@transformotion/ui"
+import { TabErrorBoundary } from "@transformotion/ui-error-boundaries"
 
 // ============================================================================
 // TAB RENDERER
