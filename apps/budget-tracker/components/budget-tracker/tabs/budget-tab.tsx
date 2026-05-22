@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react"
 import { useBudgetStore } from "@/stores/budget-tracker/use-budget-store"
-import { PageHeader, Card, PrimaryButton, SecondaryButton } from "@/components/ui/design-system"
+import { PageHeader, Card, PrimaryButton, SecondaryButton } from "@transformotion/ui-primitives"
 import { ChevronDown, Plus, Pencil, Trash2, RotateCcw, X, Check, Undo2, Eye, EyeOff } from "lucide-react"
 import {
   getActiveCategories,

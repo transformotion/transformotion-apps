@@ -15,7 +15,7 @@ import {
   TextToggle,
   getAlert,
   type CycleStage,
-} from "@/components/ui/design-system"
+} from "@transformotion/ui-primitives"
 import { Eye, RefreshCw, X, TrendingUp, ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 

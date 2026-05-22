@@ -10,11 +10,11 @@ import {
   PrimaryButton,
   TextToggle,
   type Signal,
-} from "@/components/ui/design-system"
+} from "@transformotion/ui-primitives"
 import { ChevronRight, ChevronDown, AlertCircle } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useClaude } from "@/lib/hooks"
-import { Spinner } from "@/components/ui/spinner"
+import { Spinner } from "@transformotion/ui-primitives"
 
 type Market = "ASX" | "US" | "Global"
 type Category = "All" | "Index" | "Sector" | "Bond" | "Thematic" | "Property"

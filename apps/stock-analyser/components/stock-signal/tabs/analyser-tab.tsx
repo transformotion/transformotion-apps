@@ -17,8 +17,8 @@ import {
   FullCycleGauge,
   type Verdict,
   type CycleStage,
-} from "@/components/ui/design-system"
-import { Spinner } from "@/components/ui/spinner"
+} from "@transformotion/ui-primitives"
+import { Spinner } from "@transformotion/ui-primitives"
 import { 
   Search,
   TrendingUp,

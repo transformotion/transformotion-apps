@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useBudgetStore } from "@/stores/budget-tracker/use-budget-store"
-import { PageHeader, Card, PrimaryButton } from "@/components/ui/design-system"
+import { PageHeader, Card, PrimaryButton } from "@transformotion/ui-primitives"
 import { Settings, RotateCcw, Save } from "lucide-react"
 import type { BudgetSettings } from "@transformotion/budget-domain"
 

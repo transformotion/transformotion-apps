@@ -10,7 +10,7 @@ import {
   ModeToggle,
   TextToggle,
   type TrendSignal,
-} from "@/components/ui/design-system"
+} from "@transformotion/ui-primitives"
 import { 
   TrendingUp, 
   TrendingDown, 
@@ -22,7 +22,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useClaude } from "@/lib/hooks"
-import { Spinner } from "@/components/ui/spinner"
+import { Spinner } from "@transformotion/ui-primitives"
 
 interface Metal {
   name: string

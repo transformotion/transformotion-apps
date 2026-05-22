@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react"
 import { useBudgetStore } from "@/stores/budget-tracker/use-budget-store"
-import { PageHeader, Card, EmptyState } from "@/components/ui/design-system"
+import { PageHeader, Card, EmptyState } from "@transformotion/ui-primitives"
 import { ChevronLeft, ChevronRight, ChevronDown, PieChart, Briefcase } from "lucide-react"
 import { CATEGORY_COLORS } from "../data/category-colors"
 import { ExcludedBadge } from "../badges/excluded-badge"

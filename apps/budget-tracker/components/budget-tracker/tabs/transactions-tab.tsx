@@ -3,7 +3,7 @@
 import { useState, useMemo, useRef } from "react"
 import { useBudgetStore } from "@/stores/budget-tracker/use-budget-store"
 import { useAuthStore, selectCurrentAccount } from "@/stores/auth/use-auth-store"
-import { PageHeader, Card, PrimaryButton, SecondaryButton, EmptyState } from "@/components/ui/design-system"
+import { PageHeader, Card, PrimaryButton, SecondaryButton, EmptyState } from "@transformotion/ui-primitives"
 import {
   Upload, Receipt, Filter, Download, Briefcase, X,
   RotateCcw, Check, BookOpen, Search, FileText, AlertCircle

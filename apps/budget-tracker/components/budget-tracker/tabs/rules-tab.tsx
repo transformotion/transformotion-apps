@@ -3,7 +3,7 @@
 import { useState, useRef, useMemo, useEffect } from "react"
 import { useBudgetStore } from "@/stores/budget-tracker/use-budget-store"
 import { useAuthStore, selectCurrentAccount } from "@/stores/auth/use-auth-store"
-import { PageHeader, Card, PrimaryButton, SecondaryButton } from "@/components/ui/design-system"
+import { PageHeader, Card, PrimaryButton, SecondaryButton } from "@transformotion/ui-primitives"
 import { Search, Plus, RotateCcw, ChevronDown, Check, X, Pencil, Trash2, Ban, HelpCircle, GripVertical } from "lucide-react"
 import { applyRules, previewRuleMatches } from "@transformotion/budget-domain"
 import { CATEGORY_COLORS } from "../data/category-colors"
