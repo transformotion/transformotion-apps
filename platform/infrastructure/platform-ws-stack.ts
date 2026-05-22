@@ -95,7 +95,10 @@ export class PlatformWsStack extends cdk.Stack {
       environment: {
         COGNITO_USER_POOL_ID: userPool.userPoolId,
         APP_NAME:             'budget-tracker',
-        PERMITTED_APPS:       'budget-tracker,stock-analyser',
+        // 'stock-signal' matches the JWT accounts claim key (which mirrors the URL prefix).
+        // When the URL prefix rename issue (#286) lands, this becomes 'stock-analyser' in
+        // coordination with the Cognito claim key migration.
+        PERMITTED_APPS:       'budget-tracker,stock-signal',
       },
       bundling: {
         ...bundling,
