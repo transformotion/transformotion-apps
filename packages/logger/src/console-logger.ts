@@ -1,12 +1,4 @@
-/**
- * Console Logger Implementation
- * 
- * Structured logging to browser/Node console.
- * Outputs JSON format for easy parsing by CloudWatch.
- */
-
-import { Logger, LogLevel, LogContext, LogEntry, LoggerConfig, AppName } from './index'
-import { getConfig } from '../../config'
+import { Logger, LogLevel, LogContext, LogEntry, LoggerConfig } from './index'
 
 const LOG_LEVEL_PRIORITY: Record<LogLevel, number> = {
   debug: 0,
@@ -51,14 +43,13 @@ export class ConsoleLogger implements Logger {
     if (!this.shouldLog(level)) return
 
     const entry = this.formatEntry(level, message, context, error)
-    
-    // Use structured JSON in production, readable format in development
+
     const isDev = process.env.NODE_ENV === 'development'
-    
+
     if (isDev) {
       const prefix = `[${entry.level.toUpperCase()}] ${entry.timestamp}`
       const contextStr = entry.context ? ` ${JSON.stringify(entry.context)}` : ''
-      
+
       switch (level) {
         case 'debug':
           console.debug(`${prefix} ${message}${contextStr}`)
@@ -74,7 +65,6 @@ export class ConsoleLogger implements Logger {
           break
       }
     } else {
-      // JSON format for CloudWatch Logs Insights
       console.log(JSON.stringify(entry))
     }
   }
@@ -97,7 +87,7 @@ export class ConsoleLogger implements Logger {
 
   child(context: LogContext): Logger {
     return new ConsoleLogger(
-      { level: this.level, app: this.baseContext.app as AppName },
+      { level: this.level, app: this.baseContext.app },
       { ...this.baseContext, ...context }
     )
   }
@@ -117,18 +107,15 @@ export class ConsoleLogger implements Logger {
   }
 }
 
-// Factory function
-export function createLogger(app?: AppName): Logger {
-  const config = getConfig()
-  return new ConsoleLogger({ level: config.logging.level, app })
+export function createLogger(app?: string, level: LogLevel = 'info'): Logger {
+  return new ConsoleLogger({ level, app })
 }
 
-// Singleton loggers per app
-const loggers: Partial<Record<AppName, Logger>> = {}
+const loggers: Record<string, Logger> = {}
 
-export function getLogger(app: AppName): Logger {
-  if (!loggers[app]) {
-    loggers[app] = createLogger(app)
+export function getLogger(name: string): Logger {
+  if (!loggers[name]) {
+    loggers[name] = createLogger(name)
   }
-  return loggers[app]!
+  return loggers[name]!
 }
