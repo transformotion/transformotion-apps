@@ -6,61 +6,24 @@
  * Client-safe keys use NEXT_PUBLIC_ prefix.
  */
 
-import { selectProvider, normaliseCrossAppUrl } from '@transformotion/runtime-config'
+import {
+  selectProvider,
+  normaliseCrossAppUrl,
+  createConfig,
+  type APIConfig,
+  type AuthConfig,
+  type StorageConfig,
+  type LoggingConfig,
+  type ClaudeConfig,
+  type FeaturesConfig,
+  type AppsConfig,
+} from '@transformotion/runtime-config'
 
-export interface APIConfig {
-  baseURL: string
-  timeout: number
-}
-
-export interface AuthConfig {
-  provider: 'mock' | 'cognito'
-  cognitoUserPoolId?: string
-  cognitoClientId?: string
-  cognitoRegion?: string
-}
-
+// AIConfig stays per-app: BT has wssUrl which SA lacks (resolved by #295)
 export interface AIConfig {
   provider: 'mock' | 'claude'
   model: string
   wssUrl: string
-}
-
-export interface StorageConfig {
-  provider: 'local' | 'dynamo'
-  dynamoTablePrefix?: string
-  region?: string
-}
-
-export interface LoggingConfig {
-  provider: 'console' | 'cloudwatch'
-  level: 'debug' | 'info' | 'warn' | 'error'
-  cloudwatchLogGroup?: string
-}
-
-export interface ClaudeConfig {
-  /** Base URL for Claude API proxy (AWS API Gateway) */
-  apiUrl: string
-  /** Base URL for polling job status (analysis-cache Lambda) */
-  cacheUrl: string
-  /** Polling interval in ms */
-  pollInterval: number
-  /** Max polling duration in ms */
-  maxPollTime: number
-}
-
-export interface FeaturesConfig {
-  /** Enable debug logging */
-  debugMode: boolean
-}
-
-export interface AppsConfig {
-  /** URL for the Launchpad app (cross-app navigation requires full page load) */
-  launchpadUrl: string
-  /** URL for the Launchpad sign-in page; unauthenticated users are redirected here */
-  signInUrl: string
-  /** URL for the signed-out landing page after sign-out */
-  signOutUrl: string
 }
 
 export interface AppConfig {
@@ -74,11 +37,17 @@ export interface AppConfig {
   apps: AppsConfig
 }
 
-/**
- * Load configuration from environment variables.
- * Called once at app startup.
- */
-export function loadConfig(): AppConfig {
+export type {
+  APIConfig,
+  AuthConfig,
+  StorageConfig,
+  LoggingConfig,
+  ClaudeConfig,
+  FeaturesConfig,
+  AppsConfig,
+}
+
+function loadConfig(): AppConfig {
   return {
     api: {
       baseURL: process.env.NEXT_PUBLIC_API_URL || '',
@@ -127,24 +96,13 @@ export function loadConfig(): AppConfig {
       debugMode: process.env.NEXT_PUBLIC_DEBUG_MODE === 'true',
     },
     apps: {
-      launchpadUrl: normaliseCrossAppUrl(process.env.NEXT_PUBLIC_LAUNCHPAD_URL, '/'),
       signInUrl: normaliseCrossAppUrl(process.env.NEXT_PUBLIC_SIGNIN_URL, '/sign-in/'),
       signOutUrl: normaliseCrossAppUrl(process.env.NEXT_PUBLIC_SIGNOUT_URL, '/signed-out/'),
+      peers: {
+        'launchpad': normaliseCrossAppUrl(process.env.NEXT_PUBLIC_LAUNCHPAD_URL, '/'),
+      },
     },
   }
 }
 
-// Singleton config instance
-let _config: AppConfig | null = null
-
-export function getConfig(): AppConfig {
-  if (!_config) {
-    _config = loadConfig()
-  }
-  return _config
-}
-
-// Reset config (useful for testing)
-export function resetConfig(): void {
-  _config = null
-}
+export const { getConfig, resetConfig } = createConfig(loadConfig)

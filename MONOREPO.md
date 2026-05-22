@@ -45,7 +45,7 @@ transformotion-apps/
 │   ├── data-access/                       # Shared Repository<T,ID> interface + query types (@transformotion/data-access)
 │   ├── logger/                            # Shared Logger interface + ConsoleLogger (@transformotion/logger)
 │   ├── lambda-middleware/                 # Shared withAuth/withAuthOnly wrappers
-│   ├── runtime-config/                    # Runtime profile + provider resolution (@transformotion/runtime-config)
+│   ├── runtime-config/                    # Runtime profile + provider resolution + shared config sub-types + createConfig factory (@transformotion/runtime-config)
 │   └── ui/                                # Organisational directory (not itself a package; §3.4)
 │       ├── error-boundaries/              # @transformotion/ui-error-boundaries
 │       └── primitives/                    # @transformotion/ui-primitives (56 shadcn components + hooks)
