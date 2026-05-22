@@ -147,9 +147,8 @@ packages:
 | infrastructure/* | functions/* (file paths) | apps/* directly |
 
 **Data Contracts:**
-- `apps/stock-analyser/contracts/DATA_CONTRACTS.md` — PortfolioHolding, StockAnalysisResult, WatchlistItem, EnrichedHolding; cache keys with TTLs; mock/real separation
-- `apps/budget-tracker/contracts/` — Transaction, BudgetSettings, CustomRule, BuiltinRule (v1.1); separate contract files per domain area
-- `contracts/<app>/` — top-level canonical contract docs (mirrored to app directories)
+- `contracts/stock-analyser/DATA_CONTRACTS.md` — PortfolioHolding, StockAnalysisResult, WatchlistItem, EnrichedHolding; cache keys with TTLs; mock/real separation
+- `contracts/budget-tracker/` — Transaction, BudgetSettings, CustomRule, BuiltinRule (v1.1); separate contract files per domain area
 
 **Key Architectural Decisions (from DEVELOPMENT_PLAN.md):**
 - Multi-tenancy via `accountId` (not user-based); all DynamoDB queries scoped

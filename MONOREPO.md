@@ -77,7 +77,8 @@ transformotion-apps/
 │       └── user/                          # Platform user data
 │
 ├── contracts/                             # Per-scope normative contracts
-│   └── budget-tracker/                    # (M2.3 will add platform/ and stock-analyser/)
+│   ├── budget-tracker/                    # 8 contract files (data-models.md, ui-patterns.md, etc.)
+│   └── stock-analyser/                    # DATA_CONTRACTS.md
 │
 ├── docs/
 │   ├── architecture/                      # Architecture invariants
@@ -127,8 +128,8 @@ Several directories above are migrating to different homes per
 - `infrastructure/lib/<app>/` will move to `apps/<app>/infrastructure/`
   (M7).
 - `apps/web/` will be deleted (M3).
-- `contracts/platform/` and `contracts/stock-analyser/` will be created
-  (M2.3 ratifies the contracts policy; subsequent work creates them).
+- `contracts/platform/` will be created when platform contracts are formalised.
+- `contracts/stock-analyser/` was created by M7 / PR #301 (DATA_CONTRACTS.md moved from `apps/stock-analyser/contracts/`).
 
 `migration-utilities/infrastructure/` is **not** subject to the M7
 platform restructuring. Per CONTRIBUTING.md Section 6.4, it is a

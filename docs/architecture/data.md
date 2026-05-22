@@ -133,7 +133,7 @@ Cache of Claude AI analysis results, keyed per account.
 
 Served by `transformotion-analysis-cache-{stage}` Lambda (`GET/PUT/DELETE /analysis-cache/{key}`).
 
-For full type definitions see [apps/stock-analyser/contracts/DATA_CONTRACTS.md](/apps/stock-analyser/contracts/DATA_CONTRACTS.md).
+For full type definitions see [contracts/stock-analyser/DATA_CONTRACTS.md](/contracts/stock-analyser/DATA_CONTRACTS.md).
 
 ### Budget Tracker
 
