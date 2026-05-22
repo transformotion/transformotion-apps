@@ -42,6 +42,7 @@ transformotion-apps/
 │   ├── auth-client/                       # Cognito + mock auth service implementations (@transformotion/auth-client)
 │   ├── budget-domain/                     # Budget Tracker domain types and helpers
 │   ├── cache/                             # Shared cache interfaces + MemoryCacheService (@transformotion/cache)
+│   ├── data-access/                       # Shared Repository<T,ID> interface + query types (@transformotion/data-access)
 │   ├── logger/                            # Shared Logger interface + ConsoleLogger (@transformotion/logger)
 │   ├── lambda-middleware/                 # Shared withAuth/withAuthOnly wrappers
 │   ├── runtime-config/                    # Runtime profile + provider resolution (@transformotion/runtime-config)

@@ -5,7 +5,7 @@
  * Allows swapping between localStorage and DynamoDB implementations.
  */
 
-export { type Repository, type RepositoryOptions, type QueryOptions, type PaginatedResult } from './base-repository'
+export type { Repository, RepositoryOptions, QueryOptions, PaginatedResult } from '@transformotion/data-access'
 
 // Stock Signal repositories (to be created)
 // export { WatchlistRepository, createWatchlistRepository } from './stock-signal/watchlist-repository'
