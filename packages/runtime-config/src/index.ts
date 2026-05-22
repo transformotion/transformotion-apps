@@ -20,6 +20,73 @@
 
 export type RuntimeProfile = 'mock' | 'live'
 
+// ── Shared config sub-types ───────────────────────────────────────────────────
+
+export interface APIConfig {
+  baseURL: string
+  timeout: number
+}
+
+export interface AuthConfig {
+  provider: 'mock' | 'cognito'
+  cognitoUserPoolId?: string
+  cognitoClientId?: string
+  cognitoRegion?: string
+}
+
+export interface StorageConfig {
+  provider: 'local' | 'dynamo'
+  dynamoTablePrefix?: string
+  region?: string
+}
+
+export interface LoggingConfig {
+  provider: 'console' | 'cloudwatch'
+  level: 'debug' | 'info' | 'warn' | 'error'
+  cloudwatchLogGroup?: string
+}
+
+export interface ClaudeConfig {
+  apiUrl: string
+  cacheUrl: string
+  pollInterval: number
+  maxPollTime: number
+}
+
+export interface FeaturesConfig {
+  debugMode: boolean
+}
+
+/** Unified cross-app URL config. Use `peers[appSlug]` for peer app URLs. */
+export interface AppsConfig {
+  signInUrl: string
+  signOutUrl: string
+  peers: Record<string, string>
+}
+
+// ── Config factory ────────────────────────────────────────────────────────────
+
+/**
+ * Creates a lazy singleton config accessor.
+ * Each call to createConfig() produces an independent cache slot.
+ * resetConfig() clears the cached instance (test isolation).
+ */
+export function createConfig<T>(factory: () => T): {
+  getConfig: () => T
+  resetConfig: () => void
+} {
+  let _config: T | null = null
+  return {
+    getConfig() {
+      if (_config === null) _config = factory()
+      return _config
+    },
+    resetConfig() {
+      _config = null
+    },
+  }
+}
+
 /**
  * Resolves the active runtime profile from the environment.
  * Defaults to 'mock' if NEXT_PUBLIC_RUNTIME_PROFILE is unset or invalid —

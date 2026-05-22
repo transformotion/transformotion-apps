@@ -178,7 +178,12 @@ implemented:
   4 source files. Not a stub. Description corrected by M7 / PR #304.
 - `packages/runtime-config/` — `selectProvider()`, `resolveProfile()`,
   `normaliseCrossAppUrl()`, `RuntimeProfile` exports. Previously absent
-  from this section; added by M7 / PR #304.
+  from this section; added by M7 / PR #304. Extended by M7 / PR #293
+  to export 7 shared config sub-types (`APIConfig`, `AuthConfig`,
+  `StorageConfig`, `LoggingConfig`, `ClaudeConfig`, `FeaturesConfig`,
+  `AppsConfig`) and `createConfig<T>()` factory. Both apps' `lib/config/index.ts`
+  now import sub-types and factory from the package; `AppsConfig.peers`
+  replaces the per-app `budgetTrackerUrl`/`launchpadUrl` fields.
 
 `packages/cycle-engine/` was deleted in this PR. Its RSI/MACD/cycle
 scoring implementation was app-specific (Stock Analyser only), so it

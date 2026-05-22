@@ -8,7 +8,7 @@ export default function Page() {
   const { signOut } = useAuthStore()
 
   const handleGoToLaunchpad = () => {
-    window.location.assign(getConfig().apps.launchpadUrl)
+    window.location.assign(getConfig().apps.peers['launchpad'])
   }
 
   const handleSignOut = async () => {
