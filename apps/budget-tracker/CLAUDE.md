@@ -186,7 +186,7 @@ Provider is selected via `config.ai.provider` (`'mock'` or `'claude'`), resolved
 4. Implement the method in `MockAIService` (mock-ai.ts) and `ClaudeAIService` (claude-ai.ts)
 5. Add prompt text in the Lambda (server-side only — never in client code)
 
-AI flows use `getAIService()` directly from components (not `useClaude`). The `useClaude` hook in `lib/hooks/use-claude.ts` is legacy and should not be used for new features.
+AI flows use `getAIService()` directly from components.
 
 ## v0 origins
 
