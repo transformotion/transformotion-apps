@@ -5,9 +5,9 @@
  * Use these instead of console.log for production-ready logging.
  */
 
-import { createLogger, getLogger, type Logger, type LogContext, type AppName } from './services/logger'
+import { createLogger, getLogger, type Logger, type LogContext } from '@transformotion/logger'
 
-export { createLogger, getLogger, type Logger, type LogContext, type AppName }
+export { createLogger, getLogger, type Logger, type LogContext }
 
 // Pre-configured loggers for each app
 export const launchpadLogger = getLogger('launchpad')
