@@ -26,7 +26,7 @@ React + TypeScript + Tailwind CSS.
 | DynamoDB table schemas | [/docs/architecture/data.md](/docs/architecture/data.md) |
 | CDK stacks, Lambda names | [/docs/architecture/cdk.md](/docs/architecture/cdk.md) |
 | URL routing, CloudFront, deploy triggers | [/docs/architecture/urls-and-deploy.md](/docs/architecture/urls-and-deploy.md) |
-| Stock Analyser API contracts and types | [apps/stock-analyser/contracts/DATA_CONTRACTS.md](./contracts/DATA_CONTRACTS.md) |
+| Stock Analyser API contracts and types | [contracts/stock-analyser/DATA_CONTRACTS.md](/contracts/stock-analyser/DATA_CONTRACTS.md) |
 | Migration invariants from HTML version | [apps/stock-analyser/MIGRATION_INVARIANTS.md](./MIGRATION_INVARIANTS.md) |
 
 ## CDK stacks owned

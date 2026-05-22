@@ -906,9 +906,9 @@ missing folders.
 
 Per `CONTRIBUTING.md` Section 3.5, contracts have exactly one canonical
 location at `contracts/<scope>/<file>.md`. Per-app mirrors at
-`apps/<app>/contracts/` are forbidden. Currently
-`apps/budget-tracker/contracts/ui-patterns.md` exists — M3 covers
-resolving this against the canonical location.
+`apps/<app>/contracts/` are forbidden. Both inversions resolved by M7 / PR #301:
+- `contracts/budget-tracker/` populated (8 files moved from `apps/budget-tracker/contracts/`)
+- `contracts/stock-analyser/` created; `DATA_CONTRACTS.md` moved from `apps/stock-analyser/contracts/`
 
 ### 4.3 v0-sufficient subset pattern
 
@@ -1145,10 +1145,9 @@ The documents are broadly accurate. Gaps and inconsistencies found:
    attribute" and that `custom:active_account` (singular) is "Declared
    but unused." The data.md example is stale. M3 reconciles.
 
-3. data.md references analysis-cache type definitions at
-   `apps/stock-analyser/contracts/DATA_CONTRACTS.md` — an app-level
-   path, not `contracts/stock-analyser/`. M2.3 ratifies the contracts
-   policy; subsequent work determines the canonical location.
+3. data.md previously referenced analysis-cache type definitions at
+   `apps/stock-analyser/contracts/DATA_CONTRACTS.md`. Resolved by M7 / PR #301:
+   file moved to `contracts/stock-analyser/DATA_CONTRACTS.md`; data.md reference updated.
 
 **urls-and-deploy.md gaps:**
 

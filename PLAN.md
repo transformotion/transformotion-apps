@@ -348,8 +348,8 @@ rewrites them so the documentation set reflects the post-M2 state.
   refreshed or replaced.
 - `docs/cowork-testing-brief.md` reviewed; partly aspirational, partly
   historical — decision on future role.
-- `apps/budget-tracker/contracts/ui-patterns.md` mirror resolved against
-  root: re-sync or formally diverge per M2.3 contracts policy.
+- `contracts/budget-tracker/ui-patterns.md` reviewed: re-sync or formally
+  diverge per M2.3 contracts policy. (File moved to canonical location by M7 #301.)
 - Stale `first-login` references in code or docs that didn't propagate
   from the rename to `account-provisioning`: identified and fixed.
 - `apps/web/` 0-LOC shell directory cleanup: directory deleted or removed
@@ -770,9 +770,9 @@ the original M7 framing. All are M7 scope:
 - **#300** — Lift 58-file shadcn `components/ui/` set to
   `packages/ui/primitives/`. The single largest duplication class.
   Blocks on #298 (packages/ui/ structure correction).
-- **#301** — Move contracts to canonical locations. `contracts/budget-tracker/`
-  is empty; `apps/budget-tracker/contracts/` has 8 files at the forbidden
-  location. Same inversion for SA. Open §3.5 violation deferred from M3.
+- **#301** — Move contracts to canonical locations. Resolved by M7:
+  `contracts/budget-tracker/` populated (8 files); `contracts/stock-analyser/`
+  created with `DATA_CONTRACTS.md`. §3.5 inversion closed.
 - **#302** — Document BT WebSocket AI infrastructure in normative docs
   (MONOREPO.md, inventory.md, BT CLAUDE.md). 4 WS Lambdas, 1 WS CDK
   stack, 1 ai-connections table were shipped without §2.1 updates.

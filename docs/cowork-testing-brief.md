@@ -125,7 +125,7 @@ User action
 ### The Contract (`contracts/budget-tracker/data-models.md`)
 This file is the single canonical definition of all shared types. It is mirrored in:
 - `contracts/budget-tracker/data-models.md` (monorepo)
-- `apps/budget-tracker/contracts/data-models.md` (Lambda layer reference)
+- `contracts/budget-tracker/data-models.md` (monorepo canonical; moved from `apps/budget-tracker/contracts/` by M7 #301)
 - `transformotion-apps-b8/contracts/data-models.md` (v0 prototype reference)
 
 **All layers must comply with the contract. When the contract changes, ALL layers must be updated.**
