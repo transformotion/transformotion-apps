@@ -37,6 +37,7 @@ React + TypeScript + Tailwind CSS + shadcn/ui.
 |---|---|
 | `Transformotion{Stage}-BudgetTrackerTables` | `budget-tracker.accounts`, `budget-tracker.transactions`, `budget-tracker.rules`, `budget-tracker.settings` |
 | `Transformotion{Stage}-BudgetTrackerApi` | All Budget Tracker Lambda functions, mounted on the shared platform API Gateway |
+| `Transformotion{Stage}-BudgetTrackerWs` | WebSocket API Gateway `budget-tracker-ai-ws-{stage}`, custom Lambda authoriser (Cognito ID token via `?token=`), 4 WS Lambdas, `budget-tracker.ai-connections-{stage}` table |
 
 Source: `infrastructure/lib/budget-tracker/`
 
@@ -54,6 +55,17 @@ Source: `infrastructure/lib/budget-tracker/`
 | `budget-ai-csv-analysis-handler-{stage}` | `POST /api/budget/v1/ai/csv-analysis` |
 | `budget-export-handler-{stage}` | `GET /api/budget/v1/business-export` |
 
+## WebSocket Lambda functions
+
+API Gateway v2 WebSocket (`budget-tracker-ai-ws-{stage}`). Uses a custom Lambda authoriser on `$connect`; does not use the platform Cognito JWT authoriser.
+
+| Lambda | Route / trigger |
+|---|---|
+| `budget-ai-ws-authorizer-{stage}` | Custom authoriser for `$connect`; validates Cognito ID token from `?token=` query string |
+| `budget-ai-ws-connect-{stage}` | `$connect` — writes `{ connectionId, userId, accountId, expiresAt }` to `budget-tracker.ai-connections-{stage}` |
+| `budget-ai-ws-disconnect-{stage}` | `$disconnect` — deletes connection record |
+| `budget-ai-ws-default-{stage}` | `$default` — receives client messages; has `execute-api:ManageConnections` IAM grant |
+
 ## DynamoDB tables
 
 | Table | PK | SK | Purpose |
@@ -62,6 +74,7 @@ Source: `infrastructure/lib/budget-tracker/`
 | `budget-tracker.transactions-{stage}` | `accountId` | `transactionId` | Transactions; GSI: `accountId-dateIso-index` |
 | `budget-tracker.rules-{stage}` | `accountId` | `ruleId` | Custom categorisation rules |
 | `budget-tracker.settings-{stage}` | `accountId` | `settingKey` | Per-account settings (key-value) |
+| `budget-tracker.ai-connections-{stage}` | `connectionId` | — | Active WS connections; GSI: `userId-index`; TTL: `expiresAt` |
 
 ## Authorization requirement
 

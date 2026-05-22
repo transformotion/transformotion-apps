@@ -512,6 +512,9 @@ during v4 inventory production.
 | `budget-tracker.transactions-{stage}` | accountId | transactionId |
 | `budget-tracker.rules-{stage}` | accountId | ruleId |
 | `budget-tracker.settings-{stage}` | accountId | settingKey |
+| `budget-tracker.ai-connections-{stage}` | connectionId | — |
+
+`budget-tracker.ai-connections-{stage}` is owned by `BudgetTrackerWsStack` (not `BudgetTrackerTablesStack`). PK: `connectionId` (STRING); GSI: `userId-index` (PK: `userId`); TTL attribute: `expiresAt`. Added by M7 / PR #302.
 
 Categories, subcategories, and budget amounts are stored as a single
 `budgetData` value in the settings table (key: `budgetData`), with
@@ -1030,6 +1033,13 @@ CDK stacks under `infrastructure/lib/`:
 - `budget-tracker-api-stack.ts` — defines the BudgetTrackerApi gateway
   (the workaround per Section 2.9; M5 retires)
 - `budget-tracker-tables-stack.ts`
+- `budget-tracker-ws-stack.ts` — `BudgetTrackerWsStack`; WebSocket API
+  Gateway v2 (`budget-tracker-ai-ws-{stage}`), custom Lambda authoriser
+  (Cognito ID token via `?token=` query string), 4 WS Lambdas
+  (`budget-ai-ws-authorizer`, `budget-ai-ws-connect`,
+  `budget-ai-ws-disconnect`, `budget-ai-ws-default`),
+  `budget-tracker.ai-connections-{stage}` DynamoDB table. Added by
+  M7 / PR #302.
 
 There is no `MonitoringStack` despite `infrastructure/lib/README.md`
 declaring one. M13 creates it.
