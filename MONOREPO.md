@@ -41,6 +41,7 @@ transformotion-apps/
 │   ├── api-client/                        # Typed HTTP client (@transformotion/api-client)
 │   ├── auth-client/                       # Cognito + mock auth service implementations (@transformotion/auth-client)
 │   ├── budget-domain/                     # Budget Tracker domain types and helpers
+│   ├── cache/                             # Shared cache interfaces + MemoryCacheService (@transformotion/cache)
 │   ├── lambda-middleware/                 # Shared withAuth/withAuthOnly wrappers
 │   ├── runtime-config/                    # Runtime profile + provider resolution (@transformotion/runtime-config)
 │   └── ui/                                # Organisational directory (not itself a package; §3.4)

@@ -47,8 +47,8 @@ The repository contains the following top-level directories:
 
 - `apps/` — four subdirectories: `budget-tracker/`, `launchpad/`,
   `stock-analyser/`, `web/` (0-LOC shell, M3 cleanup)
-- `packages/` — six subdirectories: `api-client/`, `auth-client/`,
-  `budget-domain/`, `lambda-middleware/`, `runtime-config/`, `ui/`
+- `packages/` — seven subdirectories: `api-client/`, `auth-client/`,
+  `budget-domain/`, `cache/`, `lambda-middleware/`, `runtime-config/`, `ui/`
   (organisational directory; two sub-packages: `ui-error-boundaries`,
   `ui-primitives`). `cycle-engine/` was removed — see Section 1.5.
 - `infrastructure/` — CDK app with `bin/app.ts` entrypoint and
@@ -150,6 +150,12 @@ package. Split landed in M7 / PR #298:
 - `packages/ui/error-boundaries/` (`@transformotion/ui-error-boundaries`) —
   houses `TabErrorBoundary`; 6 vitest tests; 2 consumers
   (`budget-tracker-app.tsx`, `apps/stock-analyser/app/page.tsx`).
+
+`packages/cache/` (`@transformotion/cache`) was created by M7 / PR #290:
+- Exports: `CacheService`, `CacheOptions`, `CacheEntry`, `CacheConfig` interfaces; `MemoryCacheService`, `createCacheService`
+- `MemoryCacheService` lifted from `apps/*/lib/services/cache/memory-cache.ts` (byte-identical in both apps)
+- `DynamoTTLCacheService` stays SA-only (`apps/stock-analyser/lib/services/cache/dynamo-ttl-cache.ts`)
+- Both apps' `lib/services/cache/index.ts` now re-exports types and `MemoryCacheService` from the package
 
 Two packages were previously described as stubs but are fully
 implemented:

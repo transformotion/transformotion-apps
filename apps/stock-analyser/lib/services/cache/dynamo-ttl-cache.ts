@@ -10,8 +10,8 @@
 
 import { getStockSignalClient, stockAnalyserClient } from '@/lib/api'
 import { getConfig } from '@/lib/config'
-import { MemoryCacheService } from './memory-cache'
-import type { CacheService } from './index'
+import { MemoryCacheService } from '@transformotion/cache'
+import type { CacheService } from '@transformotion/cache'
 
 // ── TTL table (seconds) ────────────────────────────────────────────────────────
 
