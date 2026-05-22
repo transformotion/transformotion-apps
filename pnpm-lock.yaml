@@ -1034,6 +1034,9 @@ importers:
         specifier: '*'
         version: 19.2.5
     devDependencies:
+      '@types/react':
+        specifier: '*'
+        version: 19.2.14
       typescript:
         specifier: '*'
         version: 5.7.3
