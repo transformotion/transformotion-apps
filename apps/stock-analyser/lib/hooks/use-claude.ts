@@ -172,8 +172,11 @@ async function subscribeViaWss<T>(
 
   if (!token) throw new Error('No authentication token available')
 
+  // 'stock-signal' matches the JWT accounts claim key (which mirrors the URL prefix).
+  // When the URL prefix rename issue (#286) lands, this becomes 'stock-analyser' in
+  // coordination with the Cognito claim key migration.
   const ws = new WebSocket(
-    `${wssUrl}?token=${encodeURIComponent(token)}&app=stock-analyser&accountId=${encodeURIComponent(accountId)}`
+    `${wssUrl}?token=${encodeURIComponent(token)}&app=stock-signal&accountId=${encodeURIComponent(accountId)}`
   )
 
   // Phase 1: open connection and get connectionId via init handshake

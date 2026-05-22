@@ -151,10 +151,12 @@ export class BudgetTrackerApiStack extends cdk.Stack {
     }));
     aiJobsTable.grantReadWriteData(aiFn);
     wsConnectionsTable.grantReadData(aiFn);
-    // grantReadData covers the table ARN only; querying the userId-index GSI needs an explicit grant
+    // grantReadData on a Table imported via fromTableName covers the base table ARN but not GSI ARNs,
+    // because CDK has no schema knowledge of imported tables. Explicit grant for the userId-index GSI
+    // used by the connectionId lookup (budget-ai-handler queries by userId to find the caller's WSS connectionId).
     aiFn.addToRolePolicy(new iam.PolicyStatement({
       actions:   ['dynamodb:Query'],
-      resources: [`arn:aws:dynamodb:${this.region}:${this.account}:table/budget-tracker.ai-connections-${stage}/index/userId-index`],
+      resources: [`arn:aws:dynamodb:${this.region}:${this.account}:table/${wsConnectionsTableName}/index/*`],
     }));
 
     // ── budget-data-handler ───────────────────────────────────────────────────
