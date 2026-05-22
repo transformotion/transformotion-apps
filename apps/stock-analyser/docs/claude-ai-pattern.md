@@ -4,12 +4,12 @@ This document explains how to integrate AI features using the `useClaude` hook. 
 
 ## Overview
 
-The Claude integration uses an **async polling pattern**:
-1. POST to `/api/claude` with a prompt → returns `jobId`
-2. Poll `/analysis-cache/job-{jobId}` until complete
-3. Return typed result to component
-
-This matches the AWS Lambda + async queue pattern from your `config.yaml`.
+The Claude integration uses an **async WebSocket pattern**:
+1. Open platform WebSocket (`NEXT_PUBLIC_CLAUDE_WSS_URL`) with Cognito ID token
+2. POST to `/api/claude` with prompt + `connectionId` → returns `jobId`
+3. Receive `{ type: 'job_complete' }` push notification on the WebSocket
+4. Read the completed job result from the analysis-cache
+5. Return typed result to component
 
 ## Quick Start
 
@@ -73,12 +73,9 @@ Set environment variables to control behavior:
 NEXT_PUBLIC_RUNTIME_PROFILE=mock
 
 # API Endpoints
-NEXT_PUBLIC_CLAUDE_API_URL=/api/claude      # Where to POST prompt
-NEXT_PUBLIC_CLAUDE_CACHE_URL=/analysis-cache # Where to poll results
-
-# Polling behavior
-NEXT_PUBLIC_CLAUDE_POLL_INTERVAL=2500       # Poll every 2.5s
-NEXT_PUBLIC_CLAUDE_MAX_POLL_TIME=500000     # Give up after 500s
+NEXT_PUBLIC_CLAUDE_API_URL=/api/claude       # Where to POST prompt
+NEXT_PUBLIC_CLAUDE_CACHE_URL=/analysis-cache # Where to read job results
+NEXT_PUBLIC_CLAUDE_WSS_URL=wss://...         # Platform WebSocket URL for job notifications
 ```
 
 ## Hook API
@@ -86,8 +83,7 @@ NEXT_PUBLIC_CLAUDE_MAX_POLL_TIME=500000     # Give up after 500s
 ### `useClaude<T>(options?)`
 
 **Parameters:**
-- `options.pollInterval?` - Override polling interval (ms)
-- `options.maxPollTime?` - Override max polling time (ms)
+- `options.cacheKey?` - DynamoDB cache key for the result (optional)
 
 **Returns:**
 ```tsx
@@ -156,14 +152,13 @@ const analysis = await call({
 
 ### Development (Mock Mode)
 - `NEXT_PUBLIC_RUNTIME_PROFILE=mock` (default; no env var needed locally)
-- Simulates the async polling pattern
-- Instant results with small delay
-- No API keys needed
+- Returns mock fixture data with a short simulated delay
+- No API keys or WSS connection needed
 
 ### Production (Real Claude)
 - `NEXT_PUBLIC_RUNTIME_PROFILE=live` (set by deploy workflows)
+- Opens platform WebSocket (`NEXT_PUBLIC_CLAUDE_WSS_URL`) with Cognito ID token
 - Calls actual Lambda + Claude API
-- Requires real polling
 - API key in Lambda (server-side only)
 
 **The code stays identical — only configuration changes.**
@@ -203,10 +198,12 @@ abort()
 3. Returns result after a short delay
 
 ### Real Implementation (`config.ai.provider === 'claude'`)
-1. `POST /api/claude` with prompt (Lambda proxy endpoint)
-2. Lambda returns `{ jobId }`
-3. Polls `GET /analysis-cache/job-{jobId}` (analysis-cache Lambda)
-4. When complete, returns typed result
+1. Opens platform WebSocket with `?token=...&app=stock-analyser&accountId=...`
+2. Sends `{ action: 'init' }` — receives `{ type: 'connected', connectionId }`
+3. `POST /api/claude` with prompt + `connectionId` (Lambda proxy endpoint)
+4. Lambda returns `{ jobId }` immediately; async job runs in background
+5. When job completes, Lambda pushes `{ type: 'job_complete' }` to the WebSocket
+6. Reads `GET /analysis-cache/job-{jobId}` and returns typed result
 
 ## Migrating from Old Pattern
 

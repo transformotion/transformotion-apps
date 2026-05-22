@@ -18,6 +18,10 @@ export interface PlatformApiStackProps extends cdk.StackProps {
   budgetTrackerAppClientId: string;
   /** Imported from StockAnalyserTablesStack */
   analysisCacheTable: dynamodb.ITable;
+  /** Imported from PlatformWsStack — enables claude-proxy to push WSS notifications */
+  wsApiEndpoint?: string;
+  /** Imported from PlatformWsStack — used for execute-api:ManageConnections IAM resource */
+  wsApiId?: string;
 }
 
 /**
@@ -51,7 +55,7 @@ export class PlatformApiStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: PlatformApiStackProps) {
     super(scope, id, props);
 
-    const { stage, userPool, stockSignalAppClientId, budgetTrackerAppClientId, analysisCacheTable } = props;
+    const { stage, userPool, stockSignalAppClientId, budgetTrackerAppClientId, analysisCacheTable, wsApiEndpoint, wsApiId } = props;
 
     // ── REST API ─────────────────────────────────────────────────────────────
     this.api = new apigateway.RestApi(this, 'Api', {
@@ -159,6 +163,7 @@ export class PlatformApiStack extends cdk.Stack {
       environment: {
         ANTHROPIC_SECRET_NAME: anthropicSecret.secretName,
         CACHE_TABLE:           analysisCacheTable.tableName,
+        ...(wsApiEndpoint ? { WS_API_ENDPOINT: wsApiEndpoint } : {}),
       },
       bundling: { externalModules: ['@aws-sdk/*'], minify: true, sourceMap: false, forceDockerBundling: false },
     });
@@ -171,6 +176,12 @@ export class PlatformApiStack extends cdk.Stack {
         `arn:aws:lambda:${this.region}:${this.account}:function:transformotion-claude-proxy-${stage}`,
       ],
     }));
+    if (wsApiEndpoint && wsApiId) {
+      claudeProxyFn.addToRolePolicy(new iam.PolicyStatement({
+        actions:   ['execute-api:ManageConnections'],
+        resources: [`arn:aws:execute-api:${this.region}:${this.account}:${wsApiId}/${stage}/@connections/*`],
+      }));
+    }
 
     this.apiResource
       .addResource('claude')

@@ -10,6 +10,7 @@ interface ConnectEvent {
     authorizer?: {
       userId?: string;
       accountId?: string;
+      app?: string;
     };
   };
 }
@@ -18,9 +19,10 @@ export const handler = async (event: ConnectEvent): Promise<{ statusCode: number
   const { connectionId, authorizer } = event.requestContext;
   const userId    = authorizer?.userId ?? 'unknown';
   const accountId = authorizer?.accountId ?? '';
+  const app       = authorizer?.app ?? '';
   const now       = Math.floor(Date.now() / 1000);
 
-  console.log(`[ai-ws-connect] connectionId=${connectionId} userId=${userId} accountId=${accountId}`);
+  console.log(`[ai-ws-connect] connectionId=${connectionId} userId=${userId} accountId=${accountId} app=${app}`);
 
   await ddb.send(new PutCommand({
     TableName: TABLE,
@@ -28,6 +30,7 @@ export const handler = async (event: ConnectEvent): Promise<{ statusCode: number
       connectionId,
       userId,
       accountId,
+      app,
       createdAt: new Date().toISOString(),
       expiresAt: now + 3600,
     },

@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto';
+import { ApiGatewayManagementApiClient, PostToConnectionCommand } from '@aws-sdk/client-apigatewaymanagementapi';
 import { GetSecretValueCommand, SecretsManagerClient } from '@aws-sdk/client-secrets-manager';
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
@@ -20,6 +21,7 @@ const lambdaClient = new LambdaClient({});
 const ddb          = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
 const CACHE_TABLE     = process.env.CACHE_TABLE ?? '';
+const WS_API_ENDPOINT = process.env.WS_API_ENDPOINT ?? '';
 const JOB_TTL_SECONDS = 2 * 60 * 60; // 2 hours
 
 // ── Anthropic API key cache ───────────────────────────────────────────────────
@@ -50,12 +52,14 @@ async function getAnthropicApiKey(): Promise<string> {
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface ClaudeRequest {
-  prompt:     string;
-  system?:    string;
-  model?:     string;
-  maxTokens?: number;
-  webSearch?: boolean;
-  asyncMode?: boolean;
+  prompt:        string;
+  system?:       string;
+  model?:        string;
+  maxTokens?:    number;
+  webSearch?:    boolean;
+  asyncMode?:    boolean;
+  connectionId?: string;
+  appName?:      string;
 }
 
 interface AnthropicContentBlock {
@@ -76,14 +80,15 @@ interface AnthropicResponse {
  * an API Gateway event.
  */
 interface AsyncJobEvent {
-  __asyncJob: true;
-  jobId:      string;
-  accountId:  string;
-  prompt:     string;
-  system?:    string;
-  model?:     string;
-  maxTokens?: number;
-  webSearch?: boolean;
+  __asyncJob:    true;
+  jobId:         string;
+  accountId:     string;
+  prompt:        string;
+  system?:       string;
+  model?:        string;
+  maxTokens?:    number;
+  webSearch?:    boolean;
+  connectionId?: string;
 }
 
 // ── Core Anthropic call ───────────────────────────────────────────────────────
@@ -230,6 +235,19 @@ async function executeAsyncJob(job: AsyncJobEvent): Promise<void> {
       );
       await writeJob({ status: 'complete', content: result.content });
       console.log('[claude-proxy] Step 6: Complete — jobId:', job.jobId, 'duration:', Date.now() - startTime, 'ms');
+
+      if (job.connectionId && WS_API_ENDPOINT) {
+        const mgmt = new ApiGatewayManagementApiClient({ endpoint: WS_API_ENDPOINT });
+        try {
+          await mgmt.send(new PostToConnectionCommand({
+            ConnectionId: job.connectionId,
+            Data: Buffer.from(JSON.stringify({ type: 'job_complete', jobId: job.jobId })),
+          }));
+          console.log('[claude-proxy] Step 6: WSS push sent to connectionId:', job.connectionId);
+        } catch (wssErr) {
+          console.warn('[claude-proxy] WSS push failed (connection may be stale):', (wssErr as Error).message);
+        }
+      }
       return;
 
     } catch (err) {
@@ -271,10 +289,11 @@ const apiGatewayHandler = withAuth(async ({ auth, account, event }) => {
   const {
     prompt,
     system,
-    model     = 'claude-sonnet-4-20250514',
-    maxTokens = 4000,
-    webSearch = false,
-    asyncMode = false,
+    model        = 'claude-sonnet-4-20250514',
+    maxTokens    = 4000,
+    webSearch    = false,
+    asyncMode    = false,
+    connectionId,
   } = parseBody<ClaudeRequest>(event);
 
   if (!prompt?.trim()) throw badRequest('prompt is required');
@@ -319,6 +338,7 @@ const apiGatewayHandler = withAuth(async ({ auth, account, event }) => {
       jobId,
       accountId: account.accountId,
       prompt, system, model, maxTokens, webSearch,
+      ...(connectionId ? { connectionId } : {}),
     };
 
     await lambdaClient.send(new InvokeCommand({

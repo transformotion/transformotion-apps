@@ -767,7 +767,8 @@ the original M7 framing. All are M7 scope:
 - **#302** — Document BT WebSocket AI infrastructure in normative docs
   (MONOREPO.md, inventory.md, BT CLAUDE.md). 4 WS Lambdas, 1 WS CDK
   stack, 1 ai-connections table were shipped without §2.1 updates.
-  Lands before #295 (SA→WSS migration).
+  **Absorbed by #295** — WSS stack migrated to platform in the same PR
+  that performed the §2.1 documentation updates.
 - **#303** — Orphan cleanup: `packages/cycle-engine/` (0 consumers),
   root `functions/` ghost, empty app dirs, dead shadcn hook copies in
   `components/ui/`.
@@ -784,14 +785,14 @@ the original M7 framing. All are M7 scope:
 2. **#300** — 58-component `components/ui/` lift. Largest dedup item. Blocks on #298.
 3. **#298** — Correct `packages/ui/` structure. Gates #300 and #299.
 4. **#301** — Contracts inversion fix. Open §3.5 violation.
-5. **#302** — BT WebSocket infrastructure documentation. Open §2.1 violation. Lands before #295.
+5. **#302** — BT WebSocket infrastructure documentation. **Complete.** Absorbed by #295 — WSS stack migrated to platform; §2.1 doc updates shipped in the same PR.
 6. **#290** — Cache service lift to `packages/cache/`.
 7. **#291** — Logger service lift to `packages/logger/`.
 8. **#292** — Repository base lift to `packages/data-access/`.
 9. **#293** — Shared config sub-types lift to `packages/runtime-config/`.
 10. **#294** — Delete BT legacy useClaude orphan.
 11. **#303** — Orphan cleanup.
-12. **#295** — SA polling→WebSocket migration. Lands after #302.
+12. **#295** — SA polling→WebSocket migration. **Complete.** WSS stack + 4 Lambdas lifted to platform; claude-proxy gains WSS push; SA converts from polling to WSS subscription; polling infrastructure removed.
 13. **#297** — SA design-system type leakage in BT (Signal, Verdict, TrendSignal etc. confirmed in BT design-system.tsx).
 14. **#304** — Package listing doc updates.
 15. **#305** — Stores/ decision.

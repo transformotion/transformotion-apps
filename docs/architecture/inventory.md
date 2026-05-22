@@ -554,9 +554,7 @@ during v4 inventory production.
 | `budget-tracker.transactions-{stage}` | accountId | transactionId |
 | `budget-tracker.rules-{stage}` | accountId | ruleId |
 | `budget-tracker.settings-{stage}` | accountId | settingKey |
-| `budget-tracker.ai-connections-{stage}` | connectionId | — |
-
-`budget-tracker.ai-connections-{stage}` is owned by `BudgetTrackerWsStack` (not `BudgetTrackerTablesStack`). PK: `connectionId` (STRING); GSI: `userId-index` (PK: `userId`); TTL attribute: `expiresAt`. Added by M7 / PR #302.
+WebSocket connection state has moved to the platform table `platform.ws-connections-{stage}` (owned by `PlatformWsStack`). Migrated from `budget-tracker.ai-connections-{stage}` by M7 / PR #295.
 
 Categories, subcategories, and budget amounts are stored as a single
 `budgetData` value in the settings table (key: `budgetData`), with
@@ -1064,8 +1062,16 @@ CDK stacks — M7 #250 infrastructure split complete:
 - `github-actions-role-stack.ts` — GitHubActionsDeployRole IAM policies
 - `network-stack.ts` — CloudFront, S3, certificates
 - `platform-api-stack.ts` — shared API Gateway (the platform gateway
-  per Section 2.9)
+  per Section 2.9); receives `wsApiEndpoint`+`wsApiId` from
+  `PlatformWsStack` to wire claude-proxy WSS push
 - `platform-tables-stack.ts` — platform DynamoDB tables
+- `platform-ws-stack.ts` — `PlatformWsStack`; API Gateway v2 WebSocket
+  (`platform-ws-{stage}`), custom Lambda authoriser (Cognito ID token
+  via `?token=`; multi-app gate via `?app=`), 4 WS Lambdas
+  (`platform-ws-authorizer-{stage}`, `platform-ws-connect-{stage}`,
+  `platform-ws-default-{stage}`, `platform-ws-disconnect-{stage}`),
+  `platform.ws-connections-{stage}` DynamoDB table. Migrated from
+  `apps/budget-tracker/infrastructure/` by M7 / PR #295.
 - `storage-stack.ts` — S3 backups bucket
 
 **Stock-analyser stacks** (`apps/stock-analyser/infrastructure/`):
@@ -1074,16 +1080,16 @@ CDK stacks — M7 #250 infrastructure split complete:
 - `stock-analyser-tables-stack.ts`
 
 **Budget-tracker stacks** (`apps/budget-tracker/infrastructure/`):
-- `budget-tracker-api-stack.ts` — defines the BudgetTrackerApi gateway
-  (the workaround per Section 2.9; M5 retires)
+- `budget-tracker-api-stack.ts` — mounts BT Lambdas on the shared
+  platform API Gateway; receives `wsConnectionsTableName`+`wsApiId`
+  from `PlatformWsStack` as props (M5 retires the separate gateway workaround)
 - `budget-tracker-tables-stack.ts`
-- `budget-tracker-ws-stack.ts` — `BudgetTrackerWsStack`; WebSocket API
-  Gateway v2 (`budget-tracker-ai-ws-{stage}`), custom Lambda authoriser
-  (Cognito ID token via `?token=` query string), 4 WS Lambdas
-  (`budget-ai-ws-authorizer`, `budget-ai-ws-connect`,
-  `budget-ai-ws-disconnect`, `budget-ai-ws-default`),
-  `budget-tracker.ai-connections-{stage}` DynamoDB table. Added by
-  M7 / PR #302.
+
+`budget-tracker-ws-stack.ts` (`BudgetTrackerWsStack`) was removed by
+M7 / PR #295 — stack and 4 WS Lambdas migrated to
+`platform/infrastructure/platform-ws-stack.ts`. The orphan CloudFormation
+stack `TransformotionDev-BudgetTrackerWs` / `TransformotionProd-BudgetTrackerWs`
+must be manually deleted from AWS after the #295 deploy completes.
 
 There is no `MonitoringStack`. M13 creates it.
 

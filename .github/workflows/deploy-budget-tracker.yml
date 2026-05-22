@@ -78,18 +78,28 @@ jobs:
           role-to-assume: ${{ env.ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Wait for PlatformWs stack (handles first-deploy race; see #295)
+        run: |
+          if aws cloudformation describe-stacks --stack-name TransformotionDev-PlatformWs >/dev/null 2>&1; then
+            echo "PlatformWs exists, proceeding"
+          else
+            echo "PlatformWs not found, waiting..."
+            aws cloudformation wait stack-exists --stack-name TransformotionDev-PlatformWs
+            aws cloudformation wait stack-create-complete --stack-name TransformotionDev-PlatformWs
+          fi
+
       - name: CDK Deploy — Budget Tracker stacks (dev)
         working-directory: infrastructure
-        run: pnpm exec cdk deploy 'TransformotionDev-BudgetTrackerTables' 'TransformotionDev-BudgetTrackerWs' 'TransformotionDev-BudgetTrackerApi' --require-approval never
+        run: pnpm exec cdk deploy 'TransformotionDev-BudgetTrackerTables' 'TransformotionDev-BudgetTrackerApi' --require-approval never
 
       - name: Extract WebSocket URL from CDK output
         run: |
           WSS_URL=$(aws cloudformation describe-stacks \
-            --stack-name TransformotionDev-BudgetTrackerWs \
+            --stack-name TransformotionDev-PlatformWs \
             --query "Stacks[0].Outputs[?OutputKey=='WssUrl'].OutputValue" \
             --output text)
           if [ -z "$WSS_URL" ]; then
-            echo "ERROR: Could not extract WssUrl from TransformotionDev-BudgetTrackerWs stack"
+            echo "ERROR: Could not extract WssUrl from TransformotionDev-PlatformWs stack"
             exit 1
           fi
           echo "NEXT_PUBLIC_BUDGET_WSS_URL=$WSS_URL" >> $GITHUB_ENV
@@ -172,18 +182,28 @@ jobs:
           role-to-assume: ${{ env.ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Wait for PlatformWs stack (handles first-deploy race; see #295)
+        run: |
+          if aws cloudformation describe-stacks --stack-name TransformotionProd-PlatformWs >/dev/null 2>&1; then
+            echo "PlatformWs exists, proceeding"
+          else
+            echo "PlatformWs not found, waiting..."
+            aws cloudformation wait stack-exists --stack-name TransformotionProd-PlatformWs
+            aws cloudformation wait stack-create-complete --stack-name TransformotionProd-PlatformWs
+          fi
+
       - name: CDK Deploy — Budget Tracker stacks (prod)
         working-directory: infrastructure
-        run: pnpm exec cdk deploy 'TransformotionProd-BudgetTrackerTables' 'TransformotionProd-BudgetTrackerWs' 'TransformotionProd-BudgetTrackerApi' --require-approval never
+        run: pnpm exec cdk deploy 'TransformotionProd-BudgetTrackerTables' 'TransformotionProd-BudgetTrackerApi' --require-approval never
 
       - name: Extract WebSocket URL from CDK output
         run: |
           WSS_URL=$(aws cloudformation describe-stacks \
-            --stack-name TransformotionProd-BudgetTrackerWs \
+            --stack-name TransformotionProd-PlatformWs \
             --query "Stacks[0].Outputs[?OutputKey=='WssUrl'].OutputValue" \
             --output text)
           if [ -z "$WSS_URL" ]; then
-            echo "ERROR: Could not extract WssUrl from TransformotionProd-BudgetTrackerWs stack"
+            echo "ERROR: Could not extract WssUrl from TransformotionProd-PlatformWs stack"
             exit 1
           fi
           echo "NEXT_PUBLIC_BUDGET_WSS_URL=$WSS_URL" >> $GITHUB_ENV

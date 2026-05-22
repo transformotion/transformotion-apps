@@ -1,16 +1,17 @@
 {
-  "name": "@transformotion/fn-budget-ai-ws-disconnect",
+  "name": "@transformotion/fn-ws-authorizer",
   "version": "0.0.0",
   "private": true,
   "main": "./src/index.ts",
   "scripts": {
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
-    "lint": "echo \"lint: ai-ws-disconnect\""
+    "lint": "echo \"lint: ai-ws-authorizer\""
+  },
+  "dependencies": {
+    "jose": "^5.9.6"
   },
   "devDependencies": {
-    "@aws-sdk/client-dynamodb": "^3",
-    "@aws-sdk/lib-dynamodb": "^3",
     "@types/aws-lambda": "^8",
     "@types/node": "^22",
     "typescript": "*"

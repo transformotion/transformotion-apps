@@ -70,6 +70,10 @@ jobs:
         working-directory: infrastructure
         run: pnpm exec cdk deploy 'TransformotionDev-PlatformTables' --require-approval never
 
+      - name: CDK Deploy — PlatformWs (dev)
+        working-directory: infrastructure
+        run: pnpm exec cdk deploy 'TransformotionDev-PlatformWs' --require-approval never
+
   deploy-prod:
     name: Platform → Prod
     runs-on: ubuntu-latest
@@ -110,3 +114,7 @@ jobs:
       - name: CDK Deploy — PlatformTables (must follow Api to release Fn::ImportValue)
         working-directory: infrastructure
         run: pnpm exec cdk deploy 'TransformotionProd-PlatformTables' --require-approval never
+
+      - name: CDK Deploy — PlatformWs (prod)
+        working-directory: infrastructure
+        run: pnpm exec cdk deploy 'TransformotionProd-PlatformWs' --require-approval never

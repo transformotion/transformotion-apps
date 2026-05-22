@@ -37,9 +37,10 @@ React + TypeScript + Tailwind CSS + shadcn/ui.
 |---|---|
 | `Transformotion{Stage}-BudgetTrackerTables` | `budget-tracker.accounts`, `budget-tracker.transactions`, `budget-tracker.rules`, `budget-tracker.settings` |
 | `Transformotion{Stage}-BudgetTrackerApi` | All Budget Tracker Lambda functions, mounted on the shared platform API Gateway |
-| `Transformotion{Stage}-BudgetTrackerWs` | WebSocket API Gateway `budget-tracker-ai-ws-{stage}`, custom Lambda authoriser (Cognito ID token via `?token=`), 4 WS Lambdas, `budget-tracker.ai-connections-{stage}` table |
 
 Source: `apps/budget-tracker/infrastructure/`
+
+The WebSocket stack is platform-owned: `Transformotion{Stage}-PlatformWs` in `platform/infrastructure/platform-ws-stack.ts`. BT connects with `?app=budget-tracker` to scope the authoriser gate.
 
 > Note: Budget Tracker shares the platform API Gateway (`transformotion-api-{stage}`). Routes are mounted under `/api/budget/v1` on the shared gateway's `/api` resource, using the same Cognito authoriser as all other platform routes. The previous note about a separate `budget-tracker-api-{stage}` gateway was incorrect — the CDK stack (`BudgetTrackerApiStack`) accepts the shared `RestApi` and `apiResource` as props and mounts onto them.
 
@@ -55,16 +56,11 @@ Source: `apps/budget-tracker/infrastructure/`
 | `budget-ai-csv-analysis-handler-{stage}` | `POST /api/budget/v1/ai/csv-analysis` |
 | `budget-export-handler-{stage}` | `GET /api/budget/v1/business-export` |
 
-## WebSocket Lambda functions
+## WebSocket
 
-API Gateway v2 WebSocket (`budget-tracker-ai-ws-{stage}`). Uses a custom Lambda authoriser on `$connect`; does not use the platform Cognito JWT authoriser.
+Budget Tracker uses the shared platform WebSocket (`platform-ws-{stage}`). The 4 WS Lambdas live in `platform/functions/ws-*/` and are documented in `docs/architecture/cdk.md`. BT connects with `?app=budget-tracker&accountId=...&token=...` and receives AI review batch results on `$default`.
 
-| Lambda | Route / trigger |
-|---|---|
-| `budget-ai-ws-authorizer-{stage}` | Custom authoriser for `$connect`; validates Cognito ID token from `?token=` query string |
-| `budget-ai-ws-connect-{stage}` | `$connect` — writes `{ connectionId, userId, accountId, expiresAt }` to `budget-tracker.ai-connections-{stage}` |
-| `budget-ai-ws-disconnect-{stage}` | `$disconnect` — deletes connection record |
-| `budget-ai-ws-default-{stage}` | `$default` — receives client messages; has `execute-api:ManageConnections` IAM grant |
+The connections DynamoDB table is `platform.ws-connections-{stage}` (was `budget-tracker.ai-connections-{stage}`). `BudgetTrackerApiStack` receives `wsConnectionsTableName` and `wsApiId` as props from `PlatformWsStack`.
 
 ## DynamoDB tables
 
@@ -74,7 +70,8 @@ API Gateway v2 WebSocket (`budget-tracker-ai-ws-{stage}`). Uses a custom Lambda 
 | `budget-tracker.transactions-{stage}` | `accountId` | `transactionId` | Transactions; GSI: `accountId-dateIso-index` |
 | `budget-tracker.rules-{stage}` | `accountId` | `ruleId` | Custom categorisation rules |
 | `budget-tracker.settings-{stage}` | `accountId` | `settingKey` | Per-account settings (key-value) |
-| `budget-tracker.ai-connections-{stage}` | `connectionId` | — | Active WS connections; GSI: `userId-index`; TTL: `expiresAt` |
+
+WebSocket connection state is now in `platform.ws-connections-{stage}` (owned by `PlatformWsStack`).
 
 ## Authorization requirement
 

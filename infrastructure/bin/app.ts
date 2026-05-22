@@ -8,6 +8,7 @@ import { AuthStack }              from '../../platform/infrastructure/auth-stack
 import { AuthApiStack }           from '../../platform/infrastructure/auth-api-stack';
 import { PlatformApiStack }       from '../../platform/infrastructure/platform-api-stack';
 import { PlatformTablesStack }    from '../../platform/infrastructure/platform-tables-stack';
+import { PlatformWsStack }        from '../../platform/infrastructure/platform-ws-stack';
 import { StorageStack }           from '../../platform/infrastructure/storage-stack';
 import { GithubActionsRoleStack } from '../../platform/infrastructure/github-actions-role-stack';
 
@@ -18,7 +19,6 @@ import { StockAnalyserTablesStack } from '../../apps/stock-analyser/infrastructu
 // ── Budget Tracker stacks ─────────────────────────────────────────────────────
 import { BudgetTrackerTablesStack } from '../../apps/budget-tracker/infrastructure/budget-tracker-tables-stack';
 import { BudgetTrackerApiStack }    from '../../apps/budget-tracker/infrastructure/budget-tracker-api-stack';
-import { BudgetTrackerWsStack }     from '../../apps/budget-tracker/infrastructure/budget-tracker-ws-stack';
 
 // ── Migration Utilities stacks ────────────────────────────────────────────────
 import { MigrationsApiStack } from '../../migration-utilities/infrastructure/lib/migrations-api-stack';
@@ -80,6 +80,13 @@ const devStockAnalyserTables = new StockAnalyserTablesStack(app, 'Transformotion
   description: 'Transformotion Apps — Dev Stock Analyser DynamoDB tables',
 });
 
+const devPlatformWs = new PlatformWsStack(app, 'TransformotionDev-PlatformWs', {
+  env,
+  stage:       'dev',
+  description: 'Transformotion Apps — Dev platform WebSocket API (AI services)',
+  userPool:    devAuth.userPool,
+});
+
 const devPlatformApi = new PlatformApiStack(app, 'TransformotionDev-Api', {
   env,
   stage:                    'dev',
@@ -88,6 +95,8 @@ const devPlatformApi = new PlatformApiStack(app, 'TransformotionDev-Api', {
   stockSignalAppClientId:   devAuth.stockAnalyserAppClient.userPoolClientId,
   budgetTrackerAppClientId: devAuth.budgetTrackerAppClient.userPoolClientId,
   analysisCacheTable:       devStockAnalyserTables.analysisCacheTable,
+  wsApiEndpoint:            devPlatformWs.wsApiEndpoint,
+  wsApiId:                  devPlatformWs.webSocketApi.apiId,
 });
 
 new StockAnalyserApiStack(app, 'TransformotionDev-StockAnalyserApi', {
@@ -104,13 +113,6 @@ const devBudgetTrackerTables = new BudgetTrackerTablesStack(app, 'Transformotion
   description: 'Transformotion Apps — Dev Budget Tracker DynamoDB tables',
 });
 
-const devBudgetTrackerWs = new BudgetTrackerWsStack(app, 'TransformotionDev-BudgetTrackerWs', {
-  env,
-  stage:       'dev',
-  description: 'Transformotion Apps — Dev Budget Tracker WebSocket API (AI Review)',
-  userPool:    devAuth.userPool,
-});
-
 new BudgetTrackerApiStack(app, 'TransformotionDev-BudgetTrackerApi', {
   env,
   stage:                  'dev',
@@ -120,8 +122,8 @@ new BudgetTrackerApiStack(app, 'TransformotionDev-BudgetTrackerApi', {
   apiResource:            devPlatformApi.apiResource,
   budgetDataTableName:    devBudgetTrackerTables.budgetDataTable.tableName,
   aiJobsTableName:        devBudgetTrackerTables.aiJobsTable.tableName,
-  wsConnectionsTableName: devBudgetTrackerWs.connectionsTable.tableName,
-  wsApiId:                devBudgetTrackerWs.webSocketApi.apiId,
+  wsConnectionsTableName: devPlatformWs.connectionsTable.tableName,
+  wsApiId:                devPlatformWs.webSocketApi.apiId,
 });
 
 new MigrationsApiStack(app, 'TransformotionDev-MigrationsApi', {
@@ -174,6 +176,13 @@ const prodStockAnalyserTables = new StockAnalyserTablesStack(app, 'Transformotio
   description: 'Transformotion Apps — Prod Stock Analyser DynamoDB tables',
 });
 
+const prodPlatformWs = new PlatformWsStack(app, 'TransformotionProd-PlatformWs', {
+  env,
+  stage:       'prod',
+  description: 'Transformotion Apps — Prod platform WebSocket API (AI services)',
+  userPool:    prodAuth.userPool,
+});
+
 const prodPlatformApi = new PlatformApiStack(app, 'TransformotionProd-Api', {
   env,
   stage:                    'prod',
@@ -182,6 +191,8 @@ const prodPlatformApi = new PlatformApiStack(app, 'TransformotionProd-Api', {
   stockSignalAppClientId:   prodAuth.stockAnalyserAppClient.userPoolClientId,
   budgetTrackerAppClientId: prodAuth.budgetTrackerAppClient.userPoolClientId,
   analysisCacheTable:       prodStockAnalyserTables.analysisCacheTable,
+  wsApiEndpoint:            prodPlatformWs.wsApiEndpoint,
+  wsApiId:                  prodPlatformWs.webSocketApi.apiId,
 });
 
 new StockAnalyserApiStack(app, 'TransformotionProd-StockAnalyserApi', {
@@ -198,13 +209,6 @@ const prodBudgetTrackerTables = new BudgetTrackerTablesStack(app, 'Transformotio
   description: 'Transformotion Apps — Prod Budget Tracker DynamoDB tables',
 });
 
-const prodBudgetTrackerWs = new BudgetTrackerWsStack(app, 'TransformotionProd-BudgetTrackerWs', {
-  env,
-  stage:       'prod',
-  description: 'Transformotion Apps — Prod Budget Tracker WebSocket API (AI Review)',
-  userPool:    prodAuth.userPool,
-});
-
 new BudgetTrackerApiStack(app, 'TransformotionProd-BudgetTrackerApi', {
   env,
   stage:                  'prod',
@@ -214,8 +218,8 @@ new BudgetTrackerApiStack(app, 'TransformotionProd-BudgetTrackerApi', {
   apiResource:            prodPlatformApi.apiResource,
   budgetDataTableName:    prodBudgetTrackerTables.budgetDataTable.tableName,
   aiJobsTableName:        prodBudgetTrackerTables.aiJobsTable.tableName,
-  wsConnectionsTableName: prodBudgetTrackerWs.connectionsTable.tableName,
-  wsApiId:                prodBudgetTrackerWs.webSocketApi.apiId,
+  wsConnectionsTableName: prodPlatformWs.connectionsTable.tableName,
+  wsApiId:                prodPlatformWs.webSocketApi.apiId,
 });
 
 new MigrationsApiStack(app, 'TransformotionProd-MigrationsApi', {
