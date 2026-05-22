@@ -4,11 +4,20 @@
     "outDir": "cdk.out",
     "module": "CommonJS",
     "moduleResolution": "node",
-    "lib": ["ES2022"]
+    "lib": ["ES2022"],
+    "baseUrl": ".",
+    "paths": {
+      "aws-cdk-lib": ["./node_modules/aws-cdk-lib"],
+      "aws-cdk-lib/*": ["./node_modules/aws-cdk-lib/*"],
+      "constructs": ["./node_modules/constructs"],
+      "constructs/*": ["./node_modules/constructs/*"]
+    }
   },
   "include": [
     "bin/**/*.ts",
-    "lib/**/*.ts",
+    "../platform/infrastructure/**/*.ts",
+    "../apps/stock-analyser/infrastructure/**/*.ts",
+    "../apps/budget-tracker/infrastructure/**/*.ts",
     "../migration-utilities/infrastructure/lib/**/*.ts"
   ],
   "exclude": ["node_modules", "cdk.out"]

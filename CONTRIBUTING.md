@@ -355,8 +355,7 @@ CDK infrastructure follows ownership, mirroring the code structure:
   app entrypoint (`bin/app.ts`) that imports and wires stacks from the
   per-app and platform locations.
 
-The migration from the current `infrastructure/lib/<app>/` structure to
-this split is tracked in PLAN.md.
+This split was completed in M7 (issue #250). The `infrastructure/lib/` directory no longer exists.
 
 ### 3.8 Tests
 

@@ -43,7 +43,7 @@ export class StockAnalyserApiStack extends cdk.Stack {
 
     const portfolioFn = new lambdaNodejs.NodejsFunction(this, 'PortfolioFn', {
       functionName: `transformotion-portfolio-${stage}`,
-      entry:        path.join(__dirname, '../../../apps/stock-analyser/functions/portfolio/src/index.ts'),
+      entry:        path.join(__dirname, '../functions/portfolio/src/index.ts'),
       handler:      'handler',
       runtime:      lambda.Runtime.NODEJS_20_X,
       timeout:      cdk.Duration.seconds(15),
@@ -66,7 +66,7 @@ export class StockAnalyserApiStack extends cdk.Stack {
 
     const watchlistFn = new lambdaNodejs.NodejsFunction(this, 'WatchlistFn', {
       functionName: `transformotion-watchlist-${stage}`,
-      entry:        path.join(__dirname, '../../../apps/stock-analyser/functions/watchlist/src/index.ts'),
+      entry:        path.join(__dirname, '../functions/watchlist/src/index.ts'),
       handler:      'handler',
       runtime:      lambda.Runtime.NODEJS_20_X,
       timeout:      cdk.Duration.seconds(15),
@@ -90,7 +90,7 @@ export class StockAnalyserApiStack extends cdk.Stack {
     // ── /analysis-cache/{key} — Analysis Cache Lambda ─────────────────────
     const cacheFn = new lambdaNodejs.NodejsFunction(this, 'CacheFn', {
       functionName: `transformotion-analysis-cache-${stage}`,
-      entry:        path.join(__dirname, '../../../apps/stock-analyser/functions/analysis-cache/src/index.ts'),
+      entry:        path.join(__dirname, '../functions/analysis-cache/src/index.ts'),
       handler:      'handler',
       runtime:      lambda.Runtime.NODEJS_20_X,
       timeout:      cdk.Duration.seconds(15),
@@ -112,7 +112,7 @@ export class StockAnalyserApiStack extends cdk.Stack {
     // ── /cycle/ohlcv — Cycle Data Lambda ──────────────────────────────────
     const cycleDataFn = new lambdaNodejs.NodejsFunction(this, 'CycleDataFn', {
       functionName: `transformotion-cycle-data-${stage}`,
-      entry:        path.join(__dirname, '../../../apps/stock-analyser/functions/cycle-data/src/index.ts'),
+      entry:        path.join(__dirname, '../functions/cycle-data/src/index.ts'),
       handler:      'handler',
       runtime:      lambda.Runtime.NODEJS_20_X,
       timeout:      cdk.Duration.seconds(15),

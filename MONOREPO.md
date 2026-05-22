@@ -23,6 +23,10 @@ transformotion-apps/
 ├── apps/                                  # User-facing applications
 │   ├── budget-tracker/                    # Budget Tracker, basePath /budget-tracker
 │   │   ├── functions/                     # App-specific Lambda source
+│   │   ├── infrastructure/                # Budget Tracker CDK stacks
+│   │   │   ├── budget-tracker-api-stack.ts
+│   │   │   ├── budget-tracker-tables-stack.ts
+│   │   │   └── budget-tracker-ws-stack.ts
 │   │   ├── CLAUDE.md
 │   │   └── package.json                   # @transformotion/budget-tracker
 │   ├── launchpad/                         # Platform shell — sign-in, app tile rendering
@@ -31,11 +35,13 @@ transformotion-apps/
 │   │   ├── app/                           # Next.js App Router pages
 │   │   ├── components/                    # App-specific React components
 │   │   ├── functions/                     # App-specific Lambda source
+│   │   ├── infrastructure/                # Stock Analyser CDK stacks
+│   │   │   ├── stock-analyser-api-stack.ts
+│   │   │   └── stock-analyser-tables-stack.ts
 │   │   ├── lib/                           # Domain logic, services, adaptors
 │   │   ├── stores/                        # Zustand stores
 │   │   ├── CLAUDE.md
 │   │   └── package.json                   # @transformotion/stock-analyser
-│   └── web/                               # 0-LOC shell from earlier rename (M3 cleanup)
 │
 ├── packages/                              # Shared code consumed by 2+ apps
 │   ├── api-client/                        # Typed HTTP client (@transformotion/api-client)
@@ -50,25 +56,19 @@ transformotion-apps/
 │       ├── error-boundaries/              # @transformotion/ui-error-boundaries
 │       └── primitives/                    # @transformotion/ui-primitives (56 shadcn components + hooks)
 │
-├── infrastructure/                        # AWS CDK
-│   ├── bin/
-│   │   └── app.ts                         # CDK app entry — instantiates all stacks
-│   └── lib/
-│       ├── platform/                      # Platform stacks
-│       │   ├── auth-stack.ts              # Cognito user pool, app clients, groups
-│       │   ├── auth-api-stack.ts          # Auth-related API endpoints
-│       │   ├── network-stack.ts           # CloudFront, S3, certificates
-│       │   ├── platform-api-stack.ts      # Shared API Gateway
-│       │   └── platform-tables-stack.ts   # Platform DynamoDB tables
-│       ├── stock-analyser/                # Stock Analyser-specific stacks
-│       │   ├── stock-analyser-api-stack.ts
-│       │   └── stock-analyser-tables-stack.ts
-│       └── budget-tracker/                # Budget Tracker-specific stacks
-│           ├── budget-tracker-api-stack.ts
-│           ├── budget-tracker-tables-stack.ts
-│           └── budget-tracker-ws-stack.ts
+├── infrastructure/                        # AWS CDK entrypoint only
+│   └── bin/
+│       └── app.ts                         # CDK app entry — instantiates all stacks
 │
 ├── platform/                              # Platform-owned deployable artefacts
+│   ├── infrastructure/                    # Platform CDK stacks
+│   │   ├── auth-stack.ts                  # Cognito user pool, app clients, groups
+│   │   ├── auth-api-stack.ts              # Auth-related API endpoints
+│   │   ├── github-actions-role-stack.ts   # GitHubActionsDeployRole IAM policies
+│   │   ├── network-stack.ts               # CloudFront, S3, certificates
+│   │   ├── platform-api-stack.ts          # Shared API Gateway
+│   │   ├── platform-tables-stack.ts       # Platform DynamoDB tables
+│   │   └── storage-stack.ts              # S3 backups bucket
 │   └── functions/                         # Platform Lambda source (shared across apps)
 │       ├── auth/                          # Auth-related Lambdas (own pnpm workspace glob)
 │       │   ├── account-provisioning/      # First-sign-in account creation
@@ -108,7 +108,7 @@ transformotion-apps/
 │   ├── workflows/
 │   │   ├── ci.yml                         # PR typecheck + lint + CDK synth
 │   │   ├── cd.yml                         # Manual full-platform redeploy
-│   │   ├── deploy-platform.yml            # Triggered by infrastructure/lib/platform/** and platform/functions/** changes
+│   │   ├── deploy-platform.yml            # Triggered by platform/infrastructure/** and platform/functions/** changes
 │   │   ├── deploy-stock-analyser.yml      # Triggered by apps/stock-analyser/** changes
 │   │   ├── deploy-budget-tracker.yml      # Triggered by apps/budget-tracker/** changes
 │   │   └── deploy-migration-utilities.yml # Triggered by migration-utilities/** changes
@@ -123,25 +123,12 @@ transformotion-apps/
 └── pnpm-workspace.yaml
 ```
 
-Several directories above are migrating to different homes per
-`CONTRIBUTING.md` Section 3:
+`contracts/platform/` will be created when platform contracts are formalised.
 
-- `infrastructure/lib/platform/` will move to `platform/infrastructure/`
-  (M7).
-- `infrastructure/lib/<app>/` will move to `apps/<app>/infrastructure/`
-  (M7).
-- `apps/web/` will be deleted (M3).
-- `contracts/platform/` will be created when platform contracts are formalised.
-- `contracts/stock-analyser/` was created by M7 / PR #301 (DATA_CONTRACTS.md moved from `apps/stock-analyser/contracts/`).
-
-`migration-utilities/infrastructure/` is **not** subject to the M7
-platform restructuring. Per CONTRIBUTING.md Section 6.4, it is a
-permanent peer to `platform/infrastructure/` — utility infrastructure
-is conceptually distinct from platform infrastructure and stays
-separate.
-
-When those migrations run, this document gets updated in the same PR
-that lands them.
+`migration-utilities/infrastructure/` is a permanent peer to
+`platform/infrastructure/` — utility infrastructure is conceptually
+distinct from platform infrastructure and stays separate (per
+`CONTRIBUTING.md` Section 6.4).
 
 ## Workspace configuration
 
@@ -213,11 +200,11 @@ the other app's deployment.
 | Changed path | Workflow triggered |
 |---|---|
 | `apps/stock-analyser/**` | `deploy-stock-analyser.yml` |
-| `infrastructure/lib/stock-analyser/**` | `deploy-stock-analyser.yml` |
+| `apps/stock-analyser/infrastructure/**` | `deploy-stock-analyser.yml` |
 | `apps/budget-tracker/**` | `deploy-budget-tracker.yml` |
-| `infrastructure/lib/budget-tracker/**` | `deploy-budget-tracker.yml` |
+| `apps/budget-tracker/infrastructure/**` | `deploy-budget-tracker.yml` |
 | `apps/launchpad/**` | `deploy-platform.yml` |
-| `infrastructure/lib/platform/**` | `deploy-platform.yml` |
+| `platform/infrastructure/**` | `deploy-platform.yml` |
 | `infrastructure/bin/**` | `deploy-platform.yml` |
 | `platform/functions/**` | `deploy-platform.yml` |
 | `migration-utilities/**` | `deploy-migration-utilities.yml` |
@@ -239,8 +226,7 @@ mechanical steps within this monorepo are:
 3. Add the app's normative contracts at `contracts/<app-name>/` —
    *not* at `apps/<app-name>/contracts/`. Per-app contract mirrors are
    forbidden per `CONTRIBUTING.md` Section 3.5.
-4. Add CDK stacks in `infrastructure/lib/<app-name>/` (or
-   `apps/<app-name>/infrastructure/` post-M7).
+4. Add CDK stacks in `apps/<app-name>/infrastructure/`.
 5. Register stacks in `infrastructure/bin/app.ts`.
 6. Add Lambda source at `apps/<app-name>/functions/`. Register the
    nested workspace glob in `pnpm-workspace.yaml` if Lambdas are
@@ -267,10 +253,11 @@ organisational, not itself a package.
 
 ## Common gotchas
 
-- **CDK paths.** Lambda entry paths in CDK stacks use
-  `path.join(__dirname, '../../../apps/...')` relative to
-  `infrastructure/lib/<subdir>/`. Double-check the depth when adding
-  new stacks. Post-M7 reorganisation will change these depths.
+- **CDK paths.** Lambda entry paths in CDK stacks use `path.join(__dirname, ...)`.
+  Platform stacks are at `platform/infrastructure/` and reference
+  `platform/functions/` via `'../functions/<name>'`. App stacks are at
+  `apps/<app>/infrastructure/` and reference `apps/<app>/functions/` via
+  `'../functions/<name>'`. Double-check the depth when adding new stacks.
 
 - **pnpm workspace globs.** `apps/*` matches direct children only.
   Nested workspaces (like `apps/stock-analyser/functions/*` and

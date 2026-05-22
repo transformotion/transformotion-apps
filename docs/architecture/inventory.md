@@ -72,9 +72,10 @@ missing one (M3 outcome).
 `apps/stock-analyser/functions/*`, `apps/budget-tracker/functions/*`,
 `packages/*`, `platform/functions/*`, `platform/functions/auth/*`, `infrastructure`.
 
-The migration toward the canonical structure documented in
-`CONTRIBUTING.md` Section 3 is tracked across PLAN.md milestones — M3
-removes `apps/web/`; M7 creates `platform/` and reorganises `infrastructure/`.
+The infrastructure split (M7 #250) is complete: per-app stacks are at
+`apps/<app>/infrastructure/`, platform stacks are at `platform/infrastructure/`,
+and root `infrastructure/` retains only `bin/app.ts`. `apps/web/` and
+`apps/web-vite-backup/` have been deleted.
 
 ### 1.2 Import boundaries
 
@@ -225,9 +226,8 @@ to the `apps` JWT claim, removing this hard-coded prop.
 Several artefacts in the repo describe earlier states that have been
 superseded:
 
-- `apps/web/` — 0-LOC shell from the launchpad rename. M3 cleanup.
-- `apps/web-vite-backup/` — backup directory from earlier scaffolding.
-  Contributes 18 lint baseline entries. M3 cleanup.
+- `apps/web/` — Deleted (M7 #250). Was a 0-LOC shell from the launchpad rename.
+- `apps/web-vite-backup/` — Deleted (M7 #250). Was contributing 18 lint baseline entries.
 - Branch naming convention in root `CLAUDE.md` (`claude-code/<n>` only)
   is partial — the actual practice (per `CONTRIBUTING.md` Section
   4.1) includes `v0/<n>` and `<author>/<n>` prefixes. M3 reconciles.
@@ -493,7 +493,7 @@ is backfilled via the renamed endpoint.
 
 The platform currently has two API Gateways:
 
-- **Platform gateway** — defined in `infrastructure/lib/platform/platform-api-stack.ts`,
+- **Platform gateway** — defined in `platform/infrastructure/platform-api-stack.ts`,
   serves stock-analyser and (eventually) launchpad routes.
 - **BudgetTrackerApi gateway** — defined separately, serves budget-
   tracker routes. Documented in code as a workaround for a CDK
@@ -530,7 +530,7 @@ removing the dependency-cycle workaround.
 | `stock-analyser.analysis-cache-{stage}` | accountId | cacheKey |
 
 CDK source declares all three tables with composite keys
-(`infrastructure/lib/stock-analyser/stock-analyser-tables-stack.ts`
+(`apps/stock-analyser/infrastructure/stock-analyser-tables-stack.ts`
 lines 32-33, 41-42, 52-53). Deployed schemas in dev confirm: portfolio
 and watchlist both have HASH `accountId` + RANGE `ticker`. Runtime
 handler code using `Key: { accountId, ticker }` for Delete operations
@@ -840,7 +840,7 @@ users by sub, not email. M12 fixes.
 
 The API Gateway authoriser is constructed as
 `CognitoUserPoolsAuthorizer` taking the user pool reference (not
-specific app clients) at `infrastructure/lib/platform/platform-api-stack.ts`
+specific app clients) at `platform/infrastructure/platform-api-stack.ts`
 lines 67-68:
 
 `cognitoUserPools: [userPool]`
@@ -968,10 +968,10 @@ package question may be resolved as part of that work.
 **Status: Confirmed (current state)**
 
 The lint baseline contains 36 entries documenting "investigated,
-deferred" lint rule violations. 18 of these are from `apps/web-vite-backup/`
+deferred" lint rule violations. 18 of these were from `apps/web-vite-backup/`
 and `v0-reference/` ("rule not found" violations from un-discovered
-plugin configs). M3 removes both directories, eliminating those
-entries.
+plugin configs). `apps/web-vite-backup/` has been deleted (M7 #250);
+the baseline entries from it are now stale and can be removed.
 
 `eslint-plugin-boundaries` is in the lint baseline due to ESLint 10
 incompatibility. M7 re-enables once the upstream fix lands.
@@ -984,12 +984,12 @@ GitHub Actions workflows in `.github/workflows/`:
 
 - `ci.yml` — PR typecheck, lint, CDK synth
 - `cd.yml` — manual full-platform redeploy
-- `deploy-platform.yml` — triggers on `infrastructure/lib/platform/**`,
+- `deploy-platform.yml` — triggers on `platform/infrastructure/**`,
   `infrastructure/bin/**`, `platform/functions/**`
 - `deploy-stock-analyser.yml` — triggers on `apps/stock-analyser/**`,
-  `infrastructure/lib/stock-analyser/**`, `packages/**`, `functions/**`
+  `apps/stock-analyser/infrastructure/**`, `packages/**`
 - `deploy-budget-tracker.yml` — triggers on `apps/budget-tracker/**`,
-  `infrastructure/lib/budget-tracker/**`. **Currently a no-op
+  `apps/budget-tracker/infrastructure/**`. **Currently a no-op
   placeholder** (the job echoes a message); active deployment is
   pending Issue #17 / M5.
 
@@ -1056,22 +1056,24 @@ investigation before M14 can scope its post-deploy work properly.
 
 **Status: Confirmed in part (verified during initial inventory)**
 
-CDK stacks under `infrastructure/lib/`:
+CDK stacks — M7 #250 infrastructure split complete:
 
-**Platform stacks:**
+**Platform stacks** (`platform/infrastructure/`):
 - `auth-stack.ts` — Cognito user pool, app clients, groups
 - `auth-api-stack.ts` — auth-related API endpoints
+- `github-actions-role-stack.ts` — GitHubActionsDeployRole IAM policies
 - `network-stack.ts` — CloudFront, S3, certificates
 - `platform-api-stack.ts` — shared API Gateway (the platform gateway
   per Section 2.9)
 - `platform-tables-stack.ts` — platform DynamoDB tables
+- `storage-stack.ts` — S3 backups bucket
 
-**Stock-analyser stacks:**
+**Stock-analyser stacks** (`apps/stock-analyser/infrastructure/`):
 - `stock-analyser-api-stack.ts` — portfolio, watchlist, analysis-cache,
   and cycle-data Lambdas + routes on shared platform API Gateway
 - `stock-analyser-tables-stack.ts`
 
-**Budget-tracker stacks:**
+**Budget-tracker stacks** (`apps/budget-tracker/infrastructure/`):
 - `budget-tracker-api-stack.ts` — defines the BudgetTrackerApi gateway
   (the workaround per Section 2.9; M5 retires)
 - `budget-tracker-tables-stack.ts`
@@ -1083,8 +1085,7 @@ CDK stacks under `infrastructure/lib/`:
   `budget-tracker.ai-connections-{stage}` DynamoDB table. Added by
   M7 / PR #302.
 
-There is no `MonitoringStack` despite `infrastructure/lib/README.md`
-declaring one. M13 creates it.
+There is no `MonitoringStack`. M13 creates it.
 
 There is no shared CDK construct library at `packages/cdk-constructs/`.
 Each new Lambda or table reimplements boilerplate. M7 populates
@@ -1218,8 +1219,7 @@ consoles. There are no per-app health dashboards, no cross-app
 monitoring at the platform level, no per-user / per-account Claude
 consumption visibility.
 
-`infrastructure/lib/README.md` declares a `MonitoringStack` that does
-not exist. M13 creates it.
+There is no `MonitoringStack`. M13 creates it.
 
 ### 6.2 Configuration and secrets
 

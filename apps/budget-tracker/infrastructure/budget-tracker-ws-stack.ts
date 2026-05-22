@@ -70,7 +70,7 @@ export class BudgetTrackerWsStack extends cdk.Stack {
       forceDockerBundling: false,
     };
 
-    const fnDir = path.join(__dirname, '../../../apps/budget-tracker/functions');
+    const fnDir = path.join(__dirname, '../functions');
 
     // ── Custom authoriser — validates Cognito ID token from query string ──────
     //

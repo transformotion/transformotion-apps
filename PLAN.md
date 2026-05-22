@@ -689,23 +689,14 @@ deduplication of duplicated runtime code.
 - Infrastructure reorganisation per `CONTRIBUTING.md` Section 3.7:
   per-app stacks moved to `apps/<app>/infrastructure/`, platform stacks
   moved to `platform/infrastructure/`, root `infrastructure/` reduced to
-  CDK app entrypoint only. Tracked: #250.
-- `platform/` top-level directory created. Platform Lambdas moved
-  from root `functions/` to `platform/functions/` (with `auth/`,
-  `accounts/`, `claude-proxy/`, `user/` substructure preserved).
-  **Lambda migration complete** — `platform/functions/` has the full
-  correct structure; root `functions/` is now an empty ghost (cleanup
-  tracked in #303). Platform infrastructure migration to
-  `platform/infrastructure/` remains pending — stacks still live at
-  `infrastructure/lib/platform/`. CDK migration is #250 scope.
-- `MONOREPO.md` updated to reflect the new structure: `platform/`
-  documented as a top-level directory, `apps/<app>/infrastructure/`
-  documented in per-app structure, root `infrastructure/` reduced
-  scope documented, deploy workflow path filters updated. Per
-  `CONTRIBUTING.md` Section 2.1 discipline rule, structural
-  migrations touch this document in the same PR. Tracked: #250.
-- The `apps/web/` 0-LOC shell cleanup (if not done in M3) folded in
-  here. Tracked: #250 (`apps/web-vite-backup/` deletion).
+  CDK app entrypoint only. **Complete: #250.**
+- `platform/` top-level directory: Lambda migration complete (root
+  `functions/` ghost cleanup tracked in #303). Platform infrastructure
+  migration to `platform/infrastructure/` **complete: #250.**
+- `MONOREPO.md`, `cdk.md`, `CONTRIBUTING.md §3.7`, app `CLAUDE.md`
+  files, and deploy workflow path filters all updated in the same PR.
+  Per `CONTRIBUTING.md` Section 2.1 discipline rule. **Complete: #250.**
+- `apps/web/` and `apps/web-vite-backup/` deleted. **Complete: #250.**
 - Stock-analyser migrated from S3 root to `/stock-signal/` prefix:
   **Complete (M6 code + M7 #251 verification).** Verified 2026-05-21
   against dev deployment — basePath routing, CloudFront behavior,
@@ -789,7 +780,7 @@ the original M7 framing. All are M7 scope:
 
 ### Remaining work — rank-ordered by structural impact
 
-1. **#250** — Infrastructure split (per-app and platform stacks to canonical homes). Largest structural item; not started.
+1. **#250** — Infrastructure split (per-app and platform stacks to canonical homes). **Complete.**
 2. **#300** — 58-component `components/ui/` lift. Largest dedup item. Blocks on #298.
 3. **#298** — Correct `packages/ui/` structure. Gates #300 and #299.
 4. **#301** — Contracts inversion fix. Open §3.5 violation.

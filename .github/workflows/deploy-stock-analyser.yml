@@ -5,7 +5,7 @@ on:
     branches: [develop, main]
     paths:
       - 'apps/stock-analyser/**'
-      - 'infrastructure/lib/stock-analyser/**'
+      - 'apps/stock-analyser/infrastructure/**'
       - 'packages/api-client/**'
       - 'packages/ui/**'
       - 'packages/auth-client/**'
