@@ -14,16 +14,11 @@ const USERS_TABLE = process.env.USERS_TABLE!;
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface UserPreferences {
-  defaultMode:            'fast' | 'live';
-  notificationsEnabled:   boolean;
-  cycleAlertThreshold:    number;
-  lastAnalysedTicker?:    string;
+  notificationsEnabled: boolean;
 }
 
 const DEFAULT_PREFERENCES: UserPreferences = {
-  defaultMode:          'fast',
   notificationsEnabled: false,
-  cycleAlertThreshold:  80,
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -51,17 +46,6 @@ async function putPreferences(
   userId: string,
 ) {
   const partial = parseBody<Partial<UserPreferences>>(event);
-
-  // Validate known fields rather than blindly trusting the request
-  if (partial.defaultMode !== undefined && partial.defaultMode !== 'fast' && partial.defaultMode !== 'live') {
-    throw badRequest('defaultMode must be "fast" or "live"');
-  }
-  if (partial.cycleAlertThreshold !== undefined) {
-    const t = partial.cycleAlertThreshold;
-    if (typeof t !== 'number' || t < 0 || t > 100) {
-      throw badRequest('cycleAlertThreshold must be a number 0-100');
-    }
-  }
 
   // Merge with existing so a partial update never loses other fields
   const existing = await loadPreferences(userId);

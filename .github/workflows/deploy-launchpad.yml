@@ -74,7 +74,7 @@ jobs:
         run: pnpm build
 
       - name: Deploy to S3
-        run: aws s3 sync apps/launchpad/out s3://transformotion-web-dev-959516291617 --delete --exclude "stock-signal/*" --exclude "budget-tracker/*"
+        run: aws s3 sync apps/launchpad/out s3://transformotion-web-dev-959516291617
 
       - name: Invalidate CloudFront
         run: |
@@ -140,7 +140,7 @@ jobs:
         run: pnpm build
 
       - name: Deploy to S3
-        run: aws s3 sync apps/launchpad/out s3://transformotion-prod-bucket --delete --exclude "stock-signal/*" --exclude "budget-tracker/*"
+        run: aws s3 sync apps/launchpad/out s3://transformotion-prod-bucket
 
       - name: Invalidate CloudFront
         run: |

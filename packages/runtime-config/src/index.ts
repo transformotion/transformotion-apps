@@ -48,7 +48,6 @@ export interface LoggingConfig {
 
 export interface ClaudeConfig {
   apiUrl: string
-  cacheUrl: string
 }
 
 export interface FeaturesConfig {
