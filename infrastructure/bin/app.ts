@@ -68,7 +68,7 @@ new AuthApiStack(app, 'TransformotionDev-AuthApi', {
   appUrl:      'https://dev.apps.transformotion.com.au',
 });
 
-const devPlatformTables = new PlatformTablesStack(app, 'TransformotionDev-PlatformTables', {
+new PlatformTablesStack(app, 'TransformotionDev-PlatformTables', {
   env,
   stage:       'dev',
   description: 'Transformotion Apps — Dev platform DynamoDB tables (users, accounts, invitations)',
@@ -94,7 +94,7 @@ const devPlatformApi = new PlatformApiStack(app, 'TransformotionDev-Api', {
   userPool:                 devAuth.userPool,
   stockSignalAppClientId:   devAuth.stockAnalyserAppClient.userPoolClientId,
   budgetTrackerAppClientId: devAuth.budgetTrackerAppClient.userPoolClientId,
-  jobResultsTable:          devPlatformTables.jobResultsTable,
+  jobResultsTableName:      'platform.job-results-dev',
   wsApiEndpoint:            devPlatformWs.wsApiEndpoint,
   wsApiId:                  devPlatformWs.webSocketApi.apiId,
 });
@@ -105,7 +105,7 @@ new StockAnalyserApiStack(app, 'TransformotionDev-StockAnalyserApi', {
   description:         'Transformotion Apps — Dev Stock Analyser API routes',
   api:                 devPlatformApi.api,
   authoriser:          devPlatformApi.authoriser,
-  jobResultsTableName: devPlatformTables.jobResultsTable.tableName,
+  jobResultsTableName: 'platform.job-results-dev',
 });
 
 const devBudgetTrackerTables = new BudgetTrackerTablesStack(app, 'TransformotionDev-BudgetTrackerTables', {
@@ -165,7 +165,7 @@ new AuthApiStack(app, 'TransformotionProd-AuthApi', {
   appUrl:      'https://apps.transformotion.com.au',
 });
 
-const prodPlatformTables = new PlatformTablesStack(app, 'TransformotionProd-PlatformTables', {
+new PlatformTablesStack(app, 'TransformotionProd-PlatformTables', {
   env,
   stage:       'prod',
   description: 'Transformotion Apps — Prod platform DynamoDB tables (users, accounts, invitations)',
@@ -191,7 +191,7 @@ const prodPlatformApi = new PlatformApiStack(app, 'TransformotionProd-Api', {
   userPool:                 prodAuth.userPool,
   stockSignalAppClientId:   prodAuth.stockAnalyserAppClient.userPoolClientId,
   budgetTrackerAppClientId: prodAuth.budgetTrackerAppClient.userPoolClientId,
-  jobResultsTable:          prodPlatformTables.jobResultsTable,
+  jobResultsTableName:      'platform.job-results-prod',
   wsApiEndpoint:            prodPlatformWs.wsApiEndpoint,
   wsApiId:                  prodPlatformWs.webSocketApi.apiId,
 });
@@ -202,7 +202,7 @@ new StockAnalyserApiStack(app, 'TransformotionProd-StockAnalyserApi', {
   description:         'Transformotion Apps — Prod Stock Analyser API routes',
   api:                 prodPlatformApi.api,
   authoriser:          prodPlatformApi.authoriser,
-  jobResultsTableName: prodPlatformTables.jobResultsTable.tableName,
+  jobResultsTableName: 'platform.job-results-prod',
 });
 
 const prodBudgetTrackerTables = new BudgetTrackerTablesStack(app, 'TransformotionProd-BudgetTrackerTables', {
