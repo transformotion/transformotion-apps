@@ -5,7 +5,7 @@ This document explains how to integrate AI features using the `useClaude` hook. 
 ## Overview
 
 The Claude integration uses an **async WebSocket pattern**:
-1. Open platform WebSocket (`NEXT_PUBLIC_CLAUDE_WSS_URL`) with Cognito ID token
+1. Open platform WebSocket (`NEXT_PUBLIC_PLATFORM_WSS_URL`) with Cognito ID token
 2. POST to `/api/claude` with prompt + `connectionId` → returns `jobId`
 3. Receive `{ type: 'job_complete' }` push notification on the WebSocket
 4. Read the completed job result from the analysis-cache
@@ -75,7 +75,7 @@ NEXT_PUBLIC_RUNTIME_PROFILE=mock
 # API Endpoints
 NEXT_PUBLIC_CLAUDE_API_URL=/api/claude       # Where to POST prompt
 NEXT_PUBLIC_CLAUDE_CACHE_URL=/analysis-cache # Where to read job results
-NEXT_PUBLIC_CLAUDE_WSS_URL=wss://...         # Platform WebSocket URL for job notifications
+NEXT_PUBLIC_PLATFORM_WSS_URL=wss://...         # Platform WebSocket URL for job notifications
 ```
 
 ## Hook API
@@ -157,7 +157,7 @@ const analysis = await call({
 
 ### Production (Real Claude)
 - `NEXT_PUBLIC_RUNTIME_PROFILE=live` (set by deploy workflows)
-- Opens platform WebSocket (`NEXT_PUBLIC_CLAUDE_WSS_URL`) with Cognito ID token
+- Opens platform WebSocket (`NEXT_PUBLIC_PLATFORM_WSS_URL`) with Cognito ID token
 - Calls actual Lambda + Claude API
 - API key in Lambda (server-side only)
 

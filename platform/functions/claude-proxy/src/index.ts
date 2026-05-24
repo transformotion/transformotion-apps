@@ -13,6 +13,7 @@ import {
   HttpError,
   type APIGatewayProxyEvent,
 } from '@transformotion/lambda-middleware';
+import { APP_SLUGS } from '@transformotion/runtime-config';
 
 // ── Clients (one per Lambda container) ───────────────────────────────────────
 
@@ -285,7 +286,7 @@ async function executeAsyncJob(job: AsyncJobEvent): Promise<void> {
 // ── API Gateway handler (Cognito-authenticated) ───────────────────────────────
 
 const apiGatewayHandler = withAuth(async ({ auth, account, event }) => {
-  requireAnyAppAccess(auth, ['stock-signal', 'budget-tracker']);
+  requireAnyAppAccess(auth, APP_SLUGS);
   const {
     prompt,
     system,

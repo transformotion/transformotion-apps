@@ -6,6 +6,7 @@ import {
 } from '@aws-sdk/client-cognito-identity-provider';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand, BatchGetCommand } from '@aws-sdk/lib-dynamodb';
+import { APPS, APP_SLUGS, type AppSlug } from '@transformotion/runtime-config';
 
 // ── Clients ───────────────────────────────────────────────────────────────────
 
@@ -17,13 +18,9 @@ const ACCOUNTS_TABLE        = process.env.ACCOUNTS_TABLE!;
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const APP_SLUGS = ['stock-signal', 'budget-tracker'] as const;
-type AppSlug = (typeof APP_SLUGS)[number];
-
-const ACCESS_GROUP: Record<AppSlug, string> = {
-  'stock-signal':   'stock-app-access',
-  'budget-tracker': 'budget-app-access',
-};
+const ACCESS_GROUP = Object.fromEntries(
+  APPS.map(app => [app.slug, app.cognitoGroup])
+) as Record<AppSlug, string>;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 

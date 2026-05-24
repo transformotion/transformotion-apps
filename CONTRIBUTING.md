@@ -271,7 +271,7 @@ packages/
 ├── auth-client/           # Cognito and mock auth service implementations
 ├── budget-domain/         # Budget Tracker domain types and pure helpers
 ├── lambda-middleware/     # Shared withAuth/withAuthOnly wrappers and helpers
-├── runtime-config/        # Runtime profile + provider resolution helpers
+├── runtime-config/        # Runtime profile + provider resolution helpers; canonical app registry (APPS const)
 ├── cdk-constructs/        # Shared CDK constructs (the shared construct library)
 ├── ui/                    # UI packages, organised by concern (see below)
 └── <other-concern>/

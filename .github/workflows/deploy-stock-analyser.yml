@@ -112,7 +112,7 @@ jobs:
             echo "ERROR: Could not extract WssUrl from TransformotionDev-PlatformWs stack"
             exit 1
           fi
-          echo "NEXT_PUBLIC_CLAUDE_WSS_URL=$WSS_URL" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_PLATFORM_WSS_URL=$WSS_URL" >> $GITHUB_ENV
           echo "Extracted WSS URL: $WSS_URL"
 
       - name: Build Next.js (static export)
@@ -227,7 +227,7 @@ jobs:
             echo "ERROR: Could not extract WssUrl from TransformotionProd-PlatformWs stack"
             exit 1
           fi
-          echo "NEXT_PUBLIC_CLAUDE_WSS_URL=$WSS_URL" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_PLATFORM_WSS_URL=$WSS_URL" >> $GITHUB_ENV
           echo "Extracted WSS URL: $WSS_URL"
 
       - name: Build Next.js (static export)
