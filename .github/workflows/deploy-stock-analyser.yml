@@ -72,7 +72,7 @@ jobs:
 
       - name: CDK Deploy — Stock Analyser stacks (dev)
         working-directory: infrastructure
-        run: pnpm exec cdk deploy --app 'bin/stock-analyser.ts' 'TransformotionDev-StockAnalyserApi' --require-approval never
+        run: pnpm exec cdk deploy --app 'npx ts-node --prefer-ts-exts bin/stock-analyser.ts' 'TransformotionDev-StockAnalyserApi' --require-approval never
 
       - name: Wait for PlatformWs stack (handles first-deploy race; see #295)
         run: |
@@ -187,7 +187,7 @@ jobs:
 
       - name: CDK Deploy — Stock Analyser stacks (prod)
         working-directory: infrastructure
-        run: pnpm exec cdk deploy --app 'bin/stock-analyser.ts' 'TransformotionProd-StockAnalyserTables' 'TransformotionProd-StockAnalyserApi' --require-approval never
+        run: pnpm exec cdk deploy --app 'npx ts-node --prefer-ts-exts bin/stock-analyser.ts' 'TransformotionProd-StockAnalyserTables' 'TransformotionProd-StockAnalyserApi' --require-approval never
 
       - name: Wait for PlatformWs stack (handles first-deploy race; see #295)
         run: |
