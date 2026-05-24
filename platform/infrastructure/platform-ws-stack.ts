@@ -9,7 +9,7 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as lambdaNodejs from 'aws-cdk-lib/aws-lambda-nodejs';
 import { Construct } from 'constructs';
-import { APPS } from '@transformotion/runtime-config';
+import { loadAppRegistry } from '../../infrastructure/lib/app-registry';
 
 export interface PlatformWsStackProps extends cdk.StackProps {
   userPool: cognito.IUserPool;
@@ -48,6 +48,9 @@ export class PlatformWsStack extends cdk.Stack {
     super(scope, id, props);
 
     const { stage, userPool } = props;
+
+    // App registry — read once at synth time, passed to authoriser as env var.
+    const permittedApps = loadAppRegistry().apps.map(a => a.slug).join(',');
 
     cdk.Tags.of(this).add('app',         'platform');
     cdk.Tags.of(this).add('environment', stage);
@@ -96,7 +99,7 @@ export class PlatformWsStack extends cdk.Stack {
       environment: {
         COGNITO_USER_POOL_ID: userPool.userPoolId,
         APP_NAME:       'budget-tracker',
-        PERMITTED_APPS: APPS.map(app => app.slug).join(','),
+        PERMITTED_APPS: permittedApps,
       },
       bundling: {
         ...bundling,
@@ -198,6 +201,12 @@ export class PlatformWsStack extends cdk.Stack {
       value:       this.connectionsTable.tableName,
       description: 'DynamoDB table for WebSocket connection state',
       exportName:  `PlatformWs-${stage}-ConnectionsTableName`,
+    });
+
+    // Consumed by BudgetTrackerApiStack to build the execute-api:ManageConnections IAM resource ARN.
+    new cdk.CfnOutput(this, 'WsApiId', {
+      value:      this.webSocketApi.apiId,
+      exportName: `PlatformWs-${stage}-WsApiId`,
     });
   }
 }

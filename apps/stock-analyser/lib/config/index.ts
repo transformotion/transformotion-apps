@@ -10,7 +10,6 @@ import {
   selectProvider,
   normaliseCrossAppUrl,
   createConfig,
-  LP_AUTH_ROUTES,
   type APIConfig,
   type AuthConfig,
   type StorageConfig,
@@ -93,8 +92,8 @@ function loadConfig(): AppConfig {
       debugMode: process.env.NEXT_PUBLIC_DEBUG_MODE === 'true',
     },
     apps: {
-      signInUrl: normaliseCrossAppUrl(process.env.NEXT_PUBLIC_SIGNIN_URL, LP_AUTH_ROUTES.signIn),
-      signOutUrl: normaliseCrossAppUrl(process.env.NEXT_PUBLIC_SIGNOUT_URL, LP_AUTH_ROUTES.signedOut),
+      signInUrl: normaliseCrossAppUrl(process.env.NEXT_PUBLIC_SIGNIN_URL, '/sign-in/'),
+      signOutUrl: normaliseCrossAppUrl(process.env.NEXT_PUBLIC_SIGNOUT_URL, '/signed-out/'),
       peers: {
         'budget-tracker': normaliseCrossAppUrl(process.env.NEXT_PUBLIC_BUDGET_URL, '/budget-tracker/'),
       },

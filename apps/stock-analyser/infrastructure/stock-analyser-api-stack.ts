@@ -8,10 +8,6 @@ import { Construct } from 'constructs';
 
 export interface StockAnalyserApiStackProps extends cdk.StackProps {
   stage: 'dev' | 'prod';
-  /** Shared API Gateway from PlatformApiStack — SA routes are added here. */
-  api: apigateway.RestApi;
-  /** Shared JWT authoriser from PlatformApiStack. */
-  authoriser: apigateway.CognitoUserPoolsAuthorizer;
   /** From PlatformTablesStack — analysis-cache Lambda reads job-* keys from here. */
   jobResultsTableName: string;
 }
@@ -19,7 +15,11 @@ export interface StockAnalyserApiStackProps extends cdk.StackProps {
 /**
  * StockAnalyserApiStack — Stock Analyser API routes and Lambdas.
  *
- * Mounts onto the shared platform API Gateway:
+ * Imports the shared platform API Gateway and JWT authoriser from CloudFormation
+ * exports produced by PlatformApiStack. This allows bin/stock-analyser.ts to
+ * synthesise only SA stacks without instantiating platform stacks.
+ *
+ * Routes (owned by this stack's CF template):
  *   GET  /portfolio          — portfolio Lambda
  *   PUT  /portfolio
  *   GET  /watchlist          — watchlist Lambda
@@ -35,8 +35,18 @@ export class StockAnalyserApiStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: StockAnalyserApiStackProps) {
     super(scope, id, props);
 
-    const { stage, api, authoriser, jobResultsTableName } = props;
-    const auth = authMethodOptions(authoriser);
+    const { stage, jobResultsTableName } = props;
+
+    // Import shared platform API Gateway and JWT authoriser from CF exports.
+    const api = apigateway.RestApi.fromRestApiAttributes(this, 'PlatformApi', {
+      restApiId:      cdk.Fn.importValue(`Transformotion-${stage}-RestApiId`),
+      rootResourceId: cdk.Fn.importValue(`Transformotion-${stage}-RestApiRootResourceId`),
+    });
+
+    const auth = authMethodOptions({
+      authorizerId:      cdk.Fn.importValue(`Transformotion-${stage}-AuthorizerId`),
+      authorizationType: apigateway.AuthorizationType.COGNITO,
+    });
 
     // ── /portfolio — Portfolio Lambda ─────────────────────────────────────
     const portfolioTable = dynamodb.Table.fromTableName(
@@ -139,9 +149,7 @@ export class StockAnalyserApiStack extends cdk.Stack {
   }
 }
 
-function authMethodOptions(
-  authoriser: apigateway.CognitoUserPoolsAuthorizer,
-): apigateway.MethodOptions {
+function authMethodOptions(authoriser: apigateway.IAuthorizer): apigateway.MethodOptions {
   return {
     authorizer:        authoriser,
     authorizationType: apigateway.AuthorizationType.COGNITO,

@@ -10,8 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@transformotion/lambda-middleware": "workspace:*",
-    "@transformotion/runtime-config": "workspace:*"
+    "@transformotion/lambda-middleware": "workspace:*"
   },
   "devDependencies": {
     "@aws-sdk/client-cognito-identity-provider": "^3",

@@ -5,7 +5,7 @@ on:
     branches: [develop, main]
     paths:
       - 'platform/infrastructure/**'
-      - 'infrastructure/bin/**'
+      - 'infrastructure/bin/platform.ts'
       - 'platform/functions/**'
   workflow_dispatch:
     inputs:
@@ -56,19 +56,19 @@ jobs:
 
       - name: CDK Deploy — GithubActionsRole (account-level, deploy once)
         working-directory: infrastructure
-        run: pnpm exec cdk deploy 'Transformotion-GithubActionsRole' --require-approval never
+        run: pnpm exec cdk deploy --app 'bin/platform.ts' 'Transformotion-GithubActionsRole' --require-approval never
 
       - name: CDK Deploy — PlatformTables (dev)
         working-directory: infrastructure
-        run: pnpm exec cdk deploy 'TransformotionDev-PlatformTables' --require-approval never
+        run: pnpm exec cdk deploy --app 'bin/platform.ts' 'TransformotionDev-PlatformTables' --require-approval never
 
       - name: CDK Deploy — Platform stacks (dev)
         working-directory: infrastructure
-        run: pnpm exec cdk deploy 'TransformotionDev-Storage' 'TransformotionDev-Network' 'TransformotionDev-Auth' 'TransformotionDev-AuthApi' 'TransformotionDev-Api' --require-approval never
+        run: pnpm exec cdk deploy --app 'bin/platform.ts' 'TransformotionDev-Storage' 'TransformotionDev-Network' 'TransformotionDev-Auth' 'TransformotionDev-AuthApi' 'TransformotionDev-Api' --require-approval never
 
       - name: CDK Deploy — PlatformWs (dev)
         working-directory: infrastructure
-        run: pnpm exec cdk deploy 'TransformotionDev-PlatformWs' --require-approval never
+        run: pnpm exec cdk deploy --app 'bin/platform.ts' 'TransformotionDev-PlatformWs' --require-approval never
 
   deploy-prod:
     name: Platform → Prod
@@ -97,16 +97,16 @@ jobs:
 
       - name: CDK Deploy — GithubActionsRole (account-level, deploy once)
         working-directory: infrastructure
-        run: pnpm exec cdk deploy 'Transformotion-GithubActionsRole' --require-approval never
+        run: pnpm exec cdk deploy --app 'bin/platform.ts' 'Transformotion-GithubActionsRole' --require-approval never
 
       - name: CDK Deploy — PlatformTables (prod)
         working-directory: infrastructure
-        run: pnpm exec cdk deploy 'TransformotionProd-PlatformTables' --require-approval never
+        run: pnpm exec cdk deploy --app 'bin/platform.ts' 'TransformotionProd-PlatformTables' --require-approval never
 
       - name: CDK Deploy — Platform stacks (prod)
         working-directory: infrastructure
-        run: pnpm exec cdk deploy 'TransformotionProd-Storage' 'TransformotionProd-Network' 'TransformotionProd-Auth' 'TransformotionProd-AuthApi' 'TransformotionProd-Api' --require-approval never
+        run: pnpm exec cdk deploy --app 'bin/platform.ts' 'TransformotionProd-Storage' 'TransformotionProd-Network' 'TransformotionProd-Auth' 'TransformotionProd-AuthApi' 'TransformotionProd-Api' --require-approval never
 
       - name: CDK Deploy — PlatformWs (prod)
         working-directory: infrastructure
-        run: pnpm exec cdk deploy 'TransformotionProd-PlatformWs' --require-approval never
+        run: pnpm exec cdk deploy --app 'bin/platform.ts' 'TransformotionProd-PlatformWs' --require-approval never

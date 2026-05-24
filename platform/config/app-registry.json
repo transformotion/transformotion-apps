@@ -1,0 +1,24 @@
+{
+  "apps": [
+    {
+      "slug": "stock-analyser",
+      "displayName": "Stock Signal Analyser",
+      "description": "Cycle position analysis across ASX, NASDAQ, Dow Jones, FTSE",
+      "urlPrefix": "/stock-analyser",
+      "cognitoGroup": "stock-app-access",
+      "groupDescription": "User has access to Stock Signal",
+      "iconKey": "trending-up",
+      "colourToken": "primary"
+    },
+    {
+      "slug": "budget-tracker",
+      "displayName": "Budget Tracker",
+      "description": "Track income, expenses and savings across accounts",
+      "urlPrefix": "/budget-tracker",
+      "cognitoGroup": "budget-app-access",
+      "groupDescription": "User has access to Budget Tracker",
+      "iconKey": "wallet",
+      "colourToken": "signal-green"
+    }
+  ]
+}

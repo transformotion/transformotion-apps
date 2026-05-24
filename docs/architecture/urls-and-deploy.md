@@ -14,6 +14,8 @@ Path-based, single CloudFront distribution serving all apps at:
 | `/stock-analyser/*` | apps/stock-analyser | Stock Signal Analyser |
 | `/budget-tracker/*` | apps/budget-tracker | Budget Tracker |
 
+> **Launchpad auth path coupling:** `/sign-in/` and `/signed-out/` are Launchpad-owned routes. SA and BT use them as fallback values in `lib/config/index.ts` when `NEXT_PUBLIC_SIGNIN_URL` / `NEXT_PUBLIC_SIGNOUT_URL` are unset (local dev). If Launchpad renames these routes, SA and BT `lib/config/index.ts` need coordinated updates.
+
 ---
 
 ## Next.js basePath per app
@@ -119,13 +121,19 @@ Each app has its own path-filtered GitHub Actions deploy workflow. Workflows fir
 
 | Workflow | Trigger paths | What it deploys |
 |---|---|---|
-| `deploy-stock-analyser.yml` | `apps/stock-analyser/**`, `infrastructure/lib/stock-analyser/**`, `packages/**` | `TransformotionDev-StockAnalyserApi` CDK stack + S3 sync to `stock-analyser/` |
-| `deploy-budget-tracker.yml` | `apps/budget-tracker/**`, `infrastructure/lib/budget-tracker/**`, `packages/**` | `TransformotionDev-BudgetTrackerTables` + `BudgetTrackerApi` CDK stacks + S3 sync to `budget-tracker/` |
-| `deploy-platform.yml` | `infrastructure/lib/platform/**`, `infrastructure/bin/**`, `functions/**` | All platform CDK stacks |
+| `deploy-platform.yml` | `platform/infrastructure/**`, `infrastructure/bin/platform.ts`, `platform/functions/**` | All platform CDK stacks (`--app bin/platform.ts`) |
+| `deploy-stock-analyser.yml` | `apps/stock-analyser/**`, `infrastructure/bin/stock-analyser.ts`, `packages/api-client/**`, `packages/ui/**`, `packages/auth-client/**`, `packages/lambda-middleware/**` | `TransformotionDev-StockAnalyserApi` CDK stack (`--app bin/stock-analyser.ts`) + S3 sync to `stock-analyser/` |
+| `deploy-budget-tracker.yml` | `apps/budget-tracker/**`, `infrastructure/bin/budget-tracker.ts`, `packages/api-client/**`, `packages/ui/**`, `packages/auth-client/**`, `packages/lambda-middleware/**`, `packages/budget-domain/**` | `TransformotionDev-BudgetTrackerTables` + `BudgetTrackerApi` CDK stacks (`--app bin/budget-tracker.ts`) + S3 sync to `budget-tracker/` |
+| `deploy-migration-utilities.yml` | `migration-utilities/**`, `infrastructure/bin/migration-utilities.ts`, `packages/lambda-middleware/**` | `TransformotionDev-MigrationsApi` CDK stack (`--app bin/migration-utilities.ts`) |
 
-> **Note:** `deploy-platform.yml` does not trigger on `apps/**` changes, and app workflows do not trigger on `functions/**` changes. If you add a new Lambda to a platform stack and want it deployed with the app, ensure it is in `functions/` (not `apps/*/functions/`).
+Each CDK deploy step passes an explicit `--app` flag pointing to the per-app entrypoint. This means:
 
-Changes to one app's paths never trigger another app's deployment.
+- `deploy-stock-analyser.yml` synthesises only `StockAnalyserTables` + `StockAnalyserApi` — no platform stacks are instantiated.
+- `deploy-budget-tracker.yml` synthesises only `BudgetTrackerTables` + `BudgetTrackerApi`.
+- `deploy-migration-utilities.yml` synthesises only `MigrationsApi`.
+- `deploy-platform.yml` synthesises only platform stacks (Network, Auth, AuthApi, PlatformTables, Api, PlatformWs, Storage, GithubActionsRole).
+
+Changes to one app's paths never trigger another app's deployment. Changing `packages/runtime-config` does not trigger app redeployments (the APPS const was removed from that package in M7 / #346; app identity is now sourced from `platform/config/app-registry.json` at synth time).
 
 ---
 
@@ -169,10 +177,7 @@ The deploy verification script (`scripts/ci/verify-deploy.sh`) checks that the c
 
 | Gateway | Purpose | Name |
 |---|---|---|
-| `transformotion-api-{stage}` | Platform + Stock Analyser routes | `TransformotionDev-Api` stack output |
-| `budget-tracker-api-{stage}` | Budget Tracker routes (own gateway) | `TransformotionDev-BudgetTrackerApi` stack output |
-
-> The Budget Tracker has its own API Gateway rather than sharing the platform gateway. This is a known architectural divergence (tracked as M5 in PLAN.md). The separate gateway is functional; consolidation is optional.
+| `transformotion-api-{stage}` | All app routes (SA, BT, MU) + platform routes | `TransformotionDev-Api` stack output |
 
 ---
 

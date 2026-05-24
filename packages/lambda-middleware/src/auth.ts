@@ -114,8 +114,13 @@ export function requireAppAccess(auth: AuthClaims, app: AppName): void {
  * Like requireAppAccess but accepts multiple apps — passes if the user has
  * access to ANY of them. Used by platform handlers that serve multiple apps
  * (currently only claude-proxy).
+ *
+ * `apps` is `string[]` rather than `AppName[]` because the permitted-app list
+ * is loaded from an env var at Lambda cold-start, giving `string[]`. Narrowing
+ * to `AppName[]` would require a cast at every call site with no safety benefit
+ * (auth.apps is already `string[]` internally).
  */
-export function requireAnyAppAccess(auth: AuthClaims, apps: AppName[]): void {
+export function requireAnyAppAccess(auth: AuthClaims, apps: string[]): void {
   if (isSuperUser(auth)) return;
   if (apps.some(app => auth.apps.includes(app))) return;
   throw forbidden(`Access to one of [${apps.join(', ')}] required`);

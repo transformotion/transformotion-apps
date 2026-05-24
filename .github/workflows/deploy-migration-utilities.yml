@@ -5,7 +5,8 @@ on:
     branches: [develop, main]
     paths:
       - 'migration-utilities/**'
-      - 'packages/**'
+      - 'infrastructure/bin/migration-utilities.ts'
+      - 'packages/lambda-middleware/**'
   workflow_dispatch:
     inputs:
       target:
@@ -55,7 +56,7 @@ jobs:
 
       - name: CDK Deploy — Migration Utilities stack (dev)
         working-directory: infrastructure
-        run: pnpm exec cdk deploy 'TransformotionDev-MigrationsApi' --require-approval never
+        run: pnpm exec cdk deploy --app 'bin/migration-utilities.ts' 'TransformotionDev-MigrationsApi' --require-approval never
 
   deploy-prod:
     name: Migration Utilities → Prod
@@ -84,4 +85,4 @@ jobs:
 
       - name: CDK Deploy — Migration Utilities stack (prod)
         working-directory: infrastructure
-        run: pnpm exec cdk deploy 'TransformotionProd-MigrationsApi' --require-approval never
+        run: pnpm exec cdk deploy --app 'bin/migration-utilities.ts' 'TransformotionProd-MigrationsApi' --require-approval never

@@ -8,6 +8,7 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as lambdaNodejs from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import { Construct } from 'constructs';
+import { loadAppRegistry } from '../../infrastructure/lib/app-registry';
 
 export interface PlatformApiStackProps extends cdk.StackProps {
   stage: 'dev' | 'prod';
@@ -56,6 +57,11 @@ export class PlatformApiStack extends cdk.Stack {
     super(scope, id, props);
 
     const { stage, userPool, stockAnalyserAppClientId, budgetTrackerAppClientId, jobResultsTableName, wsApiEndpoint, wsApiId } = props;
+
+    // App registry — read once at synth time, passed to Lambdas as env vars.
+    const registry       = loadAppRegistry();
+    const appSlugs       = registry.apps.map(a => a.slug);
+    const appRegistryJson = JSON.stringify(registry);
 
     const jobResultsTable = dynamodb.Table.fromTableName(this, 'JobResultsTable', jobResultsTableName);
 
@@ -109,6 +115,9 @@ export class PlatformApiStack extends cdk.Stack {
         USER_POOL_ID:              userPool.userPoolId,
         APP_CLIENT_STOCK_ANALYSER: stockAnalyserAppClientId,
         APP_CLIENT_BUDGET_TRACKER: budgetTrackerAppClientId,
+        // APP_SLUGS: comma-separated list derived from app-registry.json at synth time.
+        // Lambda iterates APP_SLUGS.split(',') to build the appClientId → slug map.
+        APP_SLUGS:                 appSlugs.join(','),
       },
       bundling: { externalModules: ['@aws-sdk/*'], minify: true, sourceMap: false, forceDockerBundling: false },
     });
@@ -165,6 +174,7 @@ export class PlatformApiStack extends cdk.Stack {
       environment: {
         ANTHROPIC_SECRET_NAME: anthropicSecret.secretName,
         JOB_RESULTS_TABLE:     jobResultsTable.tableName,
+        PERMITTED_APPS:        appSlugs.join(','),
         ...(wsApiEndpoint ? { WS_API_ENDPOINT: wsApiEndpoint } : {}),
       },
       bundling: { externalModules: ['@aws-sdk/*'], minify: true, sourceMap: false, forceDockerBundling: false },
@@ -257,6 +267,23 @@ export class PlatformApiStack extends cdk.Stack {
       .addResource('invitations')
       .addMethod('POST', new apigateway.LambdaIntegration(invitationsFn, { proxy: true }), auth);
 
+    // ── /api/platform/apps — App registry (authenticated; Launchpad discovers available apps) ──
+    const appRegistryFn = new lambdaNodejs.NodejsFunction(this, 'AppRegistryFn', {
+      functionName: `transformotion-app-registry-${stage}`,
+      entry:        path.join(__dirname, '../functions/app-registry-api/src/index.ts'),
+      handler:      'handler',
+      runtime:      lambda.Runtime.NODEJS_20_X,
+      timeout:      cdk.Duration.seconds(10),
+      memorySize:   128,
+      environment: {
+        APP_REGISTRY: appRegistryJson,
+      },
+      bundling: { externalModules: ['@aws-sdk/*'], minify: true, sourceMap: false, forceDockerBundling: false },
+    });
+
+    const platformResource = this.apiResource.addResource('platform');
+    platformResource.addResource('apps').addMethod('GET', new apigateway.LambdaIntegration(appRegistryFn, { proxy: true }), auth);
+
     // ── Gateway Responses — CORS headers on all error responses ──────────────
     const corsHeaders = {
       'Access-Control-Allow-Origin':  "'*'",
@@ -280,6 +307,25 @@ export class PlatformApiStack extends cdk.Stack {
       value:       this.api.url,
       description: `App API base URL for ${stage}`,
       exportName:  `Transformotion-${stage}-ApiUrl`,
+    });
+
+    // CF exports consumed by per-app stacks (SA/BT/MU) to import the shared API
+    // without instantiating platform stacks in their CDK entry points.
+    new cdk.CfnOutput(this, 'RestApiId', {
+      value:      this.api.restApiId,
+      exportName: `Transformotion-${stage}-RestApiId`,
+    });
+    new cdk.CfnOutput(this, 'RestApiRootResourceId', {
+      value:      this.api.restApiRootResourceId,
+      exportName: `Transformotion-${stage}-RestApiRootResourceId`,
+    });
+    new cdk.CfnOutput(this, 'AuthorizerId', {
+      value:      this.authoriser.authorizerId,
+      exportName: `Transformotion-${stage}-AuthorizerId`,
+    });
+    new cdk.CfnOutput(this, 'ApiResourceId', {
+      value:      this.apiResource.resourceId,
+      exportName: `Transformotion-${stage}-ApiResourceId`,
     });
   }
 }

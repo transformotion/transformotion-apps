@@ -16,6 +16,7 @@
   },
   "include": [
     "bin/**/*.ts",
+    "lib/**/*.ts",
     "../platform/infrastructure/**/*.ts",
     "../apps/stock-analyser/infrastructure/**/*.ts",
     "../apps/budget-tracker/infrastructure/**/*.ts",

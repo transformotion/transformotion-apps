@@ -2,10 +2,20 @@
 
 ## Overview
 
-AWS CDK in TypeScript at `infrastructure/`. All stacks are defined in `infrastructure/bin/app.ts`. Each environment (`dev`, `prod`) has its own set of stacks; stacks are never shared across environments.
+AWS CDK in TypeScript at `infrastructure/`. Each group of stacks has its own CDK app entrypoint in `infrastructure/bin/`; stacks are never shared across environments.
 
 Account ID: `959516291617`  
 Region: `ap-southeast-2`
+
+| Entrypoint | Stacks synthesised | Deploy workflow |
+|---|---|---|
+| `infrastructure/bin/platform.ts` | All platform stacks (Network, Auth, AuthApi, PlatformTables, Api, PlatformWs, Storage, GithubActionsRole) | `deploy-platform.yml` |
+| `infrastructure/bin/stock-analyser.ts` | `StockAnalyserTables`, `StockAnalyserApi` | `deploy-stock-analyser.yml` |
+| `infrastructure/bin/budget-tracker.ts` | `BudgetTrackerTables`, `BudgetTrackerApi` | `deploy-budget-tracker.yml` |
+| `infrastructure/bin/migration-utilities.ts` | `MigrationsApi` | `deploy-migration-utilities.yml` |
+| `infrastructure/bin/launchpad.ts` | Launchpad stacks | `deploy-launchpad.yml` |
+
+Each entrypoint synthesises *only* the stacks it owns. App stacks (SA, BT, MU) resolve shared platform resources (REST API, authoriser, WebSocket API) via CloudFormation imports at deploy time — not via construct references passed through props. This enables independent deployment: changing SA code deploys only SA stacks; the platform stacks are untouched.
 
 Stacks are deployed by GitHub Actions workflows — see [urls-and-deploy.md](./urls-and-deploy.md) for workflow triggers.
 
@@ -118,19 +128,32 @@ API Gateway v2 WebSocket — does not use `CognitoUserPoolsAuthorizer`; uses a c
 
 ## Cross-stack dependencies
 
-Stacks receive constructs via `props` in `bin/app.ts`. Cross-stack references generate `Fn::ImportValue` in CloudFormation templates.
+### Platform-internal construct passing (within `bin/platform.ts`)
+
+Stacks in the same entrypoint share constructs via props as usual. CDK resolves these as `Fn::ImportValue` in the CloudFormation template.
 
 | Consumer stack | Receives from | Props |
 |---|---|---|
 | `AuthApiStack` | `AuthStack` | `userPoolId` (string — avoids construct reference) |
 | `PlatformApiStack` | `AuthStack` | `userPool` (construct) |
-| `PlatformApiStack` | `StockAnalyserTablesStack` | `analysisCacheTable` (construct) |
 | `PlatformApiStack` | `PlatformWsStack` | `wsApiEndpoint`, `wsApiId` (strings — for claude-proxy WSS push permission) |
 | `PlatformWsStack` | `AuthStack` | `userPool` (construct — for custom authoriser JWKS validation) |
-| `StockAnalyserApiStack` | `PlatformApiStack` | `api` and `authoriser` (constructs) |
-| `BudgetTrackerApiStack` | `PlatformApiStack` | `api`, `authoriser`, `apiResource` (constructs — mounts onto the shared platform gateway) |
-| `BudgetTrackerApiStack` | `BudgetTrackerTablesStack` | `budgetDataTableName`, `aiJobsTableName` (strings) |
-| `BudgetTrackerApiStack` | `PlatformWsStack` | `wsConnectionsTableName`, `wsApiId` (strings) |
+
+### CF export pattern — app stacks to platform stacks (cross-entrypoint)
+
+App stacks (`StockAnalyserApiStack`, `BudgetTrackerApiStack`, `MigrationsApiStack`) resolve shared platform resources via CloudFormation exports at deploy time. No construct references cross entrypoint boundaries.
+
+`PlatformApiStack` and `PlatformWsStack` emit these exports:
+
+| Export name | Produced by | Consumed by |
+|---|---|---|
+| `Transformotion-{stage}-RestApiId` | `PlatformApiStack` | SA, BT, MU — `RestApi.fromRestApiAttributes` |
+| `Transformotion-{stage}-RestApiRootResourceId` | `PlatformApiStack` | SA, BT, MU — `RestApi.fromRestApiAttributes` |
+| `Transformotion-{stage}-AuthorizerId` | `PlatformApiStack` | SA, BT, MU — JWT authoriser on each route |
+| `Transformotion-{stage}-ApiResourceId` | `PlatformApiStack` | BT, MU — `Resource.fromResourceAttributes` to mount under `/api/` |
+| `PlatformWs-{stage}-WsApiId` | `PlatformWsStack` | BT — WebSocket API ID for Lambda env var |
+
+The rule: cross-entrypoint references always go through CF exports (`Fn.importValue`), never through L2 construct passing. This allows each entrypoint to synthesise independently — no platform stacks are instantiated in app entrypoints.
 
 ---
 
@@ -138,11 +161,12 @@ Stacks receive constructs via `props` in `bin/app.ts`. Cross-stack references ge
 
 `deploy-platform.yml` sequences its CDK steps explicitly to avoid CloudFormation dependency conflicts:
 
-1. **Step 1 — BudgetTrackerTables first** — deploys `TransformotionDev-BudgetTrackerTables` in isolation. This must complete before Auth deploys, because BudgetTrackerTables previously imported an Auth export that needed to be released first.
-2. **Step 2 — Main platform stacks** — deploys `Storage`, `Network`, `Auth`, `AuthApi`, `Api` together. CDK runs independent stacks in parallel within this step.
-3. **Step 3 — PlatformTables** — deploys `PlatformTables` alone, after `Api` has updated its template. This ordering ensures `Api` releases any `Fn::ImportValue` exports before `PlatformTables` attempts to drop them.
+1. **Step 1 — GithubActionsRole** — account-level stack; deployed first as a one-off.
+2. **Step 2 — PlatformTables** — deployed in isolation before Auth, to release any stale export dependencies.
+3. **Step 3 — Main platform stacks** — deploys `Storage`, `Network`, `Auth`, `AuthApi`, `Api` together. CDK runs independent stacks in parallel within this step. `PlatformApiStack` emits the CF exports that SA/BT/MU consume.
+4. **Step 4 — PlatformWs** — deployed after `Api` so its `PlatformWs-{stage}-WsApiId` export is available to BT on next app deploy.
 
-The StockAnalyserTables deploy is triggered by `deploy-stock-analyser.yml`, not `deploy-platform.yml`. When a cross-stack prop flows from `StockAnalyserTables` → `PlatformApi`, that workflow must run first (or `PlatformApi` must use `fromTableName` as a temporary workaround — see data.md CDK constraints).
+App stacks (`deploy-stock-analyser.yml`, `deploy-budget-tracker.yml`, `deploy-migration-utilities.yml`) consume the CF exports produced in Step 3/4 above. On first-ever deploy, the platform stacks must be deployed before the app stacks. On subsequent deploys, each workflow is independently triggered and independently deploys only its own stacks.
 
 ---
 
@@ -250,8 +274,8 @@ Both checks cover the same scope:
 When a new app is added to the platform:
 
 1. Create `apps/{app-name}/infrastructure/{app-name}-tables-stack.ts` — DynamoDB tables
-2. Create `apps/{app-name}/infrastructure/{app-name}-api-stack.ts` — Lambda functions, routes added to the shared platform API Gateway (`api` and `authoriser` props from `PlatformApiStack`)
-3. Register both stacks in `infrastructure/bin/app.ts` for both `dev` and `prod`
-4. Update `deploy-platform.yml` if tables need to deploy before other stacks
-5. Add a Cognito app client for the new app in `auth-stack.ts`
-6. Update `docs/architecture/cdk.md` (this file) with the new stacks
+2. Create `apps/{app-name}/infrastructure/{app-name}-api-stack.ts` — Lambda functions + routes on the shared platform API Gateway. Import the API and authoriser via `Fn.importValue` using the CF export names above — do not accept `api`/`authoriser` as props.
+3. Create `infrastructure/bin/{app-name}.ts` containing only the new app's stacks. Use `cdk.Fn.importValue` to resolve the CF exports from PlatformApiStack and PlatformWsStack.
+4. Create `.github/workflows/deploy-{app-name}.yml` with `--app 'bin/{app-name}.ts'` on all CDK deploy steps.
+5. Add a Cognito app client for the new app in `auth-stack.ts`.
+6. Update `docs/architecture/cdk.md` (this file), `docs/architecture/urls-and-deploy.md`, and `CONTRIBUTING.md §3.4` with the new stacks.

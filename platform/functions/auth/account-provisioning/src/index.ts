@@ -3,7 +3,6 @@ import {
   CognitoIdentityProviderClient,
   AdminUpdateUserAttributesCommand,
 } from '@aws-sdk/client-cognito-identity-provider';
-import { APPS } from '@transformotion/runtime-config';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
   DynamoDBDocumentClient,
@@ -27,11 +26,13 @@ const ACCOUNTS_TABLE        = process.env.ACCOUNTS_TABLE!;
 const ACCOUNT_MEMBERS_TABLE = process.env.ACCOUNT_MEMBERS_TABLE!;
 const USER_POOL_ID          = process.env.USER_POOL_ID!;
 
+// Build appClientId → appSlug map from APP_SLUGS env var (comma-separated list
+// set by CDK from app-registry.json). Per-app client IDs are in APP_CLIENT_<SLUG> env vars.
 const APP_CLIENT_TO_SLUG: Record<string, string> = Object.fromEntries(
-  APPS.map(app => [
-    process.env[`APP_CLIENT_${app.slug.toUpperCase().replace(/-/g, '_')}`]!,
-    app.slug,
-  ])
+  (process.env.APP_SLUGS ?? '').split(',').filter(Boolean).map(slug => [
+    process.env[`APP_CLIENT_${slug.toUpperCase().replace(/-/g, '_')}`]!,
+    slug,
+  ]),
 );
 
 /**

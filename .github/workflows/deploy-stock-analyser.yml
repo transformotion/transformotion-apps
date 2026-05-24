@@ -5,11 +5,10 @@ on:
     branches: [develop, main]
     paths:
       - 'apps/stock-analyser/**'
-      - 'apps/stock-analyser/infrastructure/**'
+      - 'infrastructure/bin/stock-analyser.ts'
       - 'packages/api-client/**'
       - 'packages/ui/**'
       - 'packages/auth-client/**'
-      - 'packages/runtime-config/**'
       - 'packages/lambda-middleware/**'
   workflow_dispatch:
     inputs:
@@ -78,7 +77,7 @@ jobs:
 
       - name: CDK Deploy — Stock Analyser stacks (dev)
         working-directory: infrastructure
-        run: pnpm exec cdk deploy 'TransformotionDev-StockAnalyserApi' --require-approval never
+        run: pnpm exec cdk deploy --app 'bin/stock-analyser.ts' 'TransformotionDev-StockAnalyserApi' --require-approval never
 
       - name: Wait for PlatformWs stack (handles first-deploy race; see #295)
         run: |
@@ -193,7 +192,7 @@ jobs:
 
       - name: CDK Deploy — Stock Analyser stacks (prod)
         working-directory: infrastructure
-        run: pnpm exec cdk deploy 'TransformotionProd-StockAnalyserTables' 'TransformotionProd-StockAnalyserApi' --require-approval never
+        run: pnpm exec cdk deploy --app 'bin/stock-analyser.ts' 'TransformotionProd-StockAnalyserTables' 'TransformotionProd-StockAnalyserApi' --require-approval never
 
       - name: Wait for PlatformWs stack (handles first-deploy race; see #295)
         run: |
