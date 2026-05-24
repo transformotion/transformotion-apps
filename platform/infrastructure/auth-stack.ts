@@ -19,7 +19,7 @@ export interface AuthStackProps extends cdk.StackProps {
  *
  * Three app clients (one per app):
  *   LaunchpadAppClient    — shell; /, /sign-in/, /launchpad/. Social IDPs enabled.
- *   StockAnalyserAppClient — /stock-signal/*. Cognito only.
+ *   StockAnalyserAppClient — /stock-analyser/*. Cognito only.
  *   BudgetTrackerAppClient — /budget-tracker/*. Cognito only.
  *
  * All three authenticate against the same user pool. SSO via the shared
@@ -191,10 +191,10 @@ export class AuthStack extends cdk.Stack {
     // Social sign-in sessions established at the launchpad propagate via SSO.
     this.stockAnalyserAppClient = this.createAppClient('StockAnalyserAppClient', {
       callbackUrls: isProd
-        ? ['https://apps.transformotion.com.au/stock-signal/callback']
+        ? ['https://apps.transformotion.com.au/stock-analyser/callback']
         : [
-            'https://dev.apps.transformotion.com.au/stock-signal/callback',
-            'http://localhost:3000/stock-signal/callback',
+            'https://dev.apps.transformotion.com.au/stock-analyser/callback',
+            'http://localhost:3000/stock-analyser/callback',
           ],
       logoutUrls: isProd
         ? ['https://apps.transformotion.com.au/signed-out/']

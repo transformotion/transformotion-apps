@@ -19,8 +19,8 @@ const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const TABLE = process.env.PORTFOLIO_TABLE!;
 
 export const handler = withAuth(async ({ auth, account, event }) => {
-  requireAppAccess(auth, 'stock-signal');
-  requireAccountAccess(auth, 'stock-signal', account.accountId);
+  requireAppAccess(auth, 'stock-analyser');
+  requireAccountAccess(auth, 'stock-analyser', account.accountId);
   const { accountId } = account;
 
   // ── GET /portfolio ────────────────────────────────────────────────────────

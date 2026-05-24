@@ -14,7 +14,7 @@ export interface PlatformApiStackProps extends cdk.StackProps {
   /** Imported from AuthStack */
   userPool: cognito.IUserPool;
   /** Imported from AuthStack — used by account-provisioning to map aud → appSlug */
-  stockSignalAppClientId: string;
+  stockAnalyserAppClientId: string;
   budgetTrackerAppClientId: string;
   /** Table name for platform.job-results-{stage} — claude-proxy writes async job records here */
   jobResultsTableName: string;
@@ -55,7 +55,7 @@ export class PlatformApiStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: PlatformApiStackProps) {
     super(scope, id, props);
 
-    const { stage, userPool, stockSignalAppClientId, budgetTrackerAppClientId, jobResultsTableName, wsApiEndpoint, wsApiId } = props;
+    const { stage, userPool, stockAnalyserAppClientId, budgetTrackerAppClientId, jobResultsTableName, wsApiEndpoint, wsApiId } = props;
 
     const jobResultsTable = dynamodb.Table.fromTableName(this, 'JobResultsTable', jobResultsTableName);
 
@@ -107,7 +107,7 @@ export class PlatformApiStack extends cdk.Stack {
         ACCOUNTS_TABLE:            accountsTable.tableName,
         ACCOUNT_MEMBERS_TABLE:     accountMembersTable.tableName,
         USER_POOL_ID:              userPool.userPoolId,
-        APP_CLIENT_STOCK_SIGNAL:   stockSignalAppClientId,
+        APP_CLIENT_STOCK_ANALYSER: stockAnalyserAppClientId,
         APP_CLIENT_BUDGET_TRACKER: budgetTrackerAppClientId,
       },
       bundling: { externalModules: ['@aws-sdk/*'], minify: true, sourceMap: false, forceDockerBundling: false },

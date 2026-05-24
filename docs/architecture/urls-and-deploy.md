@@ -11,7 +11,7 @@ Path-based, single CloudFront distribution serving all apps at:
 | `/` | apps/launchpad | Root redirects to `/launchpad/` (authenticated) or `/sign-in/` (unauthenticated) |
 | `/sign-in/*` | apps/launchpad | Sign-in and OAuth callback routes |
 | `/launchpad/*` | apps/launchpad | Authenticated launchpad UI, app tile navigation |
-| `/stock-signal/*` | apps/stock-analyser | Stock Signal Analyser |
+| `/stock-analyser/*` | apps/stock-analyser | Stock Signal Analyser |
 | `/budget-tracker/*` | apps/budget-tracker | Budget Tracker |
 
 ---
@@ -23,7 +23,7 @@ Each app's `next.config.mjs` sets `basePath` to match its serving path:
 | App | basePath | Static export path |
 |---|---|---|
 | `apps/launchpad` | *(none — serves at root)* | `out/` |
-| `apps/stock-analyser` | `/stock-signal` | `out/stock-signal/` |
+| `apps/stock-analyser` | `/stock-analyser` | `out/stock-analyser/` |
 | `apps/budget-tracker` | `/budget-tracker` | `out/budget-tracker/` |
 
 All apps use `output: 'export'` (Next.js static export) and `trailingSlash: true`.
@@ -46,7 +46,7 @@ bucket/
   launchpad/
     index.html
     ...
-  stock-signal/
+  stock-analyser/
     index.html
     _next/                          ← stock-analyser assets
     ...
@@ -61,13 +61,13 @@ Deploy workflows sync to their respective prefix only. No deploy syncs the bucke
 Correct S3 sync pattern per app:
 ```bash
 # Stock Analyser
-aws s3 sync apps/stock-analyser/out/stock-signal s3://${BUCKET}/stock-signal --delete
+aws s3 sync apps/stock-analyser/out/stock-analyser s3://${BUCKET}/stock-analyser --delete
 
 # Budget Tracker
 aws s3 sync apps/budget-tracker/out/budget-tracker s3://${BUCKET}/budget-tracker --delete
 
 # Launchpad (syncs root, must NOT use --delete on full bucket)
-aws s3 sync apps/launchpad/out s3://${BUCKET}/ --delete --exclude "stock-signal/*" --exclude "budget-tracker/*"
+aws s3 sync apps/launchpad/out s3://${BUCKET}/ --delete --exclude "stock-analyser/*" --exclude "budget-tracker/*"
 ```
 
 ---
@@ -101,21 +101,15 @@ function handler(event) {
 }
 ```
 
-The function is path-agnostic and shared by every sub-app behavior. Each sub-app adds an `additionalBehaviors` entry in `NetworkStack` referencing the same function instance. Implemented for `/budget-tracker/*` in M6 #154 (PR #194) and `/launchpad/*` in M6 #155 follow-up. The same pattern applies to `/stock-signal/*` when the stock-analyser extraction lands (M7).
+The function is path-agnostic and shared by every sub-app behavior. Each sub-app adds an `additionalBehaviors` entry in `NetworkStack` referencing the same function instance. Implemented for `/budget-tracker/*` in M6 #154 (PR #194), `/launchpad/*` in M6 #155 follow-up, and `/stock-analyser/*` in M7 #251.
 
 ### Current state
 
-Implemented behaviors with `SubAppIndexRewrite`:
+Implemented behaviors with `SubAppIndexRewrite` — all active as of M7 #251 (verified 2026-05-21):
 
 - `/budget-tracker/*` — M6 #154 (PR #194)
-- `/launchpad/*` — M6 #155 follow-up (transitional; will be removed when launchpad promotes to S3 root and the default behavior takes over)
-
-Remaining extractions (M7 scope):
-
-- **stock-analyser:** currently serves from S3 root; needs `basePath: '/stock-signal'` in `next.config.mjs`, deploy workflow updated to sync to the `stock-signal/` prefix, and a new `/stock-signal/*` behavior
-- **launchpad at root:** requires stock-analyser to vacate root first; once promoted, the `/launchpad/*` transitional behavior is removed and launchpad serves via the default behavior (no `SubAppIndexRewrite` needed for the root occupant)
-
-Until M7 completes the remaining extractions, the SPA fallback (403/404 → `/index.html`) returns stock-analyser content for any path not handled by an explicit behavior. This is acceptable transitional behaviour: stock-analyser routes continue to work via the fallback, and budget-tracker and launchpad routes are handled by their explicit behaviors.
+- `/stock-analyser/*` — M7 #251; prefix renamed `stock-signal` → `stock-analyser` in #286
+- Launchpad at root — serves via the default behavior (no `SubAppIndexRewrite` needed for the root occupant)
 
 ---
 
@@ -125,7 +119,7 @@ Each app has its own path-filtered GitHub Actions deploy workflow. Workflows fir
 
 | Workflow | Trigger paths | What it deploys |
 |---|---|---|
-| `deploy-stock-analyser.yml` | `apps/stock-analyser/**`, `infrastructure/lib/stock-analyser/**`, `packages/**` | `TransformotionDev-StockAnalyserApi` CDK stack + S3 sync to `stock-signal/` |
+| `deploy-stock-analyser.yml` | `apps/stock-analyser/**`, `infrastructure/lib/stock-analyser/**`, `packages/**` | `TransformotionDev-StockAnalyserApi` CDK stack + S3 sync to `stock-analyser/` |
 | `deploy-budget-tracker.yml` | `apps/budget-tracker/**`, `infrastructure/lib/budget-tracker/**`, `packages/**` | `TransformotionDev-BudgetTrackerTables` + `BudgetTrackerApi` CDK stacks + S3 sync to `budget-tracker/` |
 | `deploy-platform.yml` | `infrastructure/lib/platform/**`, `infrastructure/bin/**`, `functions/**` | All platform CDK stacks |
 

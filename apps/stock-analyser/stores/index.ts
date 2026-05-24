@@ -8,5 +8,5 @@
 // Auth store (shared across all apps)
 export { useAuthStore, selectUser, selectIsAuthenticated, selectIsLoading, selectIsInitialized } from './auth/use-auth-store'
 
-// Stock Signal store (to be created)
-// export { useSignalStore } from './stock-signal/use-signal-store'
+// Stock Analyser store (to be created)
+// export { useSignalStore } from './stock-analyser/use-signal-store'

@@ -169,43 +169,43 @@
       "reason": "PRE-FREEZE: legacy unused binding, no specific owner — eligible for cleanup when the file is next touched"
     },
     {
-      "file": "apps/stock-analyser/components/stock-signal/app-shell.tsx",
+      "file": "apps/stock-analyser/components/stock-analyser/app-shell.tsx",
       "rule": "@typescript-eslint/no-unused-vars",
       "count": 1,
       "reason": "PRE-FREEZE: legacy unused binding, no specific owner — eligible for cleanup when the file is next touched"
     },
     {
-      "file": "apps/stock-analyser/components/stock-signal/tabs/analyser-tab.tsx",
+      "file": "apps/stock-analyser/components/stock-analyser/tabs/analyser-tab.tsx",
       "rule": "@typescript-eslint/no-unused-vars",
       "count": 2,
       "reason": "PRE-FREEZE: legacy unused binding, no specific owner — eligible for cleanup when the file is next touched"
     },
     {
-      "file": "apps/stock-analyser/components/stock-signal/tabs/etfs-tab.tsx",
+      "file": "apps/stock-analyser/components/stock-analyser/tabs/etfs-tab.tsx",
       "rule": "@typescript-eslint/no-unused-vars",
       "count": 1,
       "reason": "PRE-FREEZE: legacy unused binding, no specific owner — eligible for cleanup when the file is next touched"
     },
     {
-      "file": "apps/stock-analyser/components/stock-signal/tabs/metals-tab.tsx",
+      "file": "apps/stock-analyser/components/stock-analyser/tabs/metals-tab.tsx",
       "rule": "@typescript-eslint/no-unused-vars",
       "count": 5,
       "reason": "PRE-FREEZE: legacy unused binding, no specific owner — eligible for cleanup when the file is next touched"
     },
     {
-      "file": "apps/stock-analyser/components/stock-signal/tabs/portfolio-tab.tsx",
+      "file": "apps/stock-analyser/components/stock-analyser/tabs/portfolio-tab.tsx",
       "rule": "@typescript-eslint/no-unused-expressions",
       "count": 1,
       "reason": "PRE-FREEZE: legacy unused binding, no specific owner — eligible for cleanup when the file is next touched"
     },
     {
-      "file": "apps/stock-analyser/components/stock-signal/tabs/recommendations-tab.tsx",
+      "file": "apps/stock-analyser/components/stock-analyser/tabs/recommendations-tab.tsx",
       "rule": "@typescript-eslint/no-unused-vars",
       "count": 5,
       "reason": "#33: investigated, deferred to separate fix"
     },
     {
-      "file": "apps/stock-analyser/components/stock-signal/tabs/watchlist-tab.tsx",
+      "file": "apps/stock-analyser/components/stock-analyser/tabs/watchlist-tab.tsx",
       "rule": "@typescript-eslint/no-unused-vars",
       "count": 2,
       "reason": "PRE-FREEZE: legacy unused binding, no specific owner — eligible for cleanup when the file is next touched"

@@ -6,17 +6,15 @@
  * CDK stacks, launchpad, and app configs.
  *
  * Slug values are the JWT claim key used in `accounts[slug]` and the URL
- * prefix served by CloudFront. The `slug` for Stock Analyser is currently
- * 'stock-signal' matching the live claim key; it will become 'stock-analyser'
- * when issue #286 renames the URL prefix in coordination.
+ * prefix served by CloudFront.
  */
 
 export const APPS = [
   {
-    slug:             'stock-signal',
+    slug:             'stock-analyser',
     cognitoGroup:     'stock-app-access',
     groupDescription: 'User has access to Stock Signal',
-    urlPrefix:        '/stock-signal',
+    urlPrefix:        '/stock-analyser',
     label:            'Stock Signal Analyser',
   },
   {

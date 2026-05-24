@@ -1,14 +1,14 @@
 "use client"
 
 import { getConfig } from "@/lib/config"
-import { NavigationProvider, AppShell, useNavigation } from "@/components/stock-signal/app-shell"
-import { MarketAnalysisTab } from "@/components/stock-signal/tabs/market-analysis-tab"
-import { RecommendationsTab } from "@/components/stock-signal/tabs/recommendations-tab"
-import { ETFsTab } from "@/components/stock-signal/tabs/etfs-tab"
-import { MetalsTab } from "@/components/stock-signal/tabs/metals-tab"
-import { AnalyserTab } from "@/components/stock-signal/tabs/analyser-tab"
-import { PortfolioTab } from "@/components/stock-signal/tabs/portfolio-tab"
-import { WatchlistTab } from "@/components/stock-signal/tabs/watchlist-tab"
+import { NavigationProvider, AppShell, useNavigation } from "@/components/stock-analyser/app-shell"
+import { MarketAnalysisTab } from "@/components/stock-analyser/tabs/market-analysis-tab"
+import { RecommendationsTab } from "@/components/stock-analyser/tabs/recommendations-tab"
+import { ETFsTab } from "@/components/stock-analyser/tabs/etfs-tab"
+import { MetalsTab } from "@/components/stock-analyser/tabs/metals-tab"
+import { AnalyserTab } from "@/components/stock-analyser/tabs/analyser-tab"
+import { PortfolioTab } from "@/components/stock-analyser/tabs/portfolio-tab"
+import { WatchlistTab } from "@/components/stock-analyser/tabs/watchlist-tab"
 import { AuthGuard } from "@/components/providers/auth-guard"
 import { useAuthStore } from "@/stores/auth/use-auth-store"
 import { TabErrorBoundary } from "@transformotion/ui-error-boundaries"
@@ -36,7 +36,7 @@ function TabRouter() {
   }
 }
 
-function StockSignalContent() {
+function StockAnalyserContent() {
   const { signOut } = useAuthStore()
 
   const handleSignOut = async () => {
@@ -63,10 +63,10 @@ function StockSignalContent() {
   )
 }
 
-export default function StockSignalPage() {
+export default function StockAnalyserPage() {
   return (
     <AuthGuard>
-      <StockSignalContent />
+      <StockAnalyserContent />
     </AuthGuard>
   )
 }

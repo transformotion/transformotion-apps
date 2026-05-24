@@ -3,7 +3,7 @@ import * as jose from 'jose';
 const USER_POOL_ID    = process.env.COGNITO_USER_POOL_ID!;
 const REGION          = process.env.AWS_REGION ?? 'ap-southeast-2';
 const DEFAULT_APP     = process.env.APP_NAME ?? 'budget-tracker';
-const PERMITTED_APPS  = (process.env.PERMITTED_APPS ?? 'budget-tracker,stock-signal').split(',');
+const PERMITTED_APPS  = (process.env.PERMITTED_APPS ?? 'budget-tracker,stock-analyser').split(',');
 
 const JWKS_URL = `https://cognito-idp.${REGION}.amazonaws.com/${USER_POOL_ID}/.well-known/jwks.json`;
 const ISSUER   = `https://cognito-idp.${REGION}.amazonaws.com/${USER_POOL_ID}`;

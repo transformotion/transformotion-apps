@@ -58,9 +58,9 @@ describe('extractAuthClaims', () => {
   it('parses apps JSON claim', () => {
     const claims = extractAuthClaims(makeEvent({
       sub: 'u1', email: 'a@b.com',
-      apps: '["budget-tracker","stock-signal"]',
+      apps: '["budget-tracker","stock-analyser"]',
     }));
-    expect(claims.apps).toEqual(['budget-tracker', 'stock-signal']);
+    expect(claims.apps).toEqual(['budget-tracker', 'stock-analyser']);
   });
 
   it('parses accounts JSON claim', () => {
@@ -139,7 +139,7 @@ describe('requireAppAccess', () => {
 
   it('throws 403 when user has access to a different app only', () => {
     expect(() => requireAppAccess(
-      makeClaims({ apps: ['stock-signal'] }), 'budget-tracker',
+      makeClaims({ apps: ['stock-analyser'] }), 'budget-tracker',
     )).toThrow(HttpError);
   });
 });
@@ -149,24 +149,24 @@ describe('requireAppAccess', () => {
 describe('requireAnyAppAccess', () => {
   it('passes when user has at least one of the apps', () => {
     expect(() => requireAnyAppAccess(
-      makeClaims({ apps: ['budget-tracker'] }), ['budget-tracker', 'stock-signal'],
+      makeClaims({ apps: ['budget-tracker'] }), ['budget-tracker', 'stock-analyser'],
     )).not.toThrow();
   });
 
   it('passes when siteAdmin is true', () => {
     expect(() => requireAnyAppAccess(
-      makeClaims({ siteAdmin: true }), ['budget-tracker', 'stock-signal'],
+      makeClaims({ siteAdmin: true }), ['budget-tracker', 'stock-analyser'],
     )).not.toThrow();
   });
 
   it('throws 403 when user has neither app in apps claim (fail closed — no group fallback)', () => {
     expect(() => requireAnyAppAccess(
-      makeClaims({ groups: ['stock-app'] }), ['budget-tracker', 'stock-signal'],
+      makeClaims({ groups: ['stock-app'] }), ['budget-tracker', 'stock-analyser'],
     )).toThrow(HttpError);
   });
 
   it('throws 403 when user has neither app', () => {
-    expect(() => requireAnyAppAccess(makeClaims(), ['budget-tracker', 'stock-signal'])).toThrow(HttpError);
+    expect(() => requireAnyAppAccess(makeClaims(), ['budget-tracker', 'stock-analyser'])).toThrow(HttpError);
   });
 });
 

@@ -30,7 +30,7 @@ transformotion-apps/
 │   │   └── package.json                   # @transformotion/budget-tracker
 │   ├── launchpad/                         # Platform shell — sign-in, app tile rendering
 │   │   └── package.json                   # @transformotion/launchpad
-│   ├── stock-analyser/                    # Stock Signal Analyser, basePath /stock-signal
+│   ├── stock-analyser/                    # Stock Signal Analyser, basePath /stock-analyser
 │   │   ├── app/                           # Next.js App Router pages
 │   │   ├── components/                    # App-specific React components
 │   │   ├── functions/                     # App-specific Lambda source

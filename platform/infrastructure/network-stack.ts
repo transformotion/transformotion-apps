@@ -62,7 +62,7 @@ export class NetworkStack extends cdk.Stack {
 
     // ── CloudFront Function — index rewrite ───────────────────────────────
     // S3 OAC REST API returns 403 for both directory keys (e.g. /sign-in/) and
-    // extension-less paths (e.g. /stock-signal/callback). Without rewriting these
+    // extension-less paths (e.g. /stock-analyser/callback). Without rewriting these
     // to their index.html equivalents, all such requests fall through to the
     // 403→/index.html error response, which serves the SA root page. This breaks
     // OAuth callbacks because the SA root page does not configure Amplify and the

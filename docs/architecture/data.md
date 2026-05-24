@@ -54,7 +54,7 @@ Account container records, shared across all apps.
 |---|---|---|
 | `accountId` (PK) | String | UUID |
 | `name` | String | Human-readable account name |
-| `appSlug` | String | Which app this account belongs to (`stock-signal`, `budget-tracker`) |
+| `appSlug` | String | Which app this account belongs to (`stock-analyser`, `budget-tracker`) |
 | `createdAt` | String | ISO 8601 |
 | `ownerId` | String | userId of the account creator |
 
@@ -190,7 +190,7 @@ For full type definitions see [v0-reference/contracts/budget-tracker/data-models
 Handlers enforce this by calling:
 
 ```typescript
-requireAccountAccess(auth, 'stock-signal', accountId)
+requireAccountAccess(auth, 'stock-analyser', accountId)
 // or
 requireAccountAccess(auth, 'budget-tracker', accountId, 'member')
 ```
