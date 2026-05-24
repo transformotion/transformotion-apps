@@ -68,13 +68,13 @@ new AuthApiStack(app, 'TransformotionDev-AuthApi', {
   appUrl:      'https://dev.apps.transformotion.com.au',
 });
 
-new PlatformTablesStack(app, 'TransformotionDev-PlatformTables', {
+const devPlatformTables = new PlatformTablesStack(app, 'TransformotionDev-PlatformTables', {
   env,
   stage:       'dev',
   description: 'Transformotion Apps — Dev platform DynamoDB tables (users, accounts, invitations)',
 });
 
-const devStockAnalyserTables = new StockAnalyserTablesStack(app, 'TransformotionDev-StockAnalyserTables', {
+new StockAnalyserTablesStack(app, 'TransformotionDev-StockAnalyserTables', {
   env,
   stage:       'dev',
   description: 'Transformotion Apps — Dev Stock Analyser DynamoDB tables',
@@ -94,17 +94,18 @@ const devPlatformApi = new PlatformApiStack(app, 'TransformotionDev-Api', {
   userPool:                 devAuth.userPool,
   stockSignalAppClientId:   devAuth.stockAnalyserAppClient.userPoolClientId,
   budgetTrackerAppClientId: devAuth.budgetTrackerAppClient.userPoolClientId,
-  analysisCacheTable:       devStockAnalyserTables.analysisCacheTable,
+  jobResultsTable:          devPlatformTables.jobResultsTable,
   wsApiEndpoint:            devPlatformWs.wsApiEndpoint,
   wsApiId:                  devPlatformWs.webSocketApi.apiId,
 });
 
 new StockAnalyserApiStack(app, 'TransformotionDev-StockAnalyserApi', {
   env,
-  stage:       'dev',
-  description: 'Transformotion Apps — Dev Stock Analyser API routes',
-  api:         devPlatformApi.api,
-  authoriser:  devPlatformApi.authoriser,
+  stage:               'dev',
+  description:         'Transformotion Apps — Dev Stock Analyser API routes',
+  api:                 devPlatformApi.api,
+  authoriser:          devPlatformApi.authoriser,
+  jobResultsTableName: devPlatformTables.jobResultsTable.tableName,
 });
 
 const devBudgetTrackerTables = new BudgetTrackerTablesStack(app, 'TransformotionDev-BudgetTrackerTables', {
@@ -164,13 +165,13 @@ new AuthApiStack(app, 'TransformotionProd-AuthApi', {
   appUrl:      'https://apps.transformotion.com.au',
 });
 
-new PlatformTablesStack(app, 'TransformotionProd-PlatformTables', {
+const prodPlatformTables = new PlatformTablesStack(app, 'TransformotionProd-PlatformTables', {
   env,
   stage:       'prod',
   description: 'Transformotion Apps — Prod platform DynamoDB tables (users, accounts, invitations)',
 });
 
-const prodStockAnalyserTables = new StockAnalyserTablesStack(app, 'TransformotionProd-StockAnalyserTables', {
+new StockAnalyserTablesStack(app, 'TransformotionProd-StockAnalyserTables', {
   env,
   stage:       'prod',
   description: 'Transformotion Apps — Prod Stock Analyser DynamoDB tables',
@@ -190,17 +191,18 @@ const prodPlatformApi = new PlatformApiStack(app, 'TransformotionProd-Api', {
   userPool:                 prodAuth.userPool,
   stockSignalAppClientId:   prodAuth.stockAnalyserAppClient.userPoolClientId,
   budgetTrackerAppClientId: prodAuth.budgetTrackerAppClient.userPoolClientId,
-  analysisCacheTable:       prodStockAnalyserTables.analysisCacheTable,
+  jobResultsTable:          prodPlatformTables.jobResultsTable,
   wsApiEndpoint:            prodPlatformWs.wsApiEndpoint,
   wsApiId:                  prodPlatformWs.webSocketApi.apiId,
 });
 
 new StockAnalyserApiStack(app, 'TransformotionProd-StockAnalyserApi', {
   env,
-  stage:       'prod',
-  description: 'Transformotion Apps — Prod Stock Analyser API routes',
-  api:         prodPlatformApi.api,
-  authoriser:  prodPlatformApi.authoriser,
+  stage:               'prod',
+  description:         'Transformotion Apps — Prod Stock Analyser API routes',
+  api:                 prodPlatformApi.api,
+  authoriser:          prodPlatformApi.authoriser,
+  jobResultsTableName: prodPlatformTables.jobResultsTable.tableName,
 });
 
 const prodBudgetTrackerTables = new BudgetTrackerTablesStack(app, 'TransformotionProd-BudgetTrackerTables', {

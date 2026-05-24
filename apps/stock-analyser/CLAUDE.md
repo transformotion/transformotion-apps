@@ -58,7 +58,7 @@ All Stock Analyser Lambdas share the platform API Gateway and Cognito JWT author
 | `stock-analyser.watchlist-{stage}` | `accountId` | `ticker` | Watchlist items per account |
 | `stock-analyser.analysis-cache-{stage}` | `accountId` | `cacheKey` | Claude analysis cache (TTL: expiresAt) |
 
-Analysis cache is accessed via both `transformotion-claude-proxy-{stage}` (write, for the async job pattern) and `transformotion-analysis-cache-{stage}` (read/delete, for polling and cache management).
+Analysis cache is accessed by `transformotion-analysis-cache-{stage}` (read/delete). As of M7 / PR #334 (Bucket A'), async job records (`job-*` keys) are written by `claude-proxy` to `platform.job-results-{stage}` (not this table). The `analysis-cache` Lambda routes GET requests for `job-*` keys to that platform table; all other keys stay on this table.
 
 ## Authorization requirement
 
