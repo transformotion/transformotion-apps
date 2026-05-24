@@ -16,8 +16,8 @@ export interface PlatformApiStackProps extends cdk.StackProps {
   /** Imported from AuthStack — used by account-provisioning to map aud → appSlug */
   stockSignalAppClientId: string;
   budgetTrackerAppClientId: string;
-  /** Imported from PlatformTablesStack — claude-proxy writes async job records here */
-  jobResultsTable: dynamodb.ITable;
+  /** Table name for platform.job-results-{stage} — claude-proxy writes async job records here */
+  jobResultsTableName: string;
   /** Imported from PlatformWsStack — enables claude-proxy to push WSS notifications */
   wsApiEndpoint?: string;
   /** Imported from PlatformWsStack — used for execute-api:ManageConnections IAM resource */
@@ -55,7 +55,9 @@ export class PlatformApiStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: PlatformApiStackProps) {
     super(scope, id, props);
 
-    const { stage, userPool, stockSignalAppClientId, budgetTrackerAppClientId, jobResultsTable, wsApiEndpoint, wsApiId } = props;
+    const { stage, userPool, stockSignalAppClientId, budgetTrackerAppClientId, jobResultsTableName, wsApiEndpoint, wsApiId } = props;
+
+    const jobResultsTable = dynamodb.Table.fromTableName(this, 'JobResultsTable', jobResultsTableName);
 
     // ── REST API ─────────────────────────────────────────────────────────────
     this.api = new apigateway.RestApi(this, 'Api', {
