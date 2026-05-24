@@ -1,15 +1,10 @@
 name: Deploy — Stock Analyser
 
 on:
-  push:
+  workflow_run:
+    workflows: ['Deploy — Platform Infrastructure']
+    types: [completed]
     branches: [develop, main]
-    paths:
-      - 'apps/stock-analyser/**'
-      - 'infrastructure/bin/stock-analyser.ts'
-      - 'packages/api-client/**'
-      - 'packages/ui/**'
-      - 'packages/auth-client/**'
-      - 'packages/lambda-middleware/**'
   workflow_dispatch:
     inputs:
       target:
@@ -20,7 +15,7 @@ on:
         options: [dev, prod]
 
 concurrency:
-  group: deploy-stock-analyser-${{ github.ref_name }}
+  group: deploy-stock-analyser-${{ github.event.workflow_run.head_branch || github.ref_name }}
   cancel-in-progress: false
 
 permissions:
@@ -35,7 +30,7 @@ jobs:
   deploy-dev:
     name: Stock Analyser → Dev
     runs-on: ubuntu-latest
-    if: github.ref_name == 'develop' || (github.event_name == 'workflow_dispatch' && inputs.target == 'dev')
+    if: (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'develop') || (github.event_name == 'workflow_dispatch' && inputs.target == 'dev')
     environment: dev
     env:
       NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
@@ -150,7 +145,7 @@ jobs:
   deploy-prod:
     name: Stock Analyser → Prod
     runs-on: ubuntu-latest
-    if: github.ref_name == 'main' || (github.event_name == 'workflow_dispatch' && inputs.target == 'prod')
+    if: (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main') || (github.event_name == 'workflow_dispatch' && inputs.target == 'prod')
     environment: prod
     env:
       NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}

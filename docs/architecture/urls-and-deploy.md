@@ -117,23 +117,36 @@ Implemented behaviors with `SubAppIndexRewrite` — all active as of M7 #251 (ve
 
 ## Deploy triggers
 
-Each app has its own path-filtered GitHub Actions deploy workflow. Workflows fire on push to `develop` (dev deploy) or `main` (prod deploy).
+Deploy ordering is sequenced via `workflow_run` (Pattern A, established M7 / #348): the platform workflow fires on push; the four app workflows fire automatically after platform completes successfully.
 
-| Workflow | Trigger paths | What it deploys |
-|---|---|---|
-| `deploy-platform.yml` | `platform/infrastructure/**`, `infrastructure/bin/platform.ts`, `platform/functions/**` | All platform CDK stacks (`--app bin/platform.ts`) |
-| `deploy-stock-analyser.yml` | `apps/stock-analyser/**`, `infrastructure/bin/stock-analyser.ts`, `packages/api-client/**`, `packages/ui/**`, `packages/auth-client/**`, `packages/lambda-middleware/**` | `TransformotionDev-StockAnalyserApi` CDK stack (`--app bin/stock-analyser.ts`) + S3 sync to `stock-analyser/` |
-| `deploy-budget-tracker.yml` | `apps/budget-tracker/**`, `infrastructure/bin/budget-tracker.ts`, `packages/api-client/**`, `packages/ui/**`, `packages/auth-client/**`, `packages/lambda-middleware/**`, `packages/budget-domain/**` | `TransformotionDev-BudgetTrackerTables` + `BudgetTrackerApi` CDK stacks (`--app bin/budget-tracker.ts`) + S3 sync to `budget-tracker/` |
-| `deploy-migration-utilities.yml` | `migration-utilities/**`, `infrastructure/bin/migration-utilities.ts`, `packages/lambda-middleware/**` | `TransformotionDev-MigrationsApi` CDK stack (`--app bin/migration-utilities.ts`) |
+### Platform (fires on push)
 
-Each CDK deploy step passes an explicit `--app` flag pointing to the per-app entrypoint. This means:
+`deploy-platform.yml` triggers on push to `develop` or `main` when any of these paths change:
+- `platform/infrastructure/**`, `infrastructure/bin/platform.ts`, `platform/functions/**`
 
-- `deploy-stock-analyser.yml` synthesises only `StockAnalyserTables` + `StockAnalyserApi` — no platform stacks are instantiated.
-- `deploy-budget-tracker.yml` synthesises only `BudgetTrackerTables` + `BudgetTrackerApi`.
-- `deploy-migration-utilities.yml` synthesises only `MigrationsApi`.
-- `deploy-platform.yml` synthesises only platform stacks (Network, Auth, AuthApi, PlatformTables, Api, PlatformWs, Storage, GithubActionsRole).
+Deploys all platform CDK stacks (`--app bin/platform.ts`): GithubActionsRole, Storage, Network, Auth, AuthApi, PlatformTables, PlatformWs, Api (dev + prod).
 
-Changes to one app's paths never trigger another app's deployment. Changing `packages/runtime-config` does not trigger app redeployments (the APPS const was removed from that package in M7 / #346; app identity is now sourced from `platform/config/app-registry.json` at synth time).
+### App workflows (fire after platform completes)
+
+After `deploy-platform.yml` completes successfully, these workflows fire automatically via `workflow_run` with `conclusion == 'success'`:
+
+| Workflow | What it deploys |
+|---|---|
+| `deploy-stock-analyser.yml` | `StockAnalyserTables` + `StockAnalyserApi` CDK stacks (`--app bin/stock-analyser.ts`) + S3 sync to `stock-analyser/` |
+| `deploy-budget-tracker.yml` | `BudgetTrackerTables` + `BudgetTrackerApi` CDK stacks (`--app bin/budget-tracker.ts`) + S3 sync to `budget-tracker/` |
+| `deploy-migration-utilities.yml` | `MigrationsApi` CDK stack (`--app bin/migration-utilities.ts`) |
+| `deploy-launchpad.yml` | Static build + S3 sync to root |
+
+SA/BT/MU/LP workflows have no path-filtered push triggers of their own. All four fire in parallel on every successful platform deploy. Use `workflow_dispatch` to trigger an individual app deploy in isolation (e.g. after a pure app-code push that doesn't touch platform paths).
+
+Each CDK deploy step passes an explicit `--app` flag pointing to the per-app entrypoint, so each workflow synthesises only its own stacks:
+
+- `deploy-stock-analyser.yml` — `StockAnalyserTables` + `StockAnalyserApi` only
+- `deploy-budget-tracker.yml` — `BudgetTrackerTables` + `BudgetTrackerApi` only
+- `deploy-migration-utilities.yml` — `MigrationsApi` only
+- `deploy-platform.yml` — platform stacks only (Network, Auth, AuthApi, PlatformTables, Api, PlatformWs, Storage, GithubActionsRole)
+
+Changing `packages/runtime-config` does not trigger any deploy workflow (the APPS const was removed from that package in M7 / #346; app identity is now sourced from `platform/config/app-registry.json` at synth time).
 
 ---
 

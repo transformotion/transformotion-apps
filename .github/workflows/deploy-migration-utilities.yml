@@ -1,12 +1,10 @@
 name: Deploy — Migration Utilities
 
 on:
-  push:
+  workflow_run:
+    workflows: ['Deploy — Platform Infrastructure']
+    types: [completed]
     branches: [develop, main]
-    paths:
-      - 'migration-utilities/**'
-      - 'infrastructure/bin/migration-utilities.ts'
-      - 'packages/lambda-middleware/**'
   workflow_dispatch:
     inputs:
       target:
@@ -17,7 +15,7 @@ on:
         options: [dev, prod]
 
 concurrency:
-  group: deploy-migration-utilities-${{ github.ref_name }}
+  group: deploy-migration-utilities-${{ github.event.workflow_run.head_branch || github.ref_name }}
   cancel-in-progress: false
 
 permissions:
@@ -32,7 +30,7 @@ jobs:
   deploy-dev:
     name: Migration Utilities → Dev
     runs-on: ubuntu-latest
-    if: github.ref_name == 'develop' || (github.event_name == 'workflow_dispatch' && inputs.target == 'dev')
+    if: (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'develop') || (github.event_name == 'workflow_dispatch' && inputs.target == 'dev')
     environment: dev
     steps:
       - uses: actions/checkout@v4
@@ -61,7 +59,7 @@ jobs:
   deploy-prod:
     name: Migration Utilities → Prod
     runs-on: ubuntu-latest
-    if: github.ref_name == 'main' || (github.event_name == 'workflow_dispatch' && inputs.target == 'prod')
+    if: (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main') || (github.event_name == 'workflow_dispatch' && inputs.target == 'prod')
     environment: prod
     steps:
       - uses: actions/checkout@v4
