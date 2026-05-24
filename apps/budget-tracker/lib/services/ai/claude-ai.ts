@@ -19,7 +19,7 @@ export class ClaudeAIService implements AIService {
     if (!token)     throw new Error('No auth token available')
     if (!accountId) throw new Error('No accountId available')
 
-    const ws = new WebSocket(`${wssUrl}?token=${encodeURIComponent(token)}&accountId=${encodeURIComponent(accountId)}`)
+    const ws = new WebSocket(`${wssUrl}?token=${encodeURIComponent(token)}&accountId=${encodeURIComponent(accountId)}&app=budget-tracker`)
 
     // Step 1: wait for connection to open
     await new Promise<void>((resolve, reject) => {

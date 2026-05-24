@@ -929,7 +929,7 @@ missing folders.
 Per `CONTRIBUTING.md` Section 3.5, contracts have exactly one canonical
 location at `contracts/<scope>/<file>.md`. Per-app mirrors at
 `apps/<app>/contracts/` are forbidden. Both inversions resolved by M7 / PR #301:
-- `contracts/budget-tracker/` populated (8 files moved from `apps/budget-tracker/contracts/`)
+- `contracts/budget-tracker/` populated (8 files moved from `apps/budget-tracker/contracts/`); later archived to `docs/archive/contracts-budget-tracker-v0/` by M7 #333 (SC1+SC2 — content was stale)
 - `contracts/stock-analyser/` created; `DATA_CONTRACTS.md` moved from `apps/stock-analyser/contracts/`
 
 ### 4.3 v0-sufficient subset pattern

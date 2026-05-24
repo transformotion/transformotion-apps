@@ -54,10 +54,6 @@ jobs:
           role-to-assume: ${{ env.ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: CDK Deploy — BudgetTrackerTables (must precede Auth to drop cross-stack import)
-        working-directory: infrastructure
-        run: pnpm exec cdk deploy 'TransformotionDev-BudgetTrackerTables' --require-approval never
-
       - name: CDK Deploy — GithubActionsRole (account-level, deploy once)
         working-directory: infrastructure
         run: pnpm exec cdk deploy 'Transformotion-GithubActionsRole' --require-approval never
@@ -98,10 +94,6 @@ jobs:
         with:
           role-to-assume: ${{ env.ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
-
-      - name: CDK Deploy — BudgetTrackerTables (must precede Auth to drop cross-stack import)
-        working-directory: infrastructure
-        run: pnpm exec cdk deploy 'TransformotionProd-BudgetTrackerTables' --require-approval never
 
       - name: CDK Deploy — GithubActionsRole (account-level, deploy once)
         working-directory: infrastructure

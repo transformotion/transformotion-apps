@@ -145,7 +145,7 @@ jobs:
             "${{ vars.NEXT_PUBLIC_APP_URL }}/stock-signal" \
             apps/stock-analyser/.env.example \
             "${{ github.sha }}" \
-            "stock-analyser" \
+            "stock-signal" \
             "/api/user/profile"
 
   deploy-prod:
@@ -260,5 +260,5 @@ jobs:
             "${{ vars.NEXT_PUBLIC_APP_URL }}/stock-signal" \
             apps/stock-analyser/.env.example \
             "${{ github.sha }}" \
-            "stock-analyser" \
+            "stock-signal" \
             "/api/user/profile"
