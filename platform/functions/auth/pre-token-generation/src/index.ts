@@ -6,7 +6,6 @@ import {
 } from '@aws-sdk/client-cognito-identity-provider';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand, BatchGetCommand } from '@aws-sdk/lib-dynamodb';
-import { APPS, APP_SLUGS, type AppSlug } from '@transformotion/runtime-config';
 
 // ── Clients ───────────────────────────────────────────────────────────────────
 
@@ -16,11 +15,13 @@ const ddb     = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const ACCOUNT_MEMBERS_TABLE = process.env.ACCOUNT_MEMBERS_TABLE!;
 const ACCOUNTS_TABLE        = process.env.ACCOUNTS_TABLE!;
 
-// ── Constants ─────────────────────────────────────────────────────────────────
+// ── App registry (cold-start parse, env var set by CDK from app-registry.json) ─
 
-const ACCESS_GROUP = Object.fromEntries(
-  APPS.map(app => [app.slug, app.cognitoGroup])
-) as Record<AppSlug, string>;
+interface AppEntry { slug: string; cognitoGroup: string }
+
+const APP_REGISTRY: AppEntry[] = JSON.parse(process.env.APP_REGISTRY!).apps as AppEntry[];
+const APP_SLUGS                = APP_REGISTRY.map(a => a.slug);
+const ACCESS_GROUP             = Object.fromEntries(APP_REGISTRY.map(a => [a.slug, a.cognitoGroup]));
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -49,7 +50,7 @@ async function queryMemberships(userId: string): Promise<MembershipRow[]> {
   return (res.Items ?? []) as MembershipRow[];
 }
 
-async function fetchAccountAppSlugs(accountIds: string[]): Promise<Map<string, AppSlug>> {
+async function fetchAccountAppSlugs(accountIds: string[]): Promise<Map<string, string>> {
   if (accountIds.length === 0) return new Map();
 
   const keys = [...new Set(accountIds)].map(id => ({ accountId: id }));
@@ -62,11 +63,11 @@ async function fetchAccountAppSlugs(accountIds: string[]): Promise<Map<string, A
     },
   }));
 
-  const map = new Map<string, AppSlug>();
+  const map = new Map<string, string>();
   const rows = (res.Responses?.[ACCOUNTS_TABLE] ?? []) as AccountRow[];
   for (const row of rows) {
-    if (APP_SLUGS.includes(row.appSlug as AppSlug)) {
-      map.set(row.accountId, row.appSlug as AppSlug);
+    if (APP_SLUGS.includes(row.appSlug)) {
+      map.set(row.accountId, row.appSlug);
     }
   }
   return map;
@@ -74,7 +75,7 @@ async function fetchAccountAppSlugs(accountIds: string[]): Promise<Map<string, A
 
 function groupByApp(
   memberships: MembershipRow[],
-  appSlugByAccount: Map<string, AppSlug>,
+  appSlugByAccount: Map<string, string>,
 ): Record<string, Array<{ accountId: string; role: string }>> {
   const result: Record<string, Array<{ accountId: string; role: string }>> = {};
   for (const m of memberships) {

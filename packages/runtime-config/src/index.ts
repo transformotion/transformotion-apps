@@ -144,8 +144,6 @@ export function selectProvider<T extends string>(args: SelectProviderArgs<T>): T
  *   // → 'https://dev.apps.transformotion.com.au/budget-tracker/' (slash added)
  *   //   or '/budget-tracker/' if env var is unset
  */
-export * from './apps'
-
 export function normaliseCrossAppUrl(
   envValue: string | undefined,
   fallback: string

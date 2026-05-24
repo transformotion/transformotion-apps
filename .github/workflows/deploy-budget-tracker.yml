@@ -1,17 +1,10 @@
 name: Deploy — Budget Tracker
 
 on:
-  push:
+  workflow_run:
+    workflows: ['Deploy — Platform Infrastructure']
+    types: [completed]
     branches: [develop, main]
-    paths:
-      - 'apps/budget-tracker/**'
-      - 'apps/budget-tracker/infrastructure/**'
-      - 'packages/api-client/**'
-      - 'packages/ui/**'
-      - 'packages/auth-client/**'
-      - 'packages/runtime-config/**'
-      - 'packages/lambda-middleware/**'
-      - 'packages/budget-domain/**'
   workflow_dispatch:
     inputs:
       target:
@@ -22,7 +15,7 @@ on:
         options: [dev, prod]
 
 concurrency:
-  group: deploy-budget-tracker-${{ github.ref_name }}
+  group: deploy-budget-tracker-${{ github.event.workflow_run.head_branch || github.ref_name }}
   cancel-in-progress: false
 
 permissions:
@@ -37,7 +30,7 @@ jobs:
   deploy-dev:
     name: Budget Tracker → Dev
     runs-on: ubuntu-latest
-    if: github.ref_name == 'develop' || (github.event_name == 'workflow_dispatch' && inputs.target == 'dev')
+    if: (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'develop') || (github.event_name == 'workflow_dispatch' && inputs.target == 'dev')
     environment: dev
     env:
       NEXT_PUBLIC_RUNTIME_PROFILE: live
@@ -102,7 +95,7 @@ jobs:
 
       - name: CDK Deploy — Budget Tracker stacks (dev)
         working-directory: infrastructure
-        run: pnpm exec cdk deploy 'TransformotionDev-BudgetTrackerTables' 'TransformotionDev-BudgetTrackerApi' --require-approval never
+        run: pnpm exec cdk deploy --app 'bin/budget-tracker.ts' 'TransformotionDev-BudgetTrackerTables' 'TransformotionDev-BudgetTrackerApi' --require-approval never
 
       - name: Extract WebSocket URL from CDK output
         run: |
@@ -153,7 +146,7 @@ jobs:
   deploy-prod:
     name: Budget Tracker → Prod
     runs-on: ubuntu-latest
-    if: github.ref_name == 'main' || (github.event_name == 'workflow_dispatch' && inputs.target == 'prod')
+    if: (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main') || (github.event_name == 'workflow_dispatch' && inputs.target == 'prod')
     environment: prod
     env:
       NEXT_PUBLIC_RUNTIME_PROFILE: live
@@ -218,7 +211,7 @@ jobs:
 
       - name: CDK Deploy — Budget Tracker stacks (prod)
         working-directory: infrastructure
-        run: pnpm exec cdk deploy 'TransformotionProd-BudgetTrackerTables' 'TransformotionProd-BudgetTrackerApi' --require-approval never
+        run: pnpm exec cdk deploy --app 'bin/budget-tracker.ts' 'TransformotionProd-BudgetTrackerTables' 'TransformotionProd-BudgetTrackerApi' --require-approval never
 
       - name: Extract WebSocket URL from CDK output
         run: |

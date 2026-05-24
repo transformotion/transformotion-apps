@@ -14,6 +14,8 @@ Path-based, single CloudFront distribution serving all apps at:
 | `/stock-analyser/*` | apps/stock-analyser | Stock Signal Analyser |
 | `/budget-tracker/*` | apps/budget-tracker | Budget Tracker |
 
+> **Launchpad auth path coupling:** `/sign-in/` and `/signed-out/` are Launchpad-owned routes. SA and BT use them as fallback values in `lib/config/index.ts` when `NEXT_PUBLIC_SIGNIN_URL` / `NEXT_PUBLIC_SIGNOUT_URL` are unset (local dev). If Launchpad renames these routes, SA and BT `lib/config/index.ts` need coordinated updates.
+
 ---
 
 ## Next.js basePath per app
@@ -115,17 +117,36 @@ Implemented behaviors with `SubAppIndexRewrite` — all active as of M7 #251 (ve
 
 ## Deploy triggers
 
-Each app has its own path-filtered GitHub Actions deploy workflow. Workflows fire on push to `develop` (dev deploy) or `main` (prod deploy).
+Deploy ordering is sequenced via `workflow_run` (Pattern A, established M7 / #348): the platform workflow fires on push; the four app workflows fire automatically after platform completes successfully.
 
-| Workflow | Trigger paths | What it deploys |
-|---|---|---|
-| `deploy-stock-analyser.yml` | `apps/stock-analyser/**`, `infrastructure/lib/stock-analyser/**`, `packages/**` | `TransformotionDev-StockAnalyserApi` CDK stack + S3 sync to `stock-analyser/` |
-| `deploy-budget-tracker.yml` | `apps/budget-tracker/**`, `infrastructure/lib/budget-tracker/**`, `packages/**` | `TransformotionDev-BudgetTrackerTables` + `BudgetTrackerApi` CDK stacks + S3 sync to `budget-tracker/` |
-| `deploy-platform.yml` | `infrastructure/lib/platform/**`, `infrastructure/bin/**`, `functions/**` | All platform CDK stacks |
+### Platform (fires on push)
 
-> **Note:** `deploy-platform.yml` does not trigger on `apps/**` changes, and app workflows do not trigger on `functions/**` changes. If you add a new Lambda to a platform stack and want it deployed with the app, ensure it is in `functions/` (not `apps/*/functions/`).
+`deploy-platform.yml` triggers on push to `develop` or `main` when any of these paths change:
+- `platform/infrastructure/**`, `infrastructure/bin/platform.ts`, `platform/functions/**`
 
-Changes to one app's paths never trigger another app's deployment.
+Deploys all platform CDK stacks (`--app bin/platform.ts`): GithubActionsRole, Storage, Network, Auth, AuthApi, PlatformTables, PlatformWs, Api (dev + prod).
+
+### App workflows (fire after platform completes)
+
+After `deploy-platform.yml` completes successfully, these workflows fire automatically via `workflow_run` with `conclusion == 'success'`:
+
+| Workflow | What it deploys |
+|---|---|
+| `deploy-stock-analyser.yml` | `StockAnalyserTables` + `StockAnalyserApi` CDK stacks (`--app bin/stock-analyser.ts`) + S3 sync to `stock-analyser/` |
+| `deploy-budget-tracker.yml` | `BudgetTrackerTables` + `BudgetTrackerApi` CDK stacks (`--app bin/budget-tracker.ts`) + S3 sync to `budget-tracker/` |
+| `deploy-migration-utilities.yml` | `MigrationsApi` CDK stack (`--app bin/migration-utilities.ts`) |
+| `deploy-launchpad.yml` | Static build + S3 sync to root |
+
+SA/BT/MU/LP workflows have no path-filtered push triggers of their own. All four fire in parallel on every successful platform deploy. Use `workflow_dispatch` to trigger an individual app deploy in isolation (e.g. after a pure app-code push that doesn't touch platform paths).
+
+Each CDK deploy step passes an explicit `--app` flag pointing to the per-app entrypoint, so each workflow synthesises only its own stacks:
+
+- `deploy-stock-analyser.yml` — `StockAnalyserTables` + `StockAnalyserApi` only
+- `deploy-budget-tracker.yml` — `BudgetTrackerTables` + `BudgetTrackerApi` only
+- `deploy-migration-utilities.yml` — `MigrationsApi` only
+- `deploy-platform.yml` — platform stacks only (Network, Auth, AuthApi, PlatformTables, Api, PlatformWs, Storage, GithubActionsRole)
+
+Changing `packages/runtime-config` does not trigger any deploy workflow (the APPS const was removed from that package in M7 / #346; app identity is now sourced from `platform/config/app-registry.json` at synth time).
 
 ---
 
@@ -169,10 +190,7 @@ The deploy verification script (`scripts/ci/verify-deploy.sh`) checks that the c
 
 | Gateway | Purpose | Name |
 |---|---|---|
-| `transformotion-api-{stage}` | Platform + Stock Analyser routes | `TransformotionDev-Api` stack output |
-| `budget-tracker-api-{stage}` | Budget Tracker routes (own gateway) | `TransformotionDev-BudgetTrackerApi` stack output |
-
-> The Budget Tracker has its own API Gateway rather than sharing the platform gateway. This is a known architectural divergence (tracked as M5 in PLAN.md). The separate gateway is functional; consolidation is optional.
+| `transformotion-api-{stage}` | All app routes (SA, BT, MU) + platform routes | `TransformotionDev-Api` stack output |
 
 ---
 

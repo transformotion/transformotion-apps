@@ -1,12 +1,10 @@
 name: Deploy — Launchpad
 
 on:
-  push:
+  workflow_run:
+    workflows: ['Deploy — Platform Infrastructure']
+    types: [completed]
     branches: [develop, main]
-    paths:
-      - 'apps/launchpad/**'
-      - 'packages/auth-client/**'
-      - 'packages/runtime-config/**'
   workflow_dispatch:
     inputs:
       target:
@@ -17,7 +15,7 @@ on:
         options: [dev, prod]
 
 concurrency:
-  group: deploy-launchpad-${{ github.ref_name }}
+  group: deploy-launchpad-${{ github.event.workflow_run.head_branch || github.ref_name }}
   cancel-in-progress: false
 
 permissions:
@@ -32,7 +30,7 @@ jobs:
   deploy-dev:
     name: Launchpad → Dev
     runs-on: ubuntu-latest
-    if: github.ref_name == 'develop' || (github.event_name == 'workflow_dispatch' && inputs.target == 'dev')
+    if: (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'develop') || (github.event_name == 'workflow_dispatch' && inputs.target == 'dev')
     environment: dev
     env:
       NEXT_PUBLIC_COGNITO_USER_POOL_ID: ${{ vars.NEXT_PUBLIC_COGNITO_USER_POOL_ID }}
@@ -98,7 +96,7 @@ jobs:
   deploy-prod:
     name: Launchpad → Prod
     runs-on: ubuntu-latest
-    if: github.ref_name == 'main' || (github.event_name == 'workflow_dispatch' && inputs.target == 'prod')
+    if: (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main') || (github.event_name == 'workflow_dispatch' && inputs.target == 'prod')
     environment: prod
     env:
       NEXT_PUBLIC_COGNITO_USER_POOL_ID: ${{ vars.NEXT_PUBLIC_COGNITO_USER_POOL_ID }}

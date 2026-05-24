@@ -271,7 +271,7 @@ packages/
 ├── auth-client/           # Cognito and mock auth service implementations
 ├── budget-domain/         # Budget Tracker domain types and pure helpers
 ├── lambda-middleware/     # Shared withAuth/withAuthOnly wrappers and helpers
-├── runtime-config/        # Runtime profile + provider resolution helpers; canonical app registry (APPS const)
+├── runtime-config/        # Runtime profile + provider resolution helpers (selectProvider, resolveProfile, normaliseCrossAppUrl, createConfig, config sub-types)
 ├── cdk-constructs/        # Shared CDK constructs (the shared construct library)
 ├── ui/                    # UI packages, organised by concern (see below)
 └── <other-concern>/
@@ -491,6 +491,8 @@ Project automation rules are configured to:
 - Set Status to Backlog when an item is first added.
 - Move cards to Done when the issue is closed.
 - Move cards to Done when a linked PR is merged.
+
+**Issue filing with a numbered milestone — set Status to Todo immediately.** The automation always defaults to Backlog regardless of which milestone is attached. When you file an issue and attach it to a numbered milestone, also set its Project Status to Todo at the same time — manually, via the issue sidebar or the Project board. Leaving it at Backlog contradicts the milestone assignment (numbered milestones are prioritised by definition) and makes the roadmap view inaccurate, because the roadmap filters on Status.
 
 Milestone completion percentage updates automatically as issues close.
 A milestone is "complete" when 100% of its issues are closed.
@@ -1233,6 +1235,40 @@ If a prompt says "diagnose only," that instruction applies until the user explic
 When in doubt: surface findings, ask, wait. Asking adds at most a few seconds; assuming costs trust and produces work that has to be reviewed retroactively for whether it should have happened at all.
 
 This pattern was surfaced in M6 when CC, after thorough diagnosis of a rules PATCH bug, proceeded directly to implementation, commit, push, and PR — all without the user's authorization, despite an explicit "diagnose only" instruction. The fix itself was correct; the boundary violation that produced it was not.
+
+### 7.9 Architecturally clean wins ties
+
+When two implementation paths both satisfy the functional requirements
+and serve the same goals (Section 1.1, Section 7.3), prefer the one
+that is architecturally cleaner. "Architecturally cleaner" means fewer
+cross-cutting dependencies, fewer coupling points, and fewer sources of
+cascading change.
+
+The rule is a *tiebreaker*, not a trump card. It does not justify
+choosing a more complex path that incidentally avoids one dependency
+while introducing two others. It applies when the options are roughly
+equivalent on every other dimension and one of them is structurally
+tidier.
+
+This applies to humans and Claude Code alike.
+
+**Specific application:** When choosing between an approach that
+propagates a shared concern (e.g., a config object, a construct
+reference) through every consumer versus one that emits the concern
+once and lets consumers read it directly (e.g., via CloudFormation
+exports, env vars, or a canonical config file), choose the emission
+pattern — it is structurally cleaner because each consumer is
+independently deployable and independently testable.
+
+This rule was established in M7 / issue #346 when choosing between
+Path V (propagate the `api`/`authoriser`/`apiResource` constructs from
+PlatformApiStack into SA/BT/MU stacks via props, keeping all stacks
+coupled to the platform synth) and Path M (emit CF exports from
+PlatformApiStack; SA/BT/MU stacks import at deploy time via
+`Fn.importValue`, enabling per-app CDK entry points and independent
+deployment). Both paths were functional. Path M was chosen because it
+removed the coupling that forced SA/BT/MU to re-synthesise with the
+platform on every platform stack change.
 
 ---
 

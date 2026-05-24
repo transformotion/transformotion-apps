@@ -8,7 +8,7 @@ import * as lambdaNodejs from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import { Construct } from 'constructs';
 import { cognitoHostedUiCss } from './cognito-hosted-ui-css';
-import { APPS } from '@transformotion/runtime-config';
+import { loadAppRegistry } from '../../infrastructure/lib/app-registry';
 
 export interface AuthStackProps extends cdk.StackProps {
   stage: 'dev' | 'prod';
@@ -62,6 +62,11 @@ export class AuthStack extends cdk.Stack {
     const { stage } = props;
     this.stage = stage;
     const isProd = stage === 'prod';
+
+    // App registry — read once at synth time, passed to Lambdas as env vars.
+    // Decouples Lambda bundles from packages/runtime-config.
+    const registry        = loadAppRegistry();
+    const appRegistryJson = JSON.stringify(registry);
 
     // ── User Pool ──────────────────────────────────────────────────────────
     this.userPool = new cognito.UserPool(this, 'UserPool', {
@@ -241,6 +246,9 @@ export class AuthStack extends cdk.Stack {
       environment: {
         ACCOUNT_MEMBERS_TABLE: accountMembersTable.tableName,
         ACCOUNTS_TABLE:        accountsTable.tableName,
+        // APP_REGISTRY: compact JSON read from platform/config/app-registry.json at synth time.
+        // Lambda parses this at cold-start — no packages/runtime-config bundle dependency.
+        APP_REGISTRY: appRegistryJson,
         // USER_POOL_ID is NOT set here — it's read from event.userPoolId at runtime.
         // Setting it via this.userPool.userPoolId would create a Lambda→UserPool CDK
         // dependency that forms a cycle with the UserPool→Lambda trigger attachment.
@@ -261,8 +269,8 @@ export class AuthStack extends cdk.Stack {
     const groups: Array<{ name: string; description: string; precedence: number }> = [
       // Target groups (7e-prep-1) — accepted by handlers after 7e-prep-2 dual-gate
       { name: 'site-admin', description: 'Platform administrator', precedence: 1 },
-      // App-access groups sourced from APPS const — prevents cognitoGroup names from drifting
-      ...APPS.map((app, idx) => ({ name: app.cognitoGroup, description: app.groupDescription, precedence: 50 + idx * 10 })),
+      // App-access groups sourced from app-registry — prevents cognitoGroup names from drifting
+      ...registry.apps.map((app, idx) => ({ name: app.cognitoGroup, description: app.groupDescription, precedence: 50 + idx * 10 })),
       // Legacy groups — removed at 7e-cleanup
       { name: 'admin',          description: 'Platform administrators — full access to all apps', precedence: 2  },
       { name: 'stock-app',      description: 'Stock Signal Analyser access',                       precedence: 10 },

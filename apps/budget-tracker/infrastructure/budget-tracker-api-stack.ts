@@ -9,26 +9,24 @@ import { Construct } from 'constructs';
 
 export interface BudgetTrackerApiStackProps extends cdk.StackProps {
   stage: 'dev' | 'prod';
-  /** Shared REST API from PlatformApiStack — budget-tracker routes mount here. */
-  api: apigateway.RestApi;
-  /** Shared JWT authoriser from PlatformApiStack. */
-  authoriser: apigateway.CognitoUserPoolsAuthorizer;
-  /** Pre-built /api resource from PlatformApiStack — budget-tracker mounts /budget/v1 below it. */
-  apiResource: apigateway.Resource;
   /** budget-data table name — passed in to avoid cross-stack dependency issues. */
   budgetDataTableName: string;
   /** AI jobs table name from BudgetTrackerTablesStack. */
   aiJobsTableName: string;
-  /** WebSocket connections table name from BudgetTrackerWsStack. */
+  /** WebSocket connections table name from PlatformWsStack. */
   wsConnectionsTableName: string;
-  /** WebSocket API ID from BudgetTrackerWsStack (used to build the management API endpoint). */
+  /** WebSocket API ID from PlatformWsStack (used to build the management API endpoint). */
   wsApiId: string;
 }
 
 /**
  * BudgetTrackerApiStack — Lambda functions and API routes for the Budget Tracker.
  *
- * Mounts onto the shared platform API Gateway under /api/budget/v1/:
+ * Imports the shared platform API Gateway and JWT authoriser from CloudFormation
+ * exports produced by PlatformApiStack. This allows bin/budget-tracker.ts to
+ * synthesise only BT stacks without instantiating platform stacks.
+ *
+ * Routes (owned by this stack's CF template) under /api/budget/v1/:
  *   GET    /transactions
  *   POST   /transactions/bulk
  *   PATCH  /transactions/:id
@@ -48,9 +46,24 @@ export class BudgetTrackerApiStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: BudgetTrackerApiStackProps) {
     super(scope, id, props);
 
-    const { stage, authoriser, apiResource: platformApiResource, budgetDataTableName, aiJobsTableName, wsConnectionsTableName, wsApiId } = props;
+    const { stage, budgetDataTableName, aiJobsTableName, wsConnectionsTableName, wsApiId } = props;
 
-    const auth = authMethodOptions(authoriser);
+    // Import shared platform API Gateway, /api resource, and JWT authoriser from CF exports.
+    const api = apigateway.RestApi.fromRestApiAttributes(this, 'PlatformApi', {
+      restApiId:      cdk.Fn.importValue(`Transformotion-${stage}-RestApiId`),
+      rootResourceId: cdk.Fn.importValue(`Transformotion-${stage}-RestApiRootResourceId`),
+    });
+
+    const platformApiResource = apigateway.Resource.fromResourceAttributes(this, 'PlatformApiResource', {
+      restApi:    api,
+      resourceId: cdk.Fn.importValue(`Transformotion-${stage}-ApiResourceId`),
+      path:       '/api',
+    });
+
+    const auth = authMethodOptions({
+      authorizerId:      cdk.Fn.importValue(`Transformotion-${stage}-AuthorizerId`),
+      authorizationType: apigateway.AuthorizationType.COGNITO,
+    });
 
     // /api/budget/v1 — mounted on the shared platform gateway's /api resource
     const apiResource = platformApiResource
@@ -228,13 +241,10 @@ export class BudgetTrackerApiStack extends cdk.Stack {
     apiResource.addResource('business-export').addMethod(
       'GET', new apigateway.LambdaIntegration(exportFn, { proxy: true }), auth
     );
-
   }
 }
 
-function authMethodOptions(
-  authoriser: apigateway.CognitoUserPoolsAuthorizer,
-): apigateway.MethodOptions {
+function authMethodOptions(authoriser: apigateway.IAuthorizer): apigateway.MethodOptions {
   return {
     authorizer:        authoriser,
     authorizationType: apigateway.AuthorizationType.COGNITO,

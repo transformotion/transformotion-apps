@@ -4,7 +4,7 @@ import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import { Construct } from 'constructs';
-import { APPS } from '@transformotion/runtime-config';
+import { loadAppRegistry } from '../../infrastructure/lib/app-registry';
 
 export interface NetworkStackProps extends cdk.StackProps {
   stage: 'dev' | 'prod';
@@ -103,7 +103,7 @@ export class NetworkStack extends cdk.Stack {
         }],
       },
       additionalBehaviors: Object.fromEntries(
-        APPS.map(app => [`${app.urlPrefix}/*`, {
+        loadAppRegistry().apps.map(app => [`${app.urlPrefix}/*`, {
           origin: origins.S3BucketOrigin.withOriginAccessControl(this.bucket),
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,

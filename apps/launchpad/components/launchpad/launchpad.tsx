@@ -5,7 +5,6 @@ import { cn } from '@/lib/utils'
 import { Wordmark } from '@/components/brand/wordmark'
 import { TrendingUp, Wallet, Layers, LogOut, Settings, User as UserIcon, Check } from 'lucide-react'
 import type { User } from '@transformotion/auth-client'
-import { APP_SLUGS } from '@transformotion/runtime-config'
 
 interface App {
   id: string
@@ -202,8 +201,8 @@ function AppGrid({
   })
 
   const getLaunchHandler = (appId: string) => {
-    if (appId === APP_SLUGS[0]) return onLaunchApp
-    if (appId === APP_SLUGS[1]) return onLaunchBudgetTracker
+    if (appId === 'stock-analyser') return onLaunchApp
+    if (appId === 'budget-tracker') return onLaunchBudgetTracker
     return undefined
   }
 

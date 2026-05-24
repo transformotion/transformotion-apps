@@ -194,6 +194,16 @@ implemented:
   configs. WebSocket URL env var unified: `NEXT_PUBLIC_PLATFORM_WSS_URL`
   replaces the per-app `NEXT_PUBLIC_CLAUDE_WSS_URL` (SA) and
   `NEXT_PUBLIC_BUDGET_WSS_URL` (BT) in both deploy workflows and configs.
+  **Resolved by M7 / PR #346:** The `APPS` const, `APP_SLUGS`, `AppDescriptor`,
+  and `AppSlug` exports were removed from `packages/runtime-config/` as part of
+  the deploy-isolation work. The canonical app registry moved to
+  `platform/config/app-registry.json`; CDK stacks read it via `loadAppRegistry()`
+  at synth time and inject values as Lambda env vars (`APP_REGISTRY`, `APP_SLUGS`,
+  `PERMITTED_APPS`). Lambdas read env vars at runtime — no longer importing from
+  the package. `@transformotion/runtime-config` now exports only:
+  `selectProvider()`, `resolveProfile()`, `normaliseCrossAppUrl()`,
+  `createConfig<T>()`, and the 7 config sub-types. SA/BT deploy workflows no
+  longer trigger on `packages/runtime-config/**` changes.
 
 `packages/cycle-engine/` was deleted in this PR. Its RSI/MACD/cycle
 scoring implementation was app-specific (Stock Analyser only), so it

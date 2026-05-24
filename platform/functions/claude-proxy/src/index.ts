@@ -13,8 +13,6 @@ import {
   HttpError,
   type APIGatewayProxyEvent,
 } from '@transformotion/lambda-middleware';
-import { APP_SLUGS } from '@transformotion/runtime-config';
-
 // ── Clients (one per Lambda container) ───────────────────────────────────────
 
 const sm           = new SecretsManagerClient({});
@@ -22,8 +20,10 @@ const lambdaClient = new LambdaClient({});
 const ddb          = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
 const JOB_RESULTS_TABLE = process.env.JOB_RESULTS_TABLE ?? '';
-const WS_API_ENDPOINT = process.env.WS_API_ENDPOINT ?? '';
-const JOB_TTL_SECONDS = 2 * 60 * 60; // 2 hours
+const WS_API_ENDPOINT   = process.env.WS_API_ENDPOINT   ?? '';
+const JOB_TTL_SECONDS   = 2 * 60 * 60; // 2 hours
+// PERMITTED_APPS: set by CDK from app-registry.json at synth time
+const APP_SLUGS = (process.env.PERMITTED_APPS ?? '').split(',').filter(Boolean);
 
 // ── Anthropic API key cache ───────────────────────────────────────────────────
 
