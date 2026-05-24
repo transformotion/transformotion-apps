@@ -72,6 +72,16 @@ The `ws-authorizer` reads `?app=` from the query string (defaults to `budget-tra
 |---|---|---|---|---|
 | `platform.ws-connections-{stage}` | `connectionId` | `userId-index` | `expiresAt` (1h) | Active WebSocket connections for all apps |
 
+## Platform job results table (`PlatformTablesStack`)
+
+`platform.job-results-{stage}` — platform-owned async AI job state. Added M7 / PR #334 (Bucket A').
+
+| Table | PK | SK | TTL | Purpose |
+|---|---|---|---|---|
+| `platform.job-results-{stage}` | `accountId` | `cacheKey` | `expiresAt` (2h) | Async AI job records written by `claude-proxy`, read by `analysis-cache` Lambda via `job-*` key prefix |
+
+`claude-proxy` writes `cacheKey: job-{jobId}` records here (pending → retrying → complete/error). SA's `analysis-cache` Lambda routes GET requests for keys starting with `job-` to this table; all other keys continue to read from `stock-analyser.analysis-cache-{stage}`.
+
 ## Adding a new app's WebSocket flow
 
 1. Pass `?app=<appSlug>` in the WebSocket URL when connecting

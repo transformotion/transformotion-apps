@@ -527,6 +527,7 @@ removing the dependency-cycle workaround.
 | `platform.users-{stage}` | userId | — | |
 | `platform.rate-limits-{stage}` | pk | — | Owned by `AuthApiStack` (not PlatformTablesStack). PK: `lookup-provider#<ip>`. Used for rate-limiting by `forgot-provider` Lambda. |
 | `platform.analysis-cache-{stage}` | accountId | cacheKey | Misnamed — see Section 2.7. |
+| `platform.job-results-{stage}` | accountId | cacheKey | Added M7 / PR #334 (Bucket A'). Platform-owned async AI job state (pending → retrying → complete/error). Written by `claude-proxy`, read by `analysis-cache` Lambda via `job-*` key prefix routing. TTL: 2h. |
 
 #### 2.10.2 Stock-analyser tables
 
@@ -615,6 +616,13 @@ The handler distinguishes two event shapes:
 2. **Async job path** — event has `__asyncJob: true`. Routes to
    `executeAsyncJob()`, which carries no auth check. This path is only
    reachable via the proxy self-invoking itself (see IAM boundary below).
+
+#### DynamoDB grants
+
+As of M7 / PR #334 (Bucket A'), `claude-proxy` writes async job records to
+`platform.job-results-{stage}` (PlatformTablesStack) and has **no IAM
+access** to `stock-analyser.analysis-cache-{stage}`. The prior coupling
+(writing job records to SA's table) was resolved by this PR.
 
 #### IAM trust boundary
 

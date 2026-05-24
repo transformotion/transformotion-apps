@@ -58,13 +58,13 @@ jobs:
         working-directory: infrastructure
         run: pnpm exec cdk deploy 'Transformotion-GithubActionsRole' --require-approval never
 
+      - name: CDK Deploy — PlatformTables (dev) (must precede Api — Api imports job-results table ARN via Fn::ImportValue)
+        working-directory: infrastructure
+        run: pnpm exec cdk deploy 'TransformotionDev-PlatformTables' --require-approval never
+
       - name: CDK Deploy — Platform stacks (dev)
         working-directory: infrastructure
         run: pnpm exec cdk deploy 'TransformotionDev-Storage' 'TransformotionDev-Network' 'TransformotionDev-Auth' 'TransformotionDev-AuthApi' 'TransformotionDev-Api' --require-approval never
-
-      - name: CDK Deploy — PlatformTables (must follow Api to release Fn::ImportValue)
-        working-directory: infrastructure
-        run: pnpm exec cdk deploy 'TransformotionDev-PlatformTables' --require-approval never
 
       - name: CDK Deploy — PlatformWs (dev)
         working-directory: infrastructure
@@ -99,13 +99,13 @@ jobs:
         working-directory: infrastructure
         run: pnpm exec cdk deploy 'Transformotion-GithubActionsRole' --require-approval never
 
+      - name: CDK Deploy — PlatformTables (prod) (must precede Api — Api imports job-results table ARN via Fn::ImportValue)
+        working-directory: infrastructure
+        run: pnpm exec cdk deploy 'TransformotionProd-PlatformTables' --require-approval never
+
       - name: CDK Deploy — Platform stacks (prod)
         working-directory: infrastructure
         run: pnpm exec cdk deploy 'TransformotionProd-Storage' 'TransformotionProd-Network' 'TransformotionProd-Auth' 'TransformotionProd-AuthApi' 'TransformotionProd-Api' --require-approval never
-
-      - name: CDK Deploy — PlatformTables (must follow Api to release Fn::ImportValue)
-        working-directory: infrastructure
-        run: pnpm exec cdk deploy 'TransformotionProd-PlatformTables' --require-approval never
 
       - name: CDK Deploy — PlatformWs (prod)
         working-directory: infrastructure

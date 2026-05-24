@@ -21,7 +21,7 @@ const sm           = new SecretsManagerClient({});
 const lambdaClient = new LambdaClient({});
 const ddb          = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
-const CACHE_TABLE     = process.env.CACHE_TABLE ?? '';
+const JOB_RESULTS_TABLE = process.env.JOB_RESULTS_TABLE ?? '';
 const WS_API_ENDPOINT = process.env.WS_API_ENDPOINT ?? '';
 const JOB_TTL_SECONDS = 2 * 60 * 60; // 2 hours
 
@@ -205,7 +205,7 @@ async function executeAsyncJob(job: AsyncJobEvent): Promise<void> {
   const writeJob = async (payload: Record<string, unknown>) => {
     const now = new Date().toISOString();
     await ddb.send(new PutCommand({
-      TableName: CACHE_TABLE,
+      TableName: JOB_RESULTS_TABLE,
       Item: {
         accountId: job.accountId,
         cacheKey:  `job-${job.jobId}`,
@@ -220,7 +220,7 @@ async function executeAsyncJob(job: AsyncJobEvent): Promise<void> {
     '[claude-proxy] Step 1 (async job): jobId:', job.jobId,
     'accountId:', job.accountId,
     'webSearch:', job.webSearch,
-    'CACHE_TABLE:', CACHE_TABLE,
+    'JOB_RESULTS_TABLE:', JOB_RESULTS_TABLE,
     'promptLength:', job.prompt.length,
   );
 
@@ -310,13 +310,13 @@ const apiGatewayHandler = withAuth(async ({ auth, account, event }) => {
       '[claude-proxy] Step 1 (trigger): asyncMode=true, jobId:', jobId,
       'accountId:', account.accountId,
       'webSearch:', webSearch,
-      'CACHE_TABLE:', CACHE_TABLE,
+      'JOB_RESULTS_TABLE:', JOB_RESULTS_TABLE,
       'fnName:', process.env.AWS_LAMBDA_FUNCTION_NAME,
     );
 
     // Write pending state so the frontend knows the job started
     await ddb.send(new PutCommand({
-      TableName: CACHE_TABLE,
+      TableName: JOB_RESULTS_TABLE,
       Item: {
         accountId: account.accountId,
         cacheKey:  `job-${jobId}`,

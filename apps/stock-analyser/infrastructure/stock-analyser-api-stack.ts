@@ -12,6 +12,8 @@ export interface StockAnalyserApiStackProps extends cdk.StackProps {
   api: apigateway.RestApi;
   /** Shared JWT authoriser from PlatformApiStack. */
   authoriser: apigateway.CognitoUserPoolsAuthorizer;
+  /** From PlatformTablesStack — analysis-cache Lambda reads job-* keys from here. */
+  jobResultsTableName: string;
 }
 
 /**
@@ -33,7 +35,7 @@ export class StockAnalyserApiStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: StockAnalyserApiStackProps) {
     super(scope, id, props);
 
-    const { stage, api, authoriser } = props;
+    const { stage, api, authoriser, jobResultsTableName } = props;
     const auth = authMethodOptions(authoriser);
 
     // ── /portfolio — Portfolio Lambda ─────────────────────────────────────
@@ -88,6 +90,10 @@ export class StockAnalyserApiStack extends cdk.Stack {
     );
 
     // ── /analysis-cache/{key} — Analysis Cache Lambda ─────────────────────
+    const jobResultsTable = dynamodb.Table.fromTableName(
+      this, 'JobResultsTable', jobResultsTableName,
+    );
+
     const cacheFn = new lambdaNodejs.NodejsFunction(this, 'CacheFn', {
       functionName: `transformotion-analysis-cache-${stage}`,
       entry:        path.join(__dirname, '../functions/analysis-cache/src/index.ts'),
@@ -95,11 +101,15 @@ export class StockAnalyserApiStack extends cdk.Stack {
       runtime:      lambda.Runtime.NODEJS_20_X,
       timeout:      cdk.Duration.seconds(15),
       memorySize:   256,
-      environment:  { CACHE_TABLE: analysisCacheTable.tableName },
+      environment: {
+        CACHE_TABLE:       analysisCacheTable.tableName,
+        JOB_RESULTS_TABLE: jobResultsTable.tableName,
+      },
       bundling:     { externalModules: ['@aws-sdk/*'], minify: true, sourceMap: false, forceDockerBundling: false },
     });
 
     analysisCacheTable.grantReadWriteData(cacheFn);
+    jobResultsTable.grantReadData(cacheFn);
 
     const cacheIntegration = new apigateway.LambdaIntegration(cacheFn, { proxy: true });
     const cacheKey = api.root

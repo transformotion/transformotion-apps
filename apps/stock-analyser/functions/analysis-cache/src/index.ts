@@ -13,7 +13,8 @@ import {
 } from '@transformotion/lambda-middleware';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
-const TABLE = process.env.CACHE_TABLE!;
+const TABLE             = process.env.CACHE_TABLE!;
+const JOB_RESULTS_TABLE = process.env.JOB_RESULTS_TABLE!;
 
 // Special partition key used for data shared across all accounts.
 // Market analysis, recommendations, ETFs, metals, and stock analyses
@@ -86,6 +87,17 @@ export const handler = withAuth(async ({ auth, account, event }) => {
 
   // ── GET /analysis-cache/{key} ─────────────────────────────────────────────
   if (event.httpMethod === 'GET') {
+    // job-* keys are platform-owned async job records written by claude-proxy.
+    // They live in the platform.job-results table keyed by accountId + cacheKey.
+    if (cacheKey.startsWith('job-')) {
+      const res = await ddb.send(new GetCommand({
+        TableName: JOB_RESULTS_TABLE,
+        Key: { accountId, cacheKey },
+      }));
+      if (!res.Item) throw notFound(`Job '${cacheKey}' not found`);
+      return ok(normaliseItem(res.Item as Record<string, unknown>));
+    }
+
     // Check SHARED partition first (benefits all users), then fall back to
     // the account-specific partition (legacy items written before SHARED was introduced).
     let res = await ddb.send(new GetCommand({

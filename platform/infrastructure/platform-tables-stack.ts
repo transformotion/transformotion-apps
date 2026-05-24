@@ -22,6 +22,7 @@ export class PlatformTablesStack extends cdk.Stack {
   public readonly accountsTable:       dynamodb.Table;
   public readonly accountMembersTable: dynamodb.Table;
   public readonly invitationsTable:    dynamodb.Table;
+  public readonly jobResultsTable:     dynamodb.Table;
 
   constructor(scope: Construct, id: string, props: PlatformTablesStackProps) {
     super(scope, id, props);
@@ -80,6 +81,20 @@ export class PlatformTablesStack extends cdk.Stack {
       projectionType: dynamodb.ProjectionType.ALL,
     });
 
+    // ── platform.job-results ──────────────────────────────────────────────
+    // PK: accountId  SK: cacheKey
+    // Stores async AI job state (pending → retrying → complete/error).
+    // Owned by platform (written by claude-proxy, read by SA/BT via analysis-cache).
+    // TTL: 2 hours — job records are transient.
+    this.jobResultsTable = new dynamodb.Table(this, 'JobResultsTable', {
+      tableName:           `platform.job-results-${stage}`,
+      partitionKey:        { name: 'accountId', type: dynamodb.AttributeType.STRING },
+      sortKey:             { name: 'cacheKey',  type: dynamodb.AttributeType.STRING },
+      billingMode:         dynamodb.BillingMode.PAY_PER_REQUEST,
+      timeToLiveAttribute: 'expiresAt',
+      removalPolicy:       removal,
+    });
+
     // ── Outputs ───────────────────────────────────────────────────────────
     const out = (id: string, table: dynamodb.Table, hint: string) => {
       new cdk.CfnOutput(this, id, {
@@ -93,5 +108,6 @@ export class PlatformTablesStack extends cdk.Stack {
     out('AccountsTableArn',       this.accountsTable,       'platform.accounts table ARN');
     out('AccountMembersTableArn', this.accountMembersTable, 'platform.account-members table ARN');
     out('InvitationsTableArn',    this.invitationsTable,    'platform.invitations table ARN');
+    out('JobResultsTableArn',     this.jobResultsTable,     'platform.job-results table ARN');
   }
 }
