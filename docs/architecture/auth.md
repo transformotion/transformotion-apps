@@ -70,7 +70,7 @@ Three distinct Cognito app clients, one per deployable app. All share the same u
 | Client | Serving path | Identity providers | CDK logical ID |
 |---|---|---|---|
 | `LaunchpadAppClient` | `/`, `/sign-in/*`, `/launchpad/*` | Cognito, Google, Facebook, Microsoft | `LaunchpadAppClient` in `AuthStack` |
-| `StockAnalyserAppClient` | `/stock-signal/*` | Cognito only | `StockAnalyserAppClient` in `AuthStack` |
+| `StockAnalyserAppClient` | `/stock-analyser/*` | Cognito only | `StockAnalyserAppClient` in `AuthStack` |
 | `BudgetTrackerAppClient` | `/budget-tracker/*` | Cognito only | `BudgetTrackerAppClient` in `AuthStack` |
 
 Social sign-in is enabled on the launchpad client only. Per-app clients are Cognito-only because social identity sessions established at the launchpad propagate via SSO.
@@ -188,7 +188,7 @@ In practice: Dimension A governs *whether the user can use the app at all*. Dime
 
 1. Read the user's Cognito groups from the event (`event.request.groupConfiguration.groupsToOverride`).
 2. Query `platform.account-members-{stage}` for all rows where `userId = <event.userName>` — returns all of the user's account memberships across all apps.
-3. **Reconcile the app-access invariant.** For each app slug (`stock-signal`, `budget-tracker`):
+3. **Reconcile the app-access invariant.** For each app slug (`stock-analyser`, `budget-tracker`):
    - If user has any accounts for the app but is not in `<app>-access`: call `AdminAddUserToGroup`, update the in-memory group list for claim construction.
    - If user is in `<app>-access` but has no accounts: call `AdminRemoveUserFromGroup`, update the in-memory list.
    - `site-admin` membership overrides the "no accounts" removal — site-admin keeps all access regardless of account memberships.
@@ -210,9 +210,9 @@ The pre-token generation Lambda injects three custom claims on every token issua
 
 ```json
 {
-  "apps": "[\"stock-signal\",\"budget-tracker\"]",
+  "apps": "[\"stock-analyser\",\"budget-tracker\"]",
   "site_admin": "false",
-  "accounts": "{\"stock-signal\":[{\"accountId\":\"uuid-1\",\"role\":\"owner\"}],\"budget-tracker\":[{\"accountId\":\"uuid-2\",\"role\":\"manager\"}]}"
+  "accounts": "{\"stock-analyser\":[{\"accountId\":\"uuid-1\",\"role\":\"owner\"}],\"budget-tracker\":[{\"accountId\":\"uuid-2\",\"role\":\"manager\"}]}"
 }
 ```
 
@@ -390,7 +390,7 @@ export const handler = withAuth(async ({ auth, account, event }) => {
 
 ```typescript
 export const handler = withAuth(async ({ auth, account, event }) => {
-  requireAnyAppAccess(auth, ['stock-signal', 'budget-tracker']); // user must have at least one app
+  requireAnyAppAccess(auth, ['stock-analyser', 'budget-tracker']); // user must have at least one app
 
   // ... handler logic
 });

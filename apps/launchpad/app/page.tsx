@@ -6,7 +6,7 @@ import { Launchpad } from '@/components/launchpad/launchpad'
 import { useAuthStore } from '@/stores/auth/use-auth-store'
 import { getConfig } from '@/lib/config'
 
-const STOCK_SIGNAL_URL = process.env.NEXT_PUBLIC_STOCK_URL ?? 'http://localhost:3000/stock-signal/'
+const STOCK_ANALYSER_URL = process.env.NEXT_PUBLIC_STOCK_URL ?? 'http://localhost:3000/stock-analyser/'
 
 export default function Page() {
   const router = useRouter()
@@ -40,7 +40,7 @@ export default function Page() {
   return (
     <Launchpad
       user={user}
-      onLaunchApp={() => { window.location.href = STOCK_SIGNAL_URL }}
+      onLaunchApp={() => { window.location.href = STOCK_ANALYSER_URL }}
       onLaunchBudgetTracker={() => { window.location.assign(getConfig().apps.budgetTrackerUrl) }}
       onSignOut={handleSignOut}
     />

@@ -37,7 +37,7 @@ const PLACEHOLDER_ACCOUNTS: Account[] = [
 
 const APPS: App[] = [
   {
-    id: 'stock-signal',
+    id: 'stock-analyser',
     name: 'Stock Signal Analyser',
     description: 'Cycle position analysis across ASX, NASDAQ, Dow Jones, FTSE',
     icon: TrendingUp,

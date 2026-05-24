@@ -5,18 +5,18 @@ Read this file before any Stock Analyser work. Read the root `CLAUDE.md` for bra
 ## Overview
 
 Next.js app at `apps/stock-analyser/`. Static export deployed to S3/CloudFront.  
-Serves at `{host}/stock-signal/*`.  
+Serves at `{host}/stock-analyser/*`.  
 React + TypeScript + Tailwind CSS.
 
 ## Quick reference
 
 | What | Value |
 |---|---|
-| basePath | `/stock-signal` |
+| basePath | `/stock-analyser` |
 | Local dev port | `3000` |
 | Deploy workflow | `.github/workflows/deploy-stock-analyser.yml` |
 | Cognito client var | `NEXT_PUBLIC_STOCK_ANALYSER_COGNITO_CLIENT_ID` |
-| S3 prefix | `stock-signal/` in `transformotion-web-{stage}-959516291617` |
+| S3 prefix | `stock-analyser/` in `transformotion-web-{stage}-959516291617` |
 
 ## Architecture references
 
@@ -66,10 +66,10 @@ All Lambda handlers use helpers from `packages/lambda-middleware`. The four avai
 
 ```typescript
 requireSiteAdmin(auth)                                           // platform admin ops only
-requireAppAccess(auth, 'stock-signal')                          // entry-point check (every handler)
-requireAccountAccess(auth, 'stock-signal', accountId)           // standard read/write ops
-requireAccountAccess(auth, 'stock-signal', accountId, 'manager') // elevated ops (bulk delete, etc.)
-requireAccountOwner(auth, 'stock-signal', accountId)            // ownership-transfer ops
+requireAppAccess(auth, 'stock-analyser')                          // entry-point check (every handler)
+requireAccountAccess(auth, 'stock-analyser', accountId)           // standard read/write ops
+requireAccountAccess(auth, 'stock-analyser', accountId, 'manager') // elevated ops (bulk delete, etc.)
+requireAccountOwner(auth, 'stock-analyser', accountId)            // ownership-transfer ops
 ```
 
 Call `requireAppAccess` at the top of every handler, then `requireAccountAccess` (or `requireAccountOwner`) before each DynamoDB operation. Do not call `requireGroup` directly. See [auth.md](/docs/architecture/auth.md) for full middleware helper documentation.

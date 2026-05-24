@@ -12,7 +12,7 @@ export interface AuthClaims {
   email: string;
   /** Legacy Cognito groups (space-separated, still present for fallback). */
   groups: string[];
-  /** Apps the user has been granted access to, e.g. ['budget-tracker', 'stock-signal']. */
+  /** Apps the user has been granted access to, e.g. ['budget-tracker', 'stock-analyser']. */
   apps: string[];
   /**
    * Account memberships keyed by appSlug, value is an array of membership records.
@@ -25,7 +25,7 @@ export interface AuthClaims {
 }
 
 /** App identifiers used across all auth helpers. */
-export type AppName = 'budget-tracker' | 'stock-signal';
+export type AppName = 'budget-tracker' | 'stock-analyser';
 
 /** Account role levels (ordered ascending by capability). */
 export type AccountRole = 'viewer' | 'member' | 'manager' | 'owner';

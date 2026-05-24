@@ -148,7 +148,7 @@ When writing prompts in tab components, include the correct detection string:
 
 ---
 
-## MarketAnalysisResult — `components/stock-signal/tabs/market-analysis-tab.tsx`
+## MarketAnalysisResult — `components/stock-analyser/tabs/market-analysis-tab.tsx`
 
 ```typescript
 interface MarketAnalysisResult {

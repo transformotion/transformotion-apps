@@ -5,11 +5,11 @@ import { getConfig } from '../config'
 
 // ── Auth callbacks (shared across all clients) ─────────────────────────────────
 const getToken     = async () => (await authService.getIdToken()) ?? ''
-const getAccountId = () => authService.getAccountIdForApp('stock-signal')
+const getAccountId = () => authService.getAccountIdForApp('stock-analyser')
 
 // ── Platform-typed client (package typed methods: getPortfolio, getCache, etc.) ─
 let _apiClient: ApiClient | null = null
-export function getStockSignalClient(): ApiClient {
+export function getStockAnalyserClient(): ApiClient {
   if (!_apiClient) {
     _apiClient = new ApiClient({
       baseUrl:      getConfig().api.baseURL,

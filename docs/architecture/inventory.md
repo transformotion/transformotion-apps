@@ -256,7 +256,7 @@ documented rule for which is canonical:
 
 - **Service layer pattern** — used by stock-analyser portfolio and
   watchlist. `portfolio-service.ts` and `watchlist-service.ts` call
-  `getStockSignalClient()` directly; no swap point at the data-access
+  `getStockAnalyserClient()` directly; no swap point at the data-access
   layer.
 - **Repository pattern** — used by what was Budget Tracker drift in
   `apps/stock-analyser/lib/repositories/budget-tracker/` (now removed).
@@ -280,7 +280,7 @@ Production path:
 
 ```
 portfolioService.getHoldings()
-  → getStockSignalClient().getPortfolio()
+  → getStockAnalyserClient().getPortfolio()
   → ApiClient → HttpClient.request()
   → fetch(baseUrl + '/portfolio')
     with Authorization: Bearer <idToken>
@@ -290,7 +290,7 @@ portfolioService.getHoldings()
 ```
 
 No localStorage anywhere in this path. The same shape applies to
-watchlist (`watchlist-service.ts` → `getStockSignalClient().getWatchlist()`
+watchlist (`watchlist-service.ts` → `getStockAnalyserClient().getWatchlist()`
 → `transformotion-watchlist-{stage}` Lambda → `stock-analyser.watchlist-{stage}`).
 
 ### 2.3 X-Account-Id contract
@@ -341,8 +341,8 @@ so the obligation is met everywhere.
 All three stock-analyser Lambdas (portfolio, watchlist, analysis-cache)
 call the documented helper pair:
 
-- `requireAppAccess(auth, 'stock-signal')` — fail-fast app gate
-- `requireAccountAccess(auth, 'stock-signal', account.accountId)` —
+- `requireAppAccess(auth, 'stock-analyser')` — fail-fast app gate
+- `requireAccountAccess(auth, 'stock-analyser', account.accountId)` —
   account-membership check before data access
 
 This matches the pattern prescribed in `auth.md` lines 356-357.
@@ -605,7 +605,7 @@ The handler distinguishes two event shapes:
 
 1. **API Gateway path** — standard `APIGatewayProxyEvent`. Passes
    through `withAuth` middleware then calls
-   `requireAnyAppAccess(auth, ['stock-signal', 'budget-tracker'])`.
+   `requireAnyAppAccess(auth, ['stock-analyser', 'budget-tracker'])`.
    This is the path taken for Lambda-to-Lambda calls from `budget-ai`
    (which constructs a synthetic API Gateway event with full propagated
    claims). The propagated `requestContext.authorizer.claims` — including
@@ -635,7 +635,7 @@ Two callers have `lambda:InvokeFunction` on the proxy ARN:
 
 No stock-analyser Lambda has direct IAM permission to invoke the proxy.
 Stock-analyser reaches the proxy only via the API Gateway path
-(if it has `stock-signal` app access).
+(if it has `stock-analyser` app access).
 
 The lack of an auth check on the async path is safe given the IAM
 boundary: only the proxy itself can trigger that branch.
@@ -826,14 +826,14 @@ detail.
 
 The v4 inventory recorded this as an open security gap. M1 #79
 verification revealed stock-analyser Lambdas (portfolio, watchlist,
-analysis-cache) all enforce `requireAppAccess(auth, 'stock-signal')`
-plus `requireAccountAccess(auth, 'stock-signal', accountId)` per the
+analysis-cache) all enforce `requireAppAccess(auth, 'stock-analyser')`
+plus `requireAccountAccess(auth, 'stock-analyser', accountId)` per the
 documented pattern. The v4 finding was carried forward without
 re-verification.
 
 **Implication for M10 scope:** PLAN.md M10's outcomes previously
 listed "Stock-analyser Lambdas now enforce
-`requireAppAccess('stock-signal')`" as in-scope. That work is already
+`requireAppAccess('stock-analyser')`" as in-scope. That work is already
 done. M10's remaining substance is migrating budget-tracker Lambdas
 from any legacy `requireGroup` calls to the new helpers (Section 2.6
 territory; pending M1 #80 verification) and adding role-based
@@ -887,7 +887,7 @@ Amplify) is removed from all frontends.
   Microsoft, Facebook); `/launchpad/callback` route; `LaunchpadAppClient`;
   `launchpad-auth` persist key; deploy workflow: `deploy-launchpad.yml`.
 - **Stock Analyser** — `signInWithRedirect` replaces the SRP email/password
-  form; `/stock-signal/callback` route; `StockAnalyserAppClient`;
+  form; `/stock-analyser/callback` route; `StockAnalyserAppClient`;
   `stock-analyser-auth` persist key (was `auth-store`).
 - **Budget Tracker** — `signInWithRedirect` trigger when unauthenticated;
   `/budget-tracker/callback` route; `BudgetTrackerAppClient`;
@@ -903,7 +903,7 @@ key (`launchpad-auth`, `stock-analyser-auth`, `budget-tracker-auth`) with
 `NEXT_PUBLIC_CALLBACK_URL` (explicit full URL) instead of deriving the
 callback from `NEXT_PUBLIC_APP_URL + /callback`. Fixes a `redirect_uri_mismatch`
 bug where SA's derived URL (`/callback`) didn't match the CDK-registered
-URL (`/stock-signal/callback`).
+URL (`/stock-analyser/callback`).
 
 **SSO session cookie** is set by the Hosted UI on the Cognito domain.
 Users who sign in via Launchpad are silently re-authenticated by SA and
@@ -1122,9 +1122,9 @@ The `NetworkStack` CloudFront distribution has three configured behaviors plus t
 |---|---|---|---|
 | Default (`*`) | Launchpad (root) | `IndexRewrite` | Implemented — Launchpad owns `/`, `/sign-in/`, `/signed-out/`, `/launchpad/callback/` — verified M7 #251 |
 | `/budget-tracker/*` | BT (`budget-tracker/` prefix) | `IndexRewrite` | Implemented — verified M7 #251 |
-| `/stock-signal/*` | SA (`stock-signal/` prefix) | `IndexRewrite` | Implemented — verified M7 #251 |
+| `/stock-analyser/*` | SA (`stock-analyser/` prefix) | `IndexRewrite` | Implemented — verified M7 #251; prefix updated #286 |
 
-Launchpad deploy syncs to S3 root (excluding `stock-signal/*` and `budget-tracker/*`). Stock Analyser deploys to the `stock-signal/` prefix. Budget Tracker deploys to `budget-tracker/` prefix. The SPA fallback (403/404 → `/index.html`) serves Launchpad's root page.
+Launchpad deploy syncs to S3 root (excluding `stock-analyser/*` and `budget-tracker/*`). Stock Analyser deploys to the `stock-analyser/` prefix. Budget Tracker deploys to `budget-tracker/` prefix. The SPA fallback (403/404 → `/index.html`) serves Launchpad's root page.
 
 **Verified 2026-05-21 (M7 #251):** All three behaviors confirmed live on CloudFront distribution `E1128DYYBLMWYK` (dev.apps.transformotion.com.au). Launchpad confirmed at root — issue #203 closed as resolved.
 

@@ -80,17 +80,17 @@ beforeEach(() => {
 });
 
 describe('pre-token generation', () => {
-  it('1. single-app — builds correct claims for stock-signal', async () => {
+  it('1. single-app — builds correct claims for stock-analyser', async () => {
     mockDdb(
       [{ accountId: 'acct-1', userId: 'test-user-sub', role: 'owner' }],
-      [{ accountId: 'acct-1', appSlug: 'stock-signal' }],
+      [{ accountId: 'acct-1', appSlug: 'stock-analyser' }],
     );
 
     const claims = getClaims(await handler(makeEvent(['stock-app-access'])));
 
-    expect(JSON.parse(claims.apps)).toEqual(['stock-signal']);
+    expect(JSON.parse(claims.apps)).toEqual(['stock-analyser']);
     expect(JSON.parse(claims.accounts)).toEqual({
-      'stock-signal': [{ accountId: 'acct-1', role: 'owner' }],
+      'stock-analyser': [{ accountId: 'acct-1', role: 'owner' }],
     });
     expect(claims.site_admin).toBe('false');
   });
@@ -102,7 +102,7 @@ describe('pre-token generation', () => {
         { accountId: 'acct-2', userId: 'test-user-sub', role: 'member' },
       ],
       [
-        { accountId: 'acct-1', appSlug: 'stock-signal' },
+        { accountId: 'acct-1', appSlug: 'stock-analyser' },
         { accountId: 'acct-2', appSlug: 'budget-tracker' },
       ],
     );
@@ -110,10 +110,10 @@ describe('pre-token generation', () => {
     const claims = getClaims(await handler(makeEvent(['stock-app-access', 'budget-app-access'])));
     const apps = JSON.parse(claims.apps) as string[];
 
-    expect(apps).toContain('stock-signal');
+    expect(apps).toContain('stock-analyser');
     expect(apps).toContain('budget-tracker');
     const accounts = JSON.parse(claims.accounts) as Record<string, unknown>;
-    expect(accounts['stock-signal']).toHaveLength(1);
+    expect(accounts['stock-analyser']).toHaveLength(1);
     expect(accounts['budget-tracker']).toHaveLength(1);
     expect(claims.site_admin).toBe('false');
   });
@@ -123,14 +123,14 @@ describe('pre-token generation', () => {
 
     const claims = getClaims(await handler(makeEvent(['site-admin'])));
 
-    expect(JSON.parse(claims.apps)).toEqual(['stock-signal', 'budget-tracker']);
+    expect(JSON.parse(claims.apps)).toEqual(['stock-analyser', 'budget-tracker']);
     expect(claims.site_admin).toBe('true');
   });
 
-  it('4. missing group — AdminAddUserToGroup called, stock-signal added to apps', async () => {
+  it('4. missing group — AdminAddUserToGroup called, stock-analyser added to apps', async () => {
     mockDdb(
       [{ accountId: 'acct-1', userId: 'test-user-sub', role: 'member' }],
-      [{ accountId: 'acct-1', appSlug: 'stock-signal' }],
+      [{ accountId: 'acct-1', appSlug: 'stock-analyser' }],
     );
 
     const claims = getClaims(await handler(makeEvent([])));
@@ -138,7 +138,7 @@ describe('pre-token generation', () => {
     expect(mockSendCognito).toHaveBeenCalledTimes(1);
     const [addCall] = mockSendCognito.mock.calls;
     expect((addCall[0] as { input: { GroupName: string } }).input.GroupName).toBe('stock-app-access');
-    expect(JSON.parse(claims.apps)).toContain('stock-signal');
+    expect(JSON.parse(claims.apps)).toContain('stock-analyser');
   });
 
   it('5. orphan group — AdminRemoveUserFromGroup called, budget-tracker absent from apps', async () => {
@@ -174,7 +174,7 @@ describe('pre-token generation', () => {
   it('8. claim values are strings — V1 trigger claimsToAddOrOverride requires StringMap', async () => {
     mockDdb(
       [{ accountId: 'acct-1', userId: 'test-user-sub', role: 'owner' }],
-      [{ accountId: 'acct-1', appSlug: 'stock-signal' }],
+      [{ accountId: 'acct-1', appSlug: 'stock-analyser' }],
     );
 
     const claims = getClaims(await handler(makeEvent(['stock-app-access'])));
@@ -193,12 +193,12 @@ describe('pre-token generation', () => {
   });
 
   it('10. Cognito error — logs and continues, returns claims on pre-reconciliation state', async () => {
-    // User has a stock-signal account but is not in stock-app-access.
+    // User has a stock-analyser account but is not in stock-app-access.
     // AdminAddUserToGroup throws. Reconciler logs and continues without adding group.
     // Claims are still returned; apps is [] since the group was not added.
     mockDdb(
       [{ accountId: 'acct-1', userId: 'test-user-sub', role: 'owner' }],
-      [{ accountId: 'acct-1', appSlug: 'stock-signal' }],
+      [{ accountId: 'acct-1', appSlug: 'stock-analyser' }],
     );
     mockSendCognito.mockRejectedValue(new Error('Cognito unavailable'));
 
@@ -206,6 +206,6 @@ describe('pre-token generation', () => {
 
     const claims = getClaims(result);
     expect(claims).toBeDefined();
-    expect(JSON.parse(claims.apps)).not.toContain('stock-signal');
+    expect(JSON.parse(claims.apps)).not.toContain('stock-analyser');
   });
 });

@@ -47,7 +47,7 @@ jobs:
       NEXT_PUBLIC_COGNITO_REGION: ${{ vars.NEXT_PUBLIC_COGNITO_REGION }}
       NEXT_PUBLIC_COGNITO_DOMAIN: ${{ vars.NEXT_PUBLIC_COGNITO_DOMAIN }}
       NEXT_PUBLIC_APP_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}
-      NEXT_PUBLIC_CALLBACK_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}/stock-signal/callback
+      NEXT_PUBLIC_CALLBACK_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}/stock-analyser/callback
       NEXT_PUBLIC_RUNTIME_PROFILE: live
       NEXT_PUBLIC_BUDGET_URL: ${{ vars.NEXT_PUBLIC_BUDGET_URL }}
       NEXT_PUBLIC_SIGNIN_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}/sign-in/
@@ -120,7 +120,7 @@ jobs:
         run: pnpm build
 
       - name: Deploy to S3
-        run: aws s3 sync apps/stock-analyser/out s3://transformotion-web-dev-959516291617/stock-signal --delete
+        run: aws s3 sync apps/stock-analyser/out s3://transformotion-web-dev-959516291617/stock-analyser --delete
 
       - name: Invalidate CloudFront
         run: |
@@ -142,7 +142,7 @@ jobs:
           API_BASE_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
         run: |
           bash scripts/ci/verify-deploy.sh \
-            "${{ vars.NEXT_PUBLIC_APP_URL }}/stock-signal" \
+            "${{ vars.NEXT_PUBLIC_APP_URL }}/stock-analyser" \
             apps/stock-analyser/.env.example \
             "${{ github.sha }}" \
             "stock-analyser" \
@@ -162,7 +162,7 @@ jobs:
       NEXT_PUBLIC_COGNITO_REGION: ${{ vars.NEXT_PUBLIC_COGNITO_REGION }}
       NEXT_PUBLIC_COGNITO_DOMAIN: ${{ vars.NEXT_PUBLIC_COGNITO_DOMAIN }}
       NEXT_PUBLIC_APP_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}
-      NEXT_PUBLIC_CALLBACK_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}/stock-signal/callback
+      NEXT_PUBLIC_CALLBACK_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}/stock-analyser/callback
       NEXT_PUBLIC_RUNTIME_PROFILE: live
       NEXT_PUBLIC_BUDGET_URL: ${{ vars.NEXT_PUBLIC_BUDGET_URL }}
       NEXT_PUBLIC_SIGNIN_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}/sign-in/
@@ -235,7 +235,7 @@ jobs:
         run: pnpm build
 
       - name: Deploy to S3
-        run: aws s3 sync apps/stock-analyser/out s3://transformotion-prod-bucket/stock-signal --delete
+        run: aws s3 sync apps/stock-analyser/out s3://transformotion-prod-bucket/stock-analyser --delete
 
       - name: Invalidate CloudFront
         run: |
@@ -257,7 +257,7 @@ jobs:
           API_BASE_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
         run: |
           bash scripts/ci/verify-deploy.sh \
-            "${{ vars.NEXT_PUBLIC_APP_URL }}/stock-signal" \
+            "${{ vars.NEXT_PUBLIC_APP_URL }}/stock-analyser" \
             apps/stock-analyser/.env.example \
             "${{ github.sha }}" \
             "stock-analyser" \

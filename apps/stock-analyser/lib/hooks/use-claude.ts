@@ -13,7 +13,7 @@
 
 import { useState, useCallback, useRef } from 'react'
 import { getConfig } from '../config'
-import { getStockSignalClient, stockAnalyserClient } from '../api'
+import { getStockAnalyserClient, stockAnalyserClient } from '../api'
 import { dynamoCache } from '../services/cache/dynamo-ttl-cache'
 import { authService } from '../services/auth'
 
@@ -168,15 +168,12 @@ async function subscribeViaWss<T>(
   if (!wssUrl) throw new Error('WSS URL not configured (NEXT_PUBLIC_PLATFORM_WSS_URL)')
 
   const token     = await authService.getIdToken()
-  const accountId = (await authService.getAccountIdForApp('stock-signal')) ?? ''
+  const accountId = (await authService.getAccountIdForApp('stock-analyser')) ?? ''
 
   if (!token) throw new Error('No authentication token available')
 
-  // 'stock-signal' matches the JWT accounts claim key (which mirrors the URL prefix).
-  // When the URL prefix rename issue (#286) lands, this becomes 'stock-analyser' in
-  // coordination with the Cognito claim key migration.
   const ws = new WebSocket(
-    `${wssUrl}?token=${encodeURIComponent(token)}&app=stock-signal&accountId=${encodeURIComponent(accountId)}`
+    `${wssUrl}?token=${encodeURIComponent(token)}&app=stock-analyser&accountId=${encodeURIComponent(accountId)}`
   )
 
   // Phase 1: open connection and get connectionId via init handshake
@@ -227,7 +224,7 @@ async function subscribeViaWss<T>(
   })
 
   // Phase 3: read the completed job result from DynamoDB cache
-  const item = await getStockSignalClient().getCache(`job-${jobId}`)
+  const item = await getStockAnalyserClient().getCache(`job-${jobId}`)
   const jobStatus = JSON.parse(item.data) as { status: string; content?: string; message?: string }
   if (jobStatus.status === 'complete' && jobStatus.content) {
     try {

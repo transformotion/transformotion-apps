@@ -18,8 +18,8 @@ const SHARED  = 'SHARED';
 const TTL_SECS = 3600; // 1 hour
 
 export const handler = withAuth(async ({ auth, account, event }) => {
-  requireAppAccess(auth, 'stock-signal');
-  requireAccountAccess(auth, 'stock-signal', account.accountId);
+  requireAppAccess(auth, 'stock-analyser');
+  requireAccountAccess(auth, 'stock-analyser', account.accountId);
 
   const ticker = event.queryStringParameters?.ticker;
   if (!ticker) throw badRequest('ticker is required');

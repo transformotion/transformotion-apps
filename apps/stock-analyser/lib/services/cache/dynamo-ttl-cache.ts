@@ -8,7 +8,7 @@
  * AccountId:   SHARED for market/public data, user accountId for private data
  */
 
-import { getStockSignalClient, stockAnalyserClient } from '@/lib/api'
+import { getStockAnalyserClient, stockAnalyserClient } from '@/lib/api'
 import { getConfig } from '@/lib/config'
 import { MemoryCacheService } from '@transformotion/cache'
 import type { CacheService } from '@transformotion/cache'
@@ -38,7 +38,7 @@ function getTTL(cacheKey: string): number {
 export class DynamoTTLCacheService implements CacheService {
   async get<T>(key: string): Promise<T | null> {
     try {
-      const item = await getStockSignalClient().getCache(key)
+      const item = await getStockAnalyserClient().getCache(key)
       return JSON.parse(item.data) as T
     } catch {
       // 404 = cache miss; any other error falls back to null
@@ -73,7 +73,7 @@ export class DynamoTTLCacheService implements CacheService {
 
   async ttlRemaining(key: string): Promise<number> {
     try {
-      const item = await getStockSignalClient().getCache(key)
+      const item = await getStockAnalyserClient().getCache(key)
       const remaining = item.expiresAt - Math.floor(Date.now() / 1000)
       return Math.max(0, remaining)
     } catch {

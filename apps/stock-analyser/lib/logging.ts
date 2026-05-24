@@ -11,7 +11,7 @@ export { createLogger, getLogger, type Logger, type LogContext }
 
 // Pre-configured loggers for each app
 export const launchpadLogger = getLogger('launchpad')
-export const signalLogger = getLogger('stock-signal')
+export const signalLogger = getLogger('stock-analyser')
 
 /**
  * Usage examples:

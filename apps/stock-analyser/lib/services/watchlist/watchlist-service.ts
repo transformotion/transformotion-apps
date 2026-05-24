@@ -1,4 +1,4 @@
-import { getStockSignalClient } from '@/lib/api'
+import { getStockAnalyserClient } from '@/lib/api'
 import { getConfig } from '@/lib/config'
 
 export interface WatchlistItem {
@@ -23,11 +23,11 @@ let mockStore: WatchlistItem[] = [...MOCK_ITEMS]
 
 const realService = {
   async getItems(): Promise<WatchlistItem[]> {
-    const res = await getStockSignalClient().getWatchlist()
+    const res = await getStockAnalyserClient().getWatchlist()
     return res.items ?? []
   },
   async saveItems(items: WatchlistItem[]): Promise<void> {
-    await getStockSignalClient().putWatchlist({ items })
+    await getStockAnalyserClient().putWatchlist({ items })
   },
 }
 

@@ -8,7 +8,7 @@
 //   const client = new ApiClient({
 //     baseUrl:      process.env.NEXT_PUBLIC_API_URL,
 //     getToken:     () => fetchAuthSession().then(s => s.tokens?.idToken?.toString() ?? ''),
-//     getAccountId: () => cognitoAuth.getAccountIdForApp('stock-signal'),
+//     getAccountId: () => cognitoAuth.getAccountIdForApp('stock-analyser'),
 //   });
 //
 //   const { holdings } = await client.getPortfolio();

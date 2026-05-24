@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import type { CycleDataResponse } from '@transformotion/api-client';
-import { getStockSignalClient } from '../api';
+import { getStockAnalyserClient } from '../api';
 
 export interface UseCycleDataResult {
   data:      CycleDataResponse | null;
@@ -18,7 +18,7 @@ export function useCycleData(): UseCycleDataResult {
     setIsLoading(true);
     setError(null);
     try {
-      const result = await getStockSignalClient().getCycleData(ticker);
+      const result = await getStockAnalyserClient().getCycleData(ticker);
       setData(result);
       return result;
     } catch (err) {
