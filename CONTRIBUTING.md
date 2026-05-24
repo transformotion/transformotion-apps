@@ -492,6 +492,8 @@ Project automation rules are configured to:
 - Move cards to Done when the issue is closed.
 - Move cards to Done when a linked PR is merged.
 
+**Issue filing with a numbered milestone — set Status to Todo immediately.** The automation always defaults to Backlog regardless of which milestone is attached. When you file an issue and attach it to a numbered milestone, also set its Project Status to Todo at the same time — manually, via the issue sidebar or the Project board. Leaving it at Backlog contradicts the milestone assignment (numbered milestones are prioritised by definition) and makes the roadmap view inaccurate, because the roadmap filters on Status.
+
 Milestone completion percentage updates automatically as issues close.
 A milestone is "complete" when 100% of its issues are closed.
 
