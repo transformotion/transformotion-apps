@@ -3,6 +3,7 @@ import {
   CognitoIdentityProviderClient,
   AdminUpdateUserAttributesCommand,
 } from '@aws-sdk/client-cognito-identity-provider';
+import { APPS } from '@transformotion/runtime-config';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
   DynamoDBDocumentClient,
@@ -26,10 +27,12 @@ const ACCOUNTS_TABLE        = process.env.ACCOUNTS_TABLE!;
 const ACCOUNT_MEMBERS_TABLE = process.env.ACCOUNT_MEMBERS_TABLE!;
 const USER_POOL_ID          = process.env.USER_POOL_ID!;
 
-const APP_CLIENT_TO_SLUG: Record<string, string> = {
-  [process.env.APP_CLIENT_STOCK_SIGNAL!]:   'stock-signal',
-  [process.env.APP_CLIENT_BUDGET_TRACKER!]: 'budget-tracker',
-};
+const APP_CLIENT_TO_SLUG: Record<string, string> = Object.fromEntries(
+  APPS.map(app => [
+    process.env[`APP_CLIENT_${app.slug.toUpperCase().replace(/-/g, '_')}`]!,
+    app.slug,
+  ])
+);
 
 /**
  * Auth setup Lambda — handles two routes:

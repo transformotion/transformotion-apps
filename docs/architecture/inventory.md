@@ -185,6 +185,15 @@ implemented:
   `AppsConfig`) and `createConfig<T>()` factory. Both apps' `lib/config/index.ts`
   now import sub-types and factory from the package; `AppsConfig.peers`
   replaces the per-app `budgetTrackerUrl`/`launchpadUrl` fields.
+  Extended by M7 / PR #335 (Bucket A'') to add the canonical app registry:
+  `APPS` const (slug, cognitoGroup, urlPrefix, label per app), `APP_SLUGS`
+  derived array, `AppDescriptor`/`AppSlug` types, and `LP_AUTH_ROUTES`
+  (signIn/signedOut path constants). Consumed by platform Lambdas
+  (account-provisioning, pre-token-generation, claude-proxy), CDK stacks
+  (PlatformWsStack, AuthStack, NetworkStack), launchpad, and both app
+  configs. WebSocket URL env var unified: `NEXT_PUBLIC_PLATFORM_WSS_URL`
+  replaces the per-app `NEXT_PUBLIC_CLAUDE_WSS_URL` (SA) and
+  `NEXT_PUBLIC_BUDGET_WSS_URL` (BT) in both deploy workflows and configs.
 
 `packages/cycle-engine/` was deleted in this PR. Its RSI/MACD/cycle
 scoring implementation was app-specific (Stock Analyser only), so it

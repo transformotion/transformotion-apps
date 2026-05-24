@@ -10,6 +10,7 @@ import {
   selectProvider,
   normaliseCrossAppUrl,
   createConfig,
+  LP_AUTH_ROUTES,
   type APIConfig,
   type AuthConfig,
   type StorageConfig,
@@ -70,7 +71,7 @@ function loadConfig(): AppConfig {
         validValues: ['mock', 'claude'] as const,
       }),
       model: process.env.NEXT_PUBLIC_AI_MODEL || 'claude-3-sonnet',
-      wssUrl: process.env.NEXT_PUBLIC_BUDGET_WSS_URL || '',
+      wssUrl: process.env.NEXT_PUBLIC_PLATFORM_WSS_URL || '',
     },
     storage: {
       provider: selectProvider({
@@ -93,8 +94,8 @@ function loadConfig(): AppConfig {
       debugMode: process.env.NEXT_PUBLIC_DEBUG_MODE === 'true',
     },
     apps: {
-      signInUrl: normaliseCrossAppUrl(process.env.NEXT_PUBLIC_SIGNIN_URL, '/sign-in/'),
-      signOutUrl: normaliseCrossAppUrl(process.env.NEXT_PUBLIC_SIGNOUT_URL, '/signed-out/'),
+      signInUrl: normaliseCrossAppUrl(process.env.NEXT_PUBLIC_SIGNIN_URL, LP_AUTH_ROUTES.signIn),
+      signOutUrl: normaliseCrossAppUrl(process.env.NEXT_PUBLIC_SIGNOUT_URL, LP_AUTH_ROUTES.signedOut),
       peers: {
         'launchpad': normaliseCrossAppUrl(process.env.NEXT_PUBLIC_LAUNCHPAD_URL, '/'),
       },

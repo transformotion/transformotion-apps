@@ -15,7 +15,7 @@ export class ClaudeAIService implements AIService {
     const token     = await authService.getIdToken()
     const accountId = await authService.getAccountIdForApp('budget-tracker')
 
-    if (!wssUrl)    throw new Error('WebSocket URL not configured (NEXT_PUBLIC_BUDGET_WSS_URL)')
+    if (!wssUrl)    throw new Error('WebSocket URL not configured (NEXT_PUBLIC_PLATFORM_WSS_URL)')
     if (!token)     throw new Error('No auth token available')
     if (!accountId) throw new Error('No accountId available')
 

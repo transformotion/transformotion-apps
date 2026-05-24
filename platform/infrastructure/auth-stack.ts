@@ -8,6 +8,7 @@ import * as lambdaNodejs from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import { Construct } from 'constructs';
 import { cognitoHostedUiCss } from './cognito-hosted-ui-css';
+import { APPS } from '@transformotion/runtime-config';
 
 export interface AuthStackProps extends cdk.StackProps {
   stage: 'dev' | 'prod';
@@ -259,9 +260,9 @@ export class AuthStack extends cdk.Stack {
     // ── Cognito Groups ─────────────────────────────────────────────────────
     const groups: Array<{ name: string; description: string; precedence: number }> = [
       // Target groups (7e-prep-1) — accepted by handlers after 7e-prep-2 dual-gate
-      { name: 'site-admin',        description: 'Platform administrator',          precedence: 1  },
-      { name: 'stock-app-access',  description: 'User has access to Stock Signal', precedence: 50 },
-      { name: 'budget-app-access', description: 'User has access to Budget Tracker', precedence: 60 },
+      { name: 'site-admin', description: 'Platform administrator', precedence: 1 },
+      // App-access groups sourced from APPS const — prevents cognitoGroup names from drifting
+      ...APPS.map((app, idx) => ({ name: app.cognitoGroup, description: app.groupDescription, precedence: 50 + idx * 10 })),
       // Legacy groups — removed at 7e-cleanup
       { name: 'admin',          description: 'Platform administrators — full access to all apps', precedence: 2  },
       { name: 'stock-app',      description: 'Stock Signal Analyser access',                       precedence: 10 },

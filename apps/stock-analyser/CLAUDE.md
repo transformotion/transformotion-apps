@@ -86,7 +86,7 @@ Key service methods defined in [contracts/DATA_CONTRACTS.md](./contracts/DATA_CO
 ### Claude AI pattern
 
 The `useClaude<T>()` hook handles the full async request cycle via the platform WebSocket:
-1. Open platform WSS (`NEXT_PUBLIC_CLAUDE_WSS_URL`) with Cognito ID token and `?app=stock-analyser`
+1. Open platform WSS (`NEXT_PUBLIC_PLATFORM_WSS_URL`) with Cognito ID token and `?app=stock-analyser`
 2. Send `{ action: 'init' }` → receive `{ type: 'connected', connectionId }`
 3. POST to `/api/claude` with prompt + `connectionId` → returns `jobId`
 4. Receive `{ type: 'job_complete' }` push on the WebSocket when the job finishes
@@ -168,7 +168,7 @@ Required env vars marked `[REQUIRED]` in `.env.example` must be set before the d
 | `NEXT_PUBLIC_COGNITO_DOMAIN` | Hosted UI domain |
 | `NEXT_PUBLIC_RUNTIME_PROFILE` | `mock` (default; local development) or `live` (deployed environments). Determines defaults for auth, data, AI, and future concerns. See root `CLAUDE.md` for the design map. |
 | `NEXT_PUBLIC_API_BASE_URL` | Platform API base URL |
-| `NEXT_PUBLIC_CLAUDE_WSS_URL` | Platform WebSocket URL for async AI job notifications — extracted from `TransformotionDev-PlatformWs` CloudFormation output at deploy time |
+| `NEXT_PUBLIC_PLATFORM_WSS_URL` | Platform WebSocket URL for async AI job notifications — extracted from `TransformotionDev-PlatformWs` CloudFormation output at deploy time |
 
 **Cognito client variable rebind:** The GitHub Actions variable `NEXT_PUBLIC_STOCK_ANALYSER_COGNITO_CLIENT_ID` is mapped to the generic runtime env var `NEXT_PUBLIC_COGNITO_CLIENT_ID` in the deploy workflow's env block. This allows each app to have its own Cognito App Client (established in sub-phase 7b.5-alpha) while the runtime code (`@transformotion/auth-client`) reads a single generic name. Local development reads `NEXT_PUBLIC_COGNITO_CLIENT_ID` directly from `.env.local`.
 

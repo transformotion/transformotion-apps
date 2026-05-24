@@ -9,6 +9,7 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as lambdaNodejs from 'aws-cdk-lib/aws-lambda-nodejs';
 import { Construct } from 'constructs';
+import { APPS } from '@transformotion/runtime-config';
 
 export interface PlatformWsStackProps extends cdk.StackProps {
   userPool: cognito.IUserPool;
@@ -94,11 +95,8 @@ export class PlatformWsStack extends cdk.Stack {
       memorySize:   256,
       environment: {
         COGNITO_USER_POOL_ID: userPool.userPoolId,
-        APP_NAME:             'budget-tracker',
-        // 'stock-signal' matches the JWT accounts claim key (which mirrors the URL prefix).
-        // When the URL prefix rename issue (#286) lands, this becomes 'stock-analyser' in
-        // coordination with the Cognito claim key migration.
-        PERMITTED_APPS:       'budget-tracker,stock-signal',
+        APP_NAME:       'budget-tracker',
+        PERMITTED_APPS: APPS.map(app => app.slug).join(','),
       },
       bundling: {
         ...bundling,

@@ -7,6 +7,7 @@
     "lib": ["ES2022"],
     "baseUrl": ".",
     "paths": {
+      "@transformotion/runtime-config": ["./node_modules/@transformotion/runtime-config/src/index.ts"],
       "aws-cdk-lib": ["./node_modules/aws-cdk-lib"],
       "aws-cdk-lib/*": ["./node_modules/aws-cdk-lib/*"],
       "constructs": ["./node_modules/constructs"],
