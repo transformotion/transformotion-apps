@@ -497,6 +497,8 @@ Project automation rules are configured to:
 Milestone completion percentage updates automatically as issues close.
 A milestone is "complete" when 100% of its issues are closed.
 
+**Roadmap view behaviour.** The Roadmap view positions items by date. The project has no custom target-date fields, so positioning falls back to the built-in `Closed` date — meaning open issues have no timeline position and do not appear in the date range the view is currently showing. For forward-looking tracking of active work, use the Kanban view (Status-based), which shows open issues regardless of date. The Roadmap view is most useful as a "what shipped when" retrospective in this project's current configuration. If you need open issues to appear on the roadmap at a specific point in time, add a custom `Target date` field to the project and populate it.
+
 **Milestone pairing rule:** Numbered milestones in `PLAN.md` and
 GitHub Milestones are paired. Creating or removing a numbered
 milestone in `PLAN.md` requires creating or closing the corresponding
