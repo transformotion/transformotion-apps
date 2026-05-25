@@ -67,4 +67,9 @@ export type {
   RsiDivergence,
   MacdMomentum,
   VolumeTrend,
+
+  // Market data OHLCV
+  OhlcvDataResponse,
+  OhlcvRange,
+  OhlcvInterval,
 } from './types';

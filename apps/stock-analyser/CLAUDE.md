@@ -49,6 +49,7 @@ All Stock Analyser Lambdas share the platform API Gateway and Cognito JWT author
 | `transformotion-analysis-cache-{stage}` | `apps/stock-analyser/functions/analysis-cache` | `GET /api/analysis-cache/*` |
 | `transformotion-cycle-check-{stage}` | `apps/stock-analyser/functions/cycle-check` | EventBridge scheduled (no HTTP route) |
 | `transformotion-cycle-data-{stage}` | `apps/stock-analyser/functions/cycle-data` | `GET /cycle/ohlcv?ticker=` |
+| `transformotion-market-data-{stage}` | `apps/stock-analyser/functions/market-data` | `GET /price/ohlcv?ticker=&range=&interval=` |
 
 ## DynamoDB tables
 
@@ -113,7 +114,8 @@ Stock Analyser AI goes through `useClaude<T>()` or `callClaudeAPI<T>()` in `lib/
 | Metals | `METALS#all` | 2h |
 | Stock Analysis | `ANALYSIS#{ticker}` | 8h |
 | Market Cycle | `CYCLE#{geography}` | 8h |
-| OHLCV Cycle Data | `OHLCV#{ticker}` | 1h |
+| Computed Cycle Position | `OHLCV#{ticker}` | 1h |
+| Raw OHLCV (shared) | `MARKET-DATA#{ticker}#{range}#{interval}` | 8h |
 
 ## Cycle computation
 

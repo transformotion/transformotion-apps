@@ -8,14 +8,14 @@ import {
   requireAccountAccess,
   HttpError,
 } from '@transformotion/lambda-middleware';
-import YahooFinance from 'yahoo-finance2';
+import { fetchOhlcv } from '../../_shared/market-data-fetcher';
 import { computeCyclePosition } from '../../../lib/cycle';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
-const yf    = new YahooFinance();
-const TABLE   = process.env.ANALYSIS_CACHE_TABLE!;
-const SHARED  = 'SHARED';
-const TTL_SECS = 3600; // 1 hour
+const TABLE          = process.env.ANALYSIS_CACHE_TABLE!;
+const SHARED         = 'SHARED';
+const CYCLE_TTL      = 3600;  // 1 hour — computed result
+const MARKET_TTL     = 28800; // 8 hours — shared raw OHLCV
 
 export const handler = withAuth(async ({ auth, account, event }) => {
   requireAppAccess(auth, 'stock-analyser');
@@ -24,39 +24,65 @@ export const handler = withAuth(async ({ auth, account, event }) => {
   const ticker = event.queryStringParameters?.ticker;
   if (!ticker) throw badRequest('ticker is required');
 
-  const cacheKey = `OHLCV#${ticker}`;
+  const cycleCacheKey  = `OHLCV#${ticker}`;
+  const marketCacheKey = `MARKET-DATA#${ticker}#1y#1d`;
 
-  // Cache read — OHLCV is SHARED data (same for all users)
-  const cached = await ddb.send(new GetCommand({
+  // 1. Check computed cycle cache first
+  const cachedCycle = await ddb.send(new GetCommand({
     TableName: TABLE,
-    Key: { accountId: SHARED, cacheKey },
+    Key: { accountId: SHARED, cacheKey: cycleCacheKey },
   }));
 
-  if (cached.Item) {
-    const data = typeof cached.Item.data === 'string'
-      ? JSON.parse(cached.Item.data)
-      : cached.Item.data;
+  if (cachedCycle.Item) {
+    const data = typeof cachedCycle.Item.data === 'string'
+      ? JSON.parse(cachedCycle.Item.data)
+      : cachedCycle.Item.data;
     return ok({ ...data, source: 'cache' as const });
   }
 
-  // Fetch OHLCV from Yahoo Finance
-  const period1 = new Date();
-  period1.setFullYear(period1.getFullYear() - 1);
+  // 2. Check shared raw OHLCV cache
+  let closes: number[], highs: number[], volumes: number[];
 
-  let quotes: Array<{ close: number | null; high: number | null; volume: number | null }>;
-  try {
-    const result = await yf.chart(ticker, { period1, interval: '1d' });
-    quotes = result.quotes ?? [];
-  } catch (err) {
-    console.error(`[cycle-data] Yahoo Finance error for ${ticker}:`, err);
-    throw new HttpError(503, 'Failed to fetch market data from Yahoo Finance');
+  const cachedMarket = await ddb.send(new GetCommand({
+    TableName: TABLE,
+    Key: { accountId: SHARED, cacheKey: marketCacheKey },
+  }));
+
+  if (cachedMarket.Item) {
+    const raw = typeof cachedMarket.Item.data === 'string'
+      ? JSON.parse(cachedMarket.Item.data)
+      : cachedMarket.Item.data;
+    closes  = raw.closes;
+    highs   = raw.highs;
+    volumes = raw.volumes;
+  } else {
+    // 3. Fetch from Yahoo Finance and populate shared cache
+    let ohlcv: Awaited<ReturnType<typeof fetchOhlcv>>;
+    try {
+      ohlcv = await fetchOhlcv(ticker, '1y', '1d');
+    } catch (err) {
+      console.error(`[cycle-data] Yahoo Finance error for ${ticker}:`, err);
+      throw new HttpError(503, 'Failed to fetch market data from Yahoo Finance');
+    }
+
+    closes  = ohlcv.closes;
+    highs   = ohlcv.highs;
+    volumes = ohlcv.volumes;
+
+    const nowSecs = Math.floor(Date.now() / 1000);
+    await ddb.send(new PutCommand({
+      TableName: TABLE,
+      Item: {
+        accountId: SHARED,
+        cacheKey:  marketCacheKey,
+        data:      JSON.stringify({ ticker, range: '1y', interval: '1d', fetchedAt: new Date().toISOString(), ...ohlcv }),
+        dataType:  'market-data-ohlcv',
+        mode:      'live',
+        cachedAt:  nowSecs,
+        expiresAt: nowSecs + MARKET_TTL,
+      },
+    }));
   }
-
-  // Filter out any bars with null close/high and align all arrays
-  const validQuotes = quotes.filter(q => q.close != null && q.close > 0 && q.high != null);
-  const closes  = validQuotes.map(q => q.close!);
-  const highs   = validQuotes.map(q => q.high!);
-  const volumes = validQuotes.map(q => q.volume ?? 0);
 
   const position = computeCyclePosition({ closes, highs, volumes });
 
@@ -76,22 +102,21 @@ export const handler = withAuth(async ({ auth, account, event }) => {
     computedAt:     new Date().toISOString(),
   };
 
-  // Write to cache
   const nowSecs = Math.floor(Date.now() / 1000);
   await ddb.send(new PutCommand({
     TableName: TABLE,
     Item: {
       accountId: SHARED,
-      cacheKey,
+      cacheKey:  cycleCacheKey,
       data:      JSON.stringify(payload),
       dataType:  'ohlcv-cycle',
       mode:      'live',
       cachedAt:  nowSecs,
-      expiresAt: nowSecs + TTL_SECS,
+      expiresAt: nowSecs + CYCLE_TTL,
     },
   }));
 
-  console.log(`[cycle-data] Computed and cached: ${cacheKey}`);
+  console.log(`[cycle-data] Computed and cached: ${cycleCacheKey}`);
 
   return ok({ ...payload, source: 'live' as const });
 });

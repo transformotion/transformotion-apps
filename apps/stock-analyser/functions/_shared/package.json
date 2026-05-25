@@ -1,0 +1,15 @@
+{
+  "name": "@transformotion/fn-shared",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "yahoo-finance2": "^3"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8",
+    "typescript": "*"
+  }
+}
