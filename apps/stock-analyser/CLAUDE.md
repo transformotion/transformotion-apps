@@ -175,3 +175,7 @@ Required env vars marked `[REQUIRED]` in `.env.example` must be set before the d
 ## Known constraints
 
 - `eslint-plugin-boundaries` enforces no cross-app imports — do not import from `apps/budget-tracker/`.
+
+## Deploy isolation (M7)
+
+M7 deploy-isolation work is complete as of PRs #346, #348, #350, #351. This app has its own CDK entrypoint (`infrastructure/bin/stock-analyser.ts`) and deploy workflow (`deploy-stock-analyser.yml`). Changes to `apps/stock-analyser/**` trigger only this workflow — no cascade, no cross-app deploys.
