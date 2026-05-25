@@ -751,12 +751,12 @@ importers:
 
   apps/stock-analyser/functions/cycle-data:
     dependencies:
+      '@transformotion/fn-shared':
+        specifier: workspace:*
+        version: link:../_shared
       '@transformotion/lambda-middleware':
         specifier: workspace:*
         version: link:../../../../packages/lambda-middleware
-      yahoo-finance2:
-        specifier: ^3
-        version: 3.14.1
     devDependencies:
       '@aws-sdk/client-dynamodb':
         specifier: ^3
@@ -773,12 +773,12 @@ importers:
 
   apps/stock-analyser/functions/market-data:
     dependencies:
+      '@transformotion/fn-shared':
+        specifier: workspace:*
+        version: link:../_shared
       '@transformotion/lambda-middleware':
         specifier: workspace:*
         version: link:../../../../packages/lambda-middleware
-      yahoo-finance2:
-        specifier: ^3
-        version: 3.14.1
     devDependencies:
       '@aws-sdk/client-dynamodb':
         specifier: ^3
