@@ -146,7 +146,10 @@ export class StockAnalyserApiStack extends cdk.Stack {
 
     const cycleDataIntegration = new apigateway.LambdaIntegration(cycleDataFn, { proxy: true });
     const cycle = api.root.addResource('cycle');
-    cycle.addResource('ohlcv').addMethod('GET', cycleDataIntegration, auth);
+    cycle.addCorsPreflight(corsPreflightOptions);
+    const cycleOhlcv = cycle.addResource('ohlcv');
+    cycleOhlcv.addCorsPreflight(corsPreflightOptions);
+    cycleOhlcv.addMethod('GET', cycleDataIntegration, auth);
 
     // ── /price/ohlcv — Market Data Lambda ─────────────────────────────────
     const marketDataFn = new lambdaNodejs.NodejsFunction(this, 'MarketDataFn', {
@@ -164,9 +167,19 @@ export class StockAnalyserApiStack extends cdk.Stack {
 
     const marketDataIntegration = new apigateway.LambdaIntegration(marketDataFn, { proxy: true });
     const price = api.root.addResource('price');
-    price.addResource('ohlcv').addMethod('GET', marketDataIntegration, auth);
+    price.addCorsPreflight(corsPreflightOptions);
+    const priceOhlcv = price.addResource('ohlcv');
+    priceOhlcv.addCorsPreflight(corsPreflightOptions);
+    priceOhlcv.addMethod('GET', marketDataIntegration, auth);
   }
 }
+
+const corsPreflightOptions: apigateway.CorsOptions = {
+  allowOrigins: apigateway.Cors.ALL_ORIGINS,
+  allowMethods: apigateway.Cors.ALL_METHODS,
+  allowHeaders: ['Content-Type', 'Authorization', 'X-Account-Id'],
+  maxAge: cdk.Duration.hours(1),
+};
 
 function authMethodOptions(authoriser: apigateway.IAuthorizer): apigateway.MethodOptions {
   return {
