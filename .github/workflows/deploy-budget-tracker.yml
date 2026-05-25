@@ -1,10 +1,23 @@
 name: Deploy — Budget Tracker
 
 on:
-  workflow_run:
-    workflows: ['Deploy — Platform Infrastructure']
-    types: [completed]
+  push:
     branches: [develop, main]
+    paths:
+      - 'apps/budget-tracker/**'
+      - 'infrastructure/bin/budget-tracker.ts'
+      - 'packages/api-client/**'
+      - 'packages/ui/**'
+      - 'packages/auth-client/**'
+      - 'packages/runtime-config/**'
+      - 'packages/lambda-middleware/**'
+      - 'packages/budget-domain/**'
+  workflow_call:
+    inputs:
+      target:
+        required: true
+        type: string
+        description: 'Deploy target: dev or prod'
   workflow_dispatch:
     inputs:
       target:
@@ -15,7 +28,7 @@ on:
         options: [dev, prod]
 
 concurrency:
-  group: deploy-budget-tracker-${{ github.event.workflow_run.head_branch || github.ref_name }}
+  group: deploy-budget-tracker-${{ github.ref_name }}
   cancel-in-progress: false
 
 permissions:
@@ -30,7 +43,7 @@ jobs:
   deploy-dev:
     name: Budget Tracker → Dev
     runs-on: ubuntu-latest
-    if: (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'develop') || (github.event_name == 'workflow_dispatch' && inputs.target == 'dev')
+    if: (github.event_name == 'push' && github.ref_name == 'develop') || (github.event_name == 'workflow_call' && inputs.target == 'dev') || (github.event_name == 'workflow_dispatch' && inputs.target == 'dev')
     environment: dev
     env:
       NEXT_PUBLIC_RUNTIME_PROFILE: live
@@ -146,7 +159,7 @@ jobs:
   deploy-prod:
     name: Budget Tracker → Prod
     runs-on: ubuntu-latest
-    if: (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main') || (github.event_name == 'workflow_dispatch' && inputs.target == 'prod')
+    if: (github.event_name == 'push' && github.ref_name == 'main') || (github.event_name == 'workflow_call' && inputs.target == 'prod') || (github.event_name == 'workflow_dispatch' && inputs.target == 'prod')
     environment: prod
     env:
       NEXT_PUBLIC_RUNTIME_PROFILE: live
