@@ -95,10 +95,9 @@ Deployed by `deploy-budget-tracker.yml`. Source in `apps/budget-tracker/infrastr
 
 | Function name | Handler | Routes |
 |---|---|---|
-| `transformotion-portfolio-{stage}` | `apps/stock-analyser/functions/portfolio` | `GET/POST/PATCH/DELETE /api/portfolio` |
-| `transformotion-watchlist-{stage}` | `apps/stock-analyser/functions/watchlist` | `GET/POST/PATCH/DELETE /api/watchlist` |
-| `transformotion-analysis-cache-{stage}` | `apps/stock-analyser/functions/analysis-cache` | `GET /api/analysis-cache/*` |
-| `transformotion-cycle-check-{stage}` | `apps/stock-analyser/functions/cycle-check` | EventBridge scheduled (no API Gateway route) |
+| `transformotion-portfolio-{stage}` | `apps/stock-analyser/functions/portfolio` | `GET/PUT /portfolio` |
+| `transformotion-watchlist-{stage}` | `apps/stock-analyser/functions/watchlist` | `GET/PUT /watchlist` |
+| `transformotion-analysis-cache-{stage}` | `apps/stock-analyser/functions/analysis-cache` | `GET/PUT/DELETE /analysis-cache/{key}` |
 | `transformotion-cycle-data-{stage}` | `apps/stock-analyser/functions/cycle-data` | `GET /cycle/ohlcv?ticker=` |
 | `transformotion-market-data-{stage}` | `apps/stock-analyser/functions/market-data` | `GET /price/ohlcv?ticker=&range=&interval=` |
 
@@ -113,7 +112,15 @@ Deployed by `deploy-budget-tracker.yml`. Source in `apps/budget-tracker/infrastr
 | `budget-ai-review-handler-{stage}` | Budget Tracker AI Lambda | `POST /api/budget/v1/ai/review` |
 | `budget-ai-csv-analysis-handler-{stage}` | Budget Tracker AI Lambda | `POST /api/budget/v1/ai/csv-analysis` |
 | `budget-export-handler-{stage}` | Budget Tracker export Lambda | `GET /api/budget/v1/business-export` |
-| `budget-migrate-handler-{stage}` | Budget Tracker migrate Lambda | `POST /api/budget/v1/migrate-from-localstorage` |
+
+> **Note:** BT does NOT consume the shared `claude-proxy` Lambda. BT's AI routes (`/api/budget/v1/ai/*`) are independent Lambdas with their own Anthropic API key access. SA consumes `claude-proxy` directly. M9 design must account for this asymmetry.
+
+### Migration Utilities Lambda functions (`MigrationsApi`)
+
+| Function name | Handler | Routes |
+|---|---|---|
+| `migration-budget-tracker-transactions-{stage}` | `migration-utilities/budget-tracker/transactions` | `POST /api/migrations/budget-tracker/transactions/import` |
+| `migration-budget-tracker-budget-data-{stage}` | `migration-utilities/budget-tracker/budget-data` | `POST /api/migrations/budget-tracker/budget-data/run` |
 
 ### Platform WS Lambda functions (`Transformotion{Stage}-PlatformWs`)
 
@@ -222,6 +229,26 @@ Platform WS Lambda environment variables:
 | `prod` | `RETAIN` (data is permanent) | `RETAIN` on user pool, Secrets Manager entries |
 
 Secrets Manager entries for social IDP credentials are always `RETAIN` in both environments (credentials should not be destroyed if the stack is torn down).
+
+---
+
+## GitHub Actions deploy IAM
+
+A single shared IAM role `GitHubActionsDeployRole` handles all GitHub Actions deploy workflows. Source: `platform/infrastructure/github-actions-role-stack.ts`.
+
+**OIDC trust:** Federated trust from `token.actions.githubusercontent.com`, scoped to `repo:transformotion/transformotion-apps:*`.
+
+**Inline policies:**
+
+| Policy name | Permissions | Resource scope |
+|---|---|---|
+| `CDKAssumeBootstrapRoles` | `sts:AssumeRole` | CDK bootstrap role ARNs (`cdk-*`) in account `959516291617` / `ap-southeast-2` |
+| `TransformotionDevDeploy` | S3 bucket actions | `Resource: *` |
+| `TransformotionDevDeploy` | CloudFront distribution actions | `Resource: *` |
+| `TransformotionDevDeploy` | CloudFormation stack actions | `arn:aws:cloudformation:ap-southeast-2:959516291617:stack/Transformotion*` |
+| `TransformotionDevDeploy` | Cognito user pool and client actions | Both pools: `ap-southeast-2_7QhxUvefw` (dev, active) and `ap-southeast-2_8hHCARUWq` (prod — empty pool created 2026-04-22, no users, no clients) |
+
+M9 will evaluate per-app IAM scoping as part of the per-app deploy isolation outcome.
 
 ---
 

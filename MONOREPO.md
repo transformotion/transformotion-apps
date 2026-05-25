@@ -208,7 +208,7 @@ the other app's deployment.
 | `apps/stock-analyser/infrastructure/**` | `deploy-stock-analyser.yml` |
 | `apps/budget-tracker/**` | `deploy-budget-tracker.yml` |
 | `apps/budget-tracker/infrastructure/**` | `deploy-budget-tracker.yml` |
-| `apps/launchpad/**` | `deploy-platform.yml` |
+| `apps/launchpad/**` | `deploy-launchpad.yml` |
 | `platform/infrastructure/**` | `deploy-platform.yml` |
 | `infrastructure/bin/**` | `deploy-platform.yml` |
 | `platform/functions/**` | `deploy-platform.yml` |
@@ -232,7 +232,7 @@ mechanical steps within this monorepo are:
    *not* at `apps/<app-name>/contracts/`. Per-app contract mirrors are
    forbidden per `CONTRIBUTING.md` Section 3.5.
 4. Add CDK stacks in `apps/<app-name>/infrastructure/`.
-5. Register stacks in `infrastructure/bin/app.ts`.
+5. Create `infrastructure/bin/{app-name}.ts` containing only the new app's stacks, resolving shared platform resources via `cdk.Fn.importValue`.
 6. Add Lambda source at `apps/<app-name>/functions/`. Register the
    nested workspace glob in `pnpm-workspace.yaml` if Lambdas are
    workspaces themselves.

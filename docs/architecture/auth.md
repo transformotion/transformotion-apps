@@ -84,7 +84,19 @@ Social sign-in is enabled on the launchpad client only. Per-app clients are Cogn
 | `NEXT_PUBLIC_BUDGET_TRACKER_COGNITO_CLIENT_ID` | BudgetTrackerAppClient |
 
 **Callback URL convention:** `{host}/{app-slug}/callback`
-**Logout URL convention:** `{host}/sign-in`
+**Logout URL convention:** `{host}/signed-out/`
+
+**Launchpad dual callback:** The launchpad app client registers two callback URLs: `{host}/launchpad/callback` (flows initiated from launchpad pages) and `{host}/sign-in/callback` (flows initiated via the sign-in route). Both are registered; SSO flows may originate from either path.
+
+### Registered callback URLs (operational state)
+
+The following callback and logout URLs are registered on the dev Cognito app clients:
+
+| Client | Callback URLs | Logout URL |
+|---|---|---|
+| `LaunchpadAppClient` | `{host}/launchpad/callback`, `{host}/sign-in/callback` | `{host}/signed-out/` |
+| `StockAnalyserAppClient` | `{host}/stock-analyser/callback` | `{host}/signed-out/` |
+| `BudgetTrackerAppClient` | `{host}/budget-tracker/callback` | `{host}/signed-out/` |
 
 For current client IDs, read from CloudFormation outputs:
 

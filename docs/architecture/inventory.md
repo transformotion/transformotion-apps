@@ -45,8 +45,8 @@ relevant finding in this document in the same PR.
 
 The repository contains the following top-level directories:
 
-- `apps/` — four subdirectories: `budget-tracker/`, `launchpad/`,
-  `stock-analyser/`, `web/` (0-LOC shell, M3 cleanup)
+- `apps/` — three subdirectories: `budget-tracker/`, `launchpad/`,
+  `stock-analyser/`. `apps/web/` was deleted in M7 / PR #250.
 - `packages/` — nine subdirectories: `api-client/`, `auth-client/`,
   `budget-domain/`, `cache/`, `data-access/`, `lambda-middleware/`, `logger/`, `runtime-config/`, `ui/`
   (organisational directory; two sub-packages: `ui-error-boundaries`,
