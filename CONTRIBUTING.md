@@ -445,6 +445,24 @@ applies.
 Every actionable unit of work is an issue. Bug, feature, refactor,
 documentation update — each gets an issue.
 
+**Before filing: check for existing coverage.** Search GitHub for the
+problem or feature before opening a new issue. A surprising number of
+issues get filed twice — once when the problem is first noticed, once
+when it surfaces again later and the earlier issue wasn't closed because
+the work landed on `develop`, not `main` (see Section 4.2). Use
+`gh issue list --search "<keyword>"` or the GitHub search UI. If a
+duplicate exists and is open, add a comment to the existing issue rather
+than filing a new one.
+
+**At filing: attach a milestone.** Every issue gets a milestone when it
+is filed, not later. If the work fits into the current numbered
+milestone, attach it there. If it belongs in a future milestone, attach
+it to that milestone. If it is genuinely unsequenced, attach it to the
+"Backlog — unsequenced items" milestone (see Section 4.9). An issue
+without a milestone is invisible to the project board's roadmap view and
+accumulates into the stale-open debt that periodic audits have to clean
+up. There is no valid reason to leave an issue unmilestoned.
+
 Issues belong to a milestone. Milestones map to `PLAN.md` milestones
 (M-setup, M0–M14, plus the "Backlog — unsequenced items" milestone).
 The first issue of each milestone is a "kickoff" issue capturing the
@@ -530,7 +548,62 @@ by merged PRs, rather than by issue closures. This exception applies
 only to bootstrap milestones; subsequent milestones follow the
 standard pattern.
 
-### 4.5 When new problems are discovered mid-work
+For the close-time disciplines — manually closing issues that landed on
+`develop`, closing parent trackers when all children close, and the
+periodic audit that catches what slips through — see Section 4.5.
+
+### 4.5 Close-out hygiene
+
+Three disciplines keep the issue tracker clean over time. They apply
+at the moment work is completed, and periodically as a standing audit.
+
+**Manually close issues when the closing PR merges to `develop`.** As
+described in Section 4.2, `Closes #N` in a PR body does not auto-close
+the issue when the PR merges to `develop` — auto-close only fires on
+`main`. This is a predictable source of stale-open accumulation. The
+discipline: when a PR merges to `develop`, close the issues it resolves
+immediately — with a comment stating which PR closed them. Do not wait
+for `develop` to reach `main`; that merge may not happen for weeks, and
+by then the context is lost. The comment is the audit trail: it records
+why the issue closed and links back to the work.
+
+**Close parent trackers when all their children close.** A tracker
+issue — one whose purpose is to group related child issues — has done
+its job when all its children are closed. It should close at that
+point, with a comment summarising the completed scope and citing the
+closing children. Leaving parent trackers open after their children
+close is the second predictable source of stale-open accumulation. The
+rule: when you close the last issue in a set tracked by a parent,
+check the parent and close it too.
+
+Worked example from M7: issue #253 was a parent tracker for five
+deduplication-gate issues (#290–#294). When #294 (the last child)
+closed, #253 was checked, confirmed all five children were closed, and
+closed with a comment listing them. Without the discipline, #253 would
+have remained open indefinitely.
+
+**Periodic audit: catch what slips through.** Even with the above
+disciplines, issues accumulate. Run a close-out audit at every
+milestone boundary:
+
+1. `gh issue list --milestone "<closed-milestone>" --state open` —
+   any open issues against a just-closed milestone should have been
+   closed when the milestone closed. Inspect each: work done but
+   not closed (close with comment), or genuinely outstanding (move to
+   the appropriate open milestone).
+
+2. `gh issue list --state open --search "no:milestone"` — issues
+   without a milestone violate the at-filing rule (see above). Attach
+   each to the appropriate milestone.
+
+The audit at M7 close (2026-05-25) found six stale-open issues: two
+were `CLOSED_BY_PR_NOT_AUTOCLOSED` (develop-not-main pattern), one
+was `CLOSED_BY_SIDE_EFFECT` (orphan stack deleted during M7 without
+closing the tracking issue), and three were unmilestoned issues that
+needed milestone assignment. All six were resolved in a single
+follow-up action.
+
+### 4.6 When new problems are discovered mid-work
 
 If during a PR a new problem is discovered (a bug elsewhere, a
 documentation gap, a structural concern, a missing test), the rule is:
@@ -548,7 +621,7 @@ normative document is wrong, the document update happens in the same PR
 or the PR pauses until resolved. Documentation problems are not deferred
 the way code problems can be.
 
-### 4.6 Updating the architectural inventory
+### 4.7 Updating the architectural inventory
 
 The architectural inventory at `docs/architecture/inventory.md` is a
 living document — findings are updated as state changes, not appended
@@ -580,7 +653,7 @@ The inventory is one of the documents that PRs are most likely to
 touch over the platform's lifetime. Updates are normal — not a
 sign of drift.
 
-### 4.7 Commit messages
+### 4.8 Commit messages
 
 Commit message style is freeform; the merge commit is the unit that
 matters in the long-term log. Conventional Commits style (`feat:`,
@@ -590,7 +663,7 @@ Commit messages reference issues where relevant ("Refs #42", "Closes
 #43"). The PR body is the canonical place for issue references; commit
 messages are convenience.
 
-### 4.8 The Backlog milestone
+### 4.9 The Backlog milestone
 
 `PLAN.md`'s "Beyond M14" section lists items scoped but not yet
 sequenced into numbered milestones. Each such item has a corresponding
@@ -628,7 +701,7 @@ sequencing. When the item is later promoted to a numbered milestone,
 both the milestone and the Status (if not already Todo) get updated
 together.
 
-### 4.9 Cross-stack resource moves
+### 4.10 Cross-stack resource moves
 
 When relocating an AWS resource (Lambda, table, route registration, etc.) between CDK stacks, the deploy order matters. CloudFormation cross-stack exports create dependencies between stacks; if the deploy sequence isn't right, CFN refuses to delete an export still referenced by another stack.
 
