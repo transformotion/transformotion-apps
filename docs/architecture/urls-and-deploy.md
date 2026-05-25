@@ -151,8 +151,8 @@ App workflows also retain path-filtered push triggers for changes that don't tou
 
 | Workflow | Push paths |
 |---|---|
-| `deploy-stock-analyser.yml` | `apps/stock-analyser/**`, `infrastructure/bin/stock-analyser.ts`, `packages/api-client/**`, `packages/ui/**`, `packages/auth-client/**`, `packages/runtime-config/**`, `packages/lambda-middleware/**` |
-| `deploy-budget-tracker.yml` | `apps/budget-tracker/**`, `infrastructure/bin/budget-tracker.ts`, `packages/api-client/**`, `packages/ui/**`, `packages/auth-client/**`, `packages/runtime-config/**`, `packages/lambda-middleware/**`, `packages/budget-domain/**` |
+| `deploy-stock-analyser.yml` | `apps/stock-analyser/**`, `infrastructure/bin/stock-analyser.ts`, `packages/api-client/**`, `packages/cache/**`, `packages/data-access/**`, `packages/logger/**`, `packages/ui/**`, `packages/auth-client/**`, `packages/runtime-config/**`, `packages/lambda-middleware/**` |
+| `deploy-budget-tracker.yml` | `apps/budget-tracker/**`, `infrastructure/bin/budget-tracker.ts`, `packages/api-client/**`, `packages/cache/**`, `packages/data-access/**`, `packages/logger/**`, `packages/ui/**`, `packages/auth-client/**`, `packages/runtime-config/**`, `packages/lambda-middleware/**`, `packages/budget-domain/**` |
 | `deploy-migration-utilities.yml` | `migration-utilities/**`, `infrastructure/bin/migration-utilities.ts`, `packages/**` |
 | `deploy-launchpad.yml` | `apps/launchpad/**`, `infrastructure/bin/launchpad.ts`, `packages/auth-client/**`, `packages/runtime-config/**` |
 
