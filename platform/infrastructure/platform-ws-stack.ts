@@ -208,15 +208,5 @@ export class PlatformWsStack extends cdk.Stack {
       value:      this.webSocketApi.apiId,
       exportName: `PlatformWs-${stage}-WsApiId`,
     });
-
-    // TRANSITIONAL: re-emits pre-#348 auto-generated export. Dev BT stack still imports this via
-    // its live CF template. Remove in step 3 after BT redeploys with hardcoded table name.
-    if (stage === 'dev') {
-      new cdk.CfnOutput(this, 'TransitionalWsConnectionsTableExport', {
-        value:      this.connectionsTable.tableName,
-        exportName: 'TransformotionDev-PlatformWs:ExportsOutputRefWsConnectionsTable9E1AC3EBC8E88C06',
-        description: 'TRANSITIONAL: re-emits pre-#348 auto-generated export. Remove after BT redeploys without this import.',
-      });
-    }
   }
 }
