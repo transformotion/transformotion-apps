@@ -117,27 +117,51 @@ Implemented behaviors with `SubAppIndexRewrite` — all active as of M7 #251 (ve
 
 ## Deploy triggers
 
-Deploy ordering is sequenced via `workflow_run` (Pattern A, established M7 / #348): the platform workflow fires on push; the four app workflows fire automatically after platform completes successfully.
+Deploy ordering uses a two-layer model: platform fires on push; app workflows cascade via `workflow_call` from within `deploy-platform.yml`.
+
+### Why workflow_call, not workflow_run
+
+PR #348 used `workflow_run` for the cascade. GitHub's `workflow_run` trigger only activates when the listener workflow file exists on the **repository's default branch** (`main`). With `develop` as the active integration branch and `main` as the (not-yet-active) production branch, `workflow_run` cascades from `develop` were permanently inert — every app deploy after a platform deploy required a manual `workflow_dispatch`. PR #351 replaced `workflow_run` with `workflow_call` (reusable workflows), which has no default-branch restriction and fires correctly from any branch.
 
 ### Platform (fires on push)
 
 `deploy-platform.yml` triggers on push to `develop` or `main` when any of these paths change:
 - `platform/infrastructure/**`, `infrastructure/bin/platform.ts`, `platform/functions/**`
 
-Deploys all platform CDK stacks (`--app bin/platform.ts`): GithubActionsRole, Storage, Network, Auth, AuthApi, PlatformTables, PlatformWs, Api (dev + prod).
+Also triggerable via `workflow_dispatch` with `target: dev | prod`.
 
-### App workflows (fire after platform completes)
+Deploys all platform CDK stacks (`--app bin/platform.ts`): GithubActionsRole, Storage, Network, Auth, AuthApi, PlatformTables, PlatformWs, Api (dev + prod). After the platform job succeeds, four cascade jobs call the app workflows as reusable workflows in parallel.
 
-After `deploy-platform.yml` completes successfully, these workflows fire automatically via `workflow_run` with `conclusion == 'success'`:
+### App workflows (cascade via workflow_call)
 
-| Workflow | What it deploys |
+`deploy-platform.yml` calls each app workflow as a reusable workflow after the platform deploy succeeds. The cascade jobs in `deploy-platform.yml` run in parallel after `deploy-dev` or `deploy-prod` completes:
+
+| Workflow | Cascade job in platform | What it deploys |
+|---|---|---|
+| `deploy-stock-analyser.yml` | `cascade-stock-analyser` | `StockAnalyserTables` + `StockAnalyserApi` CDK stacks + S3 sync to `stock-analyser/` |
+| `deploy-budget-tracker.yml` | `cascade-budget-tracker` | `BudgetTrackerTables` + `BudgetTrackerApi` CDK stacks + S3 sync to `budget-tracker/` |
+| `deploy-migration-utilities.yml` | `cascade-migration-utilities` | `MigrationsApi` CDK stack |
+| `deploy-launchpad.yml` | `cascade-launchpad` | Static build + S3 sync to root |
+
+The cascade target (`dev` or `prod`) is computed from whichever platform job succeeded — `deploy-dev` → `dev`, `deploy-prod` → `prod`. A skipped platform job does not block the cascade; `always()` + result check handles the skipped-sibling pattern.
+
+### App-only deploys (push to app paths)
+
+App workflows also retain path-filtered push triggers for changes that don't touch platform. A push to `apps/stock-analyser/**` or `infrastructure/bin/stock-analyser.ts` fires `deploy-stock-analyser.yml` directly, without going through the platform workflow.
+
+| Workflow | Push paths |
 |---|---|
-| `deploy-stock-analyser.yml` | `StockAnalyserTables` + `StockAnalyserApi` CDK stacks (`--app bin/stock-analyser.ts`) + S3 sync to `stock-analyser/` |
-| `deploy-budget-tracker.yml` | `BudgetTrackerTables` + `BudgetTrackerApi` CDK stacks (`--app bin/budget-tracker.ts`) + S3 sync to `budget-tracker/` |
-| `deploy-migration-utilities.yml` | `MigrationsApi` CDK stack (`--app bin/migration-utilities.ts`) |
-| `deploy-launchpad.yml` | Static build + S3 sync to root |
+| `deploy-stock-analyser.yml` | `apps/stock-analyser/**`, `infrastructure/bin/stock-analyser.ts`, `packages/api-client/**`, `packages/ui/**`, `packages/auth-client/**`, `packages/runtime-config/**`, `packages/lambda-middleware/**` |
+| `deploy-budget-tracker.yml` | `apps/budget-tracker/**`, `infrastructure/bin/budget-tracker.ts`, `packages/api-client/**`, `packages/ui/**`, `packages/auth-client/**`, `packages/runtime-config/**`, `packages/lambda-middleware/**`, `packages/budget-domain/**` |
+| `deploy-migration-utilities.yml` | `migration-utilities/**`, `infrastructure/bin/migration-utilities.ts`, `packages/**` |
+| `deploy-launchpad.yml` | `apps/launchpad/**`, `infrastructure/bin/launchpad.ts`, `packages/auth-client/**`, `packages/runtime-config/**` |
 
-SA/BT/MU/LP workflows have no path-filtered push triggers of their own. All four fire in parallel on every successful platform deploy. Use `workflow_dispatch` to trigger an individual app deploy in isolation (e.g. after a pure app-code push that doesn't touch platform paths).
+### Manual deploys (workflow_dispatch)
+
+All five workflows retain `workflow_dispatch` as the operator escape hatch. Use it to deploy a single app without triggering a platform deploy:
+```bash
+gh workflow run deploy-budget-tracker.yml --ref develop -f target=dev
+```
 
 Each CDK deploy step passes an explicit `--app` flag pointing to the per-app entrypoint, so each workflow synthesises only its own stacks:
 
@@ -146,7 +170,7 @@ Each CDK deploy step passes an explicit `--app` flag pointing to the per-app ent
 - `deploy-migration-utilities.yml` — `MigrationsApi` only
 - `deploy-platform.yml` — platform stacks only (Network, Auth, AuthApi, PlatformTables, Api, PlatformWs, Storage, GithubActionsRole)
 
-Changing `packages/runtime-config` does not trigger any deploy workflow (the APPS const was removed from that package in M7 / #346; app identity is now sourced from `platform/config/app-registry.json` at synth time).
+Changing `packages/runtime-config` does not trigger a platform deploy (the APPS const was removed from that package in M7 / #346; app identity is now sourced from `platform/config/app-registry.json` at synth time).
 
 ---
 
