@@ -889,44 +889,66 @@ This milestone can run in parallel with M9 and M10.
 
 ---
 
-## 13. M9 — Launchpad tile rendering migration (sub-phase 7e-launchpad-tiles)
+## 13. M9 — Per-app architecture (REST, WSS, auth ownership, Claude proxy, IAM)
 
 ### Purpose
 
-The launchpad currently filters app tiles by reading `cognito:groups`
-from the legacy substrate, with a hard-coded `userCanAccessFramework`
-prop covering one app. The pre-token-generation Lambda emits the new
-`apps` claim correctly; the consumer side hasn't migrated.
+Substantial architectural restructure moving from shared-Platform to
+per-app architecture across REST API gateways, WebSocket API gateways,
+auth substrate ownership (LP becomes the owner of Cognito and auth
+Lambdas), per-app Claude proxies, per-app deploy IAM roles. Shared
+platform layer shrinks to CloudFront, DNS, ACM, and build-time-only
+shared CDK constructs and workspace packages. Deploy mechanism for the
+residual shared platform shifts away from workflow_call cascade toward
+backwards-compatibility defaults and explicit coordinated migrations.
 
-### Outcome
+Scope includes recon, design proposal, sub-phase breakdown into child
+issues, and implementation across all affected apps (LP, SA, BT, MU).
 
-- Launchpad tile rendering reads the `apps` JWT claim instead of
-  `cognito:groups`.
-- The hard-coded `userCanAccessFramework` prop removed.
-- Frontend auth store retains all JWT claims (apps, accounts,
-  site_admin) atomically with rendering decisions, per the migration
-  invariant in inventory Section 3.3.
-- Three-state tile rendering implemented: "active" (in apps + deployed),
-  "coming soon" (in apps + not deployed), "not rendered" (not in apps).
-- Per inventory Section 3.3: the auth store keeps claims through token
-  refresh atomically — no transient over-render window during refresh.
+Reverses architectural direction from M5 (gateway consolidation,
+closed) and M7 (consolidation within shared topology, closed).
+Surfaced during PR #354's API Gateway deployment-snapshot diagnosis
+when the cost of maintaining shared API Gateway ownership became
+apparent.
+
+### Original scope (subsumed)
+
+Original M9 scope (Launchpad tile rendering migration to the `apps`
+JWT claim) is subsumed by this work: LP's frontend gets refactored as
+part of LP becoming the auth substrate owner, and tile rendering
+migrates to the `apps` claim as part of that refactor.
 
 ### Goals served
 
-Goal 4 primarily (permissions model drives the user-visible launchpad).
-Goal 1 (the launchpad is now driven by data instead of hard-coded props).
+Goal 1 primarily (deployment isolation made true). Goal 3
+(observability isolation as a derived benefit). Goal 4 preserved
+(permissions model still drives launchpad rendering).
 
 ### Gate to next
 
-Live user logs in, launchpad tiles render based on the user's actual
-`apps` claim. Manual test: changing a user's app-group membership and
-re-authenticating updates which tiles appear.
+All apps deploy independently at REST, WSS, auth, and IAM layers.
+CloudFront, DNS, ACM, build-time packages remain shared. Deploy of one
+app's infrastructure does not affect any other app's deployment state.
+Launchpad tile rendering reads the `apps` JWT claim (subsumed from
+original M9 scope).
 
 ### Dependencies
 
-- M2.2 complete (the JWT claim shape is documented).
+- M7 (closed) provides the per-app stack foundation.
+- M2.2 (already closed).
+- M8 and M10 sub-phases may need re-sequencing — to be determined
+  during M9's recon phase.
 
-This milestone can run in parallel with M8 and M10.
+This milestone can run in parallel with M8 and M10 (sequencing TBD
+during recon).
+
+### Sub-phases
+
+Probably warrants internal sequencing analogous to M2's
+M2.1/M2.2/M2.3 — order TBD during the recon phase. Likely candidates:
+REST first, then WSS, then auth ownership, then Claude proxy, then
+IAM, then the original LP tile-rendering migration as the final piece
+since it depends on LP's auth ownership being established.
 
 ---
 
@@ -1405,7 +1427,7 @@ For quick visual reference. The full text above is the canonical source.
 | M6 | Budget Tracker activation | 1, 4 | M2.1, M4, M5 |
 | M7 | Deduplication and consolidation | 1, 2, 3 | M2, M3 |
 | M8 | Cleanup of legacy auth substrate | 3, 4 | M2.2 |
-| M9 | Launchpad tile rendering | 1, 4 | M2.2 |
+| M9 | Per-app architecture (REST, WSS, auth, Claude proxy, IAM) | 1, 3, 4 | M7, M2.2 |
 | M10 | Auth middleware extension | 3, 4 | M1, M2.2, M4 |
 | M11 | Invitation API and UI | 3, 4 | M0, M4, M10 |
 | M12 | Forgot-provider fix | 4 | (none hard) |
