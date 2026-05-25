@@ -28,6 +28,7 @@ export interface StockAnalyserApiStackProps extends cdk.StackProps {
  *   PUT  /analysis-cache/{key}
  *   DELETE /analysis-cache/{key}
  *   GET  /cycle/ohlcv        — cycle-data Lambda
+ *   GET  /price/ohlcv        — market-data Lambda (raw OHLCV bars for price chart)
  *
  * Lambda source: apps/stock-analyser/functions/
  */
@@ -146,6 +147,24 @@ export class StockAnalyserApiStack extends cdk.Stack {
     const cycleDataIntegration = new apigateway.LambdaIntegration(cycleDataFn, { proxy: true });
     const cycle = api.root.addResource('cycle');
     cycle.addResource('ohlcv').addMethod('GET', cycleDataIntegration, auth);
+
+    // ── /price/ohlcv — Market Data Lambda ─────────────────────────────────
+    const marketDataFn = new lambdaNodejs.NodejsFunction(this, 'MarketDataFn', {
+      functionName: `transformotion-market-data-${stage}`,
+      entry:        path.join(__dirname, '../functions/market-data/src/index.ts'),
+      handler:      'handler',
+      runtime:      lambda.Runtime.NODEJS_20_X,
+      timeout:      cdk.Duration.seconds(30),
+      memorySize:   512,
+      environment:  { ANALYSIS_CACHE_TABLE: analysisCacheTable.tableName },
+      bundling:     { externalModules: ['@aws-sdk/*'], minify: true, sourceMap: false, forceDockerBundling: false },
+    });
+
+    analysisCacheTable.grantReadWriteData(marketDataFn);
+
+    const marketDataIntegration = new apigateway.LambdaIntegration(marketDataFn, { proxy: true });
+    const price = api.root.addResource('price');
+    price.addResource('ohlcv').addMethod('GET', marketDataIntegration, auth);
   }
 }
 

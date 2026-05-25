@@ -23,6 +23,9 @@ import type {
   PutUserPreferencesRequest,
   PutUserPreferencesResponse,
   CycleDataResponse,
+  OhlcvDataResponse,
+  OhlcvRange,
+  OhlcvInterval,
 } from './types';
 
 /**
@@ -155,5 +158,12 @@ export class ApiClient {
   /** GET /cycle/ohlcv?ticker={ticker} — fetch OHLCV-computed cycle position for a ticker. */
   async getCycleData(ticker: string): Promise<CycleDataResponse> {
     return this.http.get<CycleDataResponse>(`cycle/ohlcv?ticker=${encodeURIComponent(ticker)}`);
+  }
+
+  /** GET /price/ohlcv?ticker={ticker}&range={range}&interval={interval} — fetch raw OHLCV bars. */
+  async getOhlcvData(ticker: string, range: OhlcvRange = '1y', interval: OhlcvInterval = '1d'): Promise<OhlcvDataResponse> {
+    return this.http.get<OhlcvDataResponse>(
+      `price/ohlcv?ticker=${encodeURIComponent(ticker)}&range=${range}&interval=${interval}`
+    );
   }
 }

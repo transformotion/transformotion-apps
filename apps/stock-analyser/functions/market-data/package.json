@@ -1,0 +1,19 @@
+{
+  "name": "@transformotion/fn-market-data",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@transformotion/lambda-middleware": "workspace:*",
+    "yahoo-finance2": "^3"
+  },
+  "devDependencies": {
+    "@aws-sdk/client-dynamodb": "^3",
+    "@aws-sdk/lib-dynamodb": "^3",
+    "@types/aws-lambda": "^8",
+    "typescript": "*"
+  }
+}

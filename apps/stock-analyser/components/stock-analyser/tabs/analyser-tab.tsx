@@ -29,6 +29,9 @@ import {
 import { cn } from "@/lib/utils"
 import { useClaude } from "@/lib/hooks"
 import { useCycleData } from "@/lib/hooks/use-cycle-data"
+import { useOhlcvData } from "@/lib/hooks/use-ohlcv-data"
+import type { OhlcvRange } from "@transformotion/api-client"
+import { PriceChart } from "@/components/price-chart/price-chart"
 
 interface SignalMetric {
   name: string
@@ -79,8 +82,11 @@ export function AnalyserTab({
   const [searchValue, setSearchValue] = useState("")
   const [result, setResult] = useState<AnalysisResult | null>(null)
 
+  const [chartRange, setChartRange] = useState<OhlcvRange>('1y')
+
   const { callClaude, isLoading: isAnalyzing, error } = useClaude<AnalysisResult>()
   const { data: liveData, isLoading: isLoadingLive, error: liveError, fetch: fetchLive } = useCycleData()
+  const { data: ohlcvData, isLoading: isLoadingChart, fetch: fetchOhlcv } = useOhlcvData()
 
   // Auto-analyse only if navigated from another tab (source is set)
   useEffect(() => {
@@ -98,6 +104,14 @@ export function AnalyserTab({
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLive, result?.ticker])
+
+  // Fetch price chart data whenever ticker or selected range changes
+  useEffect(() => {
+    if (result?.ticker) {
+      fetchOhlcv(result.ticker, chartRange)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [result?.ticker, chartRange])
 
   const runAnalysis = async (ticker: string, forceRefresh = false) => {
     if (!ticker || isAnalyzing) return
@@ -263,6 +277,46 @@ Return ONLY valid JSON.`,
               <VerdictBadge verdict={result.verdict} size="md" />
             </div>
           </div>
+
+          {/* Price Chart */}
+          <Card>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Price History
+                {isLoadingChart && <span className="ml-2 text-[10px] font-normal normal-case">Loading…</span>}
+              </h3>
+              <div className="flex gap-1">
+                {(['1mo', '3mo', '6mo', '1y', '5y'] as OhlcvRange[]).map((r) => (
+                  <button
+                    key={r}
+                    onClick={() => setChartRange(r)}
+                    className={cn(
+                      'px-2 py-0.5 text-[10px] font-medium rounded transition-colors',
+                      chartRange === r
+                        ? 'bg-primary text-primary-foreground'
+                        : 'text-muted-foreground hover:text-foreground'
+                    )}
+                  >
+                    {r.toUpperCase()}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {ohlcvData ? (
+              <PriceChart data={ohlcvData} height={260} />
+            ) : (
+              !isLoadingChart && (
+                <div className="flex items-center justify-center h-[260px] text-xs text-muted-foreground">
+                  No price data available
+                </div>
+              )
+            )}
+            {isLoadingChart && (
+              <div className="flex items-center justify-center h-[260px]">
+                <Spinner className="size-5" />
+              </div>
+            )}
+          </Card>
 
           {/* Cycle Position Gauge */}
           <Card>

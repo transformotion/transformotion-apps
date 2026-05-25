@@ -1,6 +1,8 @@
 import { useState, useCallback } from 'react';
 import type { CycleDataResponse } from '@transformotion/api-client';
 import { getStockAnalyserClient } from '../api';
+import { getConfig } from '../config';
+import { getMockCycleData } from '../services/ai/fixtures/cycle-data';
 
 export interface UseCycleDataResult {
   data:      CycleDataResponse | null;
@@ -18,6 +20,11 @@ export function useCycleData(): UseCycleDataResult {
     setIsLoading(true);
     setError(null);
     try {
+      if (getConfig().ai.provider === 'mock') {
+        const result = getMockCycleData(ticker);
+        setData(result);
+        return result;
+      }
       const result = await getStockAnalyserClient().getCycleData(ticker);
       setData(result);
       return result;

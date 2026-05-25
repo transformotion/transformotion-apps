@@ -129,6 +129,25 @@ export interface CycleDataResponse {
   source:         'live' | 'cache';
 }
 
+// ── Market data OHLCV ─────────────────────────────────────────────────────────
+
+export type OhlcvRange    = '1mo' | '3mo' | '6mo' | '1y' | '5y' | 'max';
+export type OhlcvInterval = '1d' | '1wk' | '1mo';
+
+export interface OhlcvDataResponse {
+  ticker:    string;
+  range:     OhlcvRange;
+  interval:  OhlcvInterval;
+  dates:     string[];
+  opens:     number[];
+  highs:     number[];
+  lows:      number[];
+  closes:    number[];
+  volumes:   number[];
+  fetchedAt: string;
+  source:    'live' | 'cache';
+}
+
 // ── Claude proxy ──────────────────────────────────────────────────────────────
 
 export interface ClaudeProxyRequest {
