@@ -46,6 +46,8 @@ User preferences, stored per Cognito `sub`.
 
 Served by `transformotion-user-{stage}` Lambda (`GET /api/user/profile`, `PUT /api/user/preferences`).
 
+> **Partial implementation:** Only `notificationsEnabled` is currently read and written by the Lambda handler. The fields `defaultMode`, `cycleAlertThreshold`, and `lastAnalysedTicker` appear in `@transformotion/api-client` types but are not implemented in the Lambda — writes are silently ignored and reads return `undefined` for these fields.
+
 ### `platform.accounts-{stage}`
 
 Account container records, shared across all apps.
@@ -94,6 +96,19 @@ Pending, redeemed, and expired invitations.
 
 Served by `transformotion-invitations-{stage}` Lambda.
 
+### `platform.job-results-{stage}`
+
+Async Claude AI job results, written by `transformotion-claude-proxy-{stage}` after self-invoked async jobs complete. Read by `transformotion-analysis-cache-{stage}` when the requested cache key matches the `job-*` prefix.
+
+| Attribute | Type | Notes |
+|---|---|---|
+| `accountId` (PK) | String | |
+| `jobId` (SK) | String | UUID — also used as analysis-cache key suffix (`job-{jobId}`) |
+| `result` | Map | Claude AI response payload |
+| `expiresAt` | Number | Epoch-seconds (TTL attribute) |
+
+Managed by `PlatformTablesStack`.
+
 ---
 
 ## Per-app tables
@@ -119,17 +134,25 @@ Managed by `TransformotionDev-StockAnalyserTables` / `TransformotionProd-StockAn
 |---|---|---|
 | `accountId` (PK) | String | |
 | `ticker` (SK) | String | |
+| `name` | String | Company or instrument name |
+| `addedAt` | Number | Epoch ms |
+| `addedPrice` | Number | Price at time of addition (optional) |
 
 #### `stock-analyser.analysis-cache-{stage}`
 
-Cache of Claude AI analysis results, keyed per account.
+Cache of Claude AI analysis results and shared market data.
 
 | Attribute | Type | Notes |
 |---|---|---|
-| `accountId` (PK) | String | |
-| `cacheKey` (SK) | String | Namespaced cache key (e.g. `MARKET#ASX`, `ANALYSIS#CBA.AX`) |
-| `result` | Map | Cached response |
+| `accountId` (PK) | String | `SHARED` for entries not scoped to one account (market data, ETFs, raw OHLCV) |
+| `cacheKey` (SK) | String | Namespaced cache key (e.g. `MARKET#ASX`, `ANALYSIS#CBA.AX`, `MARKET-DATA#CBA.AX#1y#1d`) |
+| `data` | String | JSON-serialised cached response |
+| `cachedAt` | String | ISO 8601 |
+| `dataType` | String | Identifies the type of cached data |
+| `mode` | String | Cache mode flag |
 | `expiresAt` | Number | Epoch-seconds (TTL attribute) |
+
+`accountId = 'SHARED'` is used for data shared across accounts (raw OHLCV, market-wide analysis). Account-specific entries use the account UUID.
 
 Served by `transformotion-analysis-cache-{stage}` Lambda (`GET/PUT/DELETE /analysis-cache/{key}`).
 
@@ -163,9 +186,13 @@ Managed by `TransformotionDev-BudgetTrackerTables` / `TransformotionProd-BudgetT
 |---|---|---|
 | `accountId` (PK) | String | |
 | `ruleId` (SK) | String | UUID |
+| `name` | String | Human-readable rule name |
 | `match` | String | Keyword or regex pattern, case-insensitive |
-| `category` | String | |
-| `subcategory` | String | |
+| `matchType` | String | `keyword` or `regex` |
+| `categoryId` | String | UUID FK — category reference |
+| `subcategoryId` | String | UUID FK — subcategory reference |
+| `enabled` | Boolean | |
+| `priority` | Number | Lower value = higher priority |
 | `learned` | Boolean | `true` = created via "Learn" button; `false` = manually authored |
 | `createdAt` | String | ISO 8601 |
 
@@ -176,10 +203,35 @@ Key-value store — each settings field is its own DynamoDB item.
 | Attribute | Type | Notes |
 |---|---|---|
 | `accountId` (PK) | String | |
-| `settingKey` (SK) | String | `budgetOverrides`, `budgetFreqs`, `customCategories`, `projectBudgets`, `deletedSubs`, `csvFormatMappings`, and others |
+| `settingKey` (SK) | String | `csvFormatMappings`, `aiReviewBatchSize`, `aiReviewParallelLimit`, `aiReviewConfidenceThreshold` |
 | `value` | Map or List | Shape depends on `settingKey` — see [v0-reference/contracts/budget-tracker/data-models.md](/v0-reference/contracts/budget-tracker/data-models.md) |
 
 For full type definitions see [v0-reference/contracts/budget-tracker/data-models.md](/v0-reference/contracts/budget-tracker/data-models.md).
+
+#### `budget-tracker.budget-data-{stage}`
+
+Key-value store for structured budget configuration (categories, budget amounts, frequencies). Kept on a dedicated table rather than in `budget-tracker.settings-{stage}` to avoid packing unrelated concepts into one key-value store.
+
+| Attribute | Type | Notes |
+|---|---|---|
+| `accountId` (PK) | String | |
+| `concept` (SK) | String | `categories`, `budgetAmounts`, `budgetFrequencies` |
+| `value` | Map or List | Shape depends on `concept` |
+
+#### `budget-tracker.ai-jobs-{stage}`
+
+Tracks in-progress and completed AI review jobs per account.
+
+| Attribute | Type | Notes |
+|---|---|---|
+| `accountId` (PK) | String | |
+| `jobId` (SK) | String | UUID |
+| `userId` | String | Cognito sub of the requesting user |
+| `status` | String | Job status |
+| `createdAt` | String | ISO 8601 |
+| `expiresAt` | Number | Epoch-seconds (TTL attribute — 24h) |
+
+**GSI:** `userId-index` (PK: `userId`) — look up jobs by user.
 
 ---
 
@@ -244,3 +296,5 @@ These CDK and CloudFormation constraints are not obvious and have cost real depl
 **4. S3 buckets containing important data should NEVER have `autoDeleteObjects: true`.** This is a CDK convenience for ephemeral dev buckets. For backups buckets, use `removalPolicy: RETAIN` alone and allow manual deletion only.
 
 **5. `cdk import` requires CDK config to match deployed reality exactly.** If the deployed table has a sort key but the CDK construct doesn't declare it (or vice versa), the import changeset will fail. Run `aws dynamodb describe-table` before writing the CDK construct for any table being imported.
+
+**6. App stacks that mount routes onto the shared API Gateway do not own a `Deployment` resource.** `StockAnalyserApiStack` and `BudgetTrackerApiStack` add routes to the shared `RestApi` via `Fn.importValue`, but they never create an `AWS::ApiGateway::Deployment`. The platform deploy workflow creates the deployment resource; until the next platform deploy, the active stage continues serving the snapshot from the last platform deploy — newly added routes return 403 "Missing Authentication Token" even though they exist in the API configuration. Workaround for the current architecture: trigger a platform deploy after adding new routes in an app stack. Per-app architecture (M9) removes this constraint by giving each app ownership of its own RestApi and deployment lifecycle.
