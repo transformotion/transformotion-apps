@@ -235,8 +235,8 @@ Cognito App Client (`LaunchpadAppClient`) and dedicated
 
 The hard-coded `userCanAccessFramework` prop in launchpad currently
 governs tile visibility for the Transformotion Framework app. M9
-migrates tile rendering from `cognito:groups` (the legacy substrate)
-to the `apps` JWT claim, removing this hard-coded prop.
+(per-app architecture restructure) includes LP's frontend refactor;
+tile rendering migration to the `apps` JWT claim is subsumed into M9.
 
 ### 1.7 Stale-by-decision artefacts
 
@@ -804,8 +804,8 @@ M1 #85 read `auth.md` in full. auth.md describes general token storage
 address atomic update semantics for the three custom claims. The concern
 is not resolvable from the architecture document — it requires reading
 the frontend auth store code (`apps/launchpad/`, or whichever app owns
-the store). M9 (launchpad tile rendering migration) needs this verified
-before it begins.
+the store). M9 (per-app architecture restructure) needs this verified
+during its recon phase.
 
 ### 3.4 Security gaps with material impact
 
