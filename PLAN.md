@@ -942,13 +942,52 @@ original M9 scope).
 This milestone can run in parallel with M8 and M10 (sequencing TBD
 during recon).
 
-### Sub-phases
+### Sub-phases (M9 child issues)
 
-Probably warrants internal sequencing analogous to M2's
-M2.1/M2.2/M2.3 — order TBD during the recon phase. Likely candidates:
-REST first, then WSS, then auth ownership, then Claude proxy, then
-IAM, then the original LP tile-rendering migration as the final piece
-since it depends on LP's auth ownership being established.
+Phase 1 — Foundations (parallel, start immediately):
+- #360 M9-1: Phase A doc corrections — cdk.md, SA CLAUDE.md, BT CLAUDE.md
+- #361 M9-2: Workspace packages — `@transformotion/fn-claude-proxy-core`
+  extraction and `@transformotion/rate-limit-middleware` creation
+- #362 M9-8: Per-app Cognito app clients + IAM deploy roles (moved to Phase 1
+  because LP needs its own IAM role before taking auth ownership in Phase 2)
+
+Phase 2 — Per-app infrastructure (parallel after Phase 1):
+- #363 M9-3: LP auth ownership transfer (Cognito + auth Lambdas → LP CDK)
+- #364 M9-4: SA per-app WSS (split SA from platform-ws)
+- #365 M9-5: BT per-app WSS (split BT from platform-ws)
+- #366 M9-6a: SA per-app REST API + per-app claude-proxy Lambda + `sa.job-results` table
+- #367 M9-7a: BT per-app REST API + per-app claude-proxy Lambda
+  (+ remove unhandled /api/budget/v1/ai/categorise route)
+
+Phase 3 — AI service canonicalization (parallel with late Phase 2):
+- #368 M9-6b: SA AI service canonical refactor (Hybrid A: AIService class +
+  thin hook; cache in service layer)
+- #369 M9-7b: BT AI service hook wrapper + mock fidelity fix + cache layer
+  (`budget-tracker.ai-cache-{stage}`, accountId+transactionsHash, 7-day TTL)
+
+Phase 4 — LP frontend (after M9-3):
+- #370 M9-10: LP tile rendering migration (apps JWT claim)
+
+Phase 5 — Isolation close and cleanup (after Phases 2 and 4):
+- #371 M9-9: Deploy cascade restructure (workflow_call → independent
+  path-filtered triggers)
+- #372 M9-11: Platform cleanup — decommission shared claude-proxy, platform-ws,
+  platform.job-results
+
+### Architectural decisions incorporated
+
+Phase B: per-app REST, WSS, auth, claude-proxy, IAM, StorageStack-to-MU,
+  deploy cascade, LP tile rendering, app client ownership, AuthApiStack fate.
+Phase C L1: all multi-route Lambdas are Type A (no cross-app routing issues).
+Phase C L3: rate-limiting via per-Lambda env vars +
+  `@transformotion/rate-limit-middleware` + per-app DynamoDB rate-limit tables.
+Phase C L4: per-app claude-proxy Lambdas wrapping shared
+  `@transformotion/fn-claude-proxy-core`; sync mode (BT, no JOB_RESULTS_TABLE)
+  and async mode (SA, JOB_RESULTS_TABLE required) both supported;
+  original shared proxy decommissioned on completion.
+Phase C (C1–C5): Hybrid A canonical AI pattern — service class layer + thin
+  React hook wrapper — adopted in both SA and BT; cache belongs in service
+  layer, not hook.
 
 ---
 
