@@ -14,19 +14,19 @@
 #   requireAppAccess, requireAnyAppAccess, requireAccountAccess,
 #   requireAccountOwner, requireSiteAdmin
 #
-# This is a coarse file-level check — it confirms authorization helpers are
+# This is a coarse file-level check - it confirms authorization helpers are
 # present in any file that performs DynamoDB work. It does not verify call
 # ordering or that every individual operation is guarded.
 #
 # Checked paths:
-#   apps/*/functions/   — app-specific handlers (Budget Tracker, Stock Analyser)
-#   functions/claude-proxy/  — platform multi-app handler
+#   apps/                 app-specific handlers (Budget Tracker, Stock Analyser)
+#   platform/functions/   platform handlers, including nested auth handlers
 #
-# Exempt (see docs/architecture/cdk.md — CI checks):
-#   functions/accounts/              platform-infrastructure: inline DynamoDB authz
-#   functions/auth/account-provisioning/  auth-infrastructure: withAuthOnly, no app claims
-#   functions/auth/forgot-provider/       auth-infrastructure: public endpoint
-#   functions/auth/pre-token-generation/  auth-infrastructure: Cognito trigger
+# Exempt (see docs/architecture/cdk.md - CI checks):
+#   platform/functions/accounts/                  platform-infrastructure: inline DynamoDB authz
+#   platform/functions/auth/account-provisioning/ auth-infrastructure: withAuthOnly, no app claims
+#   platform/functions/auth/forgot-provider/      auth-infrastructure: public endpoint
+#   platform/functions/auth/pre-token-generation/ auth-infrastructure: Cognito trigger
 #
 # Usage: bash scripts/ci/check-handler-authz-pattern.sh
 # Exits 0 if all checked files pass; 1 if any violation found.
@@ -37,7 +37,14 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 SEARCH_PATHS=(
   "$REPO_ROOT/apps"
-  "$REPO_ROOT/functions/claude-proxy"
+  "$REPO_ROOT/platform/functions"
+)
+
+EXEMPT_PATH_PREFIXES=(
+  "$REPO_ROOT/platform/functions/accounts/"
+  "$REPO_ROOT/platform/functions/auth/account-provisioning/"
+  "$REPO_ROOT/platform/functions/auth/forgot-provider/"
+  "$REPO_ROOT/platform/functions/auth/pre-token-generation/"
 )
 
 DYNAMO_PATTERN='PutItemCommand|GetItemCommand|QueryCommand|ScanCommand|UpdateItemCommand|DeleteItemCommand|TransactWriteCommand|BatchGetCommand|BatchWriteCommand'
@@ -47,11 +54,25 @@ echo "Checking handler authorization patterns..."
 
 VIOLATIONS=()
 
+is_exempt_path() {
+  local file="$1"
+  local prefix
+  for prefix in "${EXEMPT_PATH_PREFIXES[@]}"; do
+    if [[ "$file" == "$prefix"* ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
 for base in "${SEARCH_PATHS[@]}"; do
   if [[ ! -d "$base" ]]; then
     continue
   fi
   while IFS= read -r file; do
+    if is_exempt_path "$file"; then
+      continue
+    fi
     if grep -qE "$DYNAMO_PATTERN" "$file" 2>/dev/null; then
       if ! grep -qE "$AUTHZ_PATTERN" "$file" 2>/dev/null; then
         VIOLATIONS+=("$file")
@@ -61,7 +82,7 @@ for base in "${SEARCH_PATHS[@]}"; do
 done
 
 if [[ ${#VIOLATIONS[@]} -eq 0 ]]; then
-  echo "OK — all handlers with DynamoDB operations call an authorization helper."
+  echo "OK - all handlers with DynamoDB operations call an authorization helper."
   exit 0
 fi
 
@@ -75,5 +96,5 @@ for f in "${VIOLATIONS[@]}"; do
   echo "  $f"
 done
 echo ""
-echo "See docs/architecture/auth.md — Handler authorization patterns."
+echo "See docs/architecture/auth.md - Handler authorization patterns."
 exit 1
