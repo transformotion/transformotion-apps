@@ -193,9 +193,12 @@ implemented:
   (signIn/signedOut path constants). Consumed by platform Lambdas
   (account-provisioning, pre-token-generation, claude-proxy), CDK stacks
   (PlatformWsStack, AuthStack, NetworkStack), launchpad, and both app
-  configs. WebSocket URL env var unified: `NEXT_PUBLIC_PLATFORM_WSS_URL`
-  replaces the per-app `NEXT_PUBLIC_CLAUDE_WSS_URL` (SA) and
-  `NEXT_PUBLIC_BUDGET_WSS_URL` (BT) in both deploy workflows and configs.
+  configs. WebSocket URL env var unified at that point:
+  `NEXT_PUBLIC_PLATFORM_WSS_URL` replaced the per-app
+  `NEXT_PUBLIC_CLAUDE_WSS_URL` (SA) and `NEXT_PUBLIC_BUDGET_WSS_URL` (BT)
+  in both deploy workflows and configs. M9 #365 moves Budget Tracker back to
+  an app-owned WSS URL via `NEXT_PUBLIC_BT_WSS_URL`, with
+  `NEXT_PUBLIC_PLATFORM_WSS_URL` retained only as rollback fallback.
   **Resolved by M7 / PR #346:** The `APPS` const, `APP_SLUGS`, `AppDescriptor`,
   and `AppSlug` exports were removed from `packages/runtime-config/` as part of
   the deploy-isolation work. The canonical app registry moved to
@@ -578,7 +581,7 @@ during v4 inventory production.
 | `budget-tracker.transactions-{stage}` | accountId | transactionId |
 | `budget-tracker.rules-{stage}` | accountId | ruleId |
 | `budget-tracker.settings-{stage}` | accountId | settingKey |
-WebSocket connection state has moved to the platform table `platform.ws-connections-{stage}` (owned by `PlatformWsStack`). Migrated from `budget-tracker.ai-connections-{stage}` by M7 / PR #295.
+WebSocket connection state for Budget Tracker is now in the app-owned table `budget-tracker.ws-connections-{stage}` (owned by `BudgetTrackerWsStack`). The older platform table `platform.ws-connections-{stage}` remains deployed for other transitional platform WSS consumers until M9 decommissioning.
 
 Categories, subcategories, and budget amounts are stored as a single
 `budgetData` value in the settings table (key: `budgetData`), with
@@ -1110,15 +1113,15 @@ CDK stacks — M7 #250 infrastructure split complete:
 
 **Budget-tracker stacks** (`apps/budget-tracker/infrastructure/`):
 - `budget-tracker-api-stack.ts` — mounts BT Lambdas on the shared
-  platform API Gateway; receives `wsConnectionsTableName`+`wsApiId`
-  from `PlatformWsStack` as props (M5 retires the separate gateway workaround)
+  platform API Gateway; receives Budget Tracker-owned `wsConnectionsTableName`
+  + `wsApiId` from `BudgetTrackerWsStack`
 - `budget-tracker-tables-stack.ts`
+- `bt-ws-stack.ts` — Budget Tracker-owned WebSocket API
+  (`budget-tracker-ws-{stage}`), custom Lambda authorizer, connect/default/
+  disconnect Lambdas, and `budget-tracker.ws-connections-{stage}`
 
-`budget-tracker-ws-stack.ts` (`BudgetTrackerWsStack`) was removed by
-M7 / PR #295 — stack and 4 WS Lambdas migrated to
-`platform/infrastructure/platform-ws-stack.ts`. The orphan CloudFormation
-stack `TransformotionDev-BudgetTrackerWs` / `TransformotionProd-BudgetTrackerWs`
-must be manually deleted from AWS after the #295 deploy completes.
+Budget Tracker no longer uses `PlatformWsStack` for AI review streaming after
+#365. Platform WSS remains deployed for M9 dual-run and later decommissioning.
 
 There is no `MonitoringStack`. M13 creates it.
 

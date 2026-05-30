@@ -51,6 +51,7 @@ jobs:
     env:
       NEXT_PUBLIC_RUNTIME_PROFILE: live
       NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
+      NEXT_PUBLIC_BT_WSS_URL: ${{ vars.NEXT_PUBLIC_BT_WSS_URL }}
       NEXT_PUBLIC_CLAUDE_API_URL: ${{ vars.NEXT_PUBLIC_CLAUDE_API_URL }}
       NEXT_PUBLIC_CLAUDE_CACHE_URL: ${{ vars.NEXT_PUBLIC_CLAUDE_CACHE_URL }}
       NEXT_PUBLIC_COGNITO_USER_POOL_ID: ${{ vars.NEXT_PUBLIC_COGNITO_USER_POOL_ID }}
@@ -87,43 +88,21 @@ jobs:
           role-to-assume: ${{ env.ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Wait for PlatformWs stack (handles first-deploy race; see #295)
-        run: |
-          STACK=TransformotionDev-PlatformWs
-          if aws cloudformation describe-stacks --stack-name "$STACK" >/dev/null 2>&1; then
-            echo "$STACK exists, proceeding"
-          else
-            echo "$STACK not found, waiting up to 20 min..."
-            ATTEMPTS=0
-            until aws cloudformation describe-stacks --stack-name "$STACK" >/dev/null 2>&1; do
-              ATTEMPTS=$((ATTEMPTS + 1))
-              if [ "$ATTEMPTS" -ge 40 ]; then
-                echo "ERROR: $STACK not found after $((ATTEMPTS * 30))s"
-                exit 1
-              fi
-              echo "Attempt $ATTEMPTS/40: waiting 30s..."
-              sleep 30
-            done
-            echo "$STACK found, waiting for CREATE_COMPLETE..."
-            aws cloudformation wait stack-create-complete --stack-name "$STACK"
-            echo "$STACK is ready"
-          fi
-
       - name: CDK Deploy — Budget Tracker stacks (dev)
         working-directory: infrastructure
-        run: pnpm exec cdk deploy --app 'npx ts-node --prefer-ts-exts bin/budget-tracker.ts' 'TransformotionDev-BudgetTrackerTables' 'TransformotionDev-BudgetTrackerApi' --require-approval never
+        run: pnpm exec cdk deploy --app 'npx ts-node --prefer-ts-exts bin/budget-tracker.ts' 'TransformotionDev-BudgetTrackerTables' 'TransformotionDev-BudgetTrackerWs' 'TransformotionDev-BudgetTrackerApi' --require-approval never
 
       - name: Extract WebSocket URL from CDK output
         run: |
           WSS_URL=$(aws cloudformation describe-stacks \
-            --stack-name TransformotionDev-PlatformWs \
+            --stack-name TransformotionDev-BudgetTrackerWs \
             --query "Stacks[0].Outputs[?OutputKey=='WssUrl'].OutputValue" \
             --output text)
           if [ -z "$WSS_URL" ]; then
-            echo "ERROR: Could not extract WssUrl from TransformotionDev-PlatformWs stack"
+            echo "ERROR: Could not extract WssUrl from TransformotionDev-BudgetTrackerWs stack"
             exit 1
           fi
-          echo "NEXT_PUBLIC_PLATFORM_WSS_URL=$WSS_URL" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_BT_WSS_URL=$WSS_URL" >> $GITHUB_ENV
           echo "Extracted WSS URL: $WSS_URL"
 
       - name: Build Next.js (static export)
@@ -167,6 +146,7 @@ jobs:
     env:
       NEXT_PUBLIC_RUNTIME_PROFILE: live
       NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
+      NEXT_PUBLIC_BT_WSS_URL: ${{ vars.NEXT_PUBLIC_BT_WSS_URL }}
       NEXT_PUBLIC_CLAUDE_API_URL: ${{ vars.NEXT_PUBLIC_CLAUDE_API_URL }}
       NEXT_PUBLIC_CLAUDE_CACHE_URL: ${{ vars.NEXT_PUBLIC_CLAUDE_CACHE_URL }}
       NEXT_PUBLIC_COGNITO_USER_POOL_ID: ${{ vars.NEXT_PUBLIC_COGNITO_USER_POOL_ID }}
@@ -203,43 +183,21 @@ jobs:
           role-to-assume: ${{ env.ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Wait for PlatformWs stack (handles first-deploy race; see #295)
-        run: |
-          STACK=TransformotionProd-PlatformWs
-          if aws cloudformation describe-stacks --stack-name "$STACK" >/dev/null 2>&1; then
-            echo "$STACK exists, proceeding"
-          else
-            echo "$STACK not found, waiting up to 20 min..."
-            ATTEMPTS=0
-            until aws cloudformation describe-stacks --stack-name "$STACK" >/dev/null 2>&1; do
-              ATTEMPTS=$((ATTEMPTS + 1))
-              if [ "$ATTEMPTS" -ge 40 ]; then
-                echo "ERROR: $STACK not found after $((ATTEMPTS * 30))s"
-                exit 1
-              fi
-              echo "Attempt $ATTEMPTS/40: waiting 30s..."
-              sleep 30
-            done
-            echo "$STACK found, waiting for CREATE_COMPLETE..."
-            aws cloudformation wait stack-create-complete --stack-name "$STACK"
-            echo "$STACK is ready"
-          fi
-
       - name: CDK Deploy — Budget Tracker stacks (prod)
         working-directory: infrastructure
-        run: pnpm exec cdk deploy --app 'npx ts-node --prefer-ts-exts bin/budget-tracker.ts' 'TransformotionProd-BudgetTrackerTables' 'TransformotionProd-BudgetTrackerApi' --require-approval never
+        run: pnpm exec cdk deploy --app 'npx ts-node --prefer-ts-exts bin/budget-tracker.ts' 'TransformotionProd-BudgetTrackerTables' 'TransformotionProd-BudgetTrackerWs' 'TransformotionProd-BudgetTrackerApi' --require-approval never
 
       - name: Extract WebSocket URL from CDK output
         run: |
           WSS_URL=$(aws cloudformation describe-stacks \
-            --stack-name TransformotionProd-PlatformWs \
+            --stack-name TransformotionProd-BudgetTrackerWs \
             --query "Stacks[0].Outputs[?OutputKey=='WssUrl'].OutputValue" \
             --output text)
           if [ -z "$WSS_URL" ]; then
-            echo "ERROR: Could not extract WssUrl from TransformotionProd-PlatformWs stack"
+            echo "ERROR: Could not extract WssUrl from TransformotionProd-BudgetTrackerWs stack"
             exit 1
           fi
-          echo "NEXT_PUBLIC_PLATFORM_WSS_URL=$WSS_URL" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_BT_WSS_URL=$WSS_URL" >> $GITHUB_ENV
           echo "Extracted WSS URL: $WSS_URL"
 
       - name: Build Next.js (static export)

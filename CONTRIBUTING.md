@@ -500,6 +500,19 @@ The Status field has five options that drive the kanban columns:
 | **In Review** | A PR linked to the issue is open, awaiting review or CI. |
 | **Done** | Issue is closed. |
 
+Lifecycle semantics:
+
+| Lifecycle meaning | Project Status | Rule |
+|---|---|---|
+| **Backlog** | `Backlog` | Issue is raised but not yet prioritised. |
+| **Ready** | `Todo` | Issue is understood, sequenced, assigned to a milestone or intentionally prioritised from Backlog, and no active work is occurring. |
+| **In Progress** | `In Progress` | Planning, investigation, architecture review, implementation planning, implementation, or active validation work is underway. |
+| **In Review** | `In Review` | Implementation work is complete enough for review and is waiting for CI, CDK synth/diff validation, deployment, smoke testing, runtime validation, approval, or review. |
+| **Done** | `Done` | Acceptance criteria are satisfied, required deployment has completed, and required validation has completed. For deploy-affecting work, PR merge alone is not sufficient. |
+
+Do not move deploy-affecting work directly from PR merge to Done.
+Deployment and validation remain part of the work.
+
 The Backlog/Todo distinction matters: an issue in a numbered milestone
 has been prioritised by the act of being placed in that milestone, so
 it sits at Todo; an issue in the "Backlog — unsequenced items"
@@ -515,6 +528,10 @@ Project automation rules are configured to:
 - Set Status to Backlog when an item is first added.
 - Move cards to Done when the issue is closed.
 - Move cards to Done when a linked PR is merged.
+
+This automation is not the final authority for deploy-affecting work. If
+automation moves a card to Done before required deployment or runtime
+validation is complete, move it back to In Review until validation passes.
 
 **Issue filing with a numbered milestone — set Status to Todo immediately.** The automation always defaults to Backlog regardless of which milestone is attached. When you file an issue and attach it to a numbered milestone, also set its Project Status to Todo at the same time — manually, via the issue sidebar or the Project board. Leaving it at Backlog contradicts the milestone assignment (numbered milestones are prioritised by definition) and makes the roadmap view inaccurate, because the roadmap filters on Status.
 

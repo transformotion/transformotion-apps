@@ -361,6 +361,17 @@ High-value enforcement direction:
 - Every substantive PR references a GitHub issue.
 - File an issue before fixing a newly discovered bug or architecture gap, even
   if the fix is small and lands in the same session.
+
+### Issue Lifecycle Awareness
+
+- Follow the issue lifecycle in `CONTRIBUTING.md` Section 4.4. Treat `Todo`
+  as Ready, planning/recon/architecture review as In Progress, and deploy
+  validation as part of the work.
+- Do not report deploy-affecting work as Done until deployment and required
+  validation have succeeded.
+
+Other working practices:
+
 - Keep PRs scoped. Split documentation ratification from broad implementation
   when necessary.
 - Prefer incremental migrations over large rewrites.

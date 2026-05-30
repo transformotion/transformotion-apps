@@ -45,7 +45,7 @@ Deployed by `deploy-platform.yml`. Source in `platform/infrastructure/`.
 | `Transformotion{Stage}-AuthApi` | `AuthApiStack` | `transformotion-forgot-provider-{stage}` Lambda + its own API Gateway (public — no JWT required on `/auth/lookup-provider`) |
 | `Transformotion{Stage}-PlatformTables` | `PlatformTablesStack` | `platform.users`, `platform.accounts`, `platform.account-members`, `platform.invitations` DynamoDB tables |
 | `Transformotion{Stage}-Api` | `PlatformApiStack` | Shared REST API Gateway (`transformotion-api-{stage}`), Cognito JWT authoriser, platform Lambda functions (see below) |
-| `Transformotion{Stage}-PlatformWs` | `PlatformWsStack` | WebSocket API Gateway `platform-ws-{stage}`, 4 WS Lambdas, `platform.ws-connections-{stage}` table; shared by all apps for async AI notifications |
+| `Transformotion{Stage}-PlatformWs` | `PlatformWsStack` | WebSocket API Gateway `platform-ws-{stage}`, 4 WS Lambdas, `platform.ws-connections-{stage}` table; transitional shared WSS retained during M9 dual-run |
 
 ### Stock Analyser stacks
 
@@ -64,6 +64,7 @@ Deployed by `deploy-budget-tracker.yml`. Source in `apps/budget-tracker/infrastr
 |---|---|---|
 | `Transformotion{Stage}-BudgetTrackerTables` | `BudgetTrackerTablesStack` | `budget-tracker.accounts`, `budget-tracker.transactions`, `budget-tracker.rules`, `budget-tracker.settings` |
 | `Transformotion{Stage}-BudgetTrackerApi` | `BudgetTrackerApiStack` | Budget Tracker Lambda functions + routes on the shared platform API Gateway |
+| `Transformotion{Stage}-BudgetTrackerWs` | `BudgetTrackerWsStack` | Budget Tracker-owned WebSocket API, WS Lambdas, and `budget-tracker.ws-connections-{stage}` |
 
 ---
 
@@ -159,7 +160,7 @@ App stacks (`StockAnalyserApiStack`, `BudgetTrackerApiStack`, `MigrationsApiStac
 | `Transformotion-{stage}-RestApiRootResourceId` | `PlatformApiStack` | SA, BT, MU — `RestApi.fromRestApiAttributes` |
 | `Transformotion-{stage}-AuthorizerId` | `PlatformApiStack` | SA, BT, MU — JWT authoriser on each route |
 | `Transformotion-{stage}-ApiResourceId` | `PlatformApiStack` | BT, MU — `Resource.fromResourceAttributes` to mount under `/api/` |
-| `PlatformWs-{stage}-WsApiId` | `PlatformWsStack` | BT — WebSocket API ID for Lambda env var |
+| `PlatformWs-{stage}-WsApiId` | `PlatformWsStack` | Transitional platform WSS consumers; Budget Tracker no longer imports this after #365 |
 
 The rule: cross-entrypoint references always go through CF exports (`Fn.importValue`), never through L2 construct passing. This allows each entrypoint to synthesise independently — no platform stacks are instantiated in app entrypoints.
 
@@ -172,9 +173,9 @@ The rule: cross-entrypoint references always go through CF exports (`Fn.importVa
 1. **Step 1 — GithubActionsRole** — account-level stack; deployed first as a one-off.
 2. **Step 2 — PlatformTables** — deployed in isolation before Auth, to release any stale export dependencies.
 3. **Step 3 — Main platform stacks** — deploys `Storage`, `Network`, `Auth`, `AuthApi`, `Api` together. CDK runs independent stacks in parallel within this step. `PlatformApiStack` emits the CF exports that SA/BT/MU consume.
-4. **Step 4 — PlatformWs** — deployed after `Api` so its `PlatformWs-{stage}-WsApiId` export is available to BT on next app deploy.
+4. **Step 4 — PlatformWs** — deployed after `Api`; retained during M9 dual-run until app-owned WSS cutovers and decommissioning.
 
-App stacks (`deploy-stock-analyser.yml`, `deploy-budget-tracker.yml`, `deploy-migration-utilities.yml`) consume the CF exports produced in Step 3/4 above. On first-ever deploy, the platform stacks must be deployed before the app stacks. On subsequent deploys, each workflow is independently triggered and independently deploys only its own stacks.
+App stacks (`deploy-stock-analyser.yml`, `deploy-budget-tracker.yml`, `deploy-migration-utilities.yml`) consume the CF exports produced in Step 3/4 above where they still have transitional dependencies. Budget Tracker owns `Transformotion{Stage}-BudgetTrackerWs` after #365 and no longer consumes `PlatformWs-{stage}-WsApiId` for AI review streaming. On first-ever deploy, the platform stacks must be deployed before the app stacks. On subsequent deploys, each workflow is independently triggered and independently deploys only its own stacks.
 
 ---
 
@@ -217,6 +218,22 @@ Platform WS Lambda environment variables:
 | `PERMITTED_APPS` | `platform-ws-authorizer-{stage}` | `budget-tracker,stock-analyser` (comma-separated allowlist) |
 | `APP_NAME` | `platform-ws-authorizer-{stage}` | Default app slug when `?app=` is absent (currently `budget-tracker`) |
 | `CONNECTIONS_TABLE` | `platform-ws-connect-{stage}`, `platform-ws-disconnect-{stage}` | `platform.ws-connections-{stage}` |
+
+Budget Tracker WS Lambda environment variables:
+
+| Variable | Lambda | Value |
+|---|---|---|
+| `COGNITO_USER_POOL_ID` | `budget-tracker-ws-authorizer-{stage}` | Cognito user pool ID (for JWKS verification) |
+| `APP_NAME` | `budget-tracker-ws-authorizer-{stage}` | `budget-tracker` |
+| `CONNECTIONS_TABLE` | `budget-tracker-ws-connect-{stage}`, `budget-tracker-ws-disconnect-{stage}` | `budget-tracker.ws-connections-{stage}` |
+
+Budget Tracker API Lambda WSS environment variables:
+
+| Variable | Lambda | Value |
+|---|---|---|
+| `WS_CONNECTIONS_TABLE` | `budget-ai-handler-{stage}` | `budget-tracker.ws-connections-{stage}` |
+| `WS_API_ID` | `budget-ai-handler-{stage}` | Budget Tracker-owned WebSocket API ID from `BudgetTrackerWsStack` |
+| `WS_STAGE` | `budget-ai-handler-{stage}` | `dev` or `prod` |
 
 ---
 
@@ -307,7 +324,7 @@ When a new app is added to the platform:
 
 1. Create `apps/{app-name}/infrastructure/{app-name}-tables-stack.ts` — DynamoDB tables
 2. Create `apps/{app-name}/infrastructure/{app-name}-api-stack.ts` — Lambda functions + routes on the shared platform API Gateway. Import the API and authoriser via `Fn.importValue` using the CF export names above — do not accept `api`/`authoriser` as props.
-3. Create `infrastructure/bin/{app-name}.ts` containing only the new app's stacks. Use `cdk.Fn.importValue` to resolve the CF exports from PlatformApiStack and PlatformWsStack.
+3. Create `infrastructure/bin/{app-name}.ts` containing only the new app's stacks. Use `cdk.Fn.importValue` only for documented transitional platform exports that the app still needs; new runtime ownership should be app-owned, including WebSocket resources.
 4. Create `.github/workflows/deploy-{app-name}.yml` with `--app 'bin/{app-name}.ts'` on all CDK deploy steps.
 5. Add a Cognito app client for the new app in `auth-stack.ts`.
 6. Update `docs/architecture/cdk.md` (this file), `docs/architecture/urls-and-deploy.md`, and `CONTRIBUTING.md §3.4` with the new stacks.
