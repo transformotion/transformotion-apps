@@ -1088,7 +1088,7 @@ CDK stacks — M7 #250 infrastructure split complete:
 **Platform stacks** (`platform/infrastructure/`):
 - `auth-stack.ts` — Cognito user pool, app clients, groups
 - `auth-api-stack.ts` — auth-related API endpoints
-- `github-actions-role-stack.ts` — GitHubActionsDeployRole IAM policies
+- `github-actions-role-stack.ts` — GitHub Actions deploy IAM roles
 - `network-stack.ts` — CloudFront, S3, certificates
 - `platform-api-stack.ts` — shared API Gateway (the platform gateway
   per Section 2.9); receives `wsApiEndpoint`+`wsApiId` from

@@ -67,7 +67,7 @@ transformotion-apps/
 │   ├── infrastructure/                    # Platform CDK stacks
 │   │   ├── auth-stack.ts                  # Cognito user pool, app clients, groups
 │   │   ├── auth-api-stack.ts              # Auth-related API endpoints
-│   │   ├── github-actions-role-stack.ts   # GitHubActionsDeployRole IAM policies
+│   │   ├── github-actions-role-stack.ts   # GitHub Actions deploy IAM roles
 │   │   ├── network-stack.ts               # CloudFront, S3, certificates
 │   │   ├── platform-api-stack.ts          # Shared API Gateway
 │   │   ├── platform-tables-stack.ts       # Platform DynamoDB tables

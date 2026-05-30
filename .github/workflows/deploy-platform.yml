@@ -26,7 +26,8 @@ permissions:
 
 env:
   AWS_REGION: ap-southeast-2
-  ROLE_ARN: arn:aws:iam::959516291617:role/GitHubActionsDeployRole
+  LEGACY_ROLE_ARN: arn:aws:iam::959516291617:role/GitHubActionsDeployRole
+  ROLE_ARN: arn:aws:iam::959516291617:role/TransformotionPlatformDeployRole
 
 jobs:
   deploy-dev:
@@ -48,15 +49,21 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Configure AWS credentials (OIDC)
+      - name: Configure AWS credentials (OIDC, legacy bootstrap role)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ env.ROLE_ARN }}
+          role-to-assume: ${{ env.LEGACY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: CDK Deploy — GithubActionsRole (account-level, deploy once)
         working-directory: infrastructure
         run: pnpm exec cdk deploy --app 'npx ts-node --prefer-ts-exts bin/platform.ts' 'Transformotion-GithubActionsRole' --require-approval never
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: CDK Deploy — PlatformTables (dev)
         working-directory: infrastructure
@@ -89,15 +96,21 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Configure AWS credentials (OIDC)
+      - name: Configure AWS credentials (OIDC, legacy bootstrap role)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ env.ROLE_ARN }}
+          role-to-assume: ${{ env.LEGACY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: CDK Deploy — GithubActionsRole (account-level, deploy once)
         working-directory: infrastructure
         run: pnpm exec cdk deploy --app 'npx ts-node --prefer-ts-exts bin/platform.ts' 'Transformotion-GithubActionsRole' --require-approval never
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: CDK Deploy — PlatformTables (prod)
         working-directory: infrastructure
