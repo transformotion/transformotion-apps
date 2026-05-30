@@ -13,9 +13,9 @@ export interface BudgetTrackerApiStackProps extends cdk.StackProps {
   budgetDataTableName: string;
   /** AI jobs table name from BudgetTrackerTablesStack. */
   aiJobsTableName: string;
-  /** WebSocket connections table name from PlatformWsStack. */
+  /** Budget Tracker WebSocket connections table name from BudgetTrackerWsStack. */
   wsConnectionsTableName: string;
-  /** WebSocket API ID from PlatformWsStack (used to build the management API endpoint). */
+  /** Budget Tracker WebSocket API ID from BudgetTrackerWsStack. */
   wsApiId: string;
 }
 

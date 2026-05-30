@@ -22,10 +22,11 @@ that lands the migration. The discipline rule
 transformotion-apps/
 ├── apps/                                  # User-facing applications
 │   ├── budget-tracker/                    # Budget Tracker, basePath /budget-tracker
-│   │   ├── functions/                     # App-specific Lambda source
+│   │   ├── functions/                     # App-specific Lambda source, including app-owned WS handlers
 │   │   ├── infrastructure/                # Budget Tracker CDK stacks
 │   │   │   ├── budget-tracker-api-stack.ts
-│   │   │   └── budget-tracker-tables-stack.ts
+│   │   │   ├── budget-tracker-tables-stack.ts
+│   │   │   └── bt-ws-stack.ts
 │   │   ├── AGENTS.md                     # Canonical Budget Tracker agent guide
 │   │   ├── CLAUDE.md                     # Claude Code compatibility mirror
 │   │   └── package.json                   # @transformotion/budget-tracker
@@ -43,7 +44,6 @@ transformotion-apps/
 │   │   ├── AGENTS.md                     # Canonical Stock Analyser agent guide
 │   │   ├── CLAUDE.md                     # Claude Code compatibility mirror
 │   │   └── package.json                   # @transformotion/stock-analyser
-│
 ├── packages/                              # Shared code consumed by 2+ apps
 │   ├── api-client/                        # Typed HTTP client (@transformotion/api-client)
 │   ├── auth-client/                       # Cognito + mock auth service implementations (@transformotion/auth-client)

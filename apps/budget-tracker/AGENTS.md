@@ -39,10 +39,11 @@ React + TypeScript + Tailwind CSS + shadcn/ui.
 |---|---|
 | `Transformotion{Stage}-BudgetTrackerTables` | `budget-tracker.accounts`, `budget-tracker.transactions`, `budget-tracker.rules`, `budget-tracker.settings` |
 | `Transformotion{Stage}-BudgetTrackerApi` | All Budget Tracker Lambda functions, mounted on the shared platform API Gateway |
+| `Transformotion{Stage}-BudgetTrackerWs` | Budget Tracker WebSocket API, WS Lambdas, and `budget-tracker.ws-connections-{stage}` |
 
 Source: `apps/budget-tracker/infrastructure/`
 
-The WebSocket stack is platform-owned: `Transformotion{Stage}-PlatformWs` in `platform/infrastructure/platform-ws-stack.ts`. BT connects with `?app=budget-tracker` to scope the authoriser gate.
+The WebSocket stack is Budget Tracker-owned: `Transformotion{Stage}-BudgetTrackerWs` in `apps/budget-tracker/infrastructure/bt-ws-stack.ts`. BT may still send `?app=budget-tracker` during transition, but the app-owned authoriser only permits Budget Tracker scope.
 
 > Current/transitional state: Budget Tracker shares the platform API Gateway (`transformotion-api-{stage}`). Routes are mounted under `/api/budget/v1` on the shared gateway's `/api` resource, using the same Cognito authoriser as all other platform routes. This is not the M9 target; M9 moves Budget Tracker REST runtime ownership to a Budget Tracker-owned API Gateway.
 
@@ -59,9 +60,9 @@ The WebSocket stack is platform-owned: `Transformotion{Stage}-PlatformWs` in `pl
 
 ## WebSocket
 
-Budget Tracker uses the shared platform WebSocket (`platform-ws-{stage}`). The 4 WS Lambdas live in `platform/functions/ws-*/` and are documented in `docs/architecture/cdk.md`. BT connects with `?app=budget-tracker&accountId=...&token=...` and receives AI review batch results on `$default`.
+Budget Tracker uses its own WebSocket (`budget-tracker-ws-{stage}`). The 4 WS Lambdas live in `apps/budget-tracker/functions/ws-*/` and are documented in `docs/architecture/cdk.md`. BT connects with `?app=budget-tracker&accountId=...&token=...` during transition and receives AI review batch results on `$default`.
 
-The connections DynamoDB table is `platform.ws-connections-{stage}` (was `budget-tracker.ai-connections-{stage}`). `BudgetTrackerApiStack` receives `wsConnectionsTableName` and `wsApiId` as props from `PlatformWsStack`.
+The connections DynamoDB table is `budget-tracker.ws-connections-{stage}`. `BudgetTrackerApiStack` receives `wsConnectionsTableName` and `wsApiId` from `BudgetTrackerWsStack`, and `budget-ai-handler-{stage}` uses those values for connection lookup and `execute-api:ManageConnections` pushes.
 
 ## DynamoDB tables
 
@@ -72,7 +73,7 @@ The connections DynamoDB table is `platform.ws-connections-{stage}` (was `budget
 | `budget-tracker.rules-{stage}` | `accountId` | `ruleId` | Custom categorisation rules |
 | `budget-tracker.settings-{stage}` | `accountId` | `settingKey` | Per-account settings (key-value) |
 
-WebSocket connection state is now in `platform.ws-connections-{stage}` (owned by `PlatformWsStack`).
+WebSocket connection state is in `budget-tracker.ws-connections-{stage}` (owned by `BudgetTrackerWsStack`).
 
 ## Authorization requirement
 
@@ -212,5 +213,7 @@ Environment: copy `apps/budget-tracker/.env.example` to `.env.local` and fill in
 | `NEXT_PUBLIC_COGNITO_DOMAIN` | Hosted UI domain |
 | `NEXT_PUBLIC_RUNTIME_PROFILE` | `mock` (default; local development) or `live` (deployed environments). Determines defaults for auth, data, AI, and future concerns. See root `AGENTS.md` for the design map. |
 | `NEXT_PUBLIC_API_BASE_URL` | Budget Tracker API base URL |
+| `NEXT_PUBLIC_BT_WSS_URL` | Budget Tracker-owned WebSocket URL for AI review streaming; deploy workflow extracts it from `Transformotion{Stage}-BudgetTrackerWs` |
+| `NEXT_PUBLIC_PLATFORM_WSS_URL` | Transitional rollback fallback only; do not use for new Budget Tracker deploys |
 
 **Cognito client variable rebind:** The GitHub Actions variable `NEXT_PUBLIC_BUDGET_TRACKER_COGNITO_CLIENT_ID` is mapped to the generic runtime env var `NEXT_PUBLIC_COGNITO_CLIENT_ID` in the deploy workflow's env block. This allows each app to have its own Cognito App Client (established in sub-phase 7b.5-alpha) while the runtime code (`@transformotion/auth-client`) reads a single generic name. Local development reads `NEXT_PUBLIC_COGNITO_CLIENT_ID` directly from `.env.local`.
