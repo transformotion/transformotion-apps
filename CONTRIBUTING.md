@@ -274,7 +274,9 @@ packages/
 ├── api-client/            # Typed HTTP client for the platform API gateway
 ├── auth-client/           # Cognito and mock auth service implementations
 ├── budget-domain/         # Budget Tracker domain types and pure helpers
+├── fn-claude-proxy-core/  # Shared Claude proxy mechanics for app-owned proxy Lambdas
 ├── lambda-middleware/     # Shared withAuth/withAuthOnly wrappers and helpers
+├── rate-limit-middleware/ # Shared DynamoDB-backed rate-limit helpers
 ├── runtime-config/        # Runtime profile + provider resolution helpers (selectProvider, resolveProfile, normaliseCrossAppUrl, createConfig, config sub-types)
 ├── cdk-constructs/        # Shared CDK constructs (the shared construct library)
 ├── ui/                    # UI packages, organised by concern (see below)

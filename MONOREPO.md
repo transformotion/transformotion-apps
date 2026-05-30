@@ -50,8 +50,10 @@ transformotion-apps/
 │   ├── budget-domain/                     # Budget Tracker domain types and helpers
 │   ├── cache/                             # Shared cache interfaces + MemoryCacheService (@transformotion/cache)
 │   ├── data-access/                       # Shared Repository<T,ID> interface + query types (@transformotion/data-access)
+│   ├── fn-claude-proxy-core/              # Shared Claude proxy mechanics (@transformotion/fn-claude-proxy-core)
 │   ├── logger/                            # Shared Logger interface + ConsoleLogger (@transformotion/logger)
 │   ├── lambda-middleware/                 # Shared withAuth/withAuthOnly wrappers
+│   ├── rate-limit-middleware/             # Shared DynamoDB-backed rate-limit helpers (@transformotion/rate-limit-middleware)
 │   ├── runtime-config/                    # Runtime profile + provider resolution + shared config sub-types + createConfig factory (@transformotion/runtime-config)
 │   └── ui/                                # Organisational directory (not itself a package; §3.4)
 │       ├── error-boundaries/              # @transformotion/ui-error-boundaries
