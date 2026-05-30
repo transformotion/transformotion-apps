@@ -51,8 +51,9 @@ The repository contains the following top-level directories:
   `budget-domain/`, `cache/`, `data-access/`, `lambda-middleware/`, `logger/`, `runtime-config/`, `ui/`
   (organisational directory; two sub-packages: `ui-error-boundaries`,
   `ui-primitives`). `cycle-engine/` was removed — see Section 1.5.
-- `infrastructure/` — CDK app with `bin/app.ts` entrypoint and
-  `lib/{platform,stock-analyser,budget-tracker}/` per-scope subdirs
+- `infrastructure/` — root CDK entrypoint only (`bin/app.ts` and per-deploy entrypoints under `bin/`);
+  platform stacks live under `platform/infrastructure/`; app stacks live
+  under `apps/<app>/infrastructure/`.
 - `platform/functions/` — platform Lambda source: `accounts/`, `auth/` (with
   `account-provisioning/`, `pre-token-generation/`, `invitations/`,
   `forgot-provider/`), `claude-proxy/`, `user/`. Resolved by M7 / PR #250.
@@ -64,9 +65,10 @@ The repository contains the following top-level directories:
   STABILISATION_FREEZE.md)
 - `migration-artifacts/` — `budget-tracker/` only
 
-CLAUDE.md exists at root (1371 bytes); `apps/stock-analyser/` and
-`apps/budget-tracker/` have per-app CLAUDE.md; `apps/launchpad/` is
-missing one (M3 outcome).
+AGENTS.md is the canonical root AI-agent guide, with CLAUDE.md retained as
+the Claude Code compatibility mirror. `apps/stock-analyser/` and
+`apps/budget-tracker/` have paired AGENTS.md/CLAUDE.md files;
+`apps/launchpad/` is missing a per-app pair (M3 outcome).
 
 `pnpm-workspace.yaml` covers `apps/*`,
 `apps/stock-analyser/functions/*`, `apps/budget-tracker/functions/*`,
@@ -247,7 +249,7 @@ superseded:
 
 - `apps/web/` — Deleted (M7 #250). Was a 0-LOC shell from the launchpad rename.
 - `apps/web-vite-backup/` — Deleted (M7 #250). Was contributing 18 lint baseline entries.
-- Branch naming convention in root `CLAUDE.md` (`claude-code/<n>` only)
+- Branch naming convention in root `AGENTS.md` / `CLAUDE.md`
   is partial — the actual practice (per `CONTRIBUTING.md` Section
   4.1) includes `v0/<n>` and `<author>/<n>` prefixes. M3 reconciles.
 - Various stale `first-login` references in code or docs that didn't
@@ -506,22 +508,24 @@ client-side localStorage middleman. The 726-transaction historical
 fixture at `migration-artifacts/budget-tracker/budget-tracker-export-2026-04-18.json`
 is backfilled via the renamed endpoint.
 
-### 2.9 Two-gateway architecture (drift)
+### 2.9 Shared platform API Gateway runtime coupling
 
-**Status: Confirmed (verified during initial inventory)**
+**Status: Confirmed (current/transitional state; M9 targets removal)**
 
-The platform currently has two API Gateways:
+The platform currently uses the shared platform REST API Gateway for
+multiple app runtime routes:
 
 - **Platform gateway** — defined in `platform/infrastructure/platform-api-stack.ts`,
-  serves stock-analyser and (eventually) launchpad routes.
-- **BudgetTrackerApi gateway** — defined separately, serves budget-
-  tracker routes. Documented in code as a workaround for a CDK
-  cross-stack dependency cycle.
+  serves Stock Analyser routes and Budget Tracker routes.
+- **BudgetTrackerApiStack** — defined in
+  `apps/budget-tracker/infrastructure/budget-tracker-api-stack.ts`,
+  imports the shared platform `RestApi` and mounts Budget Tracker routes
+  under `/api/budget/v1`.
 
-`MONOREPO.md` declares apps share the platform gateway — true for
-stock-analyser, false for budget-tracker. M5 retires the separate
-gateway and moves budget-tracker handlers onto the platform gateway,
-removing the dependency-cycle workaround.
+This shared gateway app-runtime ownership is transitional debt. M9 moves
+Budget Tracker and Stock Analyser to app-owned API Gateway ownership;
+the shared platform gateway must not be treated as the target pattern for
+new app runtime routes.
 
 ### 2.10 DynamoDB schema
 
@@ -1013,19 +1017,17 @@ GitHub Actions workflows in `.github/workflows/`:
   `infrastructure/bin/**`, `platform/functions/**`
 - `deploy-stock-analyser.yml` — triggers on `apps/stock-analyser/**`,
   `apps/stock-analyser/infrastructure/**`, `packages/**`
-- `deploy-budget-tracker.yml` — triggers on `apps/budget-tracker/**`,
-  `apps/budget-tracker/infrastructure/**`. **Currently a no-op
-  placeholder** (the job echoes a message); active deployment is
-  pending Issue #17 / M5.
+- `deploy-budget-tracker.yml` — active Budget Tracker deployment;
+  triggers on `apps/budget-tracker/**`, `infrastructure/bin/budget-tracker.ts`,
+  and package paths consumed by Budget Tracker.
 
 Verified gaps (M1 #81):
 
-1. **`packages/**` missing from `deploy-budget-tracker.yml`.**
-   `MONOREPO.md` documents `packages/**` triggering both workflows;
-   only stock-analyser does. Once #17/M5 activates the real
-   budget-tracker deployment, a shared package change would not
-   trigger budget-tracker redeploy. Currently latent (no-op
-   workflow); becomes live bug at activation.
+1. **Package path-filter completeness remains worth review.**
+   `deploy-budget-tracker.yml` is active and includes the package paths
+   consumed by Budget Tracker explicitly rather than a blanket
+   `packages/**` filter. M14 remains the right place to verify path
+   filter completeness across all deploy workflows.
 2. **`platform/functions/**` asymmetry.** Platform Lambda source moved to
    `platform/functions/**` (M7 / PR #250). `deploy-platform.yml` path
    filter updated accordingly. Whether app deploy workflows should also
@@ -1187,8 +1189,9 @@ Surfaced by M1 #80.
 **Status: Confirmed (Resolved by M1 #85 — gaps flagged for M3)**
 
 M1 #85 read all five `docs/architecture/` files (`README.md`, `auth.md`,
-`data.md`, `urls-and-deploy.md`, `cdk.md`) and both app CLAUDE.md files
-(`apps/stock-analyser/CLAUDE.md`, `apps/budget-tracker/CLAUDE.md`).
+`data.md`, `urls-and-deploy.md`, `cdk.md`) and both app agent guide files
+(`apps/stock-analyser/AGENTS.md` / `CLAUDE.md`,
+`apps/budget-tracker/AGENTS.md` / `CLAUDE.md`).
 The documents are broadly accurate. Gaps and inconsistencies found:
 
 **data.md gaps:**
@@ -1214,10 +1217,10 @@ The documents are broadly accurate. Gaps and inconsistencies found:
    by M1 #81) included `functions/**` at verification time; that path moved to
    `platform/functions/**` per M7 / PR #250. Table completeness review deferred to M3.
 
-5. Deploy trigger table describes `deploy-budget-tracker.yml` as doing
-   real CDK + S3 deployment. The workflow is currently a no-op
-   placeholder (pending Issue #17/M5). Table doesn't note this. M3
-   reconciles (or M5 activates the real deployment first).
+5. Resolved after M5: `deploy-budget-tracker.yml` now performs real CDK
+   deployment, static build/sync, and CloudFront invalidation. Any
+   remaining work here is path-filter completeness validation, not
+   activation of the Budget Tracker deploy workflow.
 
 **cdk.md notes:**
 

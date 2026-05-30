@@ -1,8 +1,8 @@
-# Stock Analyser - Claude Code compatibility mirror
+# Stock Analyser - AI Agent operating guide
 
-`AGENTS.md` is the authoritative Stock Analyser agent guide. This `CLAUDE.md` file is maintained for Claude Code compatibility and must remain semantically equivalent to `AGENTS.md`. Changes to one without the other are governance drift.
+This file is the authoritative Stock Analyser agent guide. The sibling `CLAUDE.md` file is a Claude Code compatibility mirror and must remain semantically equivalent. Any instruction added, removed, or modified here must be reflected in `CLAUDE.md` in the same PR.
 
-Read `apps/stock-analyser/AGENTS.md` before any Stock Analyser work. Read the root `AGENTS.md` for branching strategy, architecture governance, and operating mode.
+Read this file before any Stock Analyser work. Read the root `AGENTS.md` for branching strategy, architecture governance, and operating mode.
 
 ## Overview
 

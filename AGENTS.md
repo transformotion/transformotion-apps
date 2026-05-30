@@ -51,12 +51,34 @@ Use these documents in this order:
 - `CONTRIBUTING.md` - workflow, discipline rule, contracts policy, branch/PR
   expectations.
 - `contracts/<scope>/` - explicit contract source of truth.
-- `apps/<app>/CLAUDE.md` - app-specific operating notes when present.
+- `apps/<app>/AGENTS.md` - app-specific operating notes when present.
+- `apps/<app>/CLAUDE.md` - Claude Code compatibility mirror for app-specific
+  operating notes.
+- `platform/AGENTS.md` - platform-specific operating notes for platform work.
 
 If these documents conflict, do not silently choose one. Identify whether the
 conflict is current-state vs target-state. For implementation work, preserve
 current-state compatibility unless the task is explicitly part of the migration.
 For architecture direction, prefer the M9 target state.
+
+### AI Agent Documentation Governance
+
+`AGENTS.md` is canonical. `CLAUDE.md` is a compatibility mirror for Claude Code.
+The repository supports switching between Codex and Claude Code only if these
+files remain semantically equivalent.
+
+Rules:
+
+- Agent instructions must never diverge between AGENTS and CLAUDE files.
+- Any PR modifying an `AGENTS.md` file must update the corresponding
+  `CLAUDE.md` file in the same PR.
+- Any PR modifying a `CLAUDE.md` file must either update the corresponding
+  `AGENTS.md` file as well, or explicitly explain why no AGENTS change is
+  required.
+- Reviewers should treat AGENTS/CLAUDE divergence as documentation drift.
+- Root guidance lives in `/AGENTS.md` and `/CLAUDE.md`.
+- App guidance lives in `apps/<app>/AGENTS.md` and the sibling `CLAUDE.md`.
+- Platform guidance lives in `platform/AGENTS.md` and `platform/CLAUDE.md`.
 
 ## 3. Repository Topology
 
@@ -222,6 +244,16 @@ AI agents must follow these rules:
 - Prefer explicit contracts over inferred behaviour.
 - Preserve migration compatibility unless explicitly instructed to perform a
   breaking migration.
+- Respect explicit scope boundaries such as "diagnose only", "recon only",
+  "verify only", or "do not modify files". These constraints remain binding
+  until the user authorizes a new scope.
+- Do not commit, push, create PRs, merge PRs, modify production data, or modify
+  production infrastructure without explicit user authorization in the current
+  task.
+- Verification work records findings. It does not expand into fix work unless
+  the user authorizes that scope.
+- File or reference a GitHub issue before fixing a newly discovered bug or
+  architecture gap, even when the fix is small and lands in the same session.
 - Keep migration code idempotent and auditable.
 - Update `docs/architecture/inventory.md` when current-state facts change.
 - Update `MONOREPO.md` when topology, import rules, workspace globs, or deploy
@@ -336,8 +368,19 @@ High-value enforcement direction:
   authorizes a breaking cutover.
 - Before changing AWS resources, IAM, workflows, or architecture topology,
   inspect sibling state, not only the one named attribute.
+- Before implementation work completes recon, identify which normative
+  documents and companion artifacts must be updated if the change lands.
 - After merging to `develop`, check whether changed paths trigger deploy
   workflows and watch/report the deploy result.
+
+Runtime configuration pattern:
+
+- Use `NEXT_PUBLIC_RUNTIME_PROFILE=mock` for local/default mock behaviour and
+  `NEXT_PUBLIC_RUNTIME_PROFILE=live` for deployed live integrations.
+- Per-concern overrides such as `NEXT_PUBLIC_AUTH_OVERRIDE` may override the
+  profile for one concern.
+- Resolution order is explicit override, then profile default, then `mock`
+  fallback.
 
 ## 10. Directory-Specific Guidance
 

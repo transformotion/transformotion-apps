@@ -1,8 +1,8 @@
-# Budget Tracker - Claude Code compatibility mirror
+# Budget Tracker - AI Agent operating guide
 
-`AGENTS.md` is the authoritative Budget Tracker agent guide. This `CLAUDE.md` file is maintained for Claude Code compatibility and must remain semantically equivalent to `AGENTS.md`. Changes to one without the other are governance drift.
+This file is the authoritative Budget Tracker agent guide. The sibling `CLAUDE.md` file is a Claude Code compatibility mirror and must remain semantically equivalent. Any instruction added, removed, or modified here must be reflected in `CLAUDE.md` in the same PR.
 
-Read `apps/budget-tracker/AGENTS.md` before any Budget Tracker work. Read the root `AGENTS.md` for branching strategy, architecture governance, and operating mode.
+Read this file before any Budget Tracker work. Read the root `AGENTS.md` for branching strategy, architecture governance, and operating mode.
 
 ## Overview
 

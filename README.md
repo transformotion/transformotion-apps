@@ -8,9 +8,12 @@ Multi-tenant PWA platform — Stock Signal Analyser, Budget Tracker, and Transfo
 
 ## Operating documents
 
-This repository is governed by three canonical documents. New
-contributors — human or Claude — read these first.
+This repository is governed by canonical operating documents. New
+contributors, human or AI, read these first.
 
+- **[AGENTS.md](./AGENTS.md)** - canonical AI-agent operating guide.
+  Claude Code also reads the compatibility mirror at
+  **[CLAUDE.md](./CLAUDE.md)**.
 - **[PLAN.md](./PLAN.md)** — current trajectory of work. Goals,
   v0 development constraint, milestones, gating relationships,
   sequencing.
