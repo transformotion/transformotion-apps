@@ -108,12 +108,11 @@ Deployed by `deploy-budget-tracker.yml`. Source in `apps/budget-tracker/infrastr
 | `budget-transactions-handler-{stage}` | Budget Tracker transactions Lambda | `GET/POST/PATCH/DELETE /api/budget/v1/transactions` |
 | `budget-rules-handler-{stage}` | Budget Tracker rules Lambda | `GET/POST/PATCH/DELETE /api/budget/v1/rules` |
 | `budget-settings-handler-{stage}` | Budget Tracker settings Lambda | `GET/PATCH /api/budget/v1/settings` |
-| `budget-ai-categorise-handler-{stage}` | Budget Tracker AI Lambda | `POST /api/budget/v1/ai/categorise` |
-| `budget-ai-review-handler-{stage}` | Budget Tracker AI Lambda | `POST /api/budget/v1/ai/review` |
-| `budget-ai-csv-analysis-handler-{stage}` | Budget Tracker AI Lambda | `POST /api/budget/v1/ai/csv-analysis` |
+| `budget-ai-handler-{stage}` | Budget Tracker unified AI Lambda | `POST /api/budget/v1/ai/categorise`, `POST /api/budget/v1/ai/review`, `POST /api/budget/v1/ai/csv-analysis` |
+| `budget-data-handler-{stage}` | Budget Tracker budget data Lambda | `GET/PATCH /api/budget/v1/budget-data` |
 | `budget-export-handler-{stage}` | Budget Tracker export Lambda | `GET /api/budget/v1/business-export` |
 
-> **Note:** BT does NOT consume the shared `claude-proxy` Lambda. BT's AI routes (`/api/budget/v1/ai/*`) are independent Lambdas with their own Anthropic API key access. SA consumes `claude-proxy` directly. M9 design must account for this asymmetry.
+> **Current/transitional state:** Budget Tracker's unified `budget-ai-handler-{stage}` consumes the shared platform `claude-proxy` Lambda through `CLAUDE_PROXY_FUNCTION_NAME` and an invoke permission. This is transitional runtime coupling. M9 removes it by moving Budget Tracker Claude proxy/runtime ownership into the Budget Tracker app boundary.
 
 ### Migration Utilities Lambda functions (`MigrationsApi`)
 
