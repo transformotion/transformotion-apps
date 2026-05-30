@@ -26,7 +26,8 @@ transformotion-apps/
 │   │   ├── infrastructure/                # Budget Tracker CDK stacks
 │   │   │   ├── budget-tracker-api-stack.ts
 │   │   │   └── budget-tracker-tables-stack.ts
-│   │   ├── CLAUDE.md
+│   │   ├── AGENTS.md                     # Canonical Budget Tracker agent guide
+│   │   ├── CLAUDE.md                     # Claude Code compatibility mirror
 │   │   └── package.json                   # @transformotion/budget-tracker
 │   ├── launchpad/                         # Platform shell — sign-in, app tile rendering
 │   │   └── package.json                   # @transformotion/launchpad
@@ -39,7 +40,8 @@ transformotion-apps/
 │   │   │   └── stock-analyser-tables-stack.ts
 │   │   ├── lib/                           # Domain logic, services, adaptors
 │   │   ├── stores/                        # Zustand stores
-│   │   ├── CLAUDE.md
+│   │   ├── AGENTS.md                     # Canonical Stock Analyser agent guide
+│   │   ├── CLAUDE.md                     # Claude Code compatibility mirror
 │   │   └── package.json                   # @transformotion/stock-analyser
 │
 ├── packages/                              # Shared code consumed by 2+ apps
@@ -48,8 +50,10 @@ transformotion-apps/
 │   ├── budget-domain/                     # Budget Tracker domain types and helpers
 │   ├── cache/                             # Shared cache interfaces + MemoryCacheService (@transformotion/cache)
 │   ├── data-access/                       # Shared Repository<T,ID> interface + query types (@transformotion/data-access)
+│   ├── fn-claude-proxy-core/              # Shared Claude proxy mechanics (@transformotion/fn-claude-proxy-core)
 │   ├── logger/                            # Shared Logger interface + ConsoleLogger (@transformotion/logger)
 │   ├── lambda-middleware/                 # Shared withAuth/withAuthOnly wrappers
+│   ├── rate-limit-middleware/             # Shared DynamoDB-backed rate-limit helpers (@transformotion/rate-limit-middleware)
 │   ├── runtime-config/                    # Runtime profile + provider resolution + shared config sub-types + createConfig factory (@transformotion/runtime-config)
 │   └── ui/                                # Organisational directory (not itself a package; §3.4)
 │       ├── error-boundaries/              # @transformotion/ui-error-boundaries
@@ -63,13 +67,14 @@ transformotion-apps/
 │   ├── infrastructure/                    # Platform CDK stacks
 │   │   ├── auth-stack.ts                  # Cognito user pool, app clients, groups
 │   │   ├── auth-api-stack.ts              # Auth-related API endpoints
-│   │   ├── github-actions-role-stack.ts   # GitHubActionsDeployRole IAM policies
+│   │   ├── github-actions-role-stack.ts   # GitHub Actions deploy IAM roles
 │   │   ├── network-stack.ts               # CloudFront, S3, certificates
 │   │   ├── platform-api-stack.ts          # Shared API Gateway
 │   │   ├── platform-tables-stack.ts       # Platform DynamoDB tables
 │   │   ├── platform-ws-stack.ts           # Platform WebSocket (shared async AI notifications)
 │   │   └── storage-stack.ts              # S3 backups bucket
-│   ├── CLAUDE.md
+│   ├── AGENTS.md                         # Canonical platform agent guide
+│   ├── CLAUDE.md                         # Claude Code compatibility mirror
 │   └── functions/                         # Platform Lambda source (shared across apps)
 │       ├── auth/                          # Auth-related Lambdas (own pnpm workspace glob)
 │       │   ├── account-provisioning/      # First-sign-in account creation
@@ -119,7 +124,8 @@ transformotion-apps/
 │   │   └── deploy-migration-utilities.yml # Triggered by migration-utilities/** changes
 │   └── CODEOWNERS
 │
-├── CLAUDE.md                              # Repository-level guide for Claude Code
+├── AGENTS.md                              # Canonical AI-agent operating guide
+├── CLAUDE.md                              # Claude Code compatibility mirror
 ├── CONTRIBUTING.md                        # Ways of working
 ├── MONOREPO.md                            # This document
 ├── PLAN.md                                # Trajectory of work
@@ -213,7 +219,7 @@ the other app's deployment.
 | `infrastructure/bin/**` | `deploy-platform.yml` |
 | `platform/functions/**` | `deploy-platform.yml` |
 | `migration-utilities/**` | `deploy-migration-utilities.yml` |
-| `packages/**` | `deploy-stock-analyser.yml` only (gap: `deploy-budget-tracker.yml` and `deploy-migration-utilities.yml` missing this filter — tracked for M14 fix; currently latent because budget-tracker workflow is a no-op placeholder pending Issue #17/M5) |
+| `packages/**` | Shared package changes trigger app/migration deploy workflows where their path filters include the touched package. `deploy-budget-tracker.yml` is active and includes the Budget Tracker package dependencies explicitly. |
 
 Path filter completeness is not yet verified for `.github/workflows/**`
 and `scripts/ci/**` — changes to CI machinery may not auto-trigger the
@@ -226,8 +232,9 @@ mechanical steps within this monorepo are:
 
 1. Create `apps/<app-name>/` with its own `package.json`
    (`@transformotion/<app-name>`).
-2. Add a `CLAUDE.md` at `apps/<app-name>/CLAUDE.md` per
-   `CONTRIBUTING.md` Section 2.3.
+2. Add an `AGENTS.md` at `apps/<app-name>/AGENTS.md` and a semantically
+   equivalent `CLAUDE.md` compatibility mirror per `CONTRIBUTING.md`
+   Section 2.3.
 3. Add the app's normative contracts at `contracts/<app-name>/` —
    *not* at `apps/<app-name>/contracts/`. Per-app contract mirrors are
    forbidden per `CONTRIBUTING.md` Section 3.5.
@@ -268,11 +275,12 @@ organisational, not itself a package.
   Nested workspaces (like `apps/stock-analyser/functions/*` and
   `platform/functions/auth/*`) need explicit globs in `pnpm-workspace.yaml`.
 
-- **Shared API Gateway (mostly).** `apps/stock-analyser` and
-  `apps/launchpad` use the shared API Gateway from `PlatformApiStack`.
-  `apps/budget-tracker` currently uses its own separate API Gateway
-  (a CDK dependency-cycle workaround). M5 retires the workaround and
-  consolidates onto the shared gateway.
+- **Shared API Gateway (current/transitional).** `apps/stock-analyser`
+  and `apps/budget-tracker` currently mount REST routes on the shared
+  platform API Gateway from `PlatformApiStack`. This shared runtime
+  gateway is transitional debt for M9, not the desired pattern for new
+  app runtime work. M9 moves Budget Tracker and Stock Analyser to
+  app-owned API Gateway ownership.
 
 - **Analysis cache table.** The `platform.analysis-cache` table is
   used by stock-analyser via the claude-proxy Lambda. Despite the

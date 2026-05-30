@@ -22,11 +22,13 @@ If during implementation a document is discovered to be wrong or incomplete, wor
 
 - **[MONOREPO.md](/MONOREPO.md)** — Workspace structure, import boundaries, build/deploy triggers.
 - **[contracts/](/contracts/)** — Per-app data and API contracts (living documentation adjacent to each app's code).
-- **[apps/stock-analyser/CLAUDE.md](/apps/stock-analyser/CLAUDE.md)** — Stock Analyser operating guide for agents.
-- **[apps/budget-tracker/CLAUDE.md](/apps/budget-tracker/CLAUDE.md)** — Budget Tracker operating guide for agents.
+- **[AGENTS.md](/AGENTS.md)** — Canonical AI-agent operating guide.
+- **[apps/stock-analyser/AGENTS.md](/apps/stock-analyser/AGENTS.md)** — Stock Analyser operating guide for agents.
+- **[apps/budget-tracker/AGENTS.md](/apps/budget-tracker/AGENTS.md)** — Budget Tracker operating guide for agents.
+- **CLAUDE.md files** — Claude Code compatibility mirrors for the corresponding AGENTS.md files.
 
 ## What is NOT in these documents
 
 - Project status, phase plans, or work schedules — see `STABILISATION_FREEZE.md`.
 - Migration plans for specific sub-phases — ephemeral documents like `docs/sub-phase-7e-plan.md` exist for the duration of their work, then are deleted.
-- Implementation details that change frequently — live in code or in per-app CLAUDE.md.
+- Implementation details that change frequently — live in code or in per-app AGENTS.md, with CLAUDE.md mirrors kept equivalent for Claude Code.

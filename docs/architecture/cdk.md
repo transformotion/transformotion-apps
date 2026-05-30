@@ -108,12 +108,11 @@ Deployed by `deploy-budget-tracker.yml`. Source in `apps/budget-tracker/infrastr
 | `budget-transactions-handler-{stage}` | Budget Tracker transactions Lambda | `GET/POST/PATCH/DELETE /api/budget/v1/transactions` |
 | `budget-rules-handler-{stage}` | Budget Tracker rules Lambda | `GET/POST/PATCH/DELETE /api/budget/v1/rules` |
 | `budget-settings-handler-{stage}` | Budget Tracker settings Lambda | `GET/PATCH /api/budget/v1/settings` |
-| `budget-ai-categorise-handler-{stage}` | Budget Tracker AI Lambda | `POST /api/budget/v1/ai/categorise` |
-| `budget-ai-review-handler-{stage}` | Budget Tracker AI Lambda | `POST /api/budget/v1/ai/review` |
-| `budget-ai-csv-analysis-handler-{stage}` | Budget Tracker AI Lambda | `POST /api/budget/v1/ai/csv-analysis` |
+| `budget-ai-handler-{stage}` | Budget Tracker unified AI Lambda | `POST /api/budget/v1/ai/categorise`, `POST /api/budget/v1/ai/review`, `POST /api/budget/v1/ai/csv-analysis` |
+| `budget-data-handler-{stage}` | Budget Tracker budget data Lambda | `GET/PATCH /api/budget/v1/budget-data` |
 | `budget-export-handler-{stage}` | Budget Tracker export Lambda | `GET /api/budget/v1/business-export` |
 
-> **Note:** BT does NOT consume the shared `claude-proxy` Lambda. BT's AI routes (`/api/budget/v1/ai/*`) are independent Lambdas with their own Anthropic API key access. SA consumes `claude-proxy` directly. M9 design must account for this asymmetry.
+> **Current/transitional state:** Budget Tracker's unified `budget-ai-handler-{stage}` consumes the shared platform `claude-proxy` Lambda through `CLAUDE_PROXY_FUNCTION_NAME` and an invoke permission. This is transitional runtime coupling. M9 removes it by moving Budget Tracker Claude proxy/runtime ownership into the Budget Tracker app boundary.
 
 ### Migration Utilities Lambda functions (`MigrationsApi`)
 
@@ -234,26 +233,30 @@ Secrets Manager entries for social IDP credentials are always `RETAIN` in both e
 
 ## GitHub Actions deploy IAM
 
-A single shared IAM role `GitHubActionsDeployRole` handles all GitHub Actions deploy workflows. Source: `platform/infrastructure/github-actions-role-stack.ts`.
+M9 deploy isolation uses scoped GitHub Actions deploy roles for the path-filtered deploy workflows. Source: `platform/infrastructure/github-actions-role-stack.ts`.
+
+The legacy shared `GitHubActionsDeployRole` remains available temporarily as rollback. `deploy-platform.yml` still uses it only for the account-level `Transformotion-GithubActionsRole` bootstrap step so newly defined deploy roles can be created before the same workflow assumes `TransformotionPlatformDeployRole`.
 
 **OIDC trust:** Federated trust from `token.actions.githubusercontent.com`, scoped to `repo:transformotion/transformotion-apps:*`.
 
-**Inline policies:**
+**Deploy roles:**
 
-| Policy name | Permissions | Resource scope |
+| Role | Workflow | Primary ownership scope |
 |---|---|---|
-| `CDKAssumeBootstrapRoles` | `sts:AssumeRole` | CDK bootstrap role ARNs (`cdk-*`) in account `959516291617` / `ap-southeast-2` |
-| `TransformotionDevDeploy` | S3 bucket actions | `Resource: *` |
-| `TransformotionDevDeploy` | CloudFront distribution actions | `Resource: *` |
-| `TransformotionDevDeploy` | CloudFormation stack actions | `arn:aws:cloudformation:ap-southeast-2:959516291617:stack/Transformotion*` |
-| `TransformotionDevDeploy` | Cognito user pool and client actions | Both pools: `ap-southeast-2_7QhxUvefw` (dev, active) and `ap-southeast-2_8hHCARUWq` (prod — empty pool created 2026-04-22, no users, no clients) |
+| `TransformotionPlatformDeployRole` | `deploy-platform.yml` | Platform stacks: storage, network, auth, auth API, platform tables, platform API, platform WSS |
+| `TransformotionLaunchpadDeployRole` | `deploy-launchpad.yml` | Launchpad frontend deploy; future Launchpad auth ownership in #363 |
+| `TransformotionStockAnalyserDeployRole` | `deploy-stock-analyser.yml` | Stock Analyser stacks and `/stock-analyser` web assets |
+| `TransformotionBudgetTrackerDeployRole` | `deploy-budget-tracker.yml` | Budget Tracker stacks and `/budget-tracker` web assets |
+| `TransformotionMigrationUtilitiesDeployRole` | `deploy-migration-utilities.yml` | Migration utilities stacks |
+| `GitHubActionsDeployRole` | `cd.yml`; platform role bootstrap step | Legacy shared rollback role retained during M9 transition |
 
-M9 will evaluate per-app IAM scoping as part of the per-app deploy isolation outcome.
+**Current policy shape:** roles are scoped by owned CloudFormation stack name patterns where practical, retain read access to Transformotion stack outputs for transitional dependencies, can assume CDK bootstrap roles, and keep CloudFront/Cognito smoke-test permissions needed by current deploy verification. The policies are intentionally pragmatic rather than final least privilege.
+
+Cognito app clients still live in `AuthStack`; #362 has not transferred app-client ownership or rotated client IDs.
 
 ---
 
 ## CI checks
-
 ### Lambda categories
 
 There are three categories of Lambda in this repo. Category determines authorization pattern and CI check applicability.

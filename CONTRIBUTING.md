@@ -149,7 +149,8 @@ ways of working change. Changes are themselves PRs.
 | CDK | `/docs/architecture/cdk.md` | Normative | CDK stack topology, cross-stack references, deploy ordering. | Steve |
 | Contracts policy | `/docs/architecture/contracts.md` (TBD by Stage 0b) | Normative | The policy for how contracts are organised: where they live, what is normative vs descriptive, single-source-of-truth rules. Location may shift to an extension of an existing document per Stage 0b ratification. | Steve |
 | Per-app contracts | `/contracts/<scope>/*.md` where `<scope>` is `platform` or an app slug | Normative | The actual contracts: data models, API endpoints, state management. Per-app mirrors at `apps/<app>/contracts/` are not allowed. | Per-app team |
-| Per-app guide | `/apps/<app>/CLAUDE.md` | Operational | Per-app guidance for Claude Code agents. Required for every app. Minimum content: app's purpose, key entry points, app-specific conventions, app-specific gotchas, sync flow if v0-driven. | Per-app team |
+| Agent guide | `/AGENTS.md` and `/apps/<app>/AGENTS.md` | Operational | Canonical AI-agent operating guidance. Required at root and for every app. Minimum per-app content: app's purpose, key entry points, app-specific conventions, app-specific gotchas, sync flow if v0-driven. | Root / per-app team |
+| Claude Code mirror | `/CLAUDE.md` and `/apps/<app>/CLAUDE.md` | Operational | Claude Code compatibility mirror for the corresponding AGENTS.md file. Must remain semantically equivalent; changes to one without the other are governance drift. | Root / per-app team |
 | Architectural inventory | `/docs/architecture/inventory.md` | Normative (living document) | The current-state inventory of the platform — what is true about code, infrastructure, and operating state right now. Updated as state changes per the discipline rule (Section 2.1). Findings carry status tags including **Resolved by M*N* / PR #*N*** and **Superseded by [reference]** for living-document use. | Steve |
 
 Documents that have been superseded live in `/docs/archive/` with a header
@@ -164,8 +165,10 @@ milestone serves.
 Architecture documents at `docs/architecture/*.md` reference the goals by
 number. Each document states which goals it serves at the top.
 
-Per-app `CLAUDE.md` files reference the architecture documents and this
-document for global conventions. They cover only app-specific concerns.
+Per-app `AGENTS.md` files reference the architecture documents and this
+document for global conventions. Sibling `CLAUDE.md` files are Claude Code
+compatibility mirrors. They cover only app-specific concerns and must remain
+semantically equivalent to the corresponding AGENTS file.
 
 The contracts policy document (location ratified in Stage 0b) governs the
 per-app contract files at `contracts/<scope>/`. Drift between contracts
@@ -226,7 +229,8 @@ apps/<app>/
 ├── infrastructure/        # App-specific CDK stacks
 ├── contracts/             # Forbidden — see Section 2.3 (contracts root only)
 ├── public/                # Static assets
-├── CLAUDE.md              # Per-app guide for Claude Code agents (required)
+├── AGENTS.md              # Canonical per-app agent guide (required)
+├── CLAUDE.md              # Claude Code compatibility mirror (required)
 ├── README.md              # Per-app human-readable overview
 ├── package.json
 └── tsconfig.json
@@ -270,7 +274,9 @@ packages/
 ├── api-client/            # Typed HTTP client for the platform API gateway
 ├── auth-client/           # Cognito and mock auth service implementations
 ├── budget-domain/         # Budget Tracker domain types and pure helpers
+├── fn-claude-proxy-core/  # Shared Claude proxy mechanics for app-owned proxy Lambdas
 ├── lambda-middleware/     # Shared withAuth/withAuthOnly wrappers and helpers
+├── rate-limit-middleware/ # Shared DynamoDB-backed rate-limit helpers
 ├── runtime-config/        # Runtime profile + provider resolution helpers (selectProvider, resolveProfile, normaliseCrossAppUrl, createConfig, config sub-types)
 ├── cdk-constructs/        # Shared CDK constructs (the shared construct library)
 ├── ui/                    # UI packages, organised by concern (see below)

@@ -1,10 +1,19 @@
-# Transformotion Apps — Claude Code instructions
+# Transformotion Apps - Claude Code compatibility mirror
 
-This is a pnpm workspace monorepo containing multiple apps and platform code. Read this file first when starting a session.
+Root `AGENTS.md` is the authoritative AI-agent operating guide for this repository. This `CLAUDE.md` file is maintained for Claude Code compatibility and must remain semantically equivalent to `AGENTS.md`.
+
+Any instruction added, removed, or modified in `AGENTS.md` must be reflected here in the same PR. Any PR modifying this file must either update `AGENTS.md` as well or explicitly explain why no AGENTS change is required. Changes to one without the other are governance drift.
+
+This is a pnpm workspace monorepo containing multiple apps and platform code.
+Claude Code keeps this file in context for compatibility, but `AGENTS.md` is
+the canonical instruction source.
 
 ## Operating documents
 
-Three documents define how this repository works. Read them before substantive work:
+Four documents define how this repository works. Read them before substantive work:
+
+- **[`AGENTS.md`](./AGENTS.md)** - canonical AI-agent operating rules,
+  architecture governance, and migration safety instructions.
 
 - **[`PLAN.md`](./PLAN.md)** — current trajectory of work. Goals, milestones (M-setup, M0–M14, Backlog), gating relationships. Tells you what's in scope right now and what's deferred.
 - **[`CONTRIBUTING.md`](./CONTRIBUTING.md)** — ways of working. Document map, repository conventions, workflow rules, the discipline rule, status-tag system, operating principles. Tells you how to do work correctly.
@@ -12,10 +21,11 @@ Three documents define how this repository works. Read them before substantive w
 
 For monorepo structure (current state), import boundaries, and deploy triggers, see **[`MONOREPO.md`](./MONOREPO.md)**.
 
-When working on a specific app, read that app's `CLAUDE.md` first:
+When working on a specific app, read that app's `AGENTS.md` first. Claude Code may also read the sibling `CLAUDE.md` compatibility mirror:
 
-- `apps/stock-analyser/CLAUDE.md`
-- `apps/budget-tracker/CLAUDE.md`
+- `apps/stock-analyser/AGENTS.md`
+- `apps/budget-tracker/AGENTS.md`
+- `platform/AGENTS.md` for platform-level work
 
 ## Operating mode
 
@@ -41,7 +51,7 @@ Categories to consider in the impact check:
 - Lambda handlers, API endpoints → `MONOREPO.md`, `CONTRIBUTING.md` §3, `contracts/<scope>/`, `inventory.md`
 - Build patterns, env vars, runtime config → `CONTRIBUTING.md` §5, `inventory.md`, deploy workflow env blocks, GH Actions variables/secrets
 - Repository structure → `CONTRIBUTING.md` §3, `MONOREPO.md`
-- Operating mode, agent behaviour → `CLAUDE.md`
+- Operating mode, agent behaviour → `AGENTS.md` and this compatibility mirror
 
 This rule emerged from cumulative M7 evidence. PRs #259, #261 (multiple rounds), the M6 launchpad-at-root work, the budget-tracker gateway consolidation, and the platform-functions migration all shipped code without their accompanying §2.1 obligations, requiring downstream cleanup PRs (#262, #266, #267, #269, #279, #283 among others) to make up the gap.
 
@@ -89,8 +99,8 @@ Note: some paths are migrating per `CONTRIBUTING.md` Section 3 — see `MONOREPO
 | Cross-app contracts | `/contracts/<scope>/` |
 | Shared packages | `/packages/` |
 | Platform Lambda handlers | `/platform/functions/` |
-| Platform infrastructure | `/infrastructure/lib/platform/` (migrating to `/platform/infrastructure/` per M7) |
-| Per-app infrastructure | `/infrastructure/lib/<app>/` (migrating to `apps/<app>/infrastructure/` per M7) |
+| Platform infrastructure | `/platform/infrastructure/` |
+| Per-app infrastructure | `/apps/<app>/infrastructure/` |
 | Migration data artefacts | `/migration-artifacts/<app>/` |
 | Architecture invariants | `/docs/architecture/` |
 | Archived superseded docs | `/docs/archive/` |

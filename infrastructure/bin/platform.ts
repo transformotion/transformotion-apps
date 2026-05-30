@@ -22,7 +22,7 @@ const env = {
 
 new GithubActionsRoleStack(app, 'Transformotion-GithubActionsRole', {
   env,
-  description: 'Transformotion Apps — GitHubActionsDeployRole inline IAM policies (#262, #263)',
+  description: 'Transformotion Apps — GitHub Actions deploy IAM roles',
 });
 
 // ── Dev stacks ─────────────────────────────────────────────────────────────────
