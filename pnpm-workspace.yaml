@@ -1,5 +1,6 @@
 packages:
   - 'apps/*'
+  - 'apps/launchpad/functions/*'
   - 'apps/stock-analyser/functions/*'
   - 'apps/budget-tracker/functions/*'
   - 'packages/*'

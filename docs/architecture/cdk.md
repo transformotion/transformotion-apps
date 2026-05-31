@@ -42,7 +42,7 @@ Deployed by `deploy-platform.yml`. Source in `platform/infrastructure/`.
 | `Transformotion{Stage}-Storage` | `StorageStack` | S3 backups bucket `transformotion-backups-{account}` for platform migrations and one-shot backups |
 | `Transformotion{Stage}-Network` | `NetworkStack` | S3 bucket `transformotion-web-{stage}-959516291617`, CloudFront distribution, ACM cert wiring |
 | `Transformotion{Stage}-Auth` | `AuthStack` | Cognito user pool, three app clients, Cognito groups, Secrets Manager entries for social IDP credentials, Hosted UI domain |
-| `Transformotion{Stage}-AuthApi` | `AuthApiStack` | `transformotion-forgot-provider-{stage}` Lambda + its own API Gateway (public — no JWT required on `/auth/lookup-provider`) |
+| `Transformotion{Stage}-AuthApi` | `AuthApiStack` | Legacy `transformotion-forgot-provider-{stage}` Lambda + its own API Gateway (public — no JWT required on `/auth/lookup-provider`); retained for rollback while Launchpad owns the live route |
 | `Transformotion{Stage}-PlatformTables` | `PlatformTablesStack` | `platform.users`, `platform.accounts`, `platform.account-members`, `platform.invitations` DynamoDB tables |
 | `Transformotion{Stage}-Api` | `PlatformApiStack` | Shared REST API Gateway (`transformotion-api-{stage}`), Cognito JWT authoriser, platform Lambda functions (see below) |
 | `Transformotion{Stage}-PlatformWs` | `PlatformWsStack` | WebSocket API Gateway `platform-ws-{stage}`, 4 WS Lambdas, `platform.ws-connections-{stage}` table; transitional shared WSS retained during M9 dual-run |
@@ -53,7 +53,7 @@ Deployed by `deploy-launchpad.yml`. Source in `apps/launchpad/infrastructure/`.
 
 | Stack name | Class | Contents |
 |---|---|---|
-| `Transformotion{Stage}-LaunchpadControlPlane` | `LaunchpadControlPlaneStack` | Launchpad-owned control-plane API foundation. Cognito and shared account tables remain platform substrate. Initially exposes `GET /health`; #363 API migrations add auth/control-plane routes here. |
+| `Transformotion{Stage}-LaunchpadControlPlane` | `LaunchpadControlPlaneStack` | Launchpad-owned control-plane API. Cognito and shared account tables remain platform substrate. Owns `GET /health` and live `POST /auth/lookup-provider`. |
 
 ### Stock Analyser stacks
 
@@ -89,11 +89,17 @@ Deployed by `deploy-budget-tracker.yml`. Source in `apps/budget-tracker/infrastr
 | `transformotion-accounts-{stage}` | `functions/accounts` | `POST /accounts`, `GET/PUT/DELETE /accounts/{id}`, `GET /accounts/{id}/members`, `DELETE /accounts/{id}/members/{userId}` |
 | `transformotion-invitations-{stage}` | `functions/auth/invitations` | `POST /accounts/{id}/invitations` |
 
+### Launchpad control-plane Lambda functions (`Transformotion{Stage}-LaunchpadControlPlane`)
+
+| Function name | Handler | Routes |
+|---|---|---|
+| `launchpad-forgot-provider-{stage}` | `apps/launchpad/functions/forgot-provider` | `POST /auth/lookup-provider` (public) |
+
 ### Auth API Lambda functions (`Transformotion{Stage}-AuthApi`)
 
 | Function name | Handler | Routes |
 |---|---|---|
-| `transformotion-forgot-provider-{stage}` | `functions/auth/forgot-provider` | `POST /auth/lookup-provider` (public) |
+| `transformotion-forgot-provider-{stage}` | `functions/auth/forgot-provider` | `POST /auth/lookup-provider` (public; rollback-only after #363 PR 3) |
 
 ### Pre-token generation Lambda (`Transformotion{Stage}-Auth`)
 
@@ -318,7 +324,7 @@ There are three categories of Lambda in this repo. Category determines authoriza
 
 **App handlers** — Lambdas serving authenticated user requests for a specific app. Located in `apps/*/functions/` (per-app) or `platform/functions/claude-proxy/` (transitional platform multi-app runtime). Subject to the documented authorization pattern: `requireAppAccess` (or `requireAnyAppAccess`) at the top, then `requireAccountAccess` before account-scoped data operations. CI enforces this pattern.
 
-**Auth infrastructure** — Lambdas that produce, verify, or recover identity-related state. Located in `functions/auth/`. Examples: `pre-token-generation`, `forgot-provider`, `account-provisioning`, `invitations` (forthcoming). Each has a bespoke authorization pattern (some unauthenticated, some `withAuthOnly`, some `requireAccountOwner`, etc.). Not subject to the CI handler-authz check.
+**Auth infrastructure** — Lambdas that produce, verify, or recover identity-related state. Located in `platform/functions/auth/` for platform substrate/rollback handlers and `apps/launchpad/functions/` for Launchpad-owned control-plane handlers. Examples: `pre-token-generation`, Launchpad `forgot-provider`, `account-provisioning`, `invitations`. Each has a bespoke authorization pattern (some unauthenticated, some `withAuthOnly`, some `requireAccountOwner`, etc.). Not subject to the CI handler-authz check.
 
 **Platform infrastructure** — Lambdas managing platform-level data. Currently: `functions/accounts/`. Uses inline membership checks against the data it manages rather than consuming JWT claims. Not subject to the CI handler-authz check.
 
@@ -350,7 +356,8 @@ Both checks cover the same scope:
 | Path | Category | Reason |
 |---|---|---|
 | `functions/auth/pre-token-generation/` | auth-infrastructure | Cognito trigger (`PreTokenGenerationTriggerEvent`), not API Gateway — reads DynamoDB to build JWT claims, cannot consume them |
-| `functions/auth/forgot-provider/` | auth-infrastructure | Public endpoint (`withPublic`); DynamoDB used for rate-limiting only, no JWT context |
+| `apps/launchpad/functions/forgot-provider/` | auth-infrastructure | Public endpoint; DynamoDB used for rate-limiting only, no JWT context |
+| `functions/auth/forgot-provider/` | auth-infrastructure | Legacy rollback copy of the public lookup-provider endpoint |
 | `functions/auth/account-provisioning/` | auth-infrastructure | First-login route (`withAuthOnly`); user is authenticated but has no app claims yet — `requireAppAccess` is inapplicable by design |
 | `functions/accounts/` | platform-infrastructure | Platform accounts API — manages the accounts table that the pre-token Lambda reads; does inline DynamoDB membership checks rather than consuming JWT claims (it IS the accounts system) |
 

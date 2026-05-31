@@ -376,7 +376,7 @@ This is a layering rule of the same shape as the data-access layered architectur
 
 ### Deprecated helpers (retiring in M8)
 
-- `requireGroup(auth, group)` — group-name-based pattern superseded by claim-based helpers. Currently retained for the legacy `auth/forgot-provider` route's IP-based rate limiter; retires when `auth/forgot-provider` migrates to the canonical claim-based pattern.
+- `requireGroup(auth, group)` — group-name-based pattern superseded by claim-based helpers. Retained only for legacy compatibility if needed; new Launchpad-owned forgot-provider work must not use it.
 - `userInGroup(auth, group)` — utility check, also group-name-based; zero current callers; retires alongside `requireGroup`.
 
 Handlers do NOT call `requireGroup` for new work.
@@ -430,11 +430,11 @@ Five platform Lambdas have explicit permission models. Each is documented here f
 | `user` | `withAuthOnly` | None — user owns their own data | `platform.users` RW |
 | `auth/account-provisioning` | `withAuthOnly` | None — first-login flow; user has JWT but no app group memberships yet | `platform.accounts` RW + `platform.account-members` RW + `AdminUpdateUserAttributes` on user pool ARN |
 | `auth/invitations` | `withAuth` | Account-context guards | `platform.accounts` R + `platform.invitations` RW |
-| `auth/forgot-provider` | None (raw handler — pre-authentication) | None | `platform.rate-limits` RW + `AdminGetUser` on user pool ARN + SES `SendEmail` (scoped to verified sender identity ARN, pending tightening in M8) |
+| `apps/launchpad/functions/forgot-provider` | None (raw handler — pre-authentication) | None | `platform.rate-limits` RW + `AdminGetUser` on user pool ARN + SES `SendEmail` |
 
 **`accounts`, `user`, `auth/account-provisioning`, `auth/invitations`** are user-facing API endpoints. Each uses the appropriate middleware wrapper based on whether account context is required, and authorization helpers based on what the operation needs to verify.
 
-**`auth/forgot-provider`** is pre-authentication by necessity (the user has forgotten their identity provider; they cannot authenticate). It uses no middleware wrapper — the handler reads the request directly. Abuse-resistance is provided by Lambda-side IP-based rate limiting, plus tightenings scheduled for M8 (API Gateway throttling, CORS allowlist to the sign-in page origin, SES grant scoping, rate-limiter fail-closed behaviour). See *Forgot-provider flow* below.
+**`apps/launchpad/functions/forgot-provider`** is pre-authentication by necessity (the user has forgotten their identity provider; they cannot authenticate). It uses no middleware wrapper — the handler reads the request directly. Abuse-resistance is provided by Lambda-side IP-based rate limiting. The legacy platform `auth/forgot-provider` route remains deployed only for rollback after #363 PR 3. See *Forgot-provider flow* below.
 
 ### Cross-Lambda trust pattern
 
@@ -634,23 +634,21 @@ Users who do not remember which identity provider they signed up with can reques
 
 **Endpoint:** `POST /auth/lookup-provider` (public — no JWT required)
 
-The Lambda `transformotion-forgot-provider-{stage}` (in `AuthApiStack`):
+The live Lambda `launchpad-forgot-provider-{stage}` (in `LaunchpadControlPlaneStack`):
 1. Rate-limits by IP/email
-2. Queries Cognito via `ListUsersCommand` with filter `email = "<email>"` (works for both native users and federated users regardless of Cognito username format)
+2. Queries the platform-owned Cognito User Pool via `AdminGetUserCommand`
 3. Reads the `identities` attribute to detect which IDP was used
 4. Sends an SES email to the user naming the sign-in method and a link
 
 The handler is pre-authentication by necessity. It uses no `withAuth` / `withAuthOnly` wrapper — there is no JWT to extract. Abuse-resistance is the load-bearing security property.
 
+The older platform-owned `transformotion-forgot-provider-{stage}` route in `AuthApiStack` remains deployed for rollback during #363. New Launchpad code calls `NEXT_PUBLIC_LAUNCHPAD_CONTROL_PLANE_API_URL`.
+
 ### Abuse-resistance posture
 
-Lambda-side IP-based rate limiting (5 requests per IP per 15 minutes, stored in `platform.rate-limits-{stage}`). The rate limiter fails closed: if the rate-limit table is unavailable, requests are blocked rather than bypassed. The availability trade-off is accepted for this endpoint — it is not critical-path for active users; legitimate users can retry after DDB recovers; the abuse window stays closed during outages.
+Lambda-side IP-based rate limiting (5 requests per IP per 15 minutes, stored in platform-owned substrate table `platform.rate-limits-{stage}`). The current handler fails open if the rate-limit table is unavailable, preserving the existing platform behavior during the Launchpad ownership move.
 
-M8 deployed the following additional tightenings (all active):
-
-- **SES grant scoped** to the specific verified sender identity ARN (no longer `Resource: ['*']`).
-- **API Gateway throttling** active as a second layer independent of the Lambda's DDB-based limiter.
-- **CORS allowlist** restricts to the sign-in page origin (no longer `ALL_ORIGINS`).
+Future hardening can add API Gateway throttling, CORS allowlisting to the sign-in page origin, tighter SES resource scoping, and fail-closed rate limiting.
 
 **Known limitation:** For federated users, `AdminGetUser(Username=email)` fails because their Cognito username is `Google_{sub}` (not email). The fix using `ListUsersCommand` resolves this. See sub-phase `7e-forgot-provider-fix` in `docs/sub-phase-7e-plan.md`.
 

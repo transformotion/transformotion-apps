@@ -586,6 +586,24 @@ importers:
         specifier: 5.7.3
         version: 5.7.3
 
+  apps/launchpad/functions/forgot-provider:
+    devDependencies:
+      '@aws-sdk/client-cognito-identity-provider':
+        specifier: ^3
+        version: 3.1032.0
+      '@aws-sdk/client-dynamodb':
+        specifier: ^3
+        version: 3.1032.0
+      '@aws-sdk/client-sesv2':
+        specifier: ^3
+        version: 3.1032.0
+      '@types/node':
+        specifier: ^22
+        version: 22.19.17
+      typescript:
+        specifier: '*'
+        version: 5.7.3
+
   apps/stock-analyser:
     dependencies:
       '@hookform/resolvers':

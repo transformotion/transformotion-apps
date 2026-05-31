@@ -195,7 +195,8 @@ Per-app deploys require these variables set in the GitHub environment (`dev` or 
 
 | Variable | Source |
 |---|---|
-| `NEXT_PUBLIC_LAUNCHPAD_CONTROL_PLANE_API_URL` | `ControlPlaneApiUrl` output from `Transformotion{Stage}-LaunchpadControlPlane` |
+| `NEXT_PUBLIC_LAUNCHPAD_CONTROL_PLANE_API_URL` | `ControlPlaneApiUrl` output from `Transformotion{Stage}-LaunchpadControlPlane`; live base URL for Launchpad control-plane routes including `POST /auth/lookup-provider` |
+| `NEXT_PUBLIC_PLATFORM_AUTH_API_URL` | Optional rollback-only base URL for legacy platform AuthApi lookup-provider route |
 
 Client IDs are synced from CloudFormation outputs after each auth stack deploy by running:
 ```bash

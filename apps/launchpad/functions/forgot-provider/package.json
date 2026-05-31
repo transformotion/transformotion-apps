@@ -1,0 +1,18 @@
+{
+  "name": "@transformotion/fn-launchpad-forgot-provider",
+  "version": "0.0.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "lint": "echo \"lint: launchpad forgot-provider\""
+  },
+  "devDependencies": {
+    "@aws-sdk/client-cognito-identity-provider": "^3",
+    "@aws-sdk/client-dynamodb": "^3",
+    "@aws-sdk/client-sesv2": "^3",
+    "@types/node": "^22",
+    "typescript": "*"
+  }
+}

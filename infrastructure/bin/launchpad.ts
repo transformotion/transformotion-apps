@@ -14,11 +14,17 @@ const env = {
 new LaunchpadControlPlaneStack(app, 'TransformotionDev-LaunchpadControlPlane', {
   env,
   stage:       'dev',
+  userPoolId:  cdk.Fn.importValue('Transformotion-dev-UserPoolId'),
+  fromEmail:   'noreply@transformotion.com.au',
+  appUrl:      'https://dev.apps.transformotion.com.au',
   description: 'Transformotion Apps - Dev Launchpad control plane',
 });
 
 new LaunchpadControlPlaneStack(app, 'TransformotionProd-LaunchpadControlPlane', {
   env,
   stage:       'prod',
+  userPoolId:  cdk.Fn.importValue('Transformotion-prod-UserPoolId'),
+  fromEmail:   'noreply@transformotion.com.au',
+  appUrl:      'https://apps.transformotion.com.au',
   description: 'Transformotion Apps - Prod Launchpad control plane',
 });

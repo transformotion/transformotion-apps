@@ -31,6 +31,8 @@ transformotion-apps/
 │   │   ├── CLAUDE.md                     # Claude Code compatibility mirror
 │   │   └── package.json                   # @transformotion/budget-tracker
 │   ├── launchpad/                         # Platform shell and control-plane app
+│   │   ├── functions/                     # Launchpad-owned control-plane Lambda source
+│   │   │   └── forgot-provider/
 │   │   ├── infrastructure/                # Launchpad CDK stacks
 │   │   │   └── launchpad-control-plane-stack.ts
 │   │   └── package.json                   # @transformotion/launchpad
@@ -149,6 +151,8 @@ distinct from platform infrastructure and stays separate (per
 `pnpm-workspace.yaml` declares the following workspace globs:
 
 - `apps/*` — direct children only (does not include nested workspaces)
+- `apps/launchpad/functions/*` — explicit nested glob for launchpad
+  control-plane Lambdas
 - `apps/stock-analyser/functions/*` — explicit nested glob for stock
   analyser Lambdas
 - `apps/budget-tracker/functions/*` — explicit nested glob for budget
