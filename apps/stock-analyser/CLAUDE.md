@@ -35,20 +35,22 @@ React + TypeScript + Tailwind CSS.
 
 | Stack | Contents |
 |---|---|
-| `Transformotion{Stage}-StockAnalyserTables` | `stock-analyser.portfolio-{stage}`, `stock-analyser.watchlist-{stage}`, `stock-analyser.analysis-cache-{stage}` |
-| `Transformotion{Stage}-StockAnalyserApi` | All Stock Analyser Lambda functions + routes on the platform API Gateway |
+| `Transformotion{Stage}-StockAnalyserTables` | `stock-analyser.portfolio-{stage}`, `stock-analyser.watchlist-{stage}`, `stock-analyser.analysis-cache-{stage}`, `stock-analyser.job-results-{stage}` |
+| `Transformotion{Stage}-StockAnalyserWs` | Stock Analyser-owned WebSocket API, WS Lambdas, and `stock-analyser.ws-connections-{stage}` |
+| `Transformotion{Stage}-StockAnalyserApi` | Stock Analyser-owned REST API Gateway, app Lambdas, and `stock-analyser-ai-proxy-{stage}` |
 
 Source: `apps/stock-analyser/infrastructure/`
 
 ## Lambda functions
 
-Current/transitional state: Stock Analyser Lambdas are mounted on the shared platform API Gateway at the shared API root and use the platform Cognito JWT authoriser. This is not the M9 target; M9 moves Stock Analyser REST runtime ownership to a Stock Analyser-owned API Gateway.
+Current state after #366: Stock Analyser owns its REST API Gateway, AI proxy runtime, WSS completion path, and job-results table. Cognito remains platform-owned until #363. Platform REST/WSS/Claude runtime remains deployed only for rollback and #372 decommissioning.
 
 | Lambda | Source | Routes |
 |---|---|---|
 | `transformotion-portfolio-{stage}` | `apps/stock-analyser/functions/portfolio` | `GET/PUT /portfolio` |
 | `transformotion-watchlist-{stage}` | `apps/stock-analyser/functions/watchlist` | `GET/PUT /watchlist` |
 | `transformotion-analysis-cache-{stage}` | `apps/stock-analyser/functions/analysis-cache` | `GET/PUT/DELETE /analysis-cache/{key}` |
+| `stock-analyser-ai-proxy-{stage}` | `apps/stock-analyser/functions/ai-proxy` | `POST /api/claude` |
 | `transformotion-cycle-check-{stage}` | `apps/stock-analyser/functions/cycle-check` | EventBridge scheduled (no HTTP route) |
 | `transformotion-cycle-data-{stage}` | `apps/stock-analyser/functions/cycle-data` | `GET /cycle/ohlcv?ticker=` |
 | `transformotion-market-data-{stage}` | `apps/stock-analyser/functions/market-data` | `GET /price/ohlcv?ticker=&range=&interval=` |
@@ -59,9 +61,10 @@ Current/transitional state: Stock Analyser Lambdas are mounted on the shared pla
 |---|---|---|---|
 | `stock-analyser.portfolio-{stage}` | `accountId` | `ticker` | Portfolio holdings per account |
 | `stock-analyser.watchlist-{stage}` | `accountId` | `ticker` | Watchlist items per account |
-| `stock-analyser.analysis-cache-{stage}` | `accountId` | `cacheKey` | Claude analysis cache (TTL: expiresAt) |
+| `stock-analyser.analysis-cache-{stage}` | `accountId` | `cacheKey` | AI analysis cache (TTL: expiresAt) |
+| `stock-analyser.job-results-{stage}` | `accountId` | `cacheKey` | Async AI job state (TTL: expiresAt) |
 
-Analysis cache is accessed by `transformotion-analysis-cache-{stage}` (read/delete). As of M7 / PR #334 (Bucket A'), async job records (`job-*` keys) are written by `claude-proxy` to `platform.job-results-{stage}` (not this table). The `analysis-cache` Lambda routes GET requests for `job-*` keys to that platform table; all other keys stay on this table.
+Analysis cache is accessed by `transformotion-analysis-cache-{stage}` (read/delete). Async job records (`job-*` keys) are written by `stock-analyser-ai-proxy-{stage}` to `stock-analyser.job-results-{stage}`. The `analysis-cache` Lambda routes GET requests for `job-*` keys to that app-owned table; all other keys stay on `stock-analyser.analysis-cache-{stage}`.
 
 ## Authorization requirement
 
@@ -88,14 +91,16 @@ Key service methods defined in [contracts/DATA_CONTRACTS.md](./contracts/DATA_CO
 
 ### Claude AI pattern
 
-The `useClaude<T>()` hook handles the full async request cycle via the platform WebSocket:
-1. Open platform WSS (`NEXT_PUBLIC_PLATFORM_WSS_URL`) with Cognito ID token and `?app=stock-analyser`
+The `useClaude<T>()` hook handles the full async request cycle via Stock Analyser-owned runtime:
+1. Open SA WSS (`NEXT_PUBLIC_SA_WSS_URL`) with Cognito ID token and `?app=stock-analyser`
 2. Send `{ action: 'init' }` → receive `{ type: 'connected', connectionId }`
 3. POST to `/api/claude` with prompt + `connectionId` → returns `jobId`
 4. Receive `{ type: 'job_complete' }` push on the WebSocket when the job finishes
 5. Read result from `/analysis-cache/job-{jobId}` and return typed result
 
 See `apps/stock-analyser/docs/claude-ai-pattern.md` for usage examples and configuration.
+
+`NEXT_PUBLIC_PLATFORM_WSS_URL` is retained only as rollback fallback while platform WSS remains deployed for #372 decommissioning.
 
 ### Adding a new AI feature
 
@@ -171,8 +176,9 @@ Required env vars marked `[REQUIRED]` in `.env.example` must be set before the d
 | `NEXT_PUBLIC_COGNITO_USER_POOL_ID` | Shared Cognito user pool ID |
 | `NEXT_PUBLIC_COGNITO_DOMAIN` | Hosted UI domain |
 | `NEXT_PUBLIC_RUNTIME_PROFILE` | `mock` (default; local development) or `live` (deployed environments). Determines defaults for auth, data, AI, and future concerns. See root `AGENTS.md` for the design map. |
-| `NEXT_PUBLIC_API_BASE_URL` | Platform API base URL |
-| `NEXT_PUBLIC_PLATFORM_WSS_URL` | Platform WebSocket URL for async AI job notifications — extracted from `TransformotionDev-PlatformWs` CloudFormation output at deploy time |
+| `NEXT_PUBLIC_API_URL` | Stock Analyser-owned API Gateway URL from `Transformotion{Stage}-StockAnalyserApi` |
+| `NEXT_PUBLIC_PLATFORM_WSS_URL` | Rollback fallback while `PlatformWsStack` remains deployed for #372 decommissioning |
+| `NEXT_PUBLIC_SA_WSS_URL` | Stock Analyser-owned WebSocket URL from `Transformotion{Stage}-StockAnalyserWs`; live AI WSS endpoint after #366 |
 
 **Cognito client variable rebind:** The GitHub Actions variable `NEXT_PUBLIC_STOCK_ANALYSER_COGNITO_CLIENT_ID` is mapped to the generic runtime env var `NEXT_PUBLIC_COGNITO_CLIENT_ID` in the deploy workflow's env block. This allows each app to have its own Cognito App Client (established in sub-phase 7b.5-alpha) while the runtime code (`@transformotion/auth-client`) reads a single generic name. Local development reads `NEXT_PUBLIC_COGNITO_CLIENT_ID` directly from `.env.local`.
 

@@ -14,6 +14,7 @@ on:
       - 'packages/auth-client/**'
       - 'packages/runtime-config/**'
       - 'packages/lambda-middleware/**'
+      - 'packages/fn-claude-proxy-core/**'
   workflow_call:
     inputs:
       target:
@@ -49,8 +50,8 @@ jobs:
     environment: dev
     env:
       NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
-      NEXT_PUBLIC_CLAUDE_API_URL: ${{ vars.NEXT_PUBLIC_CLAUDE_API_URL }}
-      NEXT_PUBLIC_CLAUDE_CACHE_URL: ${{ vars.NEXT_PUBLIC_CLAUDE_CACHE_URL }}
+      NEXT_PUBLIC_AI_API_URL: ${{ vars.NEXT_PUBLIC_AI_API_URL }}
+      NEXT_PUBLIC_AI_CACHE_URL: ${{ vars.NEXT_PUBLIC_AI_CACHE_URL }}
       NEXT_PUBLIC_COGNITO_USER_POOL_ID: ${{ vars.NEXT_PUBLIC_COGNITO_USER_POOL_ID }}
       NEXT_PUBLIC_COGNITO_CLIENT_ID: ${{ vars.NEXT_PUBLIC_STOCK_ANALYSER_COGNITO_CLIENT_ID }}
       NEXT_PUBLIC_COGNITO_REGION: ${{ vars.NEXT_PUBLIC_COGNITO_REGION }}
@@ -62,6 +63,8 @@ jobs:
       NEXT_PUBLIC_SIGNIN_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}/sign-in/
       NEXT_PUBLIC_SIGNOUT_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}/signed-out/
       NEXT_PUBLIC_COMMIT_HASH: ${{ github.sha }}
+      NEXT_PUBLIC_PLATFORM_WSS_URL: ${{ vars.NEXT_PUBLIC_PLATFORM_WSS_URL }}
+      NEXT_PUBLIC_SA_WSS_URL: ${{ vars.NEXT_PUBLIC_SA_WSS_URL }}
     steps:
       - uses: actions/checkout@v4
 
@@ -87,42 +90,45 @@ jobs:
 
       - name: CDK Deploy — Stock Analyser stacks (dev)
         working-directory: infrastructure
-        run: pnpm exec cdk deploy --app 'npx ts-node --prefer-ts-exts bin/stock-analyser.ts' 'TransformotionDev-StockAnalyserApi' --require-approval never
+        run: pnpm exec cdk deploy --app 'npx ts-node --prefer-ts-exts bin/stock-analyser.ts' 'TransformotionDev-StockAnalyserTables' 'TransformotionDev-StockAnalyserWs' 'TransformotionDev-StockAnalyserApi' --require-approval never
 
-      - name: Wait for PlatformWs stack (handles first-deploy race; see #295)
+      - name: Extract Stock Analyser API URLs from CDK output
         run: |
-          STACK=TransformotionDev-PlatformWs
-          if aws cloudformation describe-stacks --stack-name "$STACK" >/dev/null 2>&1; then
-            echo "$STACK exists, proceeding"
-          else
-            echo "$STACK not found, waiting up to 20 min..."
-            ATTEMPTS=0
-            until aws cloudformation describe-stacks --stack-name "$STACK" >/dev/null 2>&1; do
-              ATTEMPTS=$((ATTEMPTS + 1))
-              if [ "$ATTEMPTS" -ge 40 ]; then
-                echo "ERROR: $STACK not found after $((ATTEMPTS * 30))s"
-                exit 1
-              fi
-              echo "Attempt $ATTEMPTS/40: waiting 30s..."
-              sleep 30
-            done
-            echo "$STACK found, waiting for CREATE_COMPLETE..."
-            aws cloudformation wait stack-create-complete --stack-name "$STACK"
-            echo "$STACK is ready"
-          fi
-
-      - name: Extract WebSocket URL from CDK output
-        run: |
-          WSS_URL=$(aws cloudformation describe-stacks \
-            --stack-name TransformotionDev-PlatformWs \
-            --query "Stacks[0].Outputs[?OutputKey=='WssUrl'].OutputValue" \
+          API_URL=$(aws cloudformation describe-stacks \
+            --stack-name TransformotionDev-StockAnalyserApi \
+            --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" \
             --output text)
-          if [ -z "$WSS_URL" ]; then
-            echo "ERROR: Could not extract WssUrl from TransformotionDev-PlatformWs stack"
+          AI_API_URL=$(aws cloudformation describe-stacks \
+            --stack-name TransformotionDev-StockAnalyserApi \
+            --query "Stacks[0].Outputs[?OutputKey=='AiApiUrl'].OutputValue" \
+            --output text)
+          AI_CACHE_URL=$(aws cloudformation describe-stacks \
+            --stack-name TransformotionDev-StockAnalyserApi \
+            --query "Stacks[0].Outputs[?OutputKey=='AnalysisCacheUrl'].OutputValue" \
+            --output text)
+          if [ -z "$API_URL" ] || [ -z "$AI_API_URL" ] || [ -z "$AI_CACHE_URL" ]; then
+            echo "ERROR: Could not extract API URLs from TransformotionDev-StockAnalyserApi stack"
             exit 1
           fi
-          echo "NEXT_PUBLIC_PLATFORM_WSS_URL=$WSS_URL" >> $GITHUB_ENV
-          echo "Extracted WSS URL: $WSS_URL"
+          echo "NEXT_PUBLIC_API_URL=$API_URL" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_AI_API_URL=$AI_API_URL" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_AI_CACHE_URL=$AI_CACHE_URL" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_CLAUDE_API_URL=$AI_API_URL" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_CLAUDE_CACHE_URL=$AI_CACHE_URL" >> $GITHUB_ENV
+          echo "Extracted SA API URL: $API_URL"
+
+      - name: Extract Stock Analyser WebSocket URL from CDK output
+        run: |
+          SA_WSS_URL=$(aws cloudformation describe-stacks \
+            --stack-name TransformotionDev-StockAnalyserWs \
+            --query "Stacks[0].Outputs[?OutputKey=='WssUrl'].OutputValue" \
+            --output text)
+          if [ -z "$SA_WSS_URL" ]; then
+            echo "ERROR: Could not extract WssUrl from TransformotionDev-StockAnalyserWs stack"
+            exit 1
+          fi
+          echo "NEXT_PUBLIC_SA_WSS_URL=$SA_WSS_URL" >> $GITHUB_ENV
+          echo "Extracted SA WSS URL: $SA_WSS_URL"
 
       - name: Build Next.js (static export)
         working-directory: apps/stock-analyser
@@ -148,14 +154,14 @@ jobs:
           CI_COGNITO_PASSWORD: ${{ secrets.CI_COGNITO_PASSWORD }}
           COGNITO_USER_POOL_ID: ${{ vars.NEXT_PUBLIC_COGNITO_USER_POOL_ID }}
           COGNITO_APP_CLIENT_ID: ${{ vars.NEXT_PUBLIC_STOCK_ANALYSER_COGNITO_CLIENT_ID }}
-          API_BASE_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
         run: |
+          export API_BASE_URL="${NEXT_PUBLIC_API_URL}"
           bash scripts/ci/verify-deploy.sh \
             "${{ vars.NEXT_PUBLIC_APP_URL }}/stock-analyser" \
             apps/stock-analyser/.env.example \
             "${{ github.sha }}" \
             "stock-analyser" \
-            "/api/user/profile"
+            "/portfolio"
 
   deploy-prod:
     name: Stock Analyser → Prod
@@ -164,8 +170,8 @@ jobs:
     environment: prod
     env:
       NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
-      NEXT_PUBLIC_CLAUDE_API_URL: ${{ vars.NEXT_PUBLIC_CLAUDE_API_URL }}
-      NEXT_PUBLIC_CLAUDE_CACHE_URL: ${{ vars.NEXT_PUBLIC_CLAUDE_CACHE_URL }}
+      NEXT_PUBLIC_AI_API_URL: ${{ vars.NEXT_PUBLIC_AI_API_URL }}
+      NEXT_PUBLIC_AI_CACHE_URL: ${{ vars.NEXT_PUBLIC_AI_CACHE_URL }}
       NEXT_PUBLIC_COGNITO_USER_POOL_ID: ${{ vars.NEXT_PUBLIC_COGNITO_USER_POOL_ID }}
       NEXT_PUBLIC_COGNITO_CLIENT_ID: ${{ vars.NEXT_PUBLIC_STOCK_ANALYSER_COGNITO_CLIENT_ID }}
       NEXT_PUBLIC_COGNITO_REGION: ${{ vars.NEXT_PUBLIC_COGNITO_REGION }}
@@ -177,6 +183,8 @@ jobs:
       NEXT_PUBLIC_SIGNIN_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}/sign-in/
       NEXT_PUBLIC_SIGNOUT_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}/signed-out/
       NEXT_PUBLIC_COMMIT_HASH: ${{ github.sha }}
+      NEXT_PUBLIC_PLATFORM_WSS_URL: ${{ vars.NEXT_PUBLIC_PLATFORM_WSS_URL }}
+      NEXT_PUBLIC_SA_WSS_URL: ${{ vars.NEXT_PUBLIC_SA_WSS_URL }}
     steps:
       - uses: actions/checkout@v4
 
@@ -202,42 +210,45 @@ jobs:
 
       - name: CDK Deploy — Stock Analyser stacks (prod)
         working-directory: infrastructure
-        run: pnpm exec cdk deploy --app 'npx ts-node --prefer-ts-exts bin/stock-analyser.ts' 'TransformotionProd-StockAnalyserTables' 'TransformotionProd-StockAnalyserApi' --require-approval never
+        run: pnpm exec cdk deploy --app 'npx ts-node --prefer-ts-exts bin/stock-analyser.ts' 'TransformotionProd-StockAnalyserTables' 'TransformotionProd-StockAnalyserWs' 'TransformotionProd-StockAnalyserApi' --require-approval never
 
-      - name: Wait for PlatformWs stack (handles first-deploy race; see #295)
+      - name: Extract Stock Analyser API URLs from CDK output
         run: |
-          STACK=TransformotionProd-PlatformWs
-          if aws cloudformation describe-stacks --stack-name "$STACK" >/dev/null 2>&1; then
-            echo "$STACK exists, proceeding"
-          else
-            echo "$STACK not found, waiting up to 20 min..."
-            ATTEMPTS=0
-            until aws cloudformation describe-stacks --stack-name "$STACK" >/dev/null 2>&1; do
-              ATTEMPTS=$((ATTEMPTS + 1))
-              if [ "$ATTEMPTS" -ge 40 ]; then
-                echo "ERROR: $STACK not found after $((ATTEMPTS * 30))s"
-                exit 1
-              fi
-              echo "Attempt $ATTEMPTS/40: waiting 30s..."
-              sleep 30
-            done
-            echo "$STACK found, waiting for CREATE_COMPLETE..."
-            aws cloudformation wait stack-create-complete --stack-name "$STACK"
-            echo "$STACK is ready"
-          fi
-
-      - name: Extract WebSocket URL from CDK output
-        run: |
-          WSS_URL=$(aws cloudformation describe-stacks \
-            --stack-name TransformotionProd-PlatformWs \
-            --query "Stacks[0].Outputs[?OutputKey=='WssUrl'].OutputValue" \
+          API_URL=$(aws cloudformation describe-stacks \
+            --stack-name TransformotionProd-StockAnalyserApi \
+            --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" \
             --output text)
-          if [ -z "$WSS_URL" ]; then
-            echo "ERROR: Could not extract WssUrl from TransformotionProd-PlatformWs stack"
+          AI_API_URL=$(aws cloudformation describe-stacks \
+            --stack-name TransformotionProd-StockAnalyserApi \
+            --query "Stacks[0].Outputs[?OutputKey=='AiApiUrl'].OutputValue" \
+            --output text)
+          AI_CACHE_URL=$(aws cloudformation describe-stacks \
+            --stack-name TransformotionProd-StockAnalyserApi \
+            --query "Stacks[0].Outputs[?OutputKey=='AnalysisCacheUrl'].OutputValue" \
+            --output text)
+          if [ -z "$API_URL" ] || [ -z "$AI_API_URL" ] || [ -z "$AI_CACHE_URL" ]; then
+            echo "ERROR: Could not extract API URLs from TransformotionProd-StockAnalyserApi stack"
             exit 1
           fi
-          echo "NEXT_PUBLIC_PLATFORM_WSS_URL=$WSS_URL" >> $GITHUB_ENV
-          echo "Extracted WSS URL: $WSS_URL"
+          echo "NEXT_PUBLIC_API_URL=$API_URL" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_AI_API_URL=$AI_API_URL" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_AI_CACHE_URL=$AI_CACHE_URL" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_CLAUDE_API_URL=$AI_API_URL" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_CLAUDE_CACHE_URL=$AI_CACHE_URL" >> $GITHUB_ENV
+          echo "Extracted SA API URL: $API_URL"
+
+      - name: Extract Stock Analyser WebSocket URL from CDK output
+        run: |
+          SA_WSS_URL=$(aws cloudformation describe-stacks \
+            --stack-name TransformotionProd-StockAnalyserWs \
+            --query "Stacks[0].Outputs[?OutputKey=='WssUrl'].OutputValue" \
+            --output text)
+          if [ -z "$SA_WSS_URL" ]; then
+            echo "ERROR: Could not extract WssUrl from TransformotionProd-StockAnalyserWs stack"
+            exit 1
+          fi
+          echo "NEXT_PUBLIC_SA_WSS_URL=$SA_WSS_URL" >> $GITHUB_ENV
+          echo "Extracted SA WSS URL: $SA_WSS_URL"
 
       - name: Build Next.js (static export)
         working-directory: apps/stock-analyser
@@ -263,11 +274,11 @@ jobs:
           CI_COGNITO_PASSWORD: ${{ secrets.CI_COGNITO_PASSWORD }}
           COGNITO_USER_POOL_ID: ${{ vars.NEXT_PUBLIC_COGNITO_USER_POOL_ID }}
           COGNITO_APP_CLIENT_ID: ${{ vars.NEXT_PUBLIC_STOCK_ANALYSER_COGNITO_CLIENT_ID }}
-          API_BASE_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
         run: |
+          export API_BASE_URL="${NEXT_PUBLIC_API_URL}"
           bash scripts/ci/verify-deploy.sh \
             "${{ vars.NEXT_PUBLIC_APP_URL }}/stock-analyser" \
             apps/stock-analyser/.env.example \
             "${{ github.sha }}" \
             "stock-analyser" \
-            "/api/user/profile"
+            "/portfolio"

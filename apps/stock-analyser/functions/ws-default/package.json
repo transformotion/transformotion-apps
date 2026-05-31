@@ -1,0 +1,17 @@
+{
+  "name": "@transformotion/fn-stock-analyser-ws-default",
+  "version": "0.0.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "lint": "echo \"lint: stock-analyser-ws-default\""
+  },
+  "devDependencies": {
+    "@aws-sdk/client-apigatewaymanagementapi": "^3",
+    "@types/aws-lambda": "^8",
+    "@types/node": "^22",
+    "typescript": "*"
+  }
+}

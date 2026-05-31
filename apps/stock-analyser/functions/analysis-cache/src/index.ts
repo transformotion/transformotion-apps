@@ -87,8 +87,9 @@ export const handler = withAuth(async ({ auth, account, event }) => {
 
   // ── GET /analysis-cache/{key} ─────────────────────────────────────────────
   if (event.httpMethod === 'GET') {
-    // job-* keys are platform-owned async job records written by claude-proxy.
-    // They live in the platform.job-results table keyed by accountId + cacheKey.
+    // job-* keys are app-owned async job records written by the SA AI proxy.
+    // After #366 they live in stock-analyser.job-results-{stage}; platform
+    // job-results may exist only as legacy/rollback until #372.
     if (cacheKey.startsWith('job-')) {
       const res = await ddb.send(new GetCommand({
         TableName: JOB_RESULTS_TABLE,

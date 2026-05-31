@@ -10,12 +10,12 @@ Region: `ap-southeast-2`
 | Entrypoint | Stacks synthesised | Deploy workflow |
 |---|---|---|
 | `infrastructure/bin/platform.ts` | All platform stacks (Network, Auth, AuthApi, PlatformTables, Api, PlatformWs, Storage, GithubActionsRole) | `deploy-platform.yml` |
-| `infrastructure/bin/stock-analyser.ts` | `StockAnalyserTables`, `StockAnalyserApi` | `deploy-stock-analyser.yml` |
+| `infrastructure/bin/stock-analyser.ts` | `StockAnalyserTables`, `StockAnalyserWs`, `StockAnalyserApi` | `deploy-stock-analyser.yml` |
 | `infrastructure/bin/budget-tracker.ts` | `BudgetTrackerTables`, `BudgetTrackerApi` | `deploy-budget-tracker.yml` |
 | `infrastructure/bin/migration-utilities.ts` | `MigrationsApi` | `deploy-migration-utilities.yml` |
 | `infrastructure/bin/launchpad.ts` | Launchpad stacks | `deploy-launchpad.yml` |
 
-Each entrypoint synthesises *only* the stacks it owns. App stacks (SA, BT, MU) resolve shared platform resources (REST API, authoriser, WebSocket API) via CloudFormation imports at deploy time — not via construct references passed through props. This enables independent deployment: changing SA code deploys only SA stacks; the platform stacks are untouched.
+Each entrypoint synthesises *only* the stacks it owns. App stacks resolve remaining shared substrate resources via CloudFormation imports at deploy time where needed — not via construct references passed through props. After #366, Stock Analyser owns its REST API, WSS, AI proxy, and job-results runtime.
 
 Stacks are deployed by GitHub Actions workflows — see [urls-and-deploy.md](./urls-and-deploy.md) for workflow triggers.
 
@@ -53,8 +53,9 @@ Deployed by `deploy-stock-analyser.yml`. Source in `apps/stock-analyser/infrastr
 
 | Stack name | Class | Contents |
 |---|---|---|
-| `Transformotion{Stage}-StockAnalyserTables` | `StockAnalyserTablesStack` | `stock-analyser.portfolio-{stage}`, `stock-analyser.watchlist-{stage}`, `stock-analyser.analysis-cache-{stage}` |
-| `Transformotion{Stage}-StockAnalyserApi` | `StockAnalyserApiStack` | Stock Analyser Lambda functions + routes on the shared platform API Gateway |
+| `Transformotion{Stage}-StockAnalyserTables` | `StockAnalyserTablesStack` | `stock-analyser.portfolio-{stage}`, `stock-analyser.watchlist-{stage}`, `stock-analyser.analysis-cache-{stage}`, `stock-analyser.job-results-{stage}` |
+| `Transformotion{Stage}-StockAnalyserWs` | `StockAnalyserWsStack` | Stock Analyser-owned WebSocket API, WS Lambdas, and `stock-analyser.ws-connections-{stage}` |
+| `Transformotion{Stage}-StockAnalyserApi` | `StockAnalyserApiStack` | Stock Analyser-owned REST API Gateway, app Lambda functions, Cognito authoriser, and `stock-analyser-ai-proxy-{stage}` |
 
 ### Budget Tracker stacks
 
@@ -101,6 +102,7 @@ Deployed by `deploy-budget-tracker.yml`. Source in `apps/budget-tracker/infrastr
 | `transformotion-analysis-cache-{stage}` | `apps/stock-analyser/functions/analysis-cache` | `GET/PUT/DELETE /analysis-cache/{key}` |
 | `transformotion-cycle-data-{stage}` | `apps/stock-analyser/functions/cycle-data` | `GET /cycle/ohlcv?ticker=` |
 | `transformotion-market-data-{stage}` | `apps/stock-analyser/functions/market-data` | `GET /price/ohlcv?ticker=&range=&interval=` |
+| `stock-analyser-ai-proxy-{stage}` | `apps/stock-analyser/functions/ai-proxy` | `POST /api/claude` |
 
 ### Budget Tracker Lambda functions (`Transformotion{Stage}-BudgetTrackerApi`)
 
@@ -156,11 +158,13 @@ App stacks (`StockAnalyserApiStack`, `BudgetTrackerApiStack`, `MigrationsApiStac
 
 | Export name | Produced by | Consumed by |
 |---|---|---|
-| `Transformotion-{stage}-RestApiId` | `PlatformApiStack` | SA, BT, MU — `RestApi.fromRestApiAttributes` |
-| `Transformotion-{stage}-RestApiRootResourceId` | `PlatformApiStack` | SA, BT, MU — `RestApi.fromRestApiAttributes` |
-| `Transformotion-{stage}-AuthorizerId` | `PlatformApiStack` | SA, BT, MU — JWT authoriser on each route |
+| `Transformotion-{stage}-RestApiId` | `PlatformApiStack` | BT, MU — `RestApi.fromRestApiAttributes`; SA no longer imports after #366 |
+| `Transformotion-{stage}-RestApiRootResourceId` | `PlatformApiStack` | BT, MU — `RestApi.fromRestApiAttributes`; SA no longer imports after #366 |
+| `Transformotion-{stage}-AuthorizerId` | `PlatformApiStack` | BT, MU — JWT authoriser on each route; SA owns its API authoriser after #366 |
 | `Transformotion-{stage}-ApiResourceId` | `PlatformApiStack` | BT, MU — `Resource.fromResourceAttributes` to mount under `/api/` |
-| `PlatformWs-{stage}-WsApiId` | `PlatformWsStack` | Transitional platform WSS consumers; Budget Tracker no longer imports this after #365 |
+| `PlatformWs-{stage}-WsApiId` | `PlatformWsStack` | Transitional platform WSS consumers; SA and BT no longer consume after #366/#365 |
+| `StockAnalyserWs-{stage}-Url` | `StockAnalyserWsStack` | Deploy workflow injects `NEXT_PUBLIC_SA_WSS_URL` |
+| `StockAnalyserApi-{stage}-Url` | `StockAnalyserApiStack` | Deploy workflow injects `NEXT_PUBLIC_API_URL` |
 
 The rule: cross-entrypoint references always go through CF exports (`Fn.importValue`), never through L2 construct passing. This allows each entrypoint to synthesise independently — no platform stacks are instantiated in app entrypoints.
 
@@ -175,7 +179,7 @@ The rule: cross-entrypoint references always go through CF exports (`Fn.importVa
 3. **Step 3 — Main platform stacks** — deploys `Storage`, `Network`, `Auth`, `AuthApi`, `Api` together. CDK runs independent stacks in parallel within this step. `PlatformApiStack` emits the CF exports that SA/BT/MU consume.
 4. **Step 4 — PlatformWs** — deployed after `Api`; retained during M9 dual-run until app-owned WSS cutovers and decommissioning.
 
-App stacks (`deploy-stock-analyser.yml`, `deploy-budget-tracker.yml`, `deploy-migration-utilities.yml`) consume the CF exports produced in Step 3/4 above where they still have transitional dependencies. Budget Tracker owns `Transformotion{Stage}-BudgetTrackerWs` after #365 and no longer consumes `PlatformWs-{stage}-WsApiId` for AI review streaming. On first-ever deploy, the platform stacks must be deployed before the app stacks. On subsequent deploys, each workflow is independently triggered and independently deploys only its own stacks.
+App stacks (`deploy-stock-analyser.yml`, `deploy-budget-tracker.yml`, `deploy-migration-utilities.yml`) consume the CF exports produced in Step 3/4 above where they still have transitional dependencies. Budget Tracker owns `Transformotion{Stage}-BudgetTrackerWs` after #365 and no longer consumes `PlatformWs-{stage}-WsApiId` for AI review streaming. Stock Analyser owns `Transformotion{Stage}-StockAnalyserWs`, `Transformotion{Stage}-StockAnalyserApi`, and `stock-analyser-ai-proxy-{stage}` after #366, and no longer uses platform REST/WSS/Claude runtime for live AI flow. On first-ever deploy, the platform auth stack must exist before app stacks because Cognito remains platform-owned until #363. On subsequent deploys, each workflow is independently triggered and independently deploys only its own stacks.
 
 ---
 
@@ -218,6 +222,22 @@ Platform WS Lambda environment variables:
 | `PERMITTED_APPS` | `platform-ws-authorizer-{stage}` | `budget-tracker,stock-analyser` (comma-separated allowlist) |
 | `APP_NAME` | `platform-ws-authorizer-{stage}` | Default app slug when `?app=` is absent (currently `budget-tracker`) |
 | `CONNECTIONS_TABLE` | `platform-ws-connect-{stage}`, `platform-ws-disconnect-{stage}` | `platform.ws-connections-{stage}` |
+
+Stock Analyser WS Lambda environment variables:
+
+| Variable | Lambda | Value |
+|---|---|---|
+| `COGNITO_USER_POOL_ID` | `stock-analyser-ws-authorizer-{stage}` | Cognito user pool ID (for JWKS verification) |
+| `APP_NAME` | `stock-analyser-ws-authorizer-{stage}` | `stock-analyser` |
+| `CONNECTIONS_TABLE` | `stock-analyser-ws-connect-{stage}`, `stock-analyser-ws-disconnect-{stage}` | `stock-analyser.ws-connections-{stage}` |
+
+Stock Analyser AI proxy environment variables:
+
+| Variable | Lambda | Value |
+|---|---|---|
+| `ANTHROPIC_SECRET_NAME` | `stock-analyser-ai-proxy-{stage}` | `{stage}/anthropic/api-key` |
+| `JOB_RESULTS_TABLE` | `stock-analyser-ai-proxy-{stage}` | `stock-analyser.job-results-{stage}` |
+| `WS_API_ENDPOINT` | `stock-analyser-ai-proxy-{stage}` | Stock Analyser-owned WSS management endpoint |
 
 Budget Tracker WS Lambda environment variables:
 
@@ -278,7 +298,7 @@ Cognito app clients still live in `AuthStack`; #362 has not transferred app-clie
 
 There are three categories of Lambda in this repo. Category determines authorization pattern and CI check applicability.
 
-**App handlers** — Lambdas serving authenticated user requests for a specific app. Located in `apps/*/functions/` (per-app) or `functions/claude-proxy/` (cross-app). Subject to the documented authorization pattern: `requireAppAccess` (or `requireAnyAppAccess`) at the top, then `requireAccountAccess` before account-scoped data operations. CI enforces this pattern.
+**App handlers** — Lambdas serving authenticated user requests for a specific app. Located in `apps/*/functions/` (per-app) or `platform/functions/claude-proxy/` (transitional platform multi-app runtime). Subject to the documented authorization pattern: `requireAppAccess` (or `requireAnyAppAccess`) at the top, then `requireAccountAccess` before account-scoped data operations. CI enforces this pattern.
 
 **Auth infrastructure** — Lambdas that produce, verify, or recover identity-related state. Located in `functions/auth/`. Examples: `pre-token-generation`, `forgot-provider`, `account-provisioning`, `invitations` (forthcoming). Each has a bespoke authorization pattern (some unauthenticated, some `withAuthOnly`, some `requireAccountOwner`, etc.). Not subject to the CI handler-authz check.
 
@@ -305,7 +325,7 @@ This is a coarse file-level check — it confirms authorization helpers are pres
 Both checks cover the same scope:
 
 - `apps/*/functions/` — app-specific handlers (Budget Tracker, Stock Analyser)
-- `functions/claude-proxy/` — platform multi-app handler
+- `platform/functions/claude-proxy/` — transitional platform multi-app handler
 
 ### Exempt paths
 
@@ -323,8 +343,8 @@ Both checks cover the same scope:
 When a new app is added to the platform:
 
 1. Create `apps/{app-name}/infrastructure/{app-name}-tables-stack.ts` — DynamoDB tables
-2. Create `apps/{app-name}/infrastructure/{app-name}-api-stack.ts` — Lambda functions + routes on the shared platform API Gateway. Import the API and authoriser via `Fn.importValue` using the CF export names above — do not accept `api`/`authoriser` as props.
-3. Create `infrastructure/bin/{app-name}.ts` containing only the new app's stacks. Use `cdk.Fn.importValue` only for documented transitional platform exports that the app still needs; new runtime ownership should be app-owned, including WebSocket resources.
+2. Create `apps/{app-name}/infrastructure/{app-name}-api-stack.ts` — app-owned API Gateway, Lambda functions, routes, and authorizer. Do not mount new app runtime routes on the shared platform API Gateway.
+3. Create `infrastructure/bin/{app-name}.ts` containing only the new app's stacks. Use `cdk.Fn.importValue` only for documented transitional platform exports that the app still needs; new runtime ownership should be app-owned, including REST and WebSocket resources.
 4. Create `.github/workflows/deploy-{app-name}.yml` with `--app 'bin/{app-name}.ts'` on all CDK deploy steps.
 5. Add a Cognito app client for the new app in `auth-stack.ts`.
 6. Update `docs/architecture/cdk.md` (this file), `docs/architecture/urls-and-deploy.md`, and `CONTRIBUTING.md §3.4` with the new stacks.

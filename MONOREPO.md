@@ -82,7 +82,7 @@ transformotion-apps/
 │       │   ├── invitations/               # Invitation flow
 │       │   └── forgot-provider/           # Federated identity recovery
 │       ├── accounts/                      # Account management
-│       ├── claude-proxy/                  # Anthropic API proxy (WSS push when connectionId provided)
+│       ├── claude-proxy/                  # Legacy platform Anthropic API proxy (rollback/decommission path)
 │       ├── user/                          # Platform user data
 │       ├── ws-authorizer/                 # WS $connect custom authoriser (Cognito JWT + accounts claim)
 │       ├── ws-connect/                    # WS $connect handler (writes connection record)
@@ -275,15 +275,22 @@ organisational, not itself a package.
   Nested workspaces (like `apps/stock-analyser/functions/*` and
   `platform/functions/auth/*`) need explicit globs in `pnpm-workspace.yaml`.
 
-- **Shared API Gateway (current/transitional).** `apps/stock-analyser`
-  and `apps/budget-tracker` currently mount REST routes on the shared
-  platform API Gateway from `PlatformApiStack`. This shared runtime
-  gateway is transitional debt for M9, not the desired pattern for new
-  app runtime work. M9 moves Budget Tracker and Stock Analyser to
-  app-owned API Gateway ownership.
+- **Shared API Gateway (current/transitional).** `apps/budget-tracker`
+  still mounts REST routes on the shared platform API Gateway from
+  `PlatformApiStack`. Stock Analyser owns its REST API Gateway after
+  #366. Shared runtime gateway use is transitional debt for M9, not the
+  desired pattern for new app runtime work.
+
+- **Stock Analyser WSS and AI runtime.** `apps/stock-analyser`
+  owns `sa-ws-stack.ts`, WS handler packages under
+  `apps/stock-analyser/functions/ws-*`, and
+  `apps/stock-analyser/functions/ai-proxy` after #366. Live Stock
+  Analyser AI uses Stock Analyser-owned REST, WSS, job-results, and
+  AI runtime; platform runtime remains only for rollback and later
+  decommissioning.
 
 - **Analysis cache table.** The `platform.analysis-cache` table is
-  used by stock-analyser via the claude-proxy Lambda. Despite the
+  used by stock-analyser via the legacy platform claude-proxy Lambda. Despite the
   `platform.` prefix it is functionally stock-analyser data; M2.1
   ratifies the reclassification as a Stage 0b decision.
 

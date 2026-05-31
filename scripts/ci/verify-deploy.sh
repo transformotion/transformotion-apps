@@ -26,6 +26,9 @@
 #   COGNITO_APP_CLIENT_ID — Cognito app client ID for this app
 #   API_BASE_URL          — Platform API Gateway base URL (no trailing slash)
 #
+# When the optional app identity is supplied, the smoke check derives the
+# X-Account-Id header from the token's accounts claim for that app.
+#
 # The [REQUIRED] var substitution check reads each var's value from the current
 # shell environment. In CI the job-level env block provides all NEXT_PUBLIC_* vars
 # automatically. Locally, export them before running this script.
@@ -255,9 +258,43 @@ EOF
   id_token=$(echo "$auth_response" | grep -o '"IdToken": *"[^"]*"' | sed 's/"IdToken": *"//' | tr -d '"')
   echo "      Token acquired."
 
+  smoke_account_id=""
+  if [[ -n "$EXPECTED_APP" ]]; then
+    smoke_account_id=$(ID_TOKEN="$id_token" EXPECTED_APP="$EXPECTED_APP" node - <<'NODE'
+const token = process.env.ID_TOKEN ?? '';
+const app = process.env.EXPECTED_APP ?? '';
+const payload = token.split('.')[1] ?? '';
+try {
+  const claims = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+  const accounts = claims.accounts ? JSON.parse(claims.accounts) : {};
+  const accountId = accounts?.[app]?.[0]?.accountId ?? '';
+  process.stdout.write(accountId);
+} catch {
+  process.stdout.write('');
+}
+NODE
+)
+    if [[ -z "$smoke_account_id" ]]; then
+      cat >&2 <<EOF
+
+FAIL: could not derive X-Account-Id for app '$EXPECTED_APP' from the smoke-test token.
+
+The authenticated smoke check calls an account-scoped API route. The CI user
+must have an accounts claim containing an account for '$EXPECTED_APP'.
+
+EOF
+      exit 1
+    fi
+    echo "      Derived X-Account-Id for ${EXPECTED_APP}."
+  fi
+
   echo "      Calling ${API_BASE_URL}${SMOKE_ENDPOINT}..."
+  curl_headers=(-H "Authorization: Bearer ${id_token}")
+  if [[ -n "$smoke_account_id" ]]; then
+    curl_headers+=(-H "X-Account-Id: ${smoke_account_id}")
+  fi
   smoke_code=$(curl -s -o /dev/null -w "%{http_code}" \
-    -H "Authorization: Bearer ${id_token}" \
+    "${curl_headers[@]}" \
     "${API_BASE_URL}${SMOKE_ENDPOINT}")
 
   if [[ "${smoke_code:0:1}" != "2" ]]; then

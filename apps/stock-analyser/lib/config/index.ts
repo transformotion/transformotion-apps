@@ -23,6 +23,7 @@ export interface AIConfig {
   provider: 'mock' | 'claude'
   model: string
   wssUrl: string
+  saWssUrl: string
 }
 
 export interface AppConfig {
@@ -68,8 +69,9 @@ function loadConfig(): AppConfig {
         profileDefaults: { mock: 'mock', live: 'claude' },
         validValues: ['mock', 'claude'] as const,
       }),
-      model:   process.env.NEXT_PUBLIC_AI_MODEL || 'claude-3-sonnet',
-      wssUrl:  process.env.NEXT_PUBLIC_PLATFORM_WSS_URL || '',
+      model:    process.env.NEXT_PUBLIC_AI_MODEL || 'claude-3-sonnet',
+      wssUrl:   process.env.NEXT_PUBLIC_SA_WSS_URL || process.env.NEXT_PUBLIC_PLATFORM_WSS_URL || '',
+      saWssUrl: process.env.NEXT_PUBLIC_SA_WSS_URL || '',
     },
     storage: {
       provider: selectProvider({
@@ -86,7 +88,7 @@ function loadConfig(): AppConfig {
       cloudwatchLogGroup: process.env.CLOUDWATCH_LOG_GROUP,
     },
     claude: {
-      apiUrl: process.env.NEXT_PUBLIC_CLAUDE_API_URL || '/api/claude',
+      apiUrl: process.env.NEXT_PUBLIC_AI_API_URL || process.env.NEXT_PUBLIC_CLAUDE_API_URL || '/api/claude',
     },
     features: {
       debugMode: process.env.NEXT_PUBLIC_DEBUG_MODE === 'true',

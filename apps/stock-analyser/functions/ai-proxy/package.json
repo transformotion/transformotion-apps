@@ -1,0 +1,19 @@
+{
+  "name": "@transformotion/fn-stock-analyser-ai-proxy",
+  "version": "0.0.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "lint": "echo \"lint: stock-analyser-ai-proxy\""
+  },
+  "dependencies": {
+    "@transformotion/fn-claude-proxy-core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8",
+    "@types/node": "^22",
+    "typescript": "*"
+  }
+}

@@ -73,8 +73,8 @@ Set environment variables to control behavior:
 NEXT_PUBLIC_RUNTIME_PROFILE=mock
 
 # API Endpoints
-NEXT_PUBLIC_CLAUDE_API_URL=/api/claude       # Where to POST prompt
-NEXT_PUBLIC_CLAUDE_CACHE_URL=/analysis-cache # Where to read job results
+NEXT_PUBLIC_AI_API_URL=/api/claude           # Where to POST prompt
+NEXT_PUBLIC_AI_CACHE_URL=/analysis-cache     # Where to read job results
 NEXT_PUBLIC_PLATFORM_WSS_URL=wss://...         # Platform WebSocket URL for job notifications
 ```
 
@@ -238,6 +238,6 @@ const result = await call({ prompt })
 
 When integrating with a deployed Claude backend:
 1. Create a Lambda function that calls Anthropic Claude API
-2. Expose it via API Gateway at `NEXT_PUBLIC_CLAUDE_API_URL`
+2. Expose it via API Gateway at `NEXT_PUBLIC_AI_API_URL`
 3. Deploy with `NEXT_PUBLIC_RUNTIME_PROFILE=live` (already set in deploy workflows)
 4. All component code stays the same ✨

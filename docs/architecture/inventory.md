@@ -516,19 +516,22 @@ is backfilled via the renamed endpoint.
 **Status: Confirmed (current/transitional state; M9 targets removal)**
 
 The platform currently uses the shared platform REST API Gateway for
-multiple app runtime routes:
+remaining transitional app runtime routes:
 
 - **Platform gateway** — defined in `platform/infrastructure/platform-api-stack.ts`,
-  serves Stock Analyser routes and Budget Tracker routes.
+  still serves platform routes and Budget Tracker routes.
 - **BudgetTrackerApiStack** — defined in
   `apps/budget-tracker/infrastructure/budget-tracker-api-stack.ts`,
   imports the shared platform `RestApi` and mounts Budget Tracker routes
   under `/api/budget/v1`.
+- **StockAnalyserApiStack** — defined in
+  `apps/stock-analyser/infrastructure/stock-analyser-api-stack.ts`,
+  owns the Stock Analyser REST API Gateway after #366.
 
-This shared gateway app-runtime ownership is transitional debt. M9 moves
-Budget Tracker and Stock Analyser to app-owned API Gateway ownership;
-the shared platform gateway must not be treated as the target pattern for
-new app runtime routes.
+This shared gateway app-runtime ownership is transitional debt. Stock Analyser
+no longer uses it after #366. M9 moves Budget Tracker to app-owned API Gateway
+ownership as well; the shared platform gateway must not be treated as the
+target pattern for new app runtime routes.
 
 ### 2.10 DynamoDB schema
 
@@ -555,6 +558,8 @@ new app runtime routes.
 | `stock-analyser.portfolio-{stage}` | accountId | ticker |
 | `stock-analyser.watchlist-{stage}` | accountId | ticker |
 | `stock-analyser.analysis-cache-{stage}` | accountId | cacheKey |
+| `stock-analyser.ws-connections-{stage}` | connectionId | — |
+| `stock-analyser.job-results-{stage}` | accountId | cacheKey |
 
 CDK source declares all three tables with composite keys
 (`apps/stock-analyser/infrastructure/stock-analyser-tables-stack.ts`
@@ -571,6 +576,11 @@ table names match (`stock-analyser.portfolio-dev`,
 in both source and deployment. The mismatch concern likely originated
 before a CDK fix landed and was carried forward without re-verification
 during v4 inventory production.
+
+WebSocket connection state for Stock Analyser is app-owned in
+`stock-analyser.ws-connections-{stage}`. Async AI job state is app-owned in
+`stock-analyser.job-results-{stage}`. After #366, live Stock Analyser AI uses
+Stock Analyser REST, AI proxy, job-results, and WSS runtime.
 
 #### 2.10.3 Budget-tracker tables
 
@@ -1107,9 +1117,14 @@ CDK stacks — M7 #250 infrastructure split complete:
 - `storage-stack.ts` — S3 backups bucket
 
 **Stock-analyser stacks** (`apps/stock-analyser/infrastructure/`):
-- `stock-analyser-api-stack.ts` — portfolio, watchlist, analysis-cache,
-  and cycle-data Lambdas + routes on shared platform API Gateway
-- `stock-analyser-tables-stack.ts`
+- `stock-analyser-api-stack.ts` — Stock Analyser-owned REST API Gateway,
+  portfolio, watchlist, analysis-cache, market-data, cycle-data, and
+  `stock-analyser-ai-proxy-{stage}` Lambdas
+- `stock-analyser-tables-stack.ts` — Stock Analyser data tables, including
+  `stock-analyser.job-results-{stage}` after #366
+- `sa-ws-stack.ts` — Stock Analyser-owned WebSocket API
+  (`stock-analyser-ws-{stage}`), custom Lambda authorizer, connect/default/
+  disconnect Lambdas, and `stock-analyser.ws-connections-{stage}`
 
 **Budget-tracker stacks** (`apps/budget-tracker/infrastructure/`):
 - `budget-tracker-api-stack.ts` — mounts BT Lambdas on the shared
@@ -1121,7 +1136,9 @@ CDK stacks — M7 #250 infrastructure split complete:
   disconnect Lambdas, and `budget-tracker.ws-connections-{stage}`
 
 Budget Tracker no longer uses `PlatformWsStack` for AI review streaming after
-#365. Platform WSS remains deployed for M9 dual-run and later decommissioning.
+#365. Stock Analyser no longer uses `PlatformWsStack` for live AI completion
+notifications after #366. Platform WSS remains deployed for rollback, any
+remaining transitional consumers, and later decommissioning.
 
 There is no `MonitoringStack`. M13 creates it.
 
