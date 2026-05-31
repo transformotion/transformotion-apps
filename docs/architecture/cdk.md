@@ -11,9 +11,9 @@ Region: `ap-southeast-2`
 |---|---|---|
 | `infrastructure/bin/platform.ts` | All platform stacks (Network, Auth, AuthApi, PlatformTables, Api, PlatformWs, Storage, GithubActionsRole) | `deploy-platform.yml` |
 | `infrastructure/bin/stock-analyser.ts` | `StockAnalyserTables`, `StockAnalyserWs`, `StockAnalyserApi` | `deploy-stock-analyser.yml` |
-| `infrastructure/bin/budget-tracker.ts` | `BudgetTrackerTables`, `BudgetTrackerApi` | `deploy-budget-tracker.yml` |
+| `infrastructure/bin/budget-tracker.ts` | `BudgetTrackerTables`, `BudgetTrackerWs`, `BudgetTrackerApi` | `deploy-budget-tracker.yml` |
 | `infrastructure/bin/migration-utilities.ts` | `MigrationsApi` | `deploy-migration-utilities.yml` |
-| `infrastructure/bin/launchpad.ts` | Launchpad stacks | `deploy-launchpad.yml` |
+| `infrastructure/bin/launchpad.ts` | `LaunchpadControlPlane` | `deploy-launchpad.yml` |
 
 Each entrypoint synthesises *only* the stacks it owns. App stacks resolve remaining shared substrate resources via CloudFormation imports at deploy time where needed — not via construct references passed through props. After #366, Stock Analyser owns its REST API, WSS, AI proxy, and job-results runtime.
 
@@ -46,6 +46,14 @@ Deployed by `deploy-platform.yml`. Source in `platform/infrastructure/`.
 | `Transformotion{Stage}-PlatformTables` | `PlatformTablesStack` | `platform.users`, `platform.accounts`, `platform.account-members`, `platform.invitations` DynamoDB tables |
 | `Transformotion{Stage}-Api` | `PlatformApiStack` | Shared REST API Gateway (`transformotion-api-{stage}`), Cognito JWT authoriser, platform Lambda functions (see below) |
 | `Transformotion{Stage}-PlatformWs` | `PlatformWsStack` | WebSocket API Gateway `platform-ws-{stage}`, 4 WS Lambdas, `platform.ws-connections-{stage}` table; transitional shared WSS retained during M9 dual-run |
+
+### Launchpad stacks
+
+Deployed by `deploy-launchpad.yml`. Source in `apps/launchpad/infrastructure/`.
+
+| Stack name | Class | Contents |
+|---|---|---|
+| `Transformotion{Stage}-LaunchpadControlPlane` | `LaunchpadControlPlaneStack` | Launchpad-owned control-plane API foundation. Cognito and shared account tables remain platform substrate. Initially exposes `GET /health`; #363 API migrations add auth/control-plane routes here. |
 
 ### Stock Analyser stacks
 
@@ -291,7 +299,7 @@ The legacy shared `GitHubActionsDeployRole` remains available temporarily as rol
 | Role | Workflow | Primary ownership scope |
 |---|---|---|
 | `TransformotionPlatformDeployRole` | `deploy-platform.yml` | Platform stacks: storage, network, auth, auth API, platform tables, platform API, platform WSS |
-| `TransformotionLaunchpadDeployRole` | `deploy-launchpad.yml` | Launchpad frontend deploy; future Launchpad auth ownership in #363 |
+| `TransformotionLaunchpadDeployRole` | `deploy-launchpad.yml` | Launchpad control-plane stack and frontend deploy |
 | `TransformotionStockAnalyserDeployRole` | `deploy-stock-analyser.yml` | Stock Analyser stacks and `/stock-analyser` web assets |
 | `TransformotionBudgetTrackerDeployRole` | `deploy-budget-tracker.yml` | Budget Tracker stacks and `/budget-tracker` web assets |
 | `TransformotionMigrationUtilitiesDeployRole` | `deploy-migration-utilities.yml` | Migration utilities stacks |

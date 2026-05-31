@@ -30,7 +30,9 @@ transformotion-apps/
 │   │   ├── AGENTS.md                     # Canonical Budget Tracker agent guide
 │   │   ├── CLAUDE.md                     # Claude Code compatibility mirror
 │   │   └── package.json                   # @transformotion/budget-tracker
-│   ├── launchpad/                         # Platform shell — sign-in, app tile rendering
+│   ├── launchpad/                         # Platform shell and control-plane app
+│   │   ├── infrastructure/                # Launchpad CDK stacks
+│   │   │   └── launchpad-control-plane-stack.ts
 │   │   └── package.json                   # @transformotion/launchpad
 │   ├── stock-analyser/                    # Stock Signal Analyser, basePath /stock-analyser
 │   │   ├── app/                           # Next.js App Router pages

@@ -162,6 +162,7 @@ Each CDK deploy step passes an explicit `--app` flag pointing to the per-app ent
 - `deploy-stock-analyser.yml` — `StockAnalyserTables`, `StockAnalyserWs`, and `StockAnalyserApi` only
 - `deploy-budget-tracker.yml` — `BudgetTrackerTables`, `BudgetTrackerWs`, and `BudgetTrackerApi` only
 - `deploy-migration-utilities.yml` — `MigrationsApi` only
+- `deploy-launchpad.yml` — `LaunchpadControlPlane` + static export only
 - `deploy-platform.yml` — platform stacks only (Network, Auth, AuthApi, PlatformTables, Api, PlatformWs, Storage, GithubActionsRole)
 - `cd.yml` — explicit manual full redeploy when an operator wants to redeploy all stacks
 
@@ -189,6 +190,12 @@ Per-app deploys require these variables set in the GitHub environment (`dev` or 
 | `NEXT_PUBLIC_LAUNCHPAD_COGNITO_CLIENT_ID` | LaunchpadAppClient |
 | `NEXT_PUBLIC_STOCK_ANALYSER_COGNITO_CLIENT_ID` | StockAnalyserAppClient |
 | `NEXT_PUBLIC_BUDGET_TRACKER_COGNITO_CLIENT_ID` | BudgetTrackerAppClient |
+
+### Launchpad
+
+| Variable | Source |
+|---|---|
+| `NEXT_PUBLIC_LAUNCHPAD_CONTROL_PLANE_API_URL` | `ControlPlaneApiUrl` output from `Transformotion{Stage}-LaunchpadControlPlane` |
 
 Client IDs are synced from CloudFormation outputs after each auth stack deploy by running:
 ```bash

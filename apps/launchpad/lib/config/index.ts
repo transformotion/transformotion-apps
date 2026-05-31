@@ -13,10 +13,15 @@ interface AppsConfig {
   // future: stockAnalyserUrl when stock-analyser moves off root in M7
 }
 
+interface ControlPlaneConfig {
+  apiUrl: string
+}
+
 interface AppConfig {
   auth: AuthConfig
   data: DataConfig
   apps: AppsConfig
+  controlPlane: ControlPlaneConfig
 }
 
 let cachedConfig: AppConfig | undefined
@@ -42,6 +47,9 @@ function loadConfig(): AppConfig {
         process.env.NEXT_PUBLIC_BUDGET_URL,
         '/budget-tracker/'
       ),
+    },
+    controlPlane: {
+      apiUrl: process.env.NEXT_PUBLIC_LAUNCHPAD_CONTROL_PLANE_API_URL ?? '',
     },
   }
 }

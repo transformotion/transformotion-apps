@@ -217,7 +217,7 @@ was migrated to `apps/stock-analyser/lib/cycle/` per `CONTRIBUTING.md`
 package deleted. The cycle lib now has 25 vitest tests in
 `apps/stock-analyser/lib/cycle/cycle.test.ts`.
 
-### 1.6 Launchpad as platform shell
+### 1.6 Launchpad as control-plane app
 
 **Status: Confirmed (current state — Hosted UI auth landed, M6)**
 
@@ -225,6 +225,12 @@ package deleted. The cycle lib now has 25 vitest tests in
 switcher, app tile rendering. Treated as an app for structural
 purposes (consumes platform services through packages like any other
 app) per `CONTRIBUTING.md` Section 3.2.
+
+M9 #363 extends Launchpad from frontend-only platform shell into the
+control-plane app. Launchpad-owned infrastructure lives under
+`apps/launchpad/infrastructure/` and is synthesised by
+`infrastructure/bin/launchpad.ts`, matching the Stock Analyser and Budget
+Tracker app-owned infrastructure pattern.
 
 Per M0 verification: `apps/launchpad/` contains no public signup UI
 (no `signUp`, `register`, `createAccount` references in any `.ts` or
@@ -237,6 +243,12 @@ sign-in all route through the Cognito Hosted UI. Launchpad has its own
 Cognito App Client (`LaunchpadAppClient`) and dedicated
 `/launchpad/callback` OAuth return route. Auth store persist key:
 `launchpad-auth`.
+
+`Transformotion{Stage}-LaunchpadControlPlane` is the Launchpad-owned
+control-plane API foundation. It currently exposes `GET /health`; product-level
+auth/control-plane routes migrate here during #363. Cognito User Pool, Hosted
+UI domain, app clients, pre-token trigger, and shared account tables remain
+platform-owned substrate.
 
 The hard-coded `userCanAccessFramework` prop in launchpad currently
 governs tile visibility for the Transformotion Framework app. M9
@@ -1121,6 +1133,11 @@ CDK stacks — M7 #250 infrastructure split complete:
   `platform.ws-connections-{stage}` DynamoDB table. Migrated from
   `apps/budget-tracker/infrastructure/` by M7 / PR #295.
 - `storage-stack.ts` — S3 backups bucket
+
+**Launchpad stacks** (`apps/launchpad/infrastructure/`):
+- `launchpad-control-plane-stack.ts` — Launchpad-owned control-plane API
+  foundation (`launchpad-control-plane-{stage}`), currently with `GET /health`.
+  Cognito and shared account tables remain platform substrate.
 
 **Stock-analyser stacks** (`apps/stock-analyser/infrastructure/`):
 - `stock-analyser-api-stack.ts` — Stock Analyser-owned REST API Gateway,
