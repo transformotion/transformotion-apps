@@ -98,14 +98,16 @@ Allowed dependencies:
 ### `platform/`
 
 Platform-owned substrate and transitional shared runtime. Current state includes
-platform infrastructure, auth/account Lambdas, shared REST API pieces, shared
-WSS pieces, and shared config.
+platform infrastructure, stable Cognito identity substrate, shared account
+substrate, shared REST API pieces, shared WSS pieces, and shared config.
 
 Target state after M9:
 
 - Platform retains shared substrate only: CloudFront, DNS, ACM, build-time
-  tooling, and platform contracts/config where justified.
-- Launchpad owns Cognito/auth substrate.
+  tooling, stable Cognito identity substrate, shared account substrate, and
+  platform contracts/config where justified.
+- Launchpad owns auth/control-plane product surfaces; Cognito remains platform
+  substrate unless a future initiative explicitly revisits that decision.
 - Shared runtime REST/WSS/Claude proxy resources are decommissioned or split
   into per-app resources.
 
@@ -280,10 +282,13 @@ Current-state transitional patterns include:
 
 M9 target state:
 
-- Launchpad owns Cognito and auth Lambdas.
-- Stock Analyser owns its REST API, WSS API, Claude proxy wrapper, job-results
+- Launchpad owns auth UX, account onboarding, invitations, user/account/app
+  access administration, control-plane APIs, and auth administration workflows.
+- Platform retains Cognito User Pool, Hosted UI domain, Cognito app clients,
+  pre-token-generation trigger, and shared account substrate.
+- Stock Analyser owns its REST API, WSS API, AI proxy, job-results
   table, IAM role, and deploy lifecycle.
-- Budget Tracker owns its REST API, WSS API, Claude proxy wrapper, AI cache,
+- Budget Tracker owns its REST API, WSS API, AI proxy, AI cache,
   IAM role, and deploy lifecycle.
 - Migration Utilities own their migration API/runtime separately from platform
   and app runtime.
@@ -303,7 +308,8 @@ Current model:
 - Root scripts use pnpm workspaces and Turborepo.
 - App workflows deploy app stacks and static exports.
 - Platform workflow deploys platform substrate.
-- Some workflows still cascade or share resources because M9 is not complete.
+- Platform workflow does not cascade into app or migration utility workflows.
+- Some workflows still share stable substrate because M9 is not complete.
 - CDK app entrypoints live under `infrastructure/bin/*.ts`.
 
 Target model:

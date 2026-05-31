@@ -119,6 +119,7 @@ transformotion-apps/
 │   │   ├── ci.yml                         # PR typecheck + lint + CDK synth
 │   │   ├── cd.yml                         # Manual full-platform redeploy
 │   │   ├── deploy-platform.yml            # Triggered by platform/infrastructure/** and platform/functions/** changes
+│   │   ├── deploy-launchpad.yml           # Triggered by apps/launchpad/** changes
 │   │   ├── deploy-stock-analyser.yml      # Triggered by apps/stock-analyser/** changes
 │   │   ├── deploy-budget-tracker.yml      # Triggered by apps/budget-tracker/** changes
 │   │   └── deploy-migration-utilities.yml # Triggered by migration-utilities/** changes
@@ -205,8 +206,10 @@ import { handler as accountHandler } from '../../accounts/handler'
 
 ## How deploys work
 
-Push-triggered, path-filtered per app. Changes to one app never trigger
-the other app's deployment.
+Push-triggered workflows are path-filtered by ownership boundary. Platform
+deploys platform substrate only and does not trigger app or migration utility
+deployments. Changes to one app never trigger another app's deployment. The
+manual `cd.yml` workflow remains the explicit full redeploy escape hatch.
 
 | Changed path | Workflow triggered |
 |---|---|
@@ -216,7 +219,11 @@ the other app's deployment.
 | `apps/budget-tracker/infrastructure/**` | `deploy-budget-tracker.yml` |
 | `apps/launchpad/**` | `deploy-launchpad.yml` |
 | `platform/infrastructure/**` | `deploy-platform.yml` |
-| `infrastructure/bin/**` | `deploy-platform.yml` |
+| `infrastructure/bin/platform.ts` | `deploy-platform.yml` |
+| `infrastructure/bin/launchpad.ts` | `deploy-launchpad.yml` |
+| `infrastructure/bin/stock-analyser.ts` | `deploy-stock-analyser.yml` |
+| `infrastructure/bin/budget-tracker.ts` | `deploy-budget-tracker.yml` |
+| `infrastructure/bin/migration-utilities.ts` | `deploy-migration-utilities.yml` |
 | `platform/functions/**` | `deploy-platform.yml` |
 | `migration-utilities/**` | `deploy-migration-utilities.yml` |
 | `packages/**` | Shared package changes trigger app/migration deploy workflows where their path filters include the touched package. `deploy-budget-tracker.yml` is active and includes the Budget Tracker package dependencies explicitly. |

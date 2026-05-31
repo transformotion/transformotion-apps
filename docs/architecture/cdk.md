@@ -153,7 +153,7 @@ Stacks in the same entrypoint share constructs via props as usual. CDK resolves 
 
 ### CF export pattern — cross-entrypoint platform substrate
 
-App stacks may resolve shared platform substrate via CloudFormation exports at deploy time. After #366 and #367, `StockAnalyserApiStack` and `BudgetTrackerApiStack` no longer import `PlatformApiStack` REST resources; they import Cognito user pool identity from `AuthStack` until #363 moves Cognito app-client ownership. `MigrationsApiStack` still imports shared Platform API REST resources for migration utility routes. No construct references cross entrypoint boundaries.
+App stacks may resolve shared platform substrate via CloudFormation exports at deploy time. After #366 and #367, `StockAnalyserApiStack` and `BudgetTrackerApiStack` no longer import `PlatformApiStack` REST resources; they import Cognito user pool identity from `AuthStack`, which remains platform-owned substrate. `MigrationsApiStack` still imports shared Platform API REST resources for migration utility routes. No construct references cross entrypoint boundaries.
 
 `AuthStack`, `PlatformApiStack`, `PlatformWsStack`, and app stacks emit these exports:
 
@@ -179,10 +179,10 @@ The rule: cross-entrypoint references always go through CF exports (`Fn.importVa
 
 1. **Step 1 — GithubActionsRole** — account-level stack; deployed first as a one-off.
 2. **Step 2 — PlatformTables** — deployed in isolation before Auth, to release any stale export dependencies.
-3. **Step 3 — Main platform stacks** — deploys `Storage`, `Network`, `Auth`, `AuthApi`, `Api` together. CDK runs independent stacks in parallel within this step. `AuthStack` emits the Cognito user pool export that app stacks consume until #363, and `PlatformApiStack` emits legacy/shared REST exports still used by migration utilities and rollback/decommission paths.
+3. **Step 3 — Main platform stacks** — deploys `Storage`, `Network`, `Auth`, `AuthApi`, `Api` together. CDK runs independent stacks in parallel within this step. `AuthStack` emits the Cognito user pool export that app stacks consume as stable platform substrate, and `PlatformApiStack` emits legacy/shared REST exports still used by migration utilities and rollback/decommission paths.
 4. **Step 4 — PlatformWs** — deployed after `Api`; retained during M9 dual-run until app-owned WSS cutovers and decommissioning.
 
-App stacks (`deploy-stock-analyser.yml`, `deploy-budget-tracker.yml`, `deploy-migration-utilities.yml`) consume the CF exports produced in Step 3/4 above where they still have transitional dependencies. Budget Tracker owns `Transformotion{Stage}-BudgetTrackerWs`, `Transformotion{Stage}-BudgetTrackerApi`, and `budget-tracker-ai-proxy-{stage}` after #367 and no longer uses platform REST/WSS/Claude runtime for live Budget Tracker flow. Stock Analyser owns `Transformotion{Stage}-StockAnalyserWs`, `Transformotion{Stage}-StockAnalyserApi`, and `stock-analyser-ai-proxy-{stage}` after #366, and no longer uses platform REST/WSS/Claude runtime for live AI flow. On first-ever deploy, the platform auth stack must exist before app stacks because Cognito remains platform-owned until #363. On subsequent deploys, each workflow is independently triggered and independently deploys only its own stacks.
+App stacks (`deploy-stock-analyser.yml`, `deploy-budget-tracker.yml`, `deploy-migration-utilities.yml`) consume the CF exports produced in Step 3/4 above where they still have transitional dependencies. Budget Tracker owns `Transformotion{Stage}-BudgetTrackerWs`, `Transformotion{Stage}-BudgetTrackerApi`, and `budget-tracker-ai-proxy-{stage}` after #367 and no longer uses platform REST/WSS/Claude runtime for live Budget Tracker flow. Stock Analyser owns `Transformotion{Stage}-StockAnalyserWs`, `Transformotion{Stage}-StockAnalyserApi`, and `stock-analyser-ai-proxy-{stage}` after #366, and no longer uses platform REST/WSS/Claude runtime for live AI flow. On first-ever deploy, the platform auth stack must exist before app stacks because Cognito remains platform-owned substrate. Platform deploys do not cascade into app workflows; each app/utility workflow is independently triggered and independently deploys only its own stacks.
 
 ---
 

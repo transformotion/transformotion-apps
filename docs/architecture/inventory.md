@@ -1024,14 +1024,21 @@ incompatibility. M7 re-enables once the upstream fix lands.
 GitHub Actions workflows in `.github/workflows/`:
 
 - `ci.yml` — PR typecheck, lint, CDK synth
-- `cd.yml` — manual full-platform redeploy
+- `cd.yml` — explicit manual full redeploy
 - `deploy-platform.yml` — triggers on `platform/infrastructure/**`,
-  `infrastructure/bin/**`, `platform/functions/**`
+  `infrastructure/bin/platform.ts`, `platform/functions/**`; deploys platform
+  substrate only and does not cascade into app workflows
 - `deploy-stock-analyser.yml` — triggers on `apps/stock-analyser/**`,
   `apps/stock-analyser/infrastructure/**`, `packages/**`
 - `deploy-budget-tracker.yml` — active Budget Tracker deployment;
   triggers on `apps/budget-tracker/**`, `infrastructure/bin/budget-tracker.ts`,
   and package paths consumed by Budget Tracker.
+- `deploy-launchpad.yml` — active Launchpad deployment; triggers on
+  `apps/launchpad/**`, `infrastructure/bin/launchpad.ts`, and Launchpad
+  package dependencies.
+- `deploy-migration-utilities.yml` — migration utilities deployment; triggers
+  on `migration-utilities/**`, `infrastructure/bin/migration-utilities.ts`,
+  and package paths consumed by migration utilities.
 
 Verified gaps (M1 #81):
 
@@ -1040,10 +1047,10 @@ Verified gaps (M1 #81):
    consumed by Budget Tracker explicitly rather than a blanket
    `packages/**` filter. M14 remains the right place to verify path
    filter completeness across all deploy workflows.
-2. **`platform/functions/**` asymmetry.** Platform Lambda source moved to
+2. **`platform/functions/**` boundary.** Platform Lambda source moved to
    `platform/functions/**` (M7 / PR #250). `deploy-platform.yml` path
-   filter updated accordingly. Whether app deploy workflows should also
-   trigger on `platform/functions/**` changes is worth investigating in M14.
+   filter covers platform-owned functions only; app workflows intentionally do
+   not trigger on `platform/functions/**` after #363 deployment decoupling.
 3. **`.github/workflows/**` not in any deploy workflow.** Changes
    to a deploy workflow don't trigger that workflow itself.
    Changes to CI machinery (`ci.yml` etc.) don't propagate to
