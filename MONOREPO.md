@@ -275,11 +275,11 @@ organisational, not itself a package.
   Nested workspaces (like `apps/stock-analyser/functions/*` and
   `platform/functions/auth/*`) need explicit globs in `pnpm-workspace.yaml`.
 
-- **Shared API Gateway (current/transitional).** `apps/budget-tracker`
-  still mounts REST routes on the shared platform API Gateway from
-  `PlatformApiStack`. Stock Analyser owns its REST API Gateway after
-  #366. Shared runtime gateway use is transitional debt for M9, not the
-  desired pattern for new app runtime work.
+- **App-owned REST APIs.** Stock Analyser owns its REST API Gateway after
+  #366. Budget Tracker owns its REST API Gateway and AI proxy runtime after
+  #367. The shared platform API Gateway remains deployed for platform routes,
+  rollback, and later #372 decommissioning of legacy app runtime paths; it is
+  not the desired pattern for new app runtime work.
 
 - **Stock Analyser WSS and AI runtime.** `apps/stock-analyser`
   owns `sa-ws-stack.ts`, WS handler packages under
@@ -287,6 +287,14 @@ organisational, not itself a package.
   `apps/stock-analyser/functions/ai-proxy` after #366. Live Stock
   Analyser AI uses Stock Analyser-owned REST, WSS, job-results, and
   AI runtime; platform runtime remains only for rollback and later
+  decommissioning.
+
+- **Budget Tracker WSS and AI runtime.** `apps/budget-tracker`
+  owns `bt-ws-stack.ts`, WS handler packages under
+  `apps/budget-tracker/functions/ws-*`, and
+  `apps/budget-tracker/functions/ai-proxy` after #367. Live Budget Tracker
+  AI review uses Budget Tracker-owned REST, WSS, `budget-tracker.ai-jobs`,
+  and AI runtime; platform runtime remains only for rollback and later
   decommissioning.
 
 - **Analysis cache table.** The `platform.analysis-cache` table is

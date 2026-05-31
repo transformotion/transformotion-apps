@@ -1,14 +1,17 @@
 import * as path from 'path';
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
+import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as lambdaNodejs from 'aws-cdk-lib/aws-lambda-nodejs';
+import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import { Construct } from 'constructs';
 
 export interface BudgetTrackerApiStackProps extends cdk.StackProps {
   stage: 'dev' | 'prod';
+  userPoolId: string;
   /** budget-data table name — passed in to avoid cross-stack dependency issues. */
   budgetDataTableName: string;
   /** AI jobs table name from BudgetTrackerTablesStack. */
@@ -20,13 +23,13 @@ export interface BudgetTrackerApiStackProps extends cdk.StackProps {
 }
 
 /**
- * BudgetTrackerApiStack — Lambda functions and API routes for the Budget Tracker.
+ * BudgetTrackerApiStack — Budget Tracker-owned REST API routes and Lambdas.
  *
- * Imports the shared platform API Gateway and JWT authoriser from CloudFormation
- * exports produced by PlatformApiStack. This allows bin/budget-tracker.ts to
- * synthesise only BT stacks without instantiating platform stacks.
+ * After #367 this stack owns the Budget Tracker API Gateway and AI proxy
+ * runtime. Platform REST/Claude runtime remains deployed only for rollback and
+ * later #372 decommissioning.
  *
- * Routes (owned by this stack's CF template) under /api/budget/v1/:
+ * Routes under /api/budget/v1/:
  *   GET    /transactions
  *   POST   /transactions/bulk
  *   PATCH  /transactions/:id
@@ -37,36 +40,37 @@ export interface BudgetTrackerApiStackProps extends cdk.StackProps {
  *   DELETE /rules/:id
  *   GET    /settings
  *   PATCH  /settings
- *   POST   /ai/categorise
  *   POST   /ai/review
  *   POST   /ai/csv-analysis
  *   GET    /business-export
  */
 export class BudgetTrackerApiStack extends cdk.Stack {
+  public readonly api: apigateway.RestApi;
+
   constructor(scope: Construct, id: string, props: BudgetTrackerApiStackProps) {
     super(scope, id, props);
 
-    const { stage, budgetDataTableName, aiJobsTableName, wsConnectionsTableName, wsApiId } = props;
+    const { stage, userPoolId, budgetDataTableName, aiJobsTableName, wsConnectionsTableName, wsApiId } = props;
 
-    // Import shared platform API Gateway, /api resource, and JWT authoriser from CF exports.
-    const api = apigateway.RestApi.fromRestApiAttributes(this, 'PlatformApi', {
-      restApiId:      cdk.Fn.importValue(`Transformotion-${stage}-RestApiId`),
-      rootResourceId: cdk.Fn.importValue(`Transformotion-${stage}-RestApiRootResourceId`),
+    const userPool = cognito.UserPool.fromUserPoolId(this, 'UserPool', userPoolId);
+
+    this.api = new apigateway.RestApi(this, 'BudgetTrackerApi', {
+      restApiName: `budget-tracker-api-${stage}`,
+      description: `Budget Tracker ${stage} API`,
+      deployOptions: { stageName: stage },
+      defaultCorsPreflightOptions: corsPreflightOptions,
     });
 
-    const platformApiResource = apigateway.Resource.fromResourceAttributes(this, 'PlatformApiResource', {
-      restApi:    api,
-      resourceId: cdk.Fn.importValue(`Transformotion-${stage}-ApiResourceId`),
-      path:       '/api',
+    const authoriser = new apigateway.CognitoUserPoolsAuthorizer(this, 'JwtAuthoriser', {
+      cognitoUserPools: [userPool],
+      authorizerName: `budget-tracker-jwt-${stage}`,
+      resultsCacheTtl: cdk.Duration.minutes(5),
     });
+    const auth = authMethodOptions(authoriser);
 
-    const auth = authMethodOptions({
-      authorizerId:      cdk.Fn.importValue(`Transformotion-${stage}-AuthorizerId`),
-      authorizationType: apigateway.AuthorizationType.COGNITO,
-    });
-
-    // /api/budget/v1 — mounted on the shared platform gateway's /api resource
-    const apiResource = platformApiResource
+    // /api/budget/v1 — mounted on the Budget Tracker-owned API Gateway.
+    const apiResource = this.api.root
+      .addResource('api')
       .addResource('budget')
       .addResource('v1');
 
@@ -82,8 +86,6 @@ export class BudgetTrackerApiStack extends cdk.Stack {
     const aiJobsTable       = dynamodb.Table.fromTableName(this, 'AiJobsTable',       aiJobsTableName);
     const wsConnectionsTable = dynamodb.Table.fromTableName(this, 'WsConnectionsTable', wsConnectionsTableName);
 
-    const claudeProxyFnName = `transformotion-claude-proxy-${stage}`;
-
     const bundling: lambdaNodejs.BundlingOptions = {
       externalModules: ['@aws-sdk/*'],
       minify: true,
@@ -92,6 +94,25 @@ export class BudgetTrackerApiStack extends cdk.Stack {
     };
 
     const fnDir = path.join(__dirname, '../functions');
+
+    const anthropicSecret = secretsmanager.Secret.fromSecretNameV2(
+      this, 'AnthropicApiKey', `${stage}/anthropic/api-key`,
+    );
+
+    const aiProxyFnName = `budget-tracker-ai-proxy-${stage}`;
+    const aiProxyFn = new lambdaNodejs.NodejsFunction(this, 'AiProxyFn', {
+      functionName: aiProxyFnName,
+      entry:        path.join(fnDir, 'ai-proxy/src/index.ts'),
+      handler:      'handler',
+      runtime:      lambda.Runtime.NODEJS_20_X,
+      timeout:      cdk.Duration.seconds(600),
+      memorySize:   512,
+      environment:  {
+        ANTHROPIC_SECRET_NAME: anthropicSecret.secretName,
+      },
+      bundling,
+    });
+    anthropicSecret.grantRead(aiProxyFn);
 
     // ── budget-transactions-handler ──────────────────────────────────────────
     const txFn = new lambdaNodejs.NodejsFunction(this, 'TransactionsFn', {
@@ -132,7 +153,7 @@ export class BudgetTrackerApiStack extends cdk.Stack {
     });
     settingsTable.grantReadWriteData(settingsFn);
 
-    // ── budget-ai-handler (categorise + review-start + review-worker + csv-analysis) ──
+    // ── budget-ai-handler (review-start + review-worker + csv-analysis) ───────────────
     const aiFnName = `budget-ai-handler-${stage}`;
     const aiFn = new lambdaNodejs.NodejsFunction(this, 'AiFn', {
       functionName: aiFnName,
@@ -142,7 +163,7 @@ export class BudgetTrackerApiStack extends cdk.Stack {
       timeout:      cdk.Duration.seconds(300),
       memorySize:   512,
       environment:  {
-        CLAUDE_PROXY_FUNCTION_NAME: claudeProxyFnName,
+        CLAUDE_PROXY_FUNCTION_NAME: aiProxyFnName,
         AI_JOBS_TABLE:              aiJobsTableName,
         WS_CONNECTIONS_TABLE:       wsConnectionsTableName,
         WS_API_ID:                  wsApiId,
@@ -154,7 +175,7 @@ export class BudgetTrackerApiStack extends cdk.Stack {
     aiFn.addToRolePolicy(new iam.PolicyStatement({
       actions:   ['lambda:InvokeFunction'],
       resources: [
-        `arn:aws:lambda:${this.region}:${this.account}:function:${claudeProxyFnName}`,
+        `arn:aws:lambda:${this.region}:${this.account}:function:${aiProxyFnName}`,
         `arn:aws:lambda:${this.region}:${this.account}:function:${aiFnName}`,
       ],
     }));
@@ -227,7 +248,6 @@ export class BudgetTrackerApiStack extends cdk.Stack {
     // /ai
     const aiRes = apiResource.addResource('ai');
     const aiInt = new apigateway.LambdaIntegration(aiFn, { proxy: true });
-    aiRes.addResource('categorise').addMethod('POST',    aiInt, auth);
     aiRes.addResource('review').addMethod('POST',        aiInt, auth);
     aiRes.addResource('csv-analysis').addMethod('POST',  aiInt, auth);
 
@@ -241,8 +261,21 @@ export class BudgetTrackerApiStack extends cdk.Stack {
     apiResource.addResource('business-export').addMethod(
       'GET', new apigateway.LambdaIntegration(exportFn, { proxy: true }), auth
     );
+
+    new cdk.CfnOutput(this, 'ApiUrl', {
+      value: this.api.url,
+      description: 'Budget Tracker REST API URL',
+      exportName: `BudgetTrackerApi-${stage}-Url`,
+    });
   }
 }
+
+const corsPreflightOptions: apigateway.CorsOptions = {
+  allowOrigins: apigateway.Cors.ALL_ORIGINS,
+  allowMethods: apigateway.Cors.ALL_METHODS,
+  allowHeaders: ['Content-Type', 'Authorization', 'X-Account-Id'],
+  maxAge: cdk.Duration.hours(1),
+};
 
 function authMethodOptions(authoriser: apigateway.IAuthorizer): apigateway.MethodOptions {
   return {

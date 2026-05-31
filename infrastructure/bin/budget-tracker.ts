@@ -14,8 +14,8 @@ const env = {
 };
 
 // ── Dev stacks ─────────────────────────────────────────────────────────────────
-// Platform REST resources (RestApi, Authoriser, /api resource) are imported via
-// CloudFormation exports from TransformotionDev-Api. Budget Tracker owns WSS.
+// Budget Tracker owns its REST API and WSS runtime. Cognito remains platform-owned
+// until the M9 auth ownership migration completes.
 //
 // Deploy commands:
 //   cdk deploy --app bin/budget-tracker.ts TransformotionDev-BudgetTrackerTables TransformotionDev-BudgetTrackerWs TransformotionDev-BudgetTrackerApi
@@ -36,6 +36,7 @@ const devBudgetTrackerWs = new BudgetTrackerWsStack(app, 'TransformotionDev-Budg
 new BudgetTrackerApiStack(app, 'TransformotionDev-BudgetTrackerApi', {
   env,
   stage:                  'dev',
+  userPoolId:             cdk.Fn.importValue('Transformotion-dev-UserPoolId'),
   description:            'Transformotion Apps — Dev Budget Tracker API routes',
   budgetDataTableName:    devBudgetTrackerTables.budgetDataTable.tableName,
   aiJobsTableName:        devBudgetTrackerTables.aiJobsTable.tableName,
@@ -61,6 +62,7 @@ const prodBudgetTrackerWs = new BudgetTrackerWsStack(app, 'TransformotionProd-Bu
 new BudgetTrackerApiStack(app, 'TransformotionProd-BudgetTrackerApi', {
   env,
   stage:                  'prod',
+  userPoolId:             cdk.Fn.importValue('Transformotion-prod-UserPoolId'),
   description:            'Transformotion Apps — Prod Budget Tracker API routes',
   budgetDataTableName:    prodBudgetTrackerTables.budgetDataTable.tableName,
   aiJobsTableName:        prodBudgetTrackerTables.aiJobsTable.tableName,
