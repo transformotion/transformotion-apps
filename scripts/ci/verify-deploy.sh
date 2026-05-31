@@ -267,7 +267,9 @@ const payload = token.split('.')[1] ?? '';
 try {
   const claims = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
   const accounts = claims.accounts ? JSON.parse(claims.accounts) : {};
-  const accountId = accounts?.[app]?.[0]?.accountId ?? '';
+  const accountId = accounts?.[app]?.[0]?.accountId
+    ?? (claims.site_admin === 'true' ? claims.sub : '')
+    ?? '';
   process.stdout.write(accountId);
 } catch {
   process.stdout.write('');
@@ -280,7 +282,8 @@ NODE
 FAIL: could not derive X-Account-Id for app '$EXPECTED_APP' from the smoke-test token.
 
 The authenticated smoke check calls an account-scoped API route. The CI user
-must have an accounts claim containing an account for '$EXPECTED_APP'.
+must have either an accounts claim containing an account for '$EXPECTED_APP',
+or the site_admin claim.
 
 EOF
       exit 1
