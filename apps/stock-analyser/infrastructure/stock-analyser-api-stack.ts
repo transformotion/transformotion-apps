@@ -1,176 +1,231 @@
 import * as path from 'path';
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
+import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as lambdaNodejs from 'aws-cdk-lib/aws-lambda-nodejs';
+import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import { Construct } from 'constructs';
 
 export interface StockAnalyserApiStackProps extends cdk.StackProps {
   stage: 'dev' | 'prod';
-  /** From PlatformTablesStack — analysis-cache Lambda reads job-* keys from here. */
-  jobResultsTableName: string;
+  userPoolId: string;
+  portfolioTable: dynamodb.ITable;
+  watchlistTable: dynamodb.ITable;
+  analysisCacheTable: dynamodb.ITable;
+  jobResultsTable: dynamodb.ITable;
+  wsApiEndpoint: string;
+  wsApiId: string;
 }
 
 /**
- * StockAnalyserApiStack — Stock Analyser API routes and Lambdas.
+ * StockAnalyserApiStack - Stock Analyser-owned REST API routes and Lambdas.
  *
- * Imports the shared platform API Gateway and JWT authoriser from CloudFormation
- * exports produced by PlatformApiStack. This allows bin/stock-analyser.ts to
- * synthesise only SA stacks without instantiating platform stacks.
+ * After #366 this stack owns the Stock Analyser API Gateway and AI proxy
+ * runtime. Platform REST/Claude runtime remains deployed only for rollback and
+ * later #372 decommissioning.
  *
- * Routes (owned by this stack's CF template):
- *   GET  /portfolio          — portfolio Lambda
- *   PUT  /portfolio
- *   GET  /watchlist          — watchlist Lambda
- *   PUT  /watchlist
- *   GET  /analysis-cache/{key}   — analysis-cache Lambda
- *   PUT  /analysis-cache/{key}
- *   DELETE /analysis-cache/{key}
- *   GET  /cycle/ohlcv        — cycle-data Lambda
- *   GET  /price/ohlcv        — market-data Lambda (raw OHLCV bars for price chart)
- *
- * Lambda source: apps/stock-analyser/functions/
+ * Routes:
+ *   GET/PUT           /portfolio
+ *   GET/PUT           /watchlist
+ *   GET/PUT/DELETE    /analysis-cache/{key}
+ *   GET               /cycle/ohlcv
+ *   GET               /price/ohlcv
+ *   POST              /api/claude
  */
 export class StockAnalyserApiStack extends cdk.Stack {
+  public readonly api: apigateway.RestApi;
+
   constructor(scope: Construct, id: string, props: StockAnalyserApiStackProps) {
     super(scope, id, props);
 
-    const { stage, jobResultsTableName } = props;
+    const {
+      stage,
+      userPoolId,
+      portfolioTable,
+      watchlistTable,
+      analysisCacheTable,
+      jobResultsTable,
+      wsApiEndpoint,
+      wsApiId,
+    } = props;
 
-    // Import shared platform API Gateway and JWT authoriser from CF exports.
-    const api = apigateway.RestApi.fromRestApiAttributes(this, 'PlatformApi', {
-      restApiId:      cdk.Fn.importValue(`Transformotion-${stage}-RestApiId`),
-      rootResourceId: cdk.Fn.importValue(`Transformotion-${stage}-RestApiRootResourceId`),
+    const userPool = cognito.UserPool.fromUserPoolId(this, 'UserPool', userPoolId);
+
+    this.api = new apigateway.RestApi(this, 'StockAnalyserApi', {
+      restApiName: `stock-analyser-api-${stage}`,
+      description: `Stock Analyser ${stage} API`,
+      deployOptions: { stageName: stage },
+      defaultCorsPreflightOptions: corsPreflightOptions,
     });
 
-    const auth = authMethodOptions({
-      authorizerId:      cdk.Fn.importValue(`Transformotion-${stage}-AuthorizerId`),
-      authorizationType: apigateway.AuthorizationType.COGNITO,
+    const authoriser = new apigateway.CognitoUserPoolsAuthorizer(this, 'JwtAuthoriser', {
+      cognitoUserPools: [userPool],
+      authorizerName: `stock-analyser-jwt-${stage}`,
+      resultsCacheTtl: cdk.Duration.minutes(5),
     });
+    const auth = authMethodOptions(authoriser);
 
-    // ── /portfolio — Portfolio Lambda ─────────────────────────────────────
-    const portfolioTable = dynamodb.Table.fromTableName(
-      this, 'PortfolioTable', `stock-analyser.portfolio-${stage}`,
-    );
+    const bundling: lambdaNodejs.BundlingOptions = {
+      externalModules: ['@aws-sdk/*'],
+      minify: true,
+      sourceMap: false,
+      forceDockerBundling: false,
+    };
 
     const portfolioFn = new lambdaNodejs.NodejsFunction(this, 'PortfolioFn', {
       functionName: `transformotion-portfolio-${stage}`,
-      entry:        path.join(__dirname, '../functions/portfolio/src/index.ts'),
-      handler:      'handler',
-      runtime:      lambda.Runtime.NODEJS_20_X,
-      timeout:      cdk.Duration.seconds(15),
-      memorySize:   256,
-      environment:  { PORTFOLIO_TABLE: portfolioTable.tableName },
-      bundling:     { externalModules: ['@aws-sdk/*'], minify: true, sourceMap: false, forceDockerBundling: false },
+      entry: path.join(__dirname, '../functions/portfolio/src/index.ts'),
+      handler: 'handler',
+      runtime: lambda.Runtime.NODEJS_20_X,
+      timeout: cdk.Duration.seconds(15),
+      memorySize: 256,
+      environment: { PORTFOLIO_TABLE: portfolioTable.tableName },
+      bundling,
     });
-
     portfolioTable.grantReadWriteData(portfolioFn);
 
     const portfolioIntegration = new apigateway.LambdaIntegration(portfolioFn, { proxy: true });
-    const portfolio = api.root.addResource('portfolio');
+    const portfolio = this.api.root.addResource('portfolio');
     portfolio.addMethod('GET', portfolioIntegration, auth);
     portfolio.addMethod('PUT', portfolioIntegration, auth);
 
-    // ── /watchlist — Watchlist Lambda ─────────────────────────────────────
-    const watchlistTable = dynamodb.Table.fromTableName(
-      this, 'WatchlistTable', `stock-analyser.watchlist-${stage}`,
-    );
-
     const watchlistFn = new lambdaNodejs.NodejsFunction(this, 'WatchlistFn', {
       functionName: `transformotion-watchlist-${stage}`,
-      entry:        path.join(__dirname, '../functions/watchlist/src/index.ts'),
-      handler:      'handler',
-      runtime:      lambda.Runtime.NODEJS_20_X,
-      timeout:      cdk.Duration.seconds(15),
-      memorySize:   256,
-      environment:  { WATCHLIST_TABLE: watchlistTable.tableName },
-      bundling:     { externalModules: ['@aws-sdk/*'], minify: true, sourceMap: false, forceDockerBundling: false },
+      entry: path.join(__dirname, '../functions/watchlist/src/index.ts'),
+      handler: 'handler',
+      runtime: lambda.Runtime.NODEJS_20_X,
+      timeout: cdk.Duration.seconds(15),
+      memorySize: 256,
+      environment: { WATCHLIST_TABLE: watchlistTable.tableName },
+      bundling,
     });
-
     watchlistTable.grantReadWriteData(watchlistFn);
 
     const watchlistIntegration = new apigateway.LambdaIntegration(watchlistFn, { proxy: true });
-    const watchlist = api.root.addResource('watchlist');
+    const watchlist = this.api.root.addResource('watchlist');
     watchlist.addMethod('GET', watchlistIntegration, auth);
     watchlist.addMethod('PUT', watchlistIntegration, auth);
 
-    // Shared table used by both analysis-cache and cycle-data Lambdas
-    const analysisCacheTable = dynamodb.Table.fromTableName(
-      this, 'AnalysisCacheTable', `stock-analyser.analysis-cache-${stage}`,
-    );
-
-    // ── /analysis-cache/{key} — Analysis Cache Lambda ─────────────────────
-    const jobResultsTable = dynamodb.Table.fromTableName(
-      this, 'JobResultsTable', jobResultsTableName,
-    );
-
     const cacheFn = new lambdaNodejs.NodejsFunction(this, 'CacheFn', {
       functionName: `transformotion-analysis-cache-${stage}`,
-      entry:        path.join(__dirname, '../functions/analysis-cache/src/index.ts'),
-      handler:      'handler',
-      runtime:      lambda.Runtime.NODEJS_20_X,
-      timeout:      cdk.Duration.seconds(15),
-      memorySize:   256,
+      entry: path.join(__dirname, '../functions/analysis-cache/src/index.ts'),
+      handler: 'handler',
+      runtime: lambda.Runtime.NODEJS_20_X,
+      timeout: cdk.Duration.seconds(15),
+      memorySize: 256,
       environment: {
-        CACHE_TABLE:       analysisCacheTable.tableName,
+        CACHE_TABLE: analysisCacheTable.tableName,
         JOB_RESULTS_TABLE: jobResultsTable.tableName,
       },
-      bundling:     { externalModules: ['@aws-sdk/*'], minify: true, sourceMap: false, forceDockerBundling: false },
+      bundling,
     });
-
     analysisCacheTable.grantReadWriteData(cacheFn);
     jobResultsTable.grantReadData(cacheFn);
 
     const cacheIntegration = new apigateway.LambdaIntegration(cacheFn, { proxy: true });
-    const cacheKey = api.root
+    const cacheKey = this.api.root
       .addResource('analysis-cache')
       .addResource('{key}');
-    cacheKey.addMethod('GET',    cacheIntegration, auth);
-    cacheKey.addMethod('PUT',    cacheIntegration, auth);
+    cacheKey.addMethod('GET', cacheIntegration, auth);
+    cacheKey.addMethod('PUT', cacheIntegration, auth);
     cacheKey.addMethod('DELETE', cacheIntegration, auth);
 
-    // ── /cycle/ohlcv — Cycle Data Lambda ──────────────────────────────────
     const cycleDataFn = new lambdaNodejs.NodejsFunction(this, 'CycleDataFn', {
       functionName: `transformotion-cycle-data-${stage}`,
-      entry:        path.join(__dirname, '../functions/cycle-data/src/index.ts'),
-      handler:      'handler',
-      runtime:      lambda.Runtime.NODEJS_20_X,
-      timeout:      cdk.Duration.seconds(15),
-      memorySize:   512,
-      environment:  { ANALYSIS_CACHE_TABLE: analysisCacheTable.tableName },
-      bundling:     { externalModules: ['@aws-sdk/*'], minify: true, sourceMap: false, forceDockerBundling: false },
+      entry: path.join(__dirname, '../functions/cycle-data/src/index.ts'),
+      handler: 'handler',
+      runtime: lambda.Runtime.NODEJS_20_X,
+      timeout: cdk.Duration.seconds(15),
+      memorySize: 512,
+      environment: { ANALYSIS_CACHE_TABLE: analysisCacheTable.tableName },
+      bundling,
     });
-
     analysisCacheTable.grantReadWriteData(cycleDataFn);
 
     const cycleDataIntegration = new apigateway.LambdaIntegration(cycleDataFn, { proxy: true });
-    const cycle = api.root.addResource('cycle');
-    cycle.addCorsPreflight(corsPreflightOptions);
+    const cycle = this.api.root.addResource('cycle');
     const cycleOhlcv = cycle.addResource('ohlcv');
-    cycleOhlcv.addCorsPreflight(corsPreflightOptions);
     cycleOhlcv.addMethod('GET', cycleDataIntegration, auth);
 
-    // ── /price/ohlcv — Market Data Lambda ─────────────────────────────────
     const marketDataFn = new lambdaNodejs.NodejsFunction(this, 'MarketDataFn', {
       functionName: `transformotion-market-data-${stage}`,
-      entry:        path.join(__dirname, '../functions/market-data/src/index.ts'),
-      handler:      'handler',
-      runtime:      lambda.Runtime.NODEJS_20_X,
-      timeout:      cdk.Duration.seconds(30),
-      memorySize:   512,
-      environment:  { ANALYSIS_CACHE_TABLE: analysisCacheTable.tableName },
-      bundling:     { externalModules: ['@aws-sdk/*'], minify: true, sourceMap: false, forceDockerBundling: false },
+      entry: path.join(__dirname, '../functions/market-data/src/index.ts'),
+      handler: 'handler',
+      runtime: lambda.Runtime.NODEJS_20_X,
+      timeout: cdk.Duration.seconds(30),
+      memorySize: 512,
+      environment: { ANALYSIS_CACHE_TABLE: analysisCacheTable.tableName },
+      bundling,
     });
-
     analysisCacheTable.grantReadWriteData(marketDataFn);
 
     const marketDataIntegration = new apigateway.LambdaIntegration(marketDataFn, { proxy: true });
-    const price = api.root.addResource('price');
-    price.addCorsPreflight(corsPreflightOptions);
+    const price = this.api.root.addResource('price');
     const priceOhlcv = price.addResource('ohlcv');
-    priceOhlcv.addCorsPreflight(corsPreflightOptions);
     priceOhlcv.addMethod('GET', marketDataIntegration, auth);
+
+    const anthropicSecret = secretsmanager.Secret.fromSecretNameV2(
+      this, 'AnthropicApiKey', `${stage}/anthropic/api-key`,
+    );
+
+    const aiProxyFn = new lambdaNodejs.NodejsFunction(this, 'AiProxyFn', {
+      functionName: `stock-analyser-ai-proxy-${stage}`,
+      entry: path.join(__dirname, '../functions/ai-proxy/src/index.ts'),
+      handler: 'handler',
+      runtime: lambda.Runtime.NODEJS_20_X,
+      timeout: cdk.Duration.seconds(600),
+      memorySize: 512,
+      environment: {
+        ANTHROPIC_SECRET_NAME: anthropicSecret.secretName,
+        JOB_RESULTS_TABLE: jobResultsTable.tableName,
+        WS_API_ENDPOINT: wsApiEndpoint,
+      },
+      bundling,
+    });
+    anthropicSecret.grantRead(aiProxyFn);
+    jobResultsTable.grantReadWriteData(aiProxyFn);
+    aiProxyFn.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['lambda:InvokeFunction'],
+      resources: [
+        `arn:aws:lambda:${this.region}:${this.account}:function:stock-analyser-ai-proxy-${stage}`,
+      ],
+    }));
+    aiProxyFn.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['execute-api:ManageConnections'],
+      resources: [`arn:aws:execute-api:${this.region}:${this.account}:${wsApiId}/${stage}/*`],
+    }));
+
+    const apiResource = this.api.root.addResource('api');
+    apiResource
+      .addResource('claude')
+      .addMethod('POST', new apigateway.LambdaIntegration(aiProxyFn, { proxy: true }), auth);
+
+    new cdk.CfnOutput(this, 'ApiUrl', {
+      value: this.api.url,
+      description: 'Stock Analyser REST API URL',
+      exportName: `StockAnalyserApi-${stage}-Url`,
+    });
+
+    new cdk.CfnOutput(this, 'AiApiUrl', {
+      value: `${this.api.url}api/claude`,
+      description: 'Stock Analyser AI proxy URL',
+      exportName: `StockAnalyserApi-${stage}-AiApiUrl`,
+    });
+
+    new cdk.CfnOutput(this, 'ClaudeApiUrl', {
+      value: `${this.api.url}api/claude`,
+      description: 'Compatibility output for the Stock Analyser AI proxy URL',
+      exportName: `StockAnalyserApi-${stage}-ClaudeApiUrl`,
+    });
+
+    new cdk.CfnOutput(this, 'AnalysisCacheUrl', {
+      value: `${this.api.url}analysis-cache`,
+      description: 'Stock Analyser analysis-cache URL',
+      exportName: `StockAnalyserApi-${stage}-AnalysisCacheUrl`,
+    });
   }
 }
 
@@ -183,13 +238,13 @@ const corsPreflightOptions: apigateway.CorsOptions = {
 
 function authMethodOptions(authoriser: apigateway.IAuthorizer): apigateway.MethodOptions {
   return {
-    authorizer:        authoriser,
+    authorizer: authoriser,
     authorizationType: apigateway.AuthorizationType.COGNITO,
     methodResponses: [
       {
         statusCode: '200',
         responseParameters: {
-          'method.response.header.Access-Control-Allow-Origin':  true,
+          'method.response.header.Access-Control-Allow-Origin': true,
           'method.response.header.Access-Control-Allow-Headers': true,
         },
       },

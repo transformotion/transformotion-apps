@@ -13,11 +13,13 @@ export interface StockAnalyserTablesStackProps extends cdk.StackProps {
  *   stock-analyser.portfolio       PK: accountId  SK: ticker
  *   stock-analyser.watchlist       PK: accountId  SK: ticker
  *   stock-analyser.analysis-cache  PK: accountId  SK: cacheKey  TTL: expiresAt
+ *   stock-analyser.job-results     PK: accountId  SK: cacheKey  TTL: expiresAt
  */
 export class StockAnalyserTablesStack extends cdk.Stack {
   public readonly portfolioTableNew:  dynamodb.Table;
   public readonly watchlistTableNew:  dynamodb.Table;
   public readonly analysisCacheTable: dynamodb.Table;
+  public readonly jobResultsTable:    dynamodb.Table;
 
   constructor(scope: Construct, id: string, props: StockAnalyserTablesStackProps) {
     super(scope, id, props);
@@ -56,6 +58,18 @@ export class StockAnalyserTablesStack extends cdk.Stack {
       removalPolicy:       removal,
     });
 
+    // ── stock-analyser.job-results ─────────────────────────────────────────
+    // Short-lived async Claude job state owned by Stock Analyser after #366.
+    // PK: accountId  SK: cacheKey (`job-{jobId}`)  TTL: expiresAt
+    this.jobResultsTable = new dynamodb.Table(this, 'JobResultsTable', {
+      tableName:           `stock-analyser.job-results-${stage}`,
+      partitionKey:        { name: 'accountId', type: dynamodb.AttributeType.STRING },
+      sortKey:             { name: 'cacheKey',  type: dynamodb.AttributeType.STRING },
+      billingMode:         dynamodb.BillingMode.PAY_PER_REQUEST,
+      timeToLiveAttribute: 'expiresAt',
+      removalPolicy:       removal,
+    });
+
     // ── Outputs ───────────────────────────────────────────────────────────
     const out = (id: string, table: dynamodb.Table, hint: string) => {
       new cdk.CfnOutput(this, id, {
@@ -68,5 +82,6 @@ export class StockAnalyserTablesStack extends cdk.Stack {
     out('SAPortfolioNewTableArn',  this.portfolioTableNew,  'stock-analyser.portfolio table ARN');
     out('SAWatchlistNewTableArn',  this.watchlistTableNew,  'stock-analyser.watchlist table ARN');
     out('SAAnalysisCacheTableArn', this.analysisCacheTable, 'stock-analyser.analysis-cache table ARN');
+    out('SAJobResultsTableArn',    this.jobResultsTable,    'stock-analyser.job-results table ARN');
   }
 }

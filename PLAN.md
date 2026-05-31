@@ -889,18 +889,24 @@ This milestone can run in parallel with M9 and M10.
 
 ---
 
-## 13. M9 — Per-app architecture (REST, WSS, auth ownership, Claude proxy, IAM)
+## 13. M9 - Per-app architecture (REST, WSS, auth ownership, AI proxy, IAM)
 
 ### Purpose
 
 Substantial architectural restructure moving from shared-Platform to
 per-app architecture across REST API gateways, WebSocket API gateways,
 auth substrate ownership (LP becomes the owner of Cognito and auth
-Lambdas), per-app Claude proxies, per-app deploy IAM roles. Shared
+Lambdas), per-app AI proxies, per-app deploy IAM roles. Shared
 platform layer shrinks to CloudFront, DNS, ACM, and build-time-only
 shared CDK constructs and workspace packages. Deploy mechanism for the
 residual shared platform shifts away from workflow_call cascade toward
 backwards-compatibility defaults and explicit coordinated migrations.
+
+M9 also establishes runtime-switchable multi-provider AI as an extension of
+the per-app runtime ownership work. Each app owns exactly one `ai-proxy`;
+provider-specific behaviour is internal to that proxy through provider modules
+such as `ClaudeProvider` and `OpenAIProvider`. Provider/model selection is
+runtime configuration, not provider-specific Lambda topology.
 
 Scope includes recon, design proposal, sub-phase breakdown into child
 issues, and implementation across all affected apps (LP, SA, BT, MU).
@@ -926,17 +932,18 @@ Goal 1 primarily (deployment isolation made true). Goal 3
 
 ### Gate to next
 
-All apps deploy independently at REST, WSS, auth, and IAM layers.
+All apps deploy independently at REST, WSS, auth, AI proxy, and IAM layers.
 CloudFront, DNS, ACM, build-time packages remain shared. Deploy of one
 app's infrastructure does not affect any other app's deployment state.
 Launchpad tile rendering reads the `apps` JWT claim (subsumed from
-original M9 scope).
+original M9 scope). App AI runtime supports runtime provider/model selection
+with safe fallback to current Claude behaviour.
 
 ### Dependencies
 
 - M7 (closed) provides the per-app stack foundation.
 - M2.2 (already closed).
-- M8 and M10 sub-phases may need re-sequencing — to be determined
+- M8 and M10 sub-phases may need re-sequencing - to be determined
   during M9's recon phase.
 
 This milestone can run in parallel with M8 and M10 (sequencing TBD
@@ -944,50 +951,72 @@ during recon).
 
 ### Sub-phases (M9 child issues)
 
-Phase 1 — Foundations (parallel, start immediately):
-- #360 M9-1: Phase A doc corrections — cdk.md, SA CLAUDE.md, BT CLAUDE.md
-- #361 M9-2: Workspace packages — `@transformotion/fn-claude-proxy-core`
-  extraction and `@transformotion/rate-limit-middleware` creation
+Phase 1 - Foundations (parallel, start immediately):
+- #360 M9-1: Phase A doc corrections - cdk.md, SA CLAUDE.md, BT CLAUDE.md
+- #361 M9-2: Workspace packages - initial Claude proxy mechanics extraction
+  and `@transformotion/rate-limit-middleware` creation
 - #362 M9-8: Per-app Cognito app clients + IAM deploy roles (moved to Phase 1
   because LP needs its own IAM role before taking auth ownership in Phase 2)
 
-Phase 2 — Per-app infrastructure (parallel after Phase 1):
-- #363 M9-3: LP auth ownership transfer (Cognito + auth Lambdas → LP CDK)
+Phase 2 - Per-app infrastructure ownership (parallel after Phase 1):
+- #363 M9-3: LP auth ownership transfer (Cognito + auth Lambdas to LP CDK)
 - #364 M9-4: SA per-app WSS (split SA from platform-ws)
 - #365 M9-5: BT per-app WSS (split BT from platform-ws)
-- #366 M9-6a: SA per-app REST API + per-app claude-proxy Lambda + `sa.job-results` table
-- #367 M9-7a: BT per-app REST API + per-app claude-proxy Lambda
+- #366 M9-6a: SA per-app REST API + app-owned AI proxy Lambda + `sa.job-results` table
+- #367 M9-7a: BT per-app REST API + app-owned AI proxy Lambda
   (+ remove unhandled /api/budget/v1/ai/categorise route)
 
-Phase 3 — AI service canonicalization (parallel with late Phase 2):
+Phase 3 - AI proxy naming and provider foundation (after Phase 2 ownership):
+- #376 M9-12: Rename app-owned Claude proxy concept to app-owned AI proxy
+- #377 M9-13: Shared AI provider abstraction with `ClaudeProvider` and
+  `OpenAIProvider`
+- #382 M9-18: AI proxy observability fields for provider, model, latency,
+  usage, and errors
+
+Phase 4 - Runtime provider switching (after provider foundation):
+- #378 M9-14: Runtime AI provider/model config storage and API
+- #379 M9-15: Wire Stock Analyser `ai-proxy` to runtime provider resolution
+- #380 M9-16: Wire Budget Tracker `ai-proxy` to runtime provider resolution
+
+Phase 5 - AI service canonicalization (parallel with late Phase 4):
 - #368 M9-6b: SA AI service canonical refactor (Hybrid A: AIService class +
   thin hook; cache in service layer)
 - #369 M9-7b: BT AI service hook wrapper + mock fidelity fix + cache layer
   (`budget-tracker.ai-cache-{stage}`, accountId+transactionsHash, 7-day TTL)
 
-Phase 4 — LP frontend (after M9-3):
+Phase 6 - LP frontend and admin settings:
 - #370 M9-10: LP tile rendering migration (apps JWT claim)
+- #381 M9-17: Launchpad Settings UI for AI provider/model settings
+  (site-admin only; no secret management)
 
-Phase 5 — Isolation close and cleanup (after Phases 2 and 4):
-- #371 M9-9: Deploy cascade restructure (workflow_call → independent
+Phase 7 - Isolation close and cleanup (after ownership and runtime switching):
+- #371 M9-9: Deploy cascade restructure (workflow_call to independent
   path-filtered triggers)
-- #372 M9-11: Platform cleanup — decommission shared claude-proxy, platform-ws,
+- #372 M9-11: Platform cleanup - decommission shared claude-proxy, platform-ws,
   platform.job-results
 
 ### Architectural decisions incorporated
 
-Phase B: per-app REST, WSS, auth, claude-proxy, IAM, StorageStack-to-MU,
+Phase B: per-app REST, WSS, auth, AI proxy, IAM, StorageStack-to-MU,
   deploy cascade, LP tile rendering, app client ownership, AuthApiStack fate.
 Phase C L1: all multi-route Lambdas are Type A (no cross-app routing issues).
 Phase C L3: rate-limiting via per-Lambda env vars +
   `@transformotion/rate-limit-middleware` + per-app DynamoDB rate-limit tables.
-Phase C L4: per-app claude-proxy Lambdas wrapping shared
-  `@transformotion/fn-claude-proxy-core`; sync mode (BT, no JOB_RESULTS_TABLE)
-  and async mode (SA, JOB_RESULTS_TABLE required) both supported;
-  original shared proxy decommissioned on completion.
-Phase C (C1–C5): Hybrid A canonical AI pattern — service class layer + thin
-  React hook wrapper — adopted in both SA and BT; cache belongs in service
+Phase C L4: per-app `ai-proxy` Lambdas wrapping shared AI proxy/provider
+  mechanics; sync mode (BT, no JOB_RESULTS_TABLE) and async mode (SA,
+  JOB_RESULTS_TABLE required) both supported; original shared platform
+  Claude proxy decommissioned on completion.
+Phase C (C1-C5): Hybrid A canonical AI pattern - service class layer + thin
+  React hook wrapper - adopted in both SA and BT; cache belongs in service
   layer, not hook.
+Runtime multi-provider AI: each app owns one `ai-proxy`, not separate
+Claude/OpenAI proxy Lambdas. The `ai-proxy` routes internally to
+`ClaudeProvider` or `OpenAIProvider`. Provider/model config is separate from
+secrets; API keys remain env/CDK/Secrets Manager managed. Runtime resolution
+order is app override, then platform default, then env fallback. Missing or
+invalid config must fail safe to current Claude behaviour. Launchpad Settings
+is the site-admin-only UI for provider/model switching. Observability includes
+provider, model, latency, token usage where available, and normalized errors.
 
 ---
 

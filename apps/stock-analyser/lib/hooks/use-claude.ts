@@ -165,7 +165,7 @@ async function subscribeViaWss<T>(
   wssUrl: string,
   signal: AbortSignal,
 ): Promise<T> {
-  if (!wssUrl) throw new Error('WSS URL not configured (NEXT_PUBLIC_PLATFORM_WSS_URL)')
+  if (!wssUrl) throw new Error('WSS URL not configured (NEXT_PUBLIC_SA_WSS_URL)')
 
   const token     = await authService.getIdToken()
   const accountId = (await authService.getAccountIdForApp('stock-analyser')) ?? ''
