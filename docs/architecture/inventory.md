@@ -513,25 +513,24 @@ is backfilled via the renamed endpoint.
 
 ### 2.9 Shared platform API Gateway runtime coupling
 
-**Status: Confirmed (current/transitional state; M9 targets removal)**
+**Status: Confirmed (current state after #367; legacy platform gateway retained for rollback/decommission)**
 
-The platform currently uses the shared platform REST API Gateway for
-remaining transitional app runtime routes:
+The platform previously used the shared platform REST API Gateway for
+app runtime routes. After #366/#367, Stock Analyser and Budget Tracker
+own their app runtime REST APIs:
 
 - **Platform gateway** — defined in `platform/infrastructure/platform-api-stack.ts`,
-  still serves platform routes and Budget Tracker routes.
+  still serves platform routes and remains deployed for rollback and later
+  #372 decommissioning of legacy app runtime paths.
 - **BudgetTrackerApiStack** — defined in
   `apps/budget-tracker/infrastructure/budget-tracker-api-stack.ts`,
-  imports the shared platform `RestApi` and mounts Budget Tracker routes
-  under `/api/budget/v1`.
+  owns the Budget Tracker REST API Gateway after #367.
 - **StockAnalyserApiStack** — defined in
   `apps/stock-analyser/infrastructure/stock-analyser-api-stack.ts`,
   owns the Stock Analyser REST API Gateway after #366.
 
-This shared gateway app-runtime ownership is transitional debt. Stock Analyser
-no longer uses it after #366. M9 moves Budget Tracker to app-owned API Gateway
-ownership as well; the shared platform gateway must not be treated as the
-target pattern for new app runtime routes.
+Shared platform gateway app-runtime ownership is legacy transitional debt.
+It must not be treated as the target pattern for new app runtime routes.
 
 ### 2.10 DynamoDB schema
 
@@ -1127,18 +1126,21 @@ CDK stacks — M7 #250 infrastructure split complete:
   disconnect Lambdas, and `stock-analyser.ws-connections-{stage}`
 
 **Budget-tracker stacks** (`apps/budget-tracker/infrastructure/`):
-- `budget-tracker-api-stack.ts` — mounts BT Lambdas on the shared
-  platform API Gateway; receives Budget Tracker-owned `wsConnectionsTableName`
-  + `wsApiId` from `BudgetTrackerWsStack`
+- `budget-tracker-api-stack.ts` — Budget Tracker-owned REST API Gateway,
+  app Lambdas, and `budget-tracker-ai-proxy-{stage}` after #367; receives
+  Budget Tracker-owned `wsConnectionsTableName` + `wsApiId` from
+  `BudgetTrackerWsStack`
 - `budget-tracker-tables-stack.ts`
 - `bt-ws-stack.ts` — Budget Tracker-owned WebSocket API
   (`budget-tracker-ws-{stage}`), custom Lambda authorizer, connect/default/
   disconnect Lambdas, and `budget-tracker.ws-connections-{stage}`
 
 Budget Tracker no longer uses `PlatformWsStack` for AI review streaming after
-#365. Stock Analyser no longer uses `PlatformWsStack` for live AI completion
-notifications after #366. Platform WSS remains deployed for rollback, any
-remaining transitional consumers, and later decommissioning.
+#365 and no longer uses the platform REST API Gateway or platform Claude proxy
+for live Budget Tracker runtime after #367. Stock Analyser no longer uses
+`PlatformWsStack` for live AI completion notifications after #366. Platform WSS
+and platform REST/Claude runtime remain deployed for rollback, any remaining
+transitional consumers, and later decommissioning.
 
 There is no `MonitoringStack`. M13 creates it.
 

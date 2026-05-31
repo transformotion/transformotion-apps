@@ -38,14 +38,14 @@ React + TypeScript + Tailwind CSS + shadcn/ui.
 | Stack | Contents |
 |---|---|
 | `Transformotion{Stage}-BudgetTrackerTables` | `budget-tracker.accounts`, `budget-tracker.transactions`, `budget-tracker.rules`, `budget-tracker.settings` |
-| `Transformotion{Stage}-BudgetTrackerApi` | All Budget Tracker Lambda functions, mounted on the shared platform API Gateway |
+| `Transformotion{Stage}-BudgetTrackerApi` | Budget Tracker-owned REST API Gateway, Lambda functions, and AI proxy runtime |
 | `Transformotion{Stage}-BudgetTrackerWs` | Budget Tracker WebSocket API, WS Lambdas, and `budget-tracker.ws-connections-{stage}` |
 
 Source: `apps/budget-tracker/infrastructure/`
 
 The WebSocket stack is Budget Tracker-owned: `Transformotion{Stage}-BudgetTrackerWs` in `apps/budget-tracker/infrastructure/bt-ws-stack.ts`. BT may still send `?app=budget-tracker` during transition, but the app-owned authoriser only permits Budget Tracker scope.
 
-> Current/transitional state: Budget Tracker shares the platform API Gateway (`transformotion-api-{stage}`). Routes are mounted under `/api/budget/v1` on the shared gateway's `/api` resource, using the same Cognito authoriser as all other platform routes. This is not the M9 target; M9 moves Budget Tracker REST runtime ownership to a Budget Tracker-owned API Gateway.
+> Current state after #367: Budget Tracker owns its REST API Gateway and AI runtime. Cognito remains platform-owned until the M9 auth ownership migration. The shared platform API Gateway and legacy platform Claude proxy remain deployed only for rollback/decommission.
 
 ## Lambda functions
 
@@ -54,7 +54,8 @@ The WebSocket stack is Budget Tracker-owned: `Transformotion{Stage}-BudgetTracke
 | `budget-transactions-handler-{stage}` | `GET/POST/PATCH/DELETE /api/budget/v1/transactions` |
 | `budget-rules-handler-{stage}` | `GET/POST/PATCH/DELETE /api/budget/v1/rules` |
 | `budget-settings-handler-{stage}` | `GET/PATCH /api/budget/v1/settings` |
-| `budget-ai-handler-{stage}` | `POST /api/budget/v1/ai/categorise`, `POST /api/budget/v1/ai/review`, `POST /api/budget/v1/ai/csv-analysis` |
+| `budget-ai-handler-{stage}` | `POST /api/budget/v1/ai/review`, `POST /api/budget/v1/ai/csv-analysis` |
+| `budget-tracker-ai-proxy-{stage}` | Invoked synchronously by `budget-ai-handler-{stage}` for Anthropic calls |
 | `budget-data-handler-{stage}` | `GET/PATCH /api/budget/v1/budget-data` |
 | `budget-export-handler-{stage}` | `GET /api/budget/v1/business-export` |
 
@@ -212,7 +213,7 @@ Environment: copy `apps/budget-tracker/.env.example` to `.env.local` and fill in
 | `NEXT_PUBLIC_COGNITO_USER_POOL_ID` | Shared Cognito user pool ID |
 | `NEXT_PUBLIC_COGNITO_DOMAIN` | Hosted UI domain |
 | `NEXT_PUBLIC_RUNTIME_PROFILE` | `mock` (default; local development) or `live` (deployed environments). Determines defaults for auth, data, AI, and future concerns. See root `AGENTS.md` for the design map. |
-| `NEXT_PUBLIC_API_BASE_URL` | Budget Tracker API base URL |
+| `NEXT_PUBLIC_API_URL` | Budget Tracker-owned API Gateway base URL; deploy workflow extracts it from `Transformotion{Stage}-BudgetTrackerApi` |
 | `NEXT_PUBLIC_BT_WSS_URL` | Budget Tracker-owned WebSocket URL for AI review streaming; deploy workflow extracts it from `Transformotion{Stage}-BudgetTrackerWs` |
 | `NEXT_PUBLIC_PLATFORM_WSS_URL` | Transitional rollback fallback only; do not use for new Budget Tracker deploys |
 

@@ -262,6 +262,22 @@ importers:
         specifier: 5.7.3
         version: 5.7.3
 
+  apps/budget-tracker/functions/ai-proxy:
+    dependencies:
+      '@transformotion/fn-claude-proxy-core':
+        specifier: workspace:*
+        version: link:../../../../packages/fn-claude-proxy-core
+    devDependencies:
+      '@types/aws-lambda':
+        specifier: ^8
+        version: 8.10.161
+      '@types/node':
+        specifier: ^22
+        version: 22.19.17
+      typescript:
+        specifier: '*'
+        version: 5.7.3
+
   apps/budget-tracker/functions/budget-ai:
     dependencies:
       '@transformotion/budget-domain':
@@ -791,6 +807,22 @@ importers:
         specifier: '*'
         version: 5.7.3
 
+  apps/stock-analyser/functions/ai-proxy:
+    dependencies:
+      '@transformotion/fn-claude-proxy-core':
+        specifier: workspace:*
+        version: link:../../../../packages/fn-claude-proxy-core
+    devDependencies:
+      '@types/aws-lambda':
+        specifier: ^8
+        version: 8.10.161
+      '@types/node':
+        specifier: ^22
+        version: 22.19.17
+      typescript:
+        specifier: '*'
+        version: 5.7.3
+
   apps/stock-analyser/functions/analysis-cache:
     dependencies:
       '@transformotion/lambda-middleware':
@@ -806,22 +838,6 @@ importers:
       '@types/aws-lambda':
         specifier: ^8
         version: 8.10.161
-      typescript:
-        specifier: '*'
-        version: 5.7.3
-
-  apps/stock-analyser/functions/ai-proxy:
-    dependencies:
-      '@transformotion/fn-claude-proxy-core':
-        specifier: workspace:*
-        version: link:../../../../packages/fn-claude-proxy-core
-    devDependencies:
-      '@types/aws-lambda':
-        specifier: ^8
-        version: 8.10.161
-      '@types/node':
-        specifier: ^22
-        version: 22.19.17
       typescript:
         specifier: '*'
         version: 5.7.3

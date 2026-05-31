@@ -64,7 +64,7 @@ Deployed by `deploy-budget-tracker.yml`. Source in `apps/budget-tracker/infrastr
 | Stack name | Class | Contents |
 |---|---|---|
 | `Transformotion{Stage}-BudgetTrackerTables` | `BudgetTrackerTablesStack` | `budget-tracker.accounts`, `budget-tracker.transactions`, `budget-tracker.rules`, `budget-tracker.settings` |
-| `Transformotion{Stage}-BudgetTrackerApi` | `BudgetTrackerApiStack` | Budget Tracker Lambda functions + routes on the shared platform API Gateway |
+| `Transformotion{Stage}-BudgetTrackerApi` | `BudgetTrackerApiStack` | Budget Tracker-owned REST API Gateway, Lambda functions, and AI proxy runtime |
 | `Transformotion{Stage}-BudgetTrackerWs` | `BudgetTrackerWsStack` | Budget Tracker-owned WebSocket API, WS Lambdas, and `budget-tracker.ws-connections-{stage}` |
 
 ---
@@ -111,11 +111,12 @@ Deployed by `deploy-budget-tracker.yml`. Source in `apps/budget-tracker/infrastr
 | `budget-transactions-handler-{stage}` | Budget Tracker transactions Lambda | `GET/POST/PATCH/DELETE /api/budget/v1/transactions` |
 | `budget-rules-handler-{stage}` | Budget Tracker rules Lambda | `GET/POST/PATCH/DELETE /api/budget/v1/rules` |
 | `budget-settings-handler-{stage}` | Budget Tracker settings Lambda | `GET/PATCH /api/budget/v1/settings` |
-| `budget-ai-handler-{stage}` | Budget Tracker unified AI Lambda | `POST /api/budget/v1/ai/categorise`, `POST /api/budget/v1/ai/review`, `POST /api/budget/v1/ai/csv-analysis` |
+| `budget-ai-handler-{stage}` | Budget Tracker unified AI Lambda | `POST /api/budget/v1/ai/review`, `POST /api/budget/v1/ai/csv-analysis` |
+| `budget-tracker-ai-proxy-{stage}` | `apps/budget-tracker/functions/ai-proxy` | Invoked synchronously by `budget-ai-handler-{stage}` |
 | `budget-data-handler-{stage}` | Budget Tracker budget data Lambda | `GET/PATCH /api/budget/v1/budget-data` |
 | `budget-export-handler-{stage}` | Budget Tracker export Lambda | `GET /api/budget/v1/business-export` |
 
-> **Current/transitional state:** Budget Tracker's unified `budget-ai-handler-{stage}` consumes the shared platform `claude-proxy` Lambda through `CLAUDE_PROXY_FUNCTION_NAME` and an invoke permission. This is transitional runtime coupling. M9 removes it by moving Budget Tracker Claude proxy/runtime ownership into the Budget Tracker app boundary.
+> **Current state after #367:** Budget Tracker owns its REST API Gateway and AI runtime. `budget-ai-handler-{stage}` invokes `budget-tracker-ai-proxy-{stage}` synchronously for Anthropic calls and continues to own review orchestration, `budget-tracker.ai-jobs-{stage}`, and BT WSS streaming. The legacy platform `claude-proxy` remains deployed only for rollback/decommission.
 
 ### Migration Utilities Lambda functions (`MigrationsApi`)
 
@@ -150,21 +151,23 @@ Stacks in the same entrypoint share constructs via props as usual. CDK resolves 
 | `PlatformApiStack` | `PlatformWsStack` | `wsApiEndpoint`, `wsApiId` (strings — for claude-proxy WSS push permission) |
 | `PlatformWsStack` | `AuthStack` | `userPool` (construct — for custom authoriser JWKS validation) |
 
-### CF export pattern — app stacks to platform stacks (cross-entrypoint)
+### CF export pattern — cross-entrypoint platform substrate
 
-App stacks (`StockAnalyserApiStack`, `BudgetTrackerApiStack`, `MigrationsApiStack`) resolve shared platform resources via CloudFormation exports at deploy time. No construct references cross entrypoint boundaries.
+App stacks may resolve shared platform substrate via CloudFormation exports at deploy time. After #366 and #367, `StockAnalyserApiStack` and `BudgetTrackerApiStack` no longer import `PlatformApiStack` REST resources; they import Cognito user pool identity from `AuthStack` until #363 moves Cognito app-client ownership. `MigrationsApiStack` still imports shared Platform API REST resources for migration utility routes. No construct references cross entrypoint boundaries.
 
-`PlatformApiStack` and `PlatformWsStack` emit these exports:
+`AuthStack`, `PlatformApiStack`, `PlatformWsStack`, and app stacks emit these exports:
 
 | Export name | Produced by | Consumed by |
 |---|---|---|
-| `Transformotion-{stage}-RestApiId` | `PlatformApiStack` | BT, MU — `RestApi.fromRestApiAttributes`; SA no longer imports after #366 |
-| `Transformotion-{stage}-RestApiRootResourceId` | `PlatformApiStack` | BT, MU — `RestApi.fromRestApiAttributes`; SA no longer imports after #366 |
-| `Transformotion-{stage}-AuthorizerId` | `PlatformApiStack` | BT, MU — JWT authoriser on each route; SA owns its API authoriser after #366 |
-| `Transformotion-{stage}-ApiResourceId` | `PlatformApiStack` | BT, MU — `Resource.fromResourceAttributes` to mount under `/api/` |
+| `Transformotion-{stage}-UserPoolId` | `AuthStack` | SA and BT app API/WSS stacks until #363; migration utilities where Cognito auth is required |
+| `Transformotion-{stage}-RestApiId` | `PlatformApiStack` | MU only — `RestApi.fromRestApiAttributes`; SA/BT no longer import after #366/#367 |
+| `Transformotion-{stage}-RestApiRootResourceId` | `PlatformApiStack` | MU only — `RestApi.fromRestApiAttributes`; SA/BT no longer import after #366/#367 |
+| `Transformotion-{stage}-AuthorizerId` | `PlatformApiStack` | MU only — JWT authoriser on migration utility routes; SA/BT own API authorisers after #366/#367 |
+| `Transformotion-{stage}-ApiResourceId` | `PlatformApiStack` | MU only — `Resource.fromResourceAttributes` to mount under `/api/` |
 | `PlatformWs-{stage}-WsApiId` | `PlatformWsStack` | Transitional platform WSS consumers; SA and BT no longer consume after #366/#365 |
 | `StockAnalyserWs-{stage}-Url` | `StockAnalyserWsStack` | Deploy workflow injects `NEXT_PUBLIC_SA_WSS_URL` |
 | `StockAnalyserApi-{stage}-Url` | `StockAnalyserApiStack` | Deploy workflow injects `NEXT_PUBLIC_API_URL` |
+| `BudgetTrackerApi-{stage}-Url` | `BudgetTrackerApiStack` | Deploy workflow injects `NEXT_PUBLIC_API_URL` |
 
 The rule: cross-entrypoint references always go through CF exports (`Fn.importValue`), never through L2 construct passing. This allows each entrypoint to synthesise independently — no platform stacks are instantiated in app entrypoints.
 
@@ -176,10 +179,10 @@ The rule: cross-entrypoint references always go through CF exports (`Fn.importVa
 
 1. **Step 1 — GithubActionsRole** — account-level stack; deployed first as a one-off.
 2. **Step 2 — PlatformTables** — deployed in isolation before Auth, to release any stale export dependencies.
-3. **Step 3 — Main platform stacks** — deploys `Storage`, `Network`, `Auth`, `AuthApi`, `Api` together. CDK runs independent stacks in parallel within this step. `PlatformApiStack` emits the CF exports that SA/BT/MU consume.
+3. **Step 3 — Main platform stacks** — deploys `Storage`, `Network`, `Auth`, `AuthApi`, `Api` together. CDK runs independent stacks in parallel within this step. `AuthStack` emits the Cognito user pool export that app stacks consume until #363, and `PlatformApiStack` emits legacy/shared REST exports still used by migration utilities and rollback/decommission paths.
 4. **Step 4 — PlatformWs** — deployed after `Api`; retained during M9 dual-run until app-owned WSS cutovers and decommissioning.
 
-App stacks (`deploy-stock-analyser.yml`, `deploy-budget-tracker.yml`, `deploy-migration-utilities.yml`) consume the CF exports produced in Step 3/4 above where they still have transitional dependencies. Budget Tracker owns `Transformotion{Stage}-BudgetTrackerWs` after #365 and no longer consumes `PlatformWs-{stage}-WsApiId` for AI review streaming. Stock Analyser owns `Transformotion{Stage}-StockAnalyserWs`, `Transformotion{Stage}-StockAnalyserApi`, and `stock-analyser-ai-proxy-{stage}` after #366, and no longer uses platform REST/WSS/Claude runtime for live AI flow. On first-ever deploy, the platform auth stack must exist before app stacks because Cognito remains platform-owned until #363. On subsequent deploys, each workflow is independently triggered and independently deploys only its own stacks.
+App stacks (`deploy-stock-analyser.yml`, `deploy-budget-tracker.yml`, `deploy-migration-utilities.yml`) consume the CF exports produced in Step 3/4 above where they still have transitional dependencies. Budget Tracker owns `Transformotion{Stage}-BudgetTrackerWs`, `Transformotion{Stage}-BudgetTrackerApi`, and `budget-tracker-ai-proxy-{stage}` after #367 and no longer uses platform REST/WSS/Claude runtime for live Budget Tracker flow. Stock Analyser owns `Transformotion{Stage}-StockAnalyserWs`, `Transformotion{Stage}-StockAnalyserApi`, and `stock-analyser-ai-proxy-{stage}` after #366, and no longer uses platform REST/WSS/Claude runtime for live AI flow. On first-ever deploy, the platform auth stack must exist before app stacks because Cognito remains platform-owned until #363. On subsequent deploys, each workflow is independently triggered and independently deploys only its own stacks.
 
 ---
 
@@ -254,6 +257,13 @@ Budget Tracker API Lambda WSS environment variables:
 | `WS_CONNECTIONS_TABLE` | `budget-ai-handler-{stage}` | `budget-tracker.ws-connections-{stage}` |
 | `WS_API_ID` | `budget-ai-handler-{stage}` | Budget Tracker-owned WebSocket API ID from `BudgetTrackerWsStack` |
 | `WS_STAGE` | `budget-ai-handler-{stage}` | `dev` or `prod` |
+
+Budget Tracker AI proxy environment variables:
+
+| Variable | Lambda | Value |
+|---|---|---|
+| `ANTHROPIC_SECRET_NAME` | `budget-tracker-ai-proxy-{stage}` | `{stage}/anthropic/api-key` |
+| `CLAUDE_PROXY_FUNCTION_NAME` | `budget-ai-handler-{stage}` | `budget-tracker-ai-proxy-{stage}` compatibility env name; points at the app-owned AI proxy after #367 |
 
 ---
 
