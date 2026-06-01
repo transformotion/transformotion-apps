@@ -151,6 +151,21 @@ Do not run this until staged claim validation has passed.
 
 ## Phase 5 - Flip Launchpad Cutover
 
+Before flipping the workflow guard, confirm the cutover PR also switches
+Launchpad control-plane infrastructure to the Launchpad-owned auth domain:
+
+- `LaunchpadControlPlane` Cognito authorizer uses
+  `TransformotionDev-LaunchpadAuth` `UserPoolId`.
+- Control-plane Lambda env vars use Launchpad-owned auth tables where the route
+  has moved off Platform substrate.
+- `POST /auth/lookup-provider` uses the Launchpad-owned staged User Pool when
+  resolving users.
+
+Validation note from PR 5: with `LAUNCHPAD_AUTH_CUTOVER_ENABLED=false`, staged
+tokens correctly fail against the live Launchpad control-plane API because that
+API still authorizes against the Platform User Pool. Do not treat the frontend
+flag flip alone as sufficient cutover.
+
 Create the cutover PR that changes:
 
 ```yaml
