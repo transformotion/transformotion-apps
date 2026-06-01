@@ -248,10 +248,13 @@ Cognito App Client (`LaunchpadAppClient`) and dedicated
 `Transformotion{Stage}-LaunchpadControlPlane` is the Launchpad-owned
 control-plane API. It exposes `GET /health` and owns the live
 `POST /auth/lookup-provider`, `POST /auth/setup`,
-`GET /api/user/profile`, and `PUT /api/user/preferences` routes after
-#363 PR 4. Additional product-level auth/control-plane routes migrate here
-during #363. Cognito User Pool, Hosted UI domain, app clients, pre-token
-trigger, and shared account tables remain platform-owned substrate.
+`GET /api/user/profile`, `PUT /api/user/preferences`,
+`POST /accounts`, `GET/PUT/DELETE /accounts/{accountId}`,
+`GET /accounts/{accountId}/members`,
+`DELETE /accounts/{accountId}/members/{userId}`, and
+`POST /accounts/{accountId}/invitations` routes after #363 PR 5. Cognito User
+Pool, Hosted UI domain, app clients, pre-token trigger, and shared account
+tables remain platform-owned substrate.
 
 The hard-coded `userCanAccessFramework` prop in launchpad currently
 governs tile visibility for the Transformotion Framework app. M9
@@ -432,12 +435,12 @@ proposal.
 
 Platform Lambdas (`platform/functions/`):
 
-- `accounts/` — account management
+- `accounts/` — legacy rollback copy of account management routes
 - `auth/account-provisioning/` — legacy rollback copy of first-sign-in
   account creation and superseded `/auth/switch`
 - `auth/pre-token-generation/` — Cognito pre-token trigger; emits
   the `apps`, `accounts`, `site_admin` claims into JWTs
-- `auth/invitations/` — invitation flow handlers
+- `auth/invitations/` — legacy rollback copy of invitation route
 - `auth/forgot-provider/` — legacy rollback copy of the federated identity
   recovery route after #363 PR 3
 - `claude-proxy/` — Anthropic API proxy
@@ -448,6 +451,8 @@ Launchpad control-plane Lambdas (`apps/launchpad/functions/`):
 - `forgot-provider/` — live federated identity recovery route
 - `account-provisioning/` — live first-sign-in account creation
 - `user/` — live user profile/preferences routes
+- `accounts/` — live account administration and member-management routes
+- `invitations/` — live invitation creation route
 
 Stock-analyser Lambdas (`apps/stock-analyser/functions/`):
 
@@ -959,24 +964,25 @@ Users who sign in via Launchpad are silently re-authenticated by SA and
 BT (each finds the cookie and exchanges it for app-specific tokens without
 re-prompting). This is the SSO precursor for cross-app navigation.
 
-### 3.5 Platform Lambda permission model
+### 3.5 Control-plane Lambda permission model
 
-**Status: Deferred (decision pending in M2.2)**
+**Status: Resolved by #363 control-plane migration**
 
-Four platform Lambdas (`accounts`, `user`, `auth/invitations`,
-`auth/account-provisioning`) were deliberately
-not gated during sub-phase 7b.5-beta because their permission model
-needed dedicated thought. Each needs a documented decision on its
-authorisation model — including how onboarding-stage users (no app
-groups yet) interact with them.
+The former platform control-plane Lambdas (`accounts`, `user`,
+`auth/invitations`, `auth/account-provisioning`) were deliberately not gated
+during sub-phase 7b.5-beta because their permission model needed dedicated
+thought. #363 resolves this by moving live product-level control-plane
+behavior to Launchpad-owned Lambdas with route-specific authorization.
 
-The forgot-provider lookup route, account setup route, and user
-profile/preferences routes are now Launchpad-owned control-plane behavior
+The forgot-provider lookup route, account setup route, user
+profile/preferences routes, account administration routes, member-management
+routes, and invitation creation route are now Launchpad-owned control-plane behavior
 (`apps/launchpad/functions/forgot-provider`,
 `apps/launchpad/functions/account-provisioning`,
-`apps/launchpad/functions/user`). The legacy platform copies remain only for
-rollback. `/auth/switch` is not migrated because there is no current Launchpad
-caller and account switching is handled via `X-Account-Id`.
+`apps/launchpad/functions/user`, `apps/launchpad/functions/accounts`,
+`apps/launchpad/functions/invitations`). The legacy platform copies remain
+only for rollback. `/auth/switch` is not migrated because there is no current
+Launchpad caller and account switching is handled via `X-Account-Id`.
 
 M2.2 is the decision; M10 implements.
 
@@ -1158,7 +1164,8 @@ CDK stacks — M7 #250 infrastructure split complete:
 - `launchpad-control-plane-stack.ts` — Launchpad-owned control-plane API
   (`launchpad-control-plane-{stage}`), with `GET /health` and
   `POST /auth/lookup-provider`, `POST /auth/setup`,
-  `GET /api/user/profile`, and `PUT /api/user/preferences`. Cognito and shared
+  `GET /api/user/profile`, `PUT /api/user/preferences`, account
+  administration, member-management, and invitation routes. Cognito and shared
   account tables remain platform substrate.
 
 **Stock-analyser stacks** (`apps/stock-analyser/infrastructure/`):

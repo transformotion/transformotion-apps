@@ -4,7 +4,7 @@
 
 DynamoDB is the canonical datastore for all platform and app data. Tables are divided into two scopes:
 
-- **Platform tables** — shared infrastructure, used by the platform API and available to all apps. Managed by `PlatformTablesStack`.
+- **Platform tables** — shared account/identity substrate consumed by Launchpad control-plane APIs and platform substrate Lambdas. Managed by `PlatformTablesStack`.
 - **Per-app tables** — owned exclusively by one app. Managed by that app's `TablesStack`.
 
 All records in per-app data tables are keyed by `accountId`. The account-scoping invariant (see below) means no handler may read another user's data.
@@ -60,7 +60,7 @@ Account container records, shared across all apps.
 | `createdAt` | String | ISO 8601 |
 | `ownerId` | String | userId of the account creator |
 
-Served by `transformotion-accounts-{stage}` Lambda.
+Served by Launchpad-owned `launchpad-accounts-{stage}` Lambda. The platform `transformotion-accounts-{stage}` route remains deployed only for rollback during #363.
 
 ### `platform.account-members-{stage}`
 
@@ -76,7 +76,7 @@ Membership records: which users belong to which accounts, and in what role.
 
 **GSI:** `userId-index` (PK: `userId`) — look up all accounts a given user belongs to.
 
-Read by the pre-token generation Lambda to build the `accounts` claim. Also read by account membership handlers.
+Read by the pre-token generation Lambda to build the `accounts` claim. Also read and written by Launchpad-owned account administration handlers. The platform account handlers remain deployed only for rollback during #363.
 
 ### `platform.invitations-{stage}`
 
@@ -87,14 +87,13 @@ Pending, redeemed, and expired invitations.
 | `invitationId` (PK) | String | UUID |
 | `email` | String | Normalised lowercase |
 | `invitedBy` | String | userId of the inviting admin |
-| `createdAt` | String | ISO 8601 |
 | `expiresAt` | Number | Epoch-seconds (TTL attribute — 7 days) |
 | `status` | String | `pending \| redeemed \| expired` |
 | `perApp` | Map | Per-app access configuration — see [auth.md](./auth.md) for shape |
 
 **GSI:** `email-index` (PK: `email`) — look up pending invitations for a newly registered user.
 
-Served by `transformotion-invitations-{stage}` Lambda.
+Created by Launchpad-owned `launchpad-invitations-{stage}` Lambda through `POST /accounts/{accountId}/invitations`. The platform `transformotion-invitations-{stage}` route remains deployed only for rollback during #363.
 
 ### `platform.job-results-{stage}`
 

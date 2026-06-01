@@ -33,7 +33,9 @@ transformotion-apps/
 │   ├── launchpad/                         # Platform shell and control-plane app
 │   │   ├── functions/                     # Launchpad-owned control-plane Lambda source
 │   │   │   ├── account-provisioning/
+│   │   │   ├── accounts/
 │   │   │   ├── forgot-provider/
+│   │   │   ├── invitations/
 │   │   │   └── user/
 │   │   ├── infrastructure/                # Launchpad CDK stacks
 │   │   │   └── launchpad-control-plane-stack.ts
@@ -85,9 +87,9 @@ transformotion-apps/
 │       ├── auth/                          # Auth-related Lambdas (own pnpm workspace glob)
 │       │   ├── account-provisioning/      # Legacy rollback first-sign-in account creation
 │       │   ├── pre-token-generation/      # Cognito pre-token trigger (claims)
-│       │   ├── invitations/               # Invitation flow
+│       │   ├── invitations/               # Legacy rollback invitation flow
 │       │   └── forgot-provider/           # Legacy rollback federated identity recovery
-│       ├── accounts/                      # Account management
+│       ├── accounts/                      # Legacy rollback account management routes
 │       ├── claude-proxy/                  # Legacy platform Anthropic API proxy (rollback/decommission path)
 │       ├── user/                          # Legacy rollback user profile/preferences routes
 │       ├── ws-authorizer/                 # WS $connect custom authoriser (Cognito JWT + accounts claim)

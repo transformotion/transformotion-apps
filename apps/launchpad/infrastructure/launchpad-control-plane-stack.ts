@@ -198,6 +198,73 @@ export class LaunchpadControlPlaneStack extends cdk.Stack {
       .addResource('preferences')
       .addMethod('PUT', new apigateway.LambdaIntegration(userFn, { proxy: true }), authOptions);
 
+    const accountsFn = new lambdaNodejs.NodejsFunction(this, 'AccountsFn', {
+      functionName: `launchpad-accounts-${stage}`,
+      entry: path.join(__dirname, '../functions/accounts/src/index.ts'),
+      handler: 'handler',
+      runtime: lambda.Runtime.NODEJS_20_X,
+      timeout: cdk.Duration.seconds(15),
+      memorySize: 256,
+      environment: {
+        ACCOUNTS_TABLE: accountsTable.tableName,
+        ACCOUNT_MEMBERS_TABLE: accountMembersTable.tableName,
+      },
+      bundling: {
+        externalModules: ['@aws-sdk/*'],
+        minify: true,
+        sourceMap: false,
+      },
+    });
+
+    accountsTable.grantReadWriteData(accountsFn);
+    accountMembersTable.grantReadWriteData(accountsFn);
+
+    const invitationsTable = dynamodb.Table.fromTableName(
+      this,
+      'InvitationsTable',
+      `platform.invitations-${stage}`,
+    );
+
+    const invitationsFn = new lambdaNodejs.NodejsFunction(this, 'InvitationsFn', {
+      functionName: `launchpad-invitations-${stage}`,
+      entry: path.join(__dirname, '../functions/invitations/src/index.ts'),
+      handler: 'handler',
+      runtime: lambda.Runtime.NODEJS_20_X,
+      timeout: cdk.Duration.seconds(15),
+      memorySize: 256,
+      environment: {
+        ACCOUNTS_TABLE: accountsTable.tableName,
+        INVITATIONS_TABLE: invitationsTable.tableName,
+      },
+      bundling: {
+        externalModules: ['@aws-sdk/*'],
+        minify: true,
+        sourceMap: false,
+      },
+    });
+
+    accountsTable.grantReadData(invitationsFn);
+    invitationsTable.grantReadWriteData(invitationsFn);
+
+    const accountsIntegration = new apigateway.LambdaIntegration(accountsFn, { proxy: true });
+    const accountsResource = this.api.root.addResource('accounts');
+    accountsResource.addMethod('POST', accountsIntegration, authOptions);
+
+    const accountResource = accountsResource.addResource('{accountId}');
+    accountResource.addMethod('GET', accountsIntegration, authOptions);
+    accountResource.addMethod('PUT', accountsIntegration, authOptions);
+    accountResource.addMethod('DELETE', accountsIntegration, authOptions);
+
+    const membersResource = accountResource.addResource('members');
+    membersResource.addMethod('GET', accountsIntegration, authOptions);
+    membersResource
+      .addResource('{userId}')
+      .addMethod('DELETE', accountsIntegration, authOptions);
+
+    accountResource
+      .addResource('invitations')
+      .addMethod('POST', new apigateway.LambdaIntegration(invitationsFn, { proxy: true }), authOptions);
+
     const corsHeaders = {
       'Access-Control-Allow-Origin': "'*'",
       'Access-Control-Allow-Headers': "'Content-Type,Authorization,X-Account-Id'",

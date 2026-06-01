@@ -426,13 +426,13 @@ The auth/control-plane Lambdas have explicit permission models. Each is document
 
 | Lambda | Wrapper | Authorization | IAM scope |
 |---|---|---|---|
-| `accounts` | `withAuth` | Per-route guards (`requireAccountAccess` / `requireAccountOwner`) | `platform.accounts` RW + `platform.account-members` RW |
+| `apps/launchpad/functions/accounts` | `withAuth` | Inline per-route membership/owner checks against account tables | `platform.accounts` RW + `platform.account-members` RW |
 | `apps/launchpad/functions/user` | `withAuthOnly` | None — user owns their own data | `platform.users` RW |
 | `apps/launchpad/functions/account-provisioning` | `withAuthOnly` | None — first-login flow; user has JWT but may not have app group memberships yet | `platform.accounts` RW + `platform.account-members` RW + `AdminUpdateUserAttributes` on user pool ARN |
-| `auth/invitations` | `withAuth` | Account-context guards | `platform.accounts` R + `platform.invitations` RW |
+| `apps/launchpad/functions/invitations` | `withAuth` | Inline owner check against `platform.accounts` | `platform.accounts` R + `platform.invitations` RW |
 | `apps/launchpad/functions/forgot-provider` | None (raw handler — pre-authentication) | None | `platform.rate-limits` RW + `AdminGetUser` on user pool ARN + SES `SendEmail` |
 
-**`accounts`, Launchpad `user`, Launchpad `account-provisioning`, and `auth/invitations`** are user-facing API endpoints. Each uses the appropriate middleware wrapper based on whether account context is required, and authorization helpers based on what the operation needs to verify. The platform copies of `user` and `auth/account-provisioning` remain deployed only for rollback after #363 PR 4.
+**Launchpad `accounts`, Launchpad `user`, Launchpad `account-provisioning`, and Launchpad `invitations`** are user-facing control-plane API endpoints. Each uses the appropriate middleware wrapper based on whether account context is required, and inline authorization based on what the operation needs to verify. The platform copies of `accounts`, `user`, `auth/account-provisioning`, and `auth/invitations` remain deployed only for rollback after #363 PR 5.
 
 **`apps/launchpad/functions/forgot-provider`** is pre-authentication by necessity (the user has forgotten their identity provider; they cannot authenticate). It uses no middleware wrapper — the handler reads the request directly. Abuse-resistance is provided by Lambda-side IP-based rate limiting. The legacy platform `auth/forgot-provider` route remains deployed only for rollback after #363 PR 3. See *Forgot-provider flow* below.
 
@@ -656,17 +656,24 @@ Future hardening can add API Gateway throttling, CORS allowlisting to the sign-i
 
 ## Launchpad onboarding and user profile APIs
 
-Launchpad owns the live onboarding and user profile/preference API surface in `LaunchpadControlPlaneStack`:
+Launchpad owns the live onboarding, user profile/preference, account administration, member management, and invitation API surface in `LaunchpadControlPlaneStack`:
 
 | Route | Live Lambda | Notes |
 |---|---|---|
 | `POST /auth/setup` | `launchpad-account-provisioning-{stage}` | First-login account bootstrap. Consumes platform-owned Cognito app-client IDs and platform account tables. |
 | `GET /api/user/profile` | `launchpad-user-{stage}` | Reads the caller's profile/preferences from `platform.users-{stage}`. |
 | `PUT /api/user/preferences` | `launchpad-user-{stage}` | Merges caller-owned preferences into `platform.users-{stage}`. |
+| `POST /accounts` | `launchpad-accounts-{stage}` | Creates a new account and owner membership in platform substrate tables. |
+| `GET /accounts/{accountId}` | `launchpad-accounts-{stage}` | Returns account and member list after membership verification. |
+| `PUT /accounts/{accountId}` | `launchpad-accounts-{stage}` | Updates account name after owner verification. |
+| `DELETE /accounts/{accountId}` | `launchpad-accounts-{stage}` | Deletes account and member records after owner verification. |
+| `GET /accounts/{accountId}/members` | `launchpad-accounts-{stage}` | Lists members after membership verification. |
+| `DELETE /accounts/{accountId}/members/{userId}` | `launchpad-accounts-{stage}` | Removes a member after owner verification. |
+| `POST /accounts/{accountId}/invitations` | `launchpad-invitations-{stage}` | Creates an invitation after owner verification. |
 
-Cognito User Pool, Hosted UI domain, app clients, pre-token-generation trigger, and the shared account/user tables remain platform substrate. Launchpad owns the product/control-plane workflows that consume those substrate resources.
+Cognito User Pool, Hosted UI domain, app clients, pre-token-generation trigger, and the shared account/user/invitation tables remain platform substrate. Launchpad owns the product/control-plane workflows that consume those substrate resources.
 
-The platform `transformotion-account-provisioning-{stage}` and `transformotion-user-{stage}` routes remain deployed in `PlatformApiStack` only for rollback during #363. `/auth/switch` is not migrated to Launchpad because there is no current Launchpad caller and active account switching is handled client-side via `X-Account-Id`.
+The platform `transformotion-account-provisioning-{stage}`, `transformotion-user-{stage}`, `transformotion-accounts-{stage}`, and `transformotion-invitations-{stage}` routes remain deployed in `PlatformApiStack` only for rollback during #363. `/auth/switch` is not migrated to Launchpad because there is no current Launchpad caller and active account switching is handled client-side via `X-Account-Id`.
 
 ---
 
