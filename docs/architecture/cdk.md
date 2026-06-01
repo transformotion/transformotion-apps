@@ -13,7 +13,7 @@ Region: `ap-southeast-2`
 | `infrastructure/bin/stock-analyser.ts` | `StockAnalyserTables`, `StockAnalyserWs`, `StockAnalyserApi` | `deploy-stock-analyser.yml` |
 | `infrastructure/bin/budget-tracker.ts` | `BudgetTrackerTables`, `BudgetTrackerWs`, `BudgetTrackerApi` | `deploy-budget-tracker.yml` |
 | `infrastructure/bin/migration-utilities.ts` | `MigrationsApi` | `deploy-migration-utilities.yml` |
-| `infrastructure/bin/launchpad.ts` | `LaunchpadControlPlane` | `deploy-launchpad.yml` |
+| `infrastructure/bin/launchpad.ts` | All `Launchpad*` stacks (`LaunchpadControlPlane` today) | `deploy-launchpad.yml` |
 
 Each entrypoint synthesises *only* the stacks it owns. App stacks resolve remaining shared substrate resources via CloudFormation imports at deploy time where needed — not via construct references passed through props. After #366, Stock Analyser owns its REST API, WSS, AI proxy, and job-results runtime.
 
@@ -60,6 +60,11 @@ Deployed by `deploy-launchpad.yml`. Source in `apps/launchpad/infrastructure/`.
 | Stack name | Class | Contents |
 |---|---|---|
 | `Transformotion{Stage}-LaunchpadControlPlane` | `LaunchpadControlPlaneStack` | Launchpad-owned live control-plane API. It currently consumes platform-owned auth-domain resources as migration debt until #386. Owns `GET /health`, live auth lookup, account setup, user profile/preferences, account admin, member management, and invitation routes. |
+
+`deploy-launchpad.yml` targets `Transformotion{Stage}-Launchpad*`, not a
+single stack name, so future #386 auth-domain stacks under
+`apps/launchpad/infrastructure/` deploy through the Launchpad lane without
+Platform orchestration.
 
 ### Stock Analyser stacks
 
@@ -317,13 +322,13 @@ The legacy shared `GitHubActionsDeployRole` remains available temporarily as rol
 | Role | Workflow | Primary ownership scope |
 |---|---|---|
 | `TransformotionPlatformDeployRole` | `deploy-platform.yml` | Platform stacks: storage, network, and transitional auth/API/WSS rollback resources until #386/#372 remove them |
-| `TransformotionLaunchpadDeployRole` | `deploy-launchpad.yml` | Launchpad control-plane stack and frontend deploy |
+| `TransformotionLaunchpadDeployRole` | `deploy-launchpad.yml` | All `Transformotion{Stage}-Launchpad*` stacks and Launchpad frontend deploy |
 | `TransformotionStockAnalyserDeployRole` | `deploy-stock-analyser.yml` | Stock Analyser stacks and `/stock-analyser` web assets |
 | `TransformotionBudgetTrackerDeployRole` | `deploy-budget-tracker.yml` | Budget Tracker stacks and `/budget-tracker` web assets |
 | `TransformotionMigrationUtilitiesDeployRole` | `deploy-migration-utilities.yml` | Migration utilities stacks |
 | `GitHubActionsDeployRole` | `cd.yml`; platform role bootstrap step | Legacy shared rollback role retained during M9 transition |
 
-**Current policy shape:** roles are scoped by owned CloudFormation stack name patterns where practical, retain read access to Transformotion stack outputs for transitional dependencies, can assume CDK bootstrap roles, and keep CloudFront/Cognito smoke-test permissions needed by current deploy verification. The policies are intentionally pragmatic rather than final least privilege.
+**Current policy shape:** roles are scoped by owned CloudFormation stack name patterns where practical, retain read access to Transformotion stack outputs for transitional dependencies, can assume CDK bootstrap roles, and keep CloudFront/Cognito smoke-test permissions needed by current deploy verification. The Launchpad role owns `TransformotionDev-Launchpad*` and `TransformotionProd-Launchpad*` stack patterns, which is the deploy boundary for current control-plane and future #386 auth-domain stacks. CDK/CloudFormation performs service-level resource creation through the bootstrap execution role; the GitHub role does not need direct broad Cognito, Lambda, API Gateway, DynamoDB, or IAM resource permissions for normal CDK deploys. The policies are intentionally pragmatic rather than final least privilege.
 
 Cognito app clients still live in `AuthStack` as current-state migration debt. #386 owns any physical re-home, recreation, or rotation decision.
 

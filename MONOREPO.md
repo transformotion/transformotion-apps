@@ -235,15 +235,23 @@ manual `cd.yml` workflow remains the explicit full redeploy escape hatch.
 | `apps/budget-tracker/**` | `deploy-budget-tracker.yml` |
 | `apps/budget-tracker/infrastructure/**` | `deploy-budget-tracker.yml` |
 | `apps/launchpad/**` | `deploy-launchpad.yml` |
+| `.github/workflows/deploy-launchpad.yml` | `deploy-launchpad.yml` |
 | `platform/infrastructure/**` | `deploy-platform.yml` |
 | `infrastructure/bin/platform.ts` | `deploy-platform.yml` |
 | `infrastructure/bin/launchpad.ts` | `deploy-launchpad.yml` |
+| `infrastructure/lib/**` | `deploy-launchpad.yml` when Launchpad CDK imports shared infrastructure helpers |
+| `platform/config/app-registry.json` | `deploy-launchpad.yml` when Launchpad control-plane stacks consume app registry metadata |
 | `infrastructure/bin/stock-analyser.ts` | `deploy-stock-analyser.yml` |
 | `infrastructure/bin/budget-tracker.ts` | `deploy-budget-tracker.yml` |
 | `infrastructure/bin/migration-utilities.ts` | `deploy-migration-utilities.yml` |
 | `platform/functions/**` | `deploy-platform.yml` |
 | `migration-utilities/**` | `deploy-migration-utilities.yml` |
-| `packages/**` | Shared package changes trigger app/migration deploy workflows where their path filters include the touched package. `deploy-budget-tracker.yml` is active and includes the Budget Tracker package dependencies explicitly. |
+| `packages/**` | Shared package changes trigger app/migration deploy workflows where their path filters include the touched package. `deploy-launchpad.yml` includes Launchpad frontend/control-plane package dependencies explicitly. `deploy-budget-tracker.yml` is active and includes the Budget Tracker package dependencies explicitly. |
+
+Launchpad deploys all `Transformotion{Stage}-Launchpad*` stacks from
+`infrastructure/bin/launchpad.ts`. Future #386 auth-domain stacks must follow
+that naming pattern and deploy through `deploy-launchpad.yml`; Platform deploy
+must not orchestrate Launchpad auth/control-plane resources.
 
 Path filter completeness is not yet verified for `.github/workflows/**`
 and `scripts/ci/**` — changes to CI machinery may not auto-trigger the

@@ -304,6 +304,9 @@ M9 target state:
 - `docs/migrations/m9-363-closeout.md` defines the deployment and runtime
   validation checklist for closing #363.
 - #386 owns physical auth-domain re-home into Launchpad.
+- `deploy-launchpad.yml` is the deploy lane for current and future
+  `Transformotion{Stage}-Launchpad*` backend stacks. Platform deploy must not
+  orchestrate Launchpad auth/control-plane resources.
 
 Agents must not treat transitional shared resources as precedent for new work.
 When modifying them, preserve compatibility and prefer changes that make the
@@ -318,6 +321,8 @@ Current model:
 - App workflows deploy app stacks and static exports.
 - Platform workflow deploys platform substrate.
 - Platform workflow does not cascade into app or migration utility workflows.
+- Launchpad workflow deploys Launchpad frontend plus all
+  `Transformotion{Stage}-Launchpad*` backend stacks.
 - Some workflows still share stable substrate because M9 is not complete.
 - CDK app entrypoints live under `infrastructure/bin/*.ts`.
 

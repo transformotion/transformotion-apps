@@ -152,7 +152,7 @@ directly, without going through the platform workflow.
 | `deploy-stock-analyser.yml` | `apps/stock-analyser/**`, `infrastructure/bin/stock-analyser.ts`, `packages/api-client/**`, `packages/cache/**`, `packages/data-access/**`, `packages/logger/**`, `packages/ui/**`, `packages/auth-client/**`, `packages/runtime-config/**`, `packages/lambda-middleware/**` |
 | `deploy-budget-tracker.yml` | `apps/budget-tracker/**`, `infrastructure/bin/budget-tracker.ts`, `packages/api-client/**`, `packages/cache/**`, `packages/data-access/**`, `packages/logger/**`, `packages/ui/**`, `packages/auth-client/**`, `packages/runtime-config/**`, `packages/lambda-middleware/**`, `packages/budget-domain/**` |
 | `deploy-migration-utilities.yml` | `migration-utilities/**`, `infrastructure/bin/migration-utilities.ts`, `packages/**` |
-| `deploy-launchpad.yml` | `apps/launchpad/**`, `infrastructure/bin/launchpad.ts`, `packages/auth-client/**`, `packages/runtime-config/**` |
+| `deploy-launchpad.yml` | `.github/workflows/deploy-launchpad.yml`, `apps/launchpad/**`, `infrastructure/bin/launchpad.ts`, `infrastructure/lib/**`, `platform/config/app-registry.json`, `packages/auth-client/**`, `packages/lambda-middleware/**`, `packages/runtime-config/**` |
 
 ### Manual deploys (workflow_dispatch)
 
@@ -167,7 +167,7 @@ Each CDK deploy step passes an explicit `--app` flag pointing to the per-app ent
 - `deploy-stock-analyser.yml` — `StockAnalyserTables`, `StockAnalyserWs`, and `StockAnalyserApi` only
 - `deploy-budget-tracker.yml` — `BudgetTrackerTables`, `BudgetTrackerWs`, and `BudgetTrackerApi` only
 - `deploy-migration-utilities.yml` — `MigrationsApi` only
-- `deploy-launchpad.yml` - `LaunchpadControlPlane` + static export. #386 will expand this lane as Launchpad physically owns the auth domain
+- `deploy-launchpad.yml` - all `Transformotion{Stage}-Launchpad*` stacks + static export. This lane owns current and future Launchpad auth/control-plane backend infrastructure, including #386 auth-domain stacks.
 - `deploy-platform.yml` - platform stacks only (Network, Auth, AuthApi, PlatformTables, Api, PlatformWs, Storage, GithubActionsRole). Auth-domain stacks here are current migration debt, not target ownership
 - `cd.yml` - explicit manual full redeploy when an operator wants to redeploy all stacks
 
@@ -203,6 +203,14 @@ Per-app deploys require these variables set in the GitHub environment (`dev` or 
 | `NEXT_PUBLIC_LAUNCHPAD_CONTROL_PLANE_API_URL` | `ControlPlaneApiUrl` output from `Transformotion{Stage}-LaunchpadControlPlane`; live base URL for Launchpad control-plane routes including auth lookup, account setup, user profile/preferences, account administration, member management, and invitations |
 | `NEXT_PUBLIC_PLATFORM_AUTH_API_URL` | Optional rollback-only base URL for legacy platform AuthApi lookup-provider route |
 | `NEXT_PUBLIC_PLATFORM_API_URL` | Optional rollback-only base URL for legacy platform API account setup, user profile/preferences, account administration, member-management, and invitation routes |
+
+`deploy-launchpad.yml` extracts Launchpad stack outputs after CDK deploy. It
+requires `ControlPlaneApiUrl` from `LaunchpadControlPlane` and is prepared to
+read future `Transformotion{Stage}-LaunchpadAuth` outputs for
+`UserPoolId`, `LaunchpadAppClientId`, and `CognitoDomain`. Until those outputs
+exist, the workflow falls back to the environment-scoped Cognito variables.
+Platform deploy must not source, build, or orchestrate these Launchpad frontend
+auth values.
 
 Client IDs are synced from CloudFormation outputs after each auth stack deploy by running:
 ```bash

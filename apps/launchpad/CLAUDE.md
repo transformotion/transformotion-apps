@@ -24,7 +24,8 @@ auth-domain tables, and rollback routes as migration debt until #386.
 | basePath | root app, plus `/launchpad` and `/sign-in` auth paths |
 | Deploy workflow | `.github/workflows/deploy-launchpad.yml` |
 | CDK entrypoint | `infrastructure/bin/launchpad.ts` |
-| Control-plane stack | `Transformotion{Stage}-LaunchpadControlPlane` |
+| CDK stack target | `Transformotion{Stage}-Launchpad*` |
+| Current stack | `Transformotion{Stage}-LaunchpadControlPlane` |
 | Control-plane API env | `NEXT_PUBLIC_LAUNCHPAD_CONTROL_PLANE_API_URL` |
 | Cognito client var | `NEXT_PUBLIC_LAUNCHPAD_COGNITO_CLIENT_ID` |
 
@@ -43,6 +44,7 @@ auth-domain tables, and rollback routes as migration debt until #386.
 | Stack | Contents |
 |---|---|
 | `Transformotion{Stage}-LaunchpadControlPlane` | Launchpad-owned REST API, Cognito authoriser, and control-plane Lambdas |
+| Future `Transformotion{Stage}-Launchpad*` stacks | #386 auth-domain infrastructure, deployed through the Launchpad lane |
 
 Source: `apps/launchpad/infrastructure/`.
 
@@ -70,10 +72,12 @@ Source: `apps/launchpad/infrastructure/`.
 ## Deployment rules
 
 - Launchpad deploys through `.github/workflows/deploy-launchpad.yml`.
-- The Launchpad workflow deploys `LaunchpadControlPlane`, extracts
-  `ControlPlaneApiUrl`, injects `NEXT_PUBLIC_LAUNCHPAD_CONTROL_PLANE_API_URL`,
-  and builds/deploys the frontend.
+- The Launchpad workflow deploys all `Transformotion{Stage}-Launchpad*`
+  stacks, extracts `ControlPlaneApiUrl`, can consume future
+  `LaunchpadAuth` outputs, injects frontend auth/control-plane env vars, and
+  builds/deploys the frontend.
 - Platform deploy must not cascade into Launchpad deploy.
+- Future auth-domain stacks must use `Transformotion{Stage}-Launchpad*` names
+  so the Launchpad deploy lane owns them without Platform orchestration.
 - Any change to Launchpad routes, env vars, stack outputs, or workflow behavior
   must update `docs/architecture/*` in the same PR.
-

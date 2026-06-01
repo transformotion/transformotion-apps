@@ -233,6 +233,12 @@ control-plane app. Launchpad-owned infrastructure lives under
 `infrastructure/bin/launchpad.ts`, matching the Stock Analyser and Budget
 Tracker app-owned infrastructure pattern.
 
+For #386, `deploy-launchpad.yml` is hardened as the Launchpad backend deploy
+lane. It deploys all `Transformotion{Stage}-Launchpad*` stacks from the
+Launchpad CDK entrypoint, extracts current control-plane outputs, and is ready
+to consume future Launchpad-owned auth outputs without Platform deploy
+orchestration.
+
 Per M0 verification: `apps/launchpad/` contains no public signup UI
 (no `signUp`, `register`, `createAccount` references in any `.ts` or
 `.tsx` file).
@@ -1075,9 +1081,11 @@ GitHub Actions workflows in `.github/workflows/`:
 - `deploy-budget-tracker.yml` — active Budget Tracker deployment;
   triggers on `apps/budget-tracker/**`, `infrastructure/bin/budget-tracker.ts`,
   and package paths consumed by Budget Tracker.
-- `deploy-launchpad.yml` — active Launchpad deployment; triggers on
-  `apps/launchpad/**`, `infrastructure/bin/launchpad.ts`, and Launchpad
-  package dependencies.
+- `deploy-launchpad.yml` - active Launchpad deployment; triggers on
+  `.github/workflows/deploy-launchpad.yml`, `apps/launchpad/**`,
+  `infrastructure/bin/launchpad.ts`, `infrastructure/lib/**`,
+  `platform/config/app-registry.json`, and Launchpad package dependencies.
+  It deploys all `Transformotion{Stage}-Launchpad*` stacks.
 - `deploy-migration-utilities.yml` — migration utilities deployment; triggers
   on `migration-utilities/**`, `infrastructure/bin/migration-utilities.ts`,
   and package paths consumed by migration utilities.
@@ -1172,6 +1180,9 @@ CDK stacks — M7 #250 infrastructure split complete:
   `GET /api/user/profile`, `PUT /api/user/preferences`, account
   administration, member-management, and invitation routes. Cognito and shared
   account tables remain platform-owned migration debt until #386.
+- Future #386 Launchpad auth-domain stacks belong under
+  `apps/launchpad/infrastructure/`, use `Transformotion{Stage}-Launchpad*`
+  names, and deploy through `deploy-launchpad.yml`.
 
 **Stock-analyser stacks** (`apps/stock-analyser/infrastructure/`):
 - `stock-analyser-api-stack.ts` — Stock Analyser-owned REST API Gateway,
