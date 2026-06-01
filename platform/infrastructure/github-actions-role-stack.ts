@@ -71,8 +71,15 @@ export class GithubActionsRoleStack extends cdk.Stack {
     const stackArn = (pattern: string): string =>
       `arn:aws:cloudformation:${this.region}:${this.account}:stack/${pattern}/*`;
 
-    const devUserPoolArn = `arn:aws:cognito-idp:${this.region}:${this.account}:userpool/ap-southeast-2_7QhxUvefw`;
-    const prodUserPoolArn = `arn:aws:cognito-idp:${this.region}:${this.account}:userpool/ap-southeast-2_8hHCARUWq`;
+    const transformotionUserPoolArns = [
+      // Legacy Platform-owned pools retained for rollback during #386.
+      `arn:aws:cognito-idp:${this.region}:${this.account}:userpool/ap-southeast-2_7QhxUvefw`,
+      `arn:aws:cognito-idp:${this.region}:${this.account}:userpool/ap-southeast-2_8hHCARUWq`,
+      // Launchpad-owned pools created during #386. Keep this scoped to
+      // Transformotion's account/region while avoiding another deploy-role
+      // edit for the prod LaunchpadAuth pool ID.
+      `arn:aws:cognito-idp:${this.region}:${this.account}:userpool/*`,
+    ];
     const webBucketArns = [
       'arn:aws:s3:::transformotion-web-dev-959516291617',
       'arn:aws:s3:::transformotion-prod-bucket',
@@ -174,7 +181,7 @@ export class GithubActionsRoleStack extends cdk.Stack {
         sid:       'VerifyCognitoLogin',
         effect:    iam.Effect.ALLOW,
         actions:   ['cognito-idp:AdminInitiateAuth'],
-        resources: [devUserPoolArn, prodUserPoolArn],
+        resources: transformotionUserPoolArns,
       }));
 
       return role;
