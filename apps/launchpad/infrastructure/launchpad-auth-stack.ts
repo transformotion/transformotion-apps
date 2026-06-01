@@ -1,7 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
-import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as lambdaNodejs from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
@@ -279,10 +278,6 @@ export class LaunchpadAuthStack extends cdk.Stack {
 
     this.accountMembersTable.grantReadData(preTokenFn);
     this.accountsTable.grantReadData(preTokenFn);
-    preTokenFn.addToRolePolicy(new iam.PolicyStatement({
-      actions: ['cognito-idp:AdminAddUserToGroup', 'cognito-idp:AdminRemoveUserFromGroup'],
-      resources: [this.userPool.userPoolArn],
-    }));
 
     this.userPool.addTrigger(cognito.UserPoolOperation.PRE_TOKEN_GENERATION, preTokenFn);
 
