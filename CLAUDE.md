@@ -38,6 +38,9 @@ auth/control-plane resources.
 trigger, but live auth remains on the Platform AuthStack until the explicit
 #386 cutover PR.
 
+Use `docs/migrations/m9-386-dev-auth-cutover-checklist.md` for the dev
+LaunchpadAuth cutover sequence. Do not improvise the cutover order.
+
 When working on a specific app, read that app's `AGENTS.md` first. Claude Code may also read the sibling `CLAUDE.md` compatibility mirror:
 
 - `apps/launchpad/AGENTS.md`

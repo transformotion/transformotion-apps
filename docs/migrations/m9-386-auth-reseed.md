@@ -43,6 +43,36 @@ For the platform owner's account, seed:
 `launchpad-invitations-{stage}` and `launchpad-rate-limits-{stage}` do not need
 baseline rows for cutover.
 
+## Executable Dev Seed
+
+After `TransformotionDev-LaunchpadAuth` is deployed, run:
+
+```bash
+node scripts/migrations/launchpad/seed-auth-domain-dev.mjs \
+  --stage dev \
+  --email <owner-email> \
+  --temp-password '<temporary-password>'
+```
+
+Preview writes first with:
+
+```bash
+node scripts/migrations/launchpad/seed-auth-domain-dev.mjs \
+  --stage dev \
+  --email <owner-email> \
+  --dry-run
+```
+
+The helper:
+
+- reads `TransformotionDev-LaunchpadAuth` outputs
+- creates or confirms the owner user in the Launchpad-owned User Pool
+- adds required Cognito groups
+- copies matching source account/account-membership rows by owner email
+- writes equivalent rows using the Launchpad-owned User Pool username/userId
+
+The manual commands below are retained for debugging and one-off repair.
+
 ## Manual Seed Sketch
 
 Use the current live Platform tables as the source of truth:
@@ -105,3 +135,6 @@ Before enabling cutover:
 Only after this validation should a later PR flip
 `LAUNCHPAD_AUTH_CUTOVER_ENABLED=true` and update live frontend/runtime auth
 configuration.
+
+For the full dev cutover sequence, use
+[`m9-386-dev-auth-cutover-checklist.md`](./m9-386-dev-auth-cutover-checklist.md).

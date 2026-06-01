@@ -85,6 +85,8 @@ Source: `apps/launchpad/infrastructure/`.
   builds/deploys the frontend.
 - `LAUNCHPAD_AUTH_CUTOVER_ENABLED` must remain `false` until the explicit #386
   auth cutover PR. Deploying `LaunchpadAuth` alone must not switch live auth.
+- Dev cutover must follow
+  `docs/migrations/m9-386-dev-auth-cutover-checklist.md`.
 - Platform deploy must not cascade into Launchpad deploy.
 - Future auth-domain stacks must use `Transformotion{Stage}-Launchpad*` names
   so the Launchpad deploy lane owns them without Platform orchestration.

@@ -177,6 +177,9 @@ These tables are staged and not yet used by live APIs. See
 [`m9-386-auth-reseed.md`](../migrations/m9-386-auth-reseed.md) for the reseed
 steps required before cutover.
 
+The dev cutover checklist is
+[`m9-386-dev-auth-cutover-checklist.md`](../migrations/m9-386-dev-auth-cutover-checklist.md).
+
 Apple Sign-In has placeholder secrets but is not yet active.
 
 All social IDP callback URIs point to:

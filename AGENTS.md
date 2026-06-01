@@ -111,6 +111,8 @@ Target state after M9:
   and a staged pre-token trigger; live traffic still uses Platform AuthStack
   until cutover, so remaining platform-owned auth resources are migration debt,
   not target architecture.
+- Use `docs/migrations/m9-386-dev-auth-cutover-checklist.md` for the dev
+  LaunchpadAuth cutover sequence. Do not improvise the cutover order.
 - Shared runtime REST/WSS/Claude proxy resources are decommissioned or split
   into per-app resources.
 

@@ -217,6 +217,14 @@ configuration. The staged Launchpad-owned tables must be reseeded and
 that guard is changed. Platform deploy must not source, build, or orchestrate
 these Launchpad frontend auth values.
 
+Stock Analyser and Budget Tracker do not automatically consume
+`LaunchpadAuth` outputs from the Launchpad workflow. During cutover, sync the
+Launchpad-owned auth outputs into GitHub environment variables with
+`scripts/ci/sync-launchpad-auth-client-ids.sh dev`, then redeploy SA and BT so
+their static bundles use the new User Pool, app clients, and Hosted UI domain.
+The full dev sequence is documented in
+[`m9-386-dev-auth-cutover-checklist.md`](../migrations/m9-386-dev-auth-cutover-checklist.md).
+
 Client IDs are synced from CloudFormation outputs after each auth stack deploy by running:
 ```bash
 bash scripts/ci/sync-cognito-client-ids.sh dev
