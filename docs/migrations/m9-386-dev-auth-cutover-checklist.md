@@ -189,6 +189,18 @@ Validate the Launchpad frontend bundle contains the Launchpad-owned:
 
 ## Phase 6 - Redeploy SA/BT
 
+Before syncing app client IDs or redeploying the apps, confirm the cutover PR
+also updates app infrastructure auth imports:
+
+- Stock Analyser API and WSS stacks must trust
+  `TransformotionDev-LaunchpadAuth` `UserPoolId`.
+- Budget Tracker API and WSS stacks must trust
+  `TransformotionDev-LaunchpadAuth` `UserPoolId`.
+
+Validation note from PR 5: as staged today, SA and BT still import
+`Transformotion-dev-UserPoolId` from the Platform `AuthStack`. Updating GitHub
+client ID variables alone is not enough for app cutover.
+
 After GitHub environment variables point at `LaunchpadAuth`, redeploy:
 
 ```bash
