@@ -107,9 +107,10 @@ Target state after M9:
   build-time tooling, and platform contracts/config where justified.
 - Launchpad owns auth/control-plane product surfaces now; #386 owns the
   physical auth-domain re-home. `Transformotion{Stage}-LaunchpadAuth` is the
-  staged Launchpad-owned auth foundation; live traffic still uses Platform
-  AuthStack until cutover, so remaining platform-owned auth resources are
-  migration debt, not target architecture.
+  staged Launchpad-owned auth foundation, including staged auth-domain tables
+  and a staged pre-token trigger; live traffic still uses Platform AuthStack
+  until cutover, so remaining platform-owned auth resources are migration debt,
+  not target architecture.
 - Shared runtime REST/WSS/Claude proxy resources are decommissioned or split
   into per-app resources.
 

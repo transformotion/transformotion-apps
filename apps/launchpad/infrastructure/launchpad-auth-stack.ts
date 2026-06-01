@@ -1,6 +1,11 @@
 import * as cdk from 'aws-cdk-lib';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as lambdaNodejs from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
+import * as path from 'path';
 import { Construct } from 'constructs';
 import { loadAppRegistry } from '../../../infrastructure/lib/app-registry';
 import { cognitoHostedUiCss } from './cognito-hosted-ui-css';
@@ -23,6 +28,11 @@ export class LaunchpadAuthStack extends cdk.Stack {
   public readonly stockAnalyserAppClient: cognito.UserPoolClient;
   public readonly budgetTrackerAppClient: cognito.UserPoolClient;
   public readonly userPoolDomain: cognito.UserPoolDomain;
+  public readonly usersTable: dynamodb.Table;
+  public readonly accountsTable: dynamodb.Table;
+  public readonly accountMembersTable: dynamodb.Table;
+  public readonly invitationsTable: dynamodb.Table;
+  public readonly rateLimitsTable: dynamodb.Table;
 
   private readonly stage: 'dev' | 'prod';
 
@@ -33,6 +43,8 @@ export class LaunchpadAuthStack extends cdk.Stack {
     this.stage = stage;
     const isProd = stage === 'prod';
     const registry = loadAppRegistry();
+    const appRegistryJson = JSON.stringify(registry);
+    const removal = isProd ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY;
 
     this.userPool = new cognito.UserPool(this, 'UserPool', {
       userPoolName: `launchpad-auth-${stage}`,
@@ -64,7 +76,7 @@ export class LaunchpadAuthStack extends cdk.Stack {
         emailBody: 'Your verification code is {####}',
         emailStyle: cognito.VerificationEmailStyle.CODE,
       },
-      removalPolicy: isProd ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+      removalPolicy: removal,
     });
 
     this.userPoolDomain = this.userPool.addDomain('UserPoolDomain', {
@@ -163,6 +175,85 @@ export class LaunchpadAuthStack extends cdk.Stack {
       });
     }
 
+    this.usersTable = new dynamodb.Table(this, 'UsersTable', {
+      tableName: `launchpad-users-${stage}`,
+      partitionKey: { name: 'userId', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      removalPolicy: removal,
+    });
+
+    this.accountsTable = new dynamodb.Table(this, 'AccountsTable', {
+      tableName: `launchpad-accounts-${stage}`,
+      partitionKey: { name: 'accountId', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      removalPolicy: removal,
+    });
+
+    this.accountMembersTable = new dynamodb.Table(this, 'AccountMembersTable', {
+      tableName: `launchpad-account-members-${stage}`,
+      partitionKey: { name: 'accountId', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'userId', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      removalPolicy: removal,
+    });
+
+    this.accountMembersTable.addGlobalSecondaryIndex({
+      indexName: 'userId-index',
+      partitionKey: { name: 'userId', type: dynamodb.AttributeType.STRING },
+      projectionType: dynamodb.ProjectionType.ALL,
+    });
+
+    this.invitationsTable = new dynamodb.Table(this, 'InvitationsTable', {
+      tableName: `launchpad-invitations-${stage}`,
+      partitionKey: { name: 'invitationId', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      timeToLiveAttribute: 'expiresAt',
+      removalPolicy: removal,
+    });
+
+    this.invitationsTable.addGlobalSecondaryIndex({
+      indexName: 'email-index',
+      partitionKey: { name: 'email', type: dynamodb.AttributeType.STRING },
+      projectionType: dynamodb.ProjectionType.ALL,
+    });
+
+    this.rateLimitsTable = new dynamodb.Table(this, 'RateLimitsTable', {
+      tableName: `launchpad-rate-limits-${stage}`,
+      partitionKey: { name: 'key', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      timeToLiveAttribute: 'expiresAt',
+      removalPolicy: removal,
+    });
+
+    const preTokenFn = new lambdaNodejs.NodejsFunction(this, 'PreTokenGenerationFn', {
+      functionName: `launchpad-pre-token-generation-${stage}`,
+      entry: path.join(__dirname, '../functions/pre-token-generation/src/index.ts'),
+      handler: 'handler',
+      runtime: lambda.Runtime.NODEJS_20_X,
+      timeout: cdk.Duration.seconds(10),
+      memorySize: 256,
+      environment: {
+        ACCOUNT_MEMBERS_TABLE: this.accountMembersTable.tableName,
+        ACCOUNTS_TABLE: this.accountsTable.tableName,
+        APP_REGISTRY: appRegistryJson,
+      },
+      bundling: {
+        externalModules: ['@aws-sdk/*'],
+        minify: true,
+        sourceMap: false,
+        forceDockerBundling: false,
+      },
+    });
+
+    this.accountMembersTable.grantReadData(preTokenFn);
+    this.accountsTable.grantReadData(preTokenFn);
+    preTokenFn.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['cognito-idp:AdminAddUserToGroup', 'cognito-idp:AdminRemoveUserFromGroup'],
+      resources: [this.userPool.userPoolArn],
+    }));
+
+    this.userPool.addTrigger(cognito.UserPoolOperation.PRE_TOKEN_GENERATION, preTokenFn);
+
     const hostedUiCustomisation = new cognito.CfnUserPoolUICustomizationAttachment(
       this,
       'HostedUICustomisation',
@@ -210,6 +301,12 @@ export class LaunchpadAuthStack extends cdk.Stack {
       value: domain,
       exportName: `Transformotion-${stage}-LaunchpadAuth-UserPoolDomain`,
     });
+
+    this.outputTable('UsersTableName', this.usersTable, 'Launchpad auth users table name');
+    this.outputTable('AccountsTableName', this.accountsTable, 'Launchpad auth accounts table name');
+    this.outputTable('AccountMembersTableName', this.accountMembersTable, 'Launchpad auth account-members table name');
+    this.outputTable('InvitationsTableName', this.invitationsTable, 'Launchpad auth invitations table name');
+    this.outputTable('RateLimitsTableName', this.rateLimitsTable, 'Launchpad auth rate-limits table name');
   }
 
   private createAppClient(
@@ -246,6 +343,20 @@ export class LaunchpadAuthStack extends cdk.Stack {
       writeAttributes: new cognito.ClientAttributes()
         .withStandardAttributes({ email: true, givenName: true, familyName: true })
         .withCustomAttributes('accounts'),
+    });
+  }
+
+  private outputTable(id: string, table: dynamodb.Table, description: string): void {
+    new cdk.CfnOutput(this, id, {
+      value: table.tableName,
+      description,
+      exportName: `Transformotion-${this.stage}-LaunchpadAuth-${id}`,
+    });
+
+    new cdk.CfnOutput(this, id.replace('Name', 'Arn'), {
+      value: table.tableArn,
+      description: description.replace('name', 'ARN'),
+      exportName: `Transformotion-${this.stage}-LaunchpadAuth-${id.replace('Name', 'Arn')}`,
     });
   }
 }

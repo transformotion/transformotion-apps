@@ -1,0 +1,20 @@
+{
+  "name": "@transformotion/fn-launchpad-pre-token-generation",
+  "version": "0.0.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "lint": "echo \"lint: launchpad-pre-token-generation\""
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@aws-sdk/client-cognito-identity-provider": "^3",
+    "@aws-sdk/client-dynamodb": "^3",
+    "@aws-sdk/lib-dynamodb": "^3",
+    "@types/aws-lambda": "^8",
+    "@types/node": "^22",
+    "typescript": "*"
+  }
+}

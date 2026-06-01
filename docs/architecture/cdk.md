@@ -59,7 +59,7 @@ Deployed by `deploy-launchpad.yml`. Source in `apps/launchpad/infrastructure/`.
 
 | Stack name | Class | Contents |
 |---|---|---|
-| `Transformotion{Stage}-LaunchpadAuth` | `LaunchpadAuthStack` | Staged Launchpad-owned Cognito/auth foundation. Creates a new User Pool, Hosted UI domain, app clients, groups, Hosted UI customisation, and Launchpad-owned social credential secret placeholders. Not live until #386 cutover updates app/frontend configuration and flips the Launchpad workflow cutover guard. |
+| `Transformotion{Stage}-LaunchpadAuth` | `LaunchpadAuthStack` | Staged Launchpad-owned Cognito/auth foundation. Creates a new User Pool, Hosted UI domain, app clients, groups, Hosted UI customisation, Launchpad-owned social credential secret placeholders, Launchpad-owned auth-domain tables, and `launchpad-pre-token-generation-{stage}`. Not live until #386 cutover updates app/frontend configuration and flips the Launchpad workflow cutover guard. |
 | `Transformotion{Stage}-LaunchpadControlPlane` | `LaunchpadControlPlaneStack` | Launchpad-owned live control-plane API. It currently consumes platform-owned auth-domain resources as migration debt until #386. Owns `GET /health`, live auth lookup, account setup, user profile/preferences, account admin, member management, and invitation routes. |
 
 `deploy-launchpad.yml` targets `Transformotion{Stage}-Launchpad*`, not a
@@ -122,6 +122,12 @@ Deployed by `deploy-budget-tracker.yml`. Source in `apps/budget-tracker/infrastr
 | Function name | Handler | Trigger |
 |---|---|---|
 | `transformotion-pre-token-generation-{stage}` | `functions/auth/pre-token-generation` | Cognito pre-token-generation trigger |
+
+### Launchpad auth Lambda functions (`Transformotion{Stage}-LaunchpadAuth`)
+
+| Function name | Handler | Trigger |
+|---|---|---|
+| `launchpad-pre-token-generation-{stage}` | `apps/launchpad/functions/pre-token-generation` | Staged Launchpad-owned Cognito pre-token-generation trigger attached to the staged Launchpad User Pool |
 
 ### Stock Analyser Lambda functions (`Transformotion{Stage}-StockAnalyserApi`)
 
@@ -195,6 +201,11 @@ App stacks may resolve shared platform substrate via CloudFormation exports at d
 | `Transformotion-{stage}-LaunchpadAuth-StockAnalyserAppClientId` | `LaunchpadAuthStack` | Staged Stock Analyser app client for future cutover |
 | `Transformotion-{stage}-LaunchpadAuth-BudgetTrackerAppClientId` | `LaunchpadAuthStack` | Staged Budget Tracker app client for future cutover |
 | `Transformotion-{stage}-LaunchpadAuth-CognitoDomain` | `LaunchpadAuthStack` | Staged Launchpad-owned Hosted UI domain for future cutover |
+| `Transformotion-{stage}-LaunchpadAuth-UsersTableName` | `LaunchpadAuthStack` | Staged Launchpad auth-domain table for future cutover |
+| `Transformotion-{stage}-LaunchpadAuth-AccountsTableName` | `LaunchpadAuthStack` | Staged Launchpad auth-domain table for future cutover |
+| `Transformotion-{stage}-LaunchpadAuth-AccountMembersTableName` | `LaunchpadAuthStack` | Staged Launchpad auth-domain table for future cutover |
+| `Transformotion-{stage}-LaunchpadAuth-InvitationsTableName` | `LaunchpadAuthStack` | Staged Launchpad auth-domain table for future cutover |
+| `Transformotion-{stage}-LaunchpadAuth-RateLimitsTableName` | `LaunchpadAuthStack` | Staged Launchpad auth-domain table for future cutover |
 | `Transformotion-{stage}-RestApiId` | `PlatformApiStack` | MU only — `RestApi.fromRestApiAttributes`; SA/BT no longer import after #366/#367 |
 | `Transformotion-{stage}-RestApiRootResourceId` | `PlatformApiStack` | MU only — `RestApi.fromRestApiAttributes`; SA/BT no longer import after #366/#367 |
 | `Transformotion-{stage}-AuthorizerId` | `PlatformApiStack` | MU only — JWT authoriser on migration utility routes; SA/BT own API authorisers after #366/#367 |
@@ -253,6 +264,7 @@ Control-plane and platform Lambda environment variables:
 | `APP_CLIENT_STOCK_ANALYSER` / `APP_CLIENT_BUDGET_TRACKER` | Launchpad account-provisioning | Cognito app client IDs imported from `AuthStack` outputs |
 | `APP_SLUGS` | Launchpad account-provisioning | App slugs from `platform/config/app-registry.json` |
 | `ACCOUNTS_TABLE` | pre-token-generation | `platform.accounts-{stage}` (read for appSlug resolution) |
+| `ACCOUNT_MEMBERS_TABLE` / `ACCOUNTS_TABLE` | `launchpad-pre-token-generation-{stage}` | `launchpad-account-members-{stage}` and `launchpad-accounts-{stage}` in the staged `LaunchpadAuthStack` |
 
 Platform WS Lambda environment variables:
 

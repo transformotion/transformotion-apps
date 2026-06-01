@@ -45,7 +45,7 @@ debt.
 
 | Stack | Contents |
 |---|---|
-| `Transformotion{Stage}-LaunchpadAuth` | Staged Launchpad-owned Cognito User Pool, Hosted UI domain, app clients, groups, Hosted UI customisation, and social credential secret placeholders |
+| `Transformotion{Stage}-LaunchpadAuth` | Staged Launchpad-owned Cognito User Pool, Hosted UI domain, app clients, groups, Hosted UI customisation, social credential secret placeholders, auth-domain tables, and pre-token trigger |
 | `Transformotion{Stage}-LaunchpadControlPlane` | Launchpad-owned REST API, Cognito authoriser, and control-plane Lambdas |
 | Future `Transformotion{Stage}-Launchpad*` stacks | Additional #386 auth-domain infrastructure, deployed through the Launchpad lane |
 
@@ -60,6 +60,7 @@ Source: `apps/launchpad/infrastructure/`.
 | `launchpad-user-{stage}` | `apps/launchpad/functions/user` | `GET /api/user/profile`, `PUT /api/user/preferences` |
 | `launchpad-accounts-{stage}` | `apps/launchpad/functions/accounts` | account and member administration routes |
 | `launchpad-invitations-{stage}` | `apps/launchpad/functions/invitations` | `POST /accounts/{accountId}/invitations` |
+| `launchpad-pre-token-generation-{stage}` | `apps/launchpad/functions/pre-token-generation` | Staged Cognito pre-token trigger for `LaunchpadAuth` |
 
 ## Ownership rules
 
@@ -70,6 +71,7 @@ Source: `apps/launchpad/infrastructure/`.
   current migration debt, not precedent.
 - Do not cut live auth over to `LaunchpadAuth` without an explicit #386 cutover
   PR and validation plan.
+- Reseed/validate the staged `launchpad-*` auth tables before any cutover.
 - #386 owns physical auth-domain re-home into Launchpad.
 - Preserve platform rollback routes until the issue that removes them explicitly
   says to decommission them.

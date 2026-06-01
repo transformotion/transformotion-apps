@@ -254,7 +254,11 @@ Cognito App Client (`LaunchpadAppClient`) and dedicated
 `Transformotion{Stage}-LaunchpadAuth` is the staged Launchpad-owned
 Cognito/auth foundation. It creates a new User Pool, Hosted UI domain, app
 clients, groups, Hosted UI customisation, and Launchpad-owned social credential
-secret placeholders. It is not live until #386 cutover work switches
+secret placeholders. It also creates `launchpad-users-{stage}`,
+`launchpad-accounts-{stage}`, `launchpad-account-members-{stage}`,
+`launchpad-invitations-{stage}`, `launchpad-rate-limits-{stage}`, and the
+`launchpad-pre-token-generation-{stage}` trigger attached to the staged User
+Pool. It is not live until #386 cutover work reseeds data and switches
 application configuration.
 
 `Transformotion{Stage}-LaunchpadControlPlane` is the Launchpad-owned
@@ -590,6 +594,19 @@ It must not be treated as the target pattern for new app runtime routes.
 | `platform.rate-limits-{stage}` | pk | — | Owned by `AuthApiStack` (not PlatformTablesStack). PK: `lookup-provider#<ip>`. Current migration-debt table consumed by Launchpad-owned `forgot-provider` after #363 PR 3; legacy platform route also uses it while retained for rollback. #386 owns physical re-home/rename. |
 | `platform.analysis-cache-{stage}` | accountId | cacheKey | Misnamed — see Section 2.7. |
 | `platform.job-results-{stage}` | accountId | cacheKey | Added M7 / PR #334 (Bucket A'). Platform-owned async AI job state (pending → retrying → complete/error). Written by `claude-proxy`, read by `analysis-cache` Lambda via `job-*` key prefix routing. TTL: 2h. |
+
+#### 2.10.1a Launchpad auth tables
+
+These tables are staged in `Transformotion{Stage}-LaunchpadAuth` for #386 and
+are not live until reseed/cutover:
+
+| Table | PK | SK | Notes |
+|---|---|---|---|
+| `launchpad-users-{stage}` | userId | — | Staged replacement for `platform.users-{stage}` |
+| `launchpad-accounts-{stage}` | accountId | — | Staged replacement for `platform.accounts-{stage}`; `appSlug` is required for claims |
+| `launchpad-account-members-{stage}` | accountId | userId | Staged replacement for `platform.account-members-{stage}`; includes `userId-index` |
+| `launchpad-invitations-{stage}` | invitationId | — | Staged replacement for `platform.invitations-{stage}`; includes `email-index`, TTL `expiresAt` |
+| `launchpad-rate-limits-{stage}` | key | — | Staged replacement for `platform.rate-limits-{stage}`; TTL `expiresAt` |
 
 #### 2.10.2 Stock-analyser tables
 
@@ -1182,8 +1199,9 @@ CDK stacks — M7 #250 infrastructure split complete:
 **Launchpad stacks** (`apps/launchpad/infrastructure/`):
 - `launchpad-auth-stack.ts` — staged Launchpad-owned Cognito/auth foundation
   (`launchpad-auth-{stage}` User Pool, Hosted UI domain, app clients, groups,
-  Hosted UI customisation, and social credential secret placeholders). Not live
-  until #386 cutover.
+  Hosted UI customisation, social credential secret placeholders,
+  Launchpad-owned auth-domain tables, and `launchpad-pre-token-generation-{stage}`).
+  Not live until #386 cutover.
 - `launchpad-control-plane-stack.ts` — Launchpad-owned control-plane API
   (`launchpad-control-plane-{stage}`), with `GET /health` and
   `POST /auth/lookup-provider`, `POST /auth/setup`,

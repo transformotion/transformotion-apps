@@ -34,6 +34,10 @@ For #386, `deploy-launchpad.yml` is the deploy lane for current and future
 `LaunchpadAuth`. Platform deploy must not orchestrate Launchpad
 auth/control-plane resources.
 
+`LaunchpadAuth` includes staged auth-domain tables and a staged pre-token
+trigger, but live auth remains on the Platform AuthStack until the explicit
+#386 cutover PR.
+
 When working on a specific app, read that app's `AGENTS.md` first. Claude Code may also read the sibling `CLAUDE.md` compatibility mirror:
 
 - `apps/launchpad/AGENTS.md`

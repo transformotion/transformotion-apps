@@ -212,8 +212,10 @@ The workflow currently keeps `LAUNCHPAD_AUTH_CUTOVER_ENABLED=false`, so it
 falls back to the environment-scoped Platform AuthStack Cognito variables while
 the Launchpad-owned stack is staged side-by-side. Live auth remains on the
 Platform-owned AuthStack until #386 cutover switches frontend/runtime
-configuration. Platform deploy must not source, build, or orchestrate these
-Launchpad frontend auth values.
+configuration. The staged Launchpad-owned tables must be reseeded and
+`launchpad-pre-token-generation-{stage}` claim output must be validated before
+that guard is changed. Platform deploy must not source, build, or orchestrate
+these Launchpad frontend auth values.
 
 Client IDs are synced from CloudFormation outputs after each auth stack deploy by running:
 ```bash

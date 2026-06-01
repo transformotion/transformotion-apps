@@ -77,6 +77,12 @@ Email only.
 
 ### Lambda triggers
 
+The live Platform-owned trigger remains active for current authentication.
+`LaunchpadAuthStack` also attaches `launchpad-pre-token-generation-{stage}` to
+the staged Launchpad-owned User Pool. The Launchpad-owned trigger reads
+Launchpad-owned tables and emits the same `apps`, `accounts`, and `site_admin`
+claims for #386 cutover validation.
+
 | Trigger | Function | Purpose |
 |---|---|---|
 | Pre-token generation | `transformotion-pre-token-generation-{stage}` | Injects `apps`, `site_admin`, `accounts` custom claims — see below |
@@ -154,6 +160,22 @@ Google, Facebook, and Microsoft IDPs are registered **manually in the Cognito co
 configuration on the Launchpad-owned pool is a later #386 cutover step; the
 staged Launchpad app client is Cognito-only until those providers are attached
 and validated.
+
+### Launchpad-owned staged auth tables
+
+`LaunchpadAuthStack` now creates Launchpad-owned auth-domain tables:
+
+| Table | Purpose |
+|---|---|
+| `launchpad-users-{stage}` | User profile/preferences target table for the Launchpad-owned auth domain |
+| `launchpad-accounts-{stage}` | Account records, including `appSlug` used by pre-token claims |
+| `launchpad-account-members-{stage}` | Account membership rows; includes `userId-index` for claim generation |
+| `launchpad-invitations-{stage}` | Invitation records with `email-index` and TTL |
+| `launchpad-rate-limits-{stage}` | Rate-limit state for Launchpad auth/control-plane endpoints |
+
+These tables are staged and not yet used by live APIs. See
+[`m9-386-auth-reseed.md`](../migrations/m9-386-auth-reseed.md) for the reseed
+steps required before cutover.
 
 Apple Sign-In has placeholder secrets but is not yet active.
 
@@ -702,7 +724,12 @@ Launchpad owns the live onboarding, user profile/preference, account administrat
 | `DELETE /accounts/{accountId}/members/{userId}` | `launchpad-accounts-{stage}` | Removes a member after owner verification. |
 | `POST /accounts/{accountId}/invitations` | `launchpad-invitations-{stage}` | Creates an invitation after owner verification. |
 
-Cognito User Pool, Hosted UI domain, app clients, pre-token-generation trigger, and the account/user/invitation tables remain physically platform-owned after #363. This is temporary migration debt. The target architecture is Launchpad physical and logical ownership of the auth domain, tracked by #386.
+Cognito User Pool, Hosted UI domain, app clients, pre-token-generation trigger,
+and the account/user/invitation tables used by live traffic remain physically
+platform-owned after #363. This is temporary migration debt. #386 has created
+staged Launchpad-owned replacements for the User Pool, app clients, groups,
+tables, and pre-token trigger; cutover is still disabled until reseed and
+runtime validation are complete.
 
 The platform `transformotion-account-provisioning-{stage}`, `transformotion-user-{stage}`, `transformotion-accounts-{stage}`, and `transformotion-invitations-{stage}` routes remain deployed in `PlatformApiStack` only for rollback during #363. `/auth/switch` is not migrated to Launchpad because there is no current Launchpad caller and active account switching is handled client-side via `X-Account-Id`.
 
