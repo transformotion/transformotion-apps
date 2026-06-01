@@ -208,20 +208,18 @@ Per-app deploys require these variables set in the GitHub environment (`dev` or 
 requires `ControlPlaneApiUrl` from `LaunchpadControlPlane` and reads staged
 `Transformotion{Stage}-LaunchpadAuth` outputs for `UserPoolId`,
 `LaunchpadAppClientId`, and `CognitoDomain` when cutover is explicitly enabled.
-The workflow currently keeps `LAUNCHPAD_AUTH_CUTOVER_ENABLED=false`, so it
-falls back to the environment-scoped Platform AuthStack Cognito variables while
-the Launchpad-owned stack is staged side-by-side. Live auth remains on the
-Platform-owned AuthStack until #386 cutover switches frontend/runtime
-configuration. The staged Launchpad-owned tables must be reseeded and
-`launchpad-pre-token-generation-{stage}` claim output must be validated before
-that guard is changed. Platform deploy must not source, build, or orchestrate
-these Launchpad frontend auth values.
+For dev, the `deploy-dev` job sets `LAUNCHPAD_AUTH_CUTOVER_ENABLED=true` after
+staged LaunchpadAuth deployment, reseed, Hosted UI validation, and claim
+validation. The workflow-level default remains `false`, so prod continues to
+fall back to the environment-scoped Platform AuthStack Cognito variables until
+its own cutover. Platform deploy must not source, build, or orchestrate these
+Launchpad frontend auth values.
 
 The same guard is also read by the Launchpad, Stock Analyser, and Budget
 Tracker CDK entrypoints. `false` synthesizes the current Platform-auth wiring;
 `true` synthesizes app/control-plane authorizers and Launchpad control-plane
 table references against `Transformotion{Stage}-LaunchpadAuth` outputs. The
-guard must be flipped only in the explicit #386 cutover PR.
+guard must be flipped only in an explicit #386 cutover PR.
 
 Stock Analyser and Budget Tracker do not automatically consume
 `LaunchpadAuth` outputs from the Launchpad workflow. During cutover, sync the

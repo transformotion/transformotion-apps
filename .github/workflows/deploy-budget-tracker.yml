@@ -52,6 +52,7 @@ jobs:
     if: (github.event_name == 'push' && github.ref_name == 'develop') || (github.event_name == 'workflow_call' && inputs.target == 'dev') || (github.event_name == 'workflow_dispatch' && inputs.target == 'dev')
     environment: dev
     env:
+      LAUNCHPAD_AUTH_CUTOVER_ENABLED: 'true'
       NEXT_PUBLIC_RUNTIME_PROFILE: live
       NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
       NEXT_PUBLIC_BT_WSS_URL: ${{ vars.NEXT_PUBLIC_BT_WSS_URL }}

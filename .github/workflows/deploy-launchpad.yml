@@ -47,6 +47,7 @@ jobs:
     if: (github.event_name == 'push' && github.ref_name == 'develop') || (github.event_name == 'workflow_call' && inputs.target == 'dev') || (github.event_name == 'workflow_dispatch' && inputs.target == 'dev')
     environment: dev
     env:
+      LAUNCHPAD_AUTH_CUTOVER_ENABLED: 'true'
       NEXT_PUBLIC_COGNITO_USER_POOL_ID: ${{ vars.NEXT_PUBLIC_COGNITO_USER_POOL_ID }}
       NEXT_PUBLIC_COGNITO_CLIENT_ID: ${{ vars.NEXT_PUBLIC_LAUNCHPAD_COGNITO_CLIENT_ID }}
       NEXT_PUBLIC_COGNITO_REGION: ${{ vars.NEXT_PUBLIC_COGNITO_REGION }}
@@ -128,9 +129,9 @@ jobs:
 
           require_output TransformotionDev-LaunchpadControlPlane ControlPlaneApiUrl NEXT_PUBLIC_LAUNCHPAD_CONTROL_PLANE_API_URL
 
-          # #386 foundation deploys LaunchpadAuth side-by-side. Keep live auth
-          # on environment-scoped Platform AuthStack values until the explicit
-          # cutover PR flips this guard.
+          # #386 dev cutover uses LaunchpadAuth for live dev auth. The workflow
+          # default remains false so prod stays on Platform AuthStack until its
+          # own explicit cutover.
           if [ "$LAUNCHPAD_AUTH_CUTOVER_ENABLED" = "true" ]; then
             optional_output TransformotionDev-LaunchpadAuth UserPoolId NEXT_PUBLIC_COGNITO_USER_POOL_ID "$NEXT_PUBLIC_COGNITO_USER_POOL_ID"
             optional_output TransformotionDev-LaunchpadAuth LaunchpadAppClientId NEXT_PUBLIC_COGNITO_CLIENT_ID "$NEXT_PUBLIC_COGNITO_CLIENT_ID"

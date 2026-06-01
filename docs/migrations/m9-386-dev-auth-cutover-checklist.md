@@ -8,14 +8,46 @@ Do not perform the cutover until PR 4 is merged and
 
 ## Current Guardrail
 
-`deploy-launchpad.yml` defaults to:
+`deploy-launchpad.yml`, `deploy-stock-analyser.yml`, and
+`deploy-budget-tracker.yml` keep the workflow-level default at:
 
 ```yaml
 LAUNCHPAD_AUTH_CUTOVER_ENABLED: 'false'
 ```
 
-While this is `false`, Launchpad deploys `LaunchpadAuth` but builds the
-frontend with the existing Platform AuthStack Cognito environment values.
+For the dev cutover, each `deploy-dev` job overrides the guard to:
+
+```yaml
+LAUNCHPAD_AUTH_CUTOVER_ENABLED: 'true'
+```
+
+This intentionally cuts over dev while keeping prod on Platform AuthStack until
+its own explicit cutover. While the flag is `false`, Launchpad deploys
+`LaunchpadAuth` but builds the frontend with the existing Platform AuthStack
+Cognito environment values.
+
+## Dev Cutover Record
+
+Cutover date: 2026-06-02
+
+Deployed LaunchpadAuth identifiers validated before cutover:
+
+- User Pool ID: `ap-southeast-2_EQPgoGWzh`
+- Launchpad app client ID: `6nvfrvjkdl4dneep6abnvist24`
+- Stock Analyser app client ID: `2cjrub2lhr48bo1a0anmjgki6e`
+- Budget Tracker app client ID: `4t401bvi9qeiosd624ep54af4a`
+- Cognito domain:
+  `transformotion-launchpad-959516291617-dev.auth.ap-southeast-2.amazoncognito.com`
+
+Pre-cutover staged validation completed:
+
+- Staged owner user created.
+- Launchpad auth tables seeded.
+- Cognito groups created.
+- CLI sign-in against the staged pool works.
+- `launchpad-pre-token-generation-dev` executes cleanly.
+- ID token claims include `site_admin = "true"`, app access for
+  `stock-analyser` and `budget-tracker`, and both seeded owner memberships.
 
 ## Preparation Already Front-Loaded
 
@@ -168,7 +200,7 @@ User Pool and `platform.*` auth tables. With
 and Budget Tracker stacks import `TransformotionDev-LaunchpadAuth` outputs for
 auth authorizers and Launchpad control-plane table references.
 
-Create the cutover PR that changes:
+Create the cutover PR that changes the dev deploy jobs from:
 
 ```yaml
 LAUNCHPAD_AUTH_CUTOVER_ENABLED: 'false'

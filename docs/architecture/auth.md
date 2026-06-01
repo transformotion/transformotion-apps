@@ -19,10 +19,13 @@ pre-token claims infrastructure, auth-domain tables, and legacy rollback
 routes. That platform ownership is migration debt, not target architecture.
 
 #386 owns physical auth-domain re-home into Launchpad. `Transformotion{Stage}-LaunchpadAuth`
-now exists as the staged Launchpad-owned Cognito/auth foundation, but live
-Launchpad, Stock Analyser, and Budget Tracker authentication still use
-`Transformotion{Stage}-Auth` until the cutover PR. Do not treat remaining
-Platform auth ownership as precedent for new auth/control-plane work.
+now exists as the staged Launchpad-owned Cognito/auth foundation. Dev cutover is
+performed by setting `LAUNCHPAD_AUTH_CUTOVER_ENABLED=true` for the dev
+Launchpad, Stock Analyser, and Budget Tracker deploy jobs after staged
+LaunchpadAuth deployment, reseed, Hosted UI validation, and claim validation.
+The workflow-level default remains `false`, so prod continues to use
+`Transformotion{Stage}-Auth` until its own explicit cutover. Do not treat
+remaining Platform auth ownership as precedent for new auth/control-plane work.
 
 ---
 
@@ -37,9 +40,9 @@ Platform auth ownership as precedent for new auth/control-plane work.
 
 The staged Launchpad-owned replacement pool is created by
 `Transformotion{Stage}-LaunchpadAuth` with pool name `launchpad-auth-{stage}`.
-It is not live until #386 cutover work updates application configuration and
-validates sign-in, token claims, and app access against the Launchpad-owned
-auth domain.
+Dev becomes live when the dev deploy jobs run with
+`LAUNCHPAD_AUTH_CUTOVER_ENABLED=true` and runtime validation confirms sign-in,
+token claims, and app access against the Launchpad-owned auth domain.
 
 ### Password policy
 
