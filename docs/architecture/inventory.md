@@ -55,8 +55,9 @@ The repository contains the following top-level directories:
   platform stacks live under `platform/infrastructure/`; app stacks live
   under `apps/<app>/infrastructure/`.
 - `platform/functions/` — platform Lambda source: `accounts/`, `auth/` (with
-  `account-provisioning/`, `pre-token-generation/`, `invitations/`,
-  `forgot-provider/`), `claude-proxy/`, `user/`. Resolved by M7 / PR #250.
+  `account-provisioning/`, `pre-token-generation`, `invitations`, legacy
+  rollback `forgot-provider/`), `claude-proxy/`, `user/`. Resolved by M7 /
+  PR #250.
 - `contracts/` — only `budget-tracker/` exists. M2.3 ratifies the
   contracts policy; subsequent work creates `platform/` and
   `stock-analyser/` siblings.
@@ -217,7 +218,7 @@ was migrated to `apps/stock-analyser/lib/cycle/` per `CONTRIBUTING.md`
 package deleted. The cycle lib now has 25 vitest tests in
 `apps/stock-analyser/lib/cycle/cycle.test.ts`.
 
-### 1.6 Launchpad as platform shell
+### 1.6 Launchpad as control-plane app
 
 **Status: Confirmed (current state — Hosted UI auth landed, M6)**
 
@@ -225,6 +226,12 @@ package deleted. The cycle lib now has 25 vitest tests in
 switcher, app tile rendering. Treated as an app for structural
 purposes (consumes platform services through packages like any other
 app) per `CONTRIBUTING.md` Section 3.2.
+
+M9 #363 extends Launchpad from frontend-only platform shell into the
+control-plane app. Launchpad-owned infrastructure lives under
+`apps/launchpad/infrastructure/` and is synthesised by
+`infrastructure/bin/launchpad.ts`, matching the Stock Analyser and Budget
+Tracker app-owned infrastructure pattern.
 
 Per M0 verification: `apps/launchpad/` contains no public signup UI
 (no `signUp`, `register`, `createAccount` references in any `.ts` or
@@ -237,6 +244,22 @@ sign-in all route through the Cognito Hosted UI. Launchpad has its own
 Cognito App Client (`LaunchpadAppClient`) and dedicated
 `/launchpad/callback` OAuth return route. Auth store persist key:
 `launchpad-auth`.
+
+`Transformotion{Stage}-LaunchpadControlPlane` is the Launchpad-owned
+control-plane API. It exposes `GET /health` and owns the live
+`POST /auth/lookup-provider`, `POST /auth/setup`,
+`GET /api/user/profile`, `PUT /api/user/preferences`,
+`POST /accounts`, `GET/PUT/DELETE /accounts/{accountId}`,
+`GET /accounts/{accountId}/members`,
+`DELETE /accounts/{accountId}/members/{userId}`, and
+`POST /accounts/{accountId}/invitations` routes after #363 PR 5. Cognito User
+Pool, Hosted UI domain, app clients, pre-token trigger, and shared account
+tables remain physically platform-owned as migration debt.
+
+Target ownership is Launchpad physical and logical ownership of the auth
+domain. #386 owns the physical re-home of Cognito, auth-domain tables,
+pre-token claims infrastructure, rate limits, and remaining platform rollback
+routes.
 
 The hard-coded `userCanAccessFramework` prop in launchpad currently
 governs tile visibility for the Transformotion Framework app. M9
@@ -417,16 +440,24 @@ proposal.
 
 Platform Lambdas (`platform/functions/`):
 
-- `accounts/` — account management
-- `auth/account-provisioning/` — first-sign-in account creation
-  (renamed from `first-login/`)
+- `accounts/` — legacy rollback copy of account management routes
+- `auth/account-provisioning/` — legacy rollback copy of first-sign-in
+  account creation and superseded `/auth/switch`
 - `auth/pre-token-generation/` — Cognito pre-token trigger; emits
   the `apps`, `accounts`, `site_admin` claims into JWTs
-- `auth/invitations/` — invitation flow handlers
-- `auth/forgot-provider/` — federated identity recovery (has known bug
-  per M12)
+- `auth/invitations/` — legacy rollback copy of invitation route
+- `auth/forgot-provider/` — legacy rollback copy of the federated identity
+  recovery route after #363 PR 3
 - `claude-proxy/` — Anthropic API proxy
-- `user/` — platform user data
+- `user/` — legacy rollback copy of user profile/preferences routes
+
+Launchpad control-plane Lambdas (`apps/launchpad/functions/`):
+
+- `forgot-provider/` — live federated identity recovery route
+- `account-provisioning/` — live first-sign-in account creation
+- `user/` — live user profile/preferences routes
+- `accounts/` — live account administration and member-management routes
+- `invitations/` — live invitation creation route
 
 Stock-analyser Lambdas (`apps/stock-analyser/functions/`):
 
@@ -544,7 +575,7 @@ It must not be treated as the target pattern for new app runtime routes.
 | `platform.account-members-{stage}` | accountId | userId | Has `userId-index` GSI for reverse lookup. |
 | `platform.invitations-{stage}` | invitationId | — | Used by invitation flow (M11). |
 | `platform.users-{stage}` | userId | — | |
-| `platform.rate-limits-{stage}` | pk | — | Owned by `AuthApiStack` (not PlatformTablesStack). PK: `lookup-provider#<ip>`. Used for rate-limiting by `forgot-provider` Lambda. |
+| `platform.rate-limits-{stage}` | pk | — | Owned by `AuthApiStack` (not PlatformTablesStack). PK: `lookup-provider#<ip>`. Current migration-debt table consumed by Launchpad-owned `forgot-provider` after #363 PR 3; legacy platform route also uses it while retained for rollback. #386 owns physical re-home/rename. |
 | `platform.analysis-cache-{stage}` | accountId | cacheKey | Misnamed — see Section 2.7. |
 | `platform.job-results-{stage}` | accountId | cacheKey | Added M7 / PR #334 (Bucket A'). Platform-owned async AI job state (pending → retrying → complete/error). Written by `claude-proxy`, read by `analysis-cache` Lambda via `job-*` key prefix routing. TTL: 2h. |
 
@@ -870,7 +901,7 @@ already in use.
 
 **Status: Confirmed (open; addressed in M12)**
 
-Per Issue #49: `platform/functions/auth/forgot-provider/` uses
+Per Issue #49: the forgot-provider implementation uses
 `AdminGetUserCommand(Username=email)` which works for native Cognito
 users but fails for federated users because Cognito indexes federated
 users by sub, not email. M12 fixes.
@@ -894,8 +925,10 @@ launchpad routes — exactly what cross-app navigation requires.
 
 A single shared authoriser (`JwtAuthoriser`) is defined in
 `platform-api-stack.ts` and reused across all platform routes. The
-auth-api-stack handles only the public lookup-provider Lambda; no
-authoriser config there. Aligns with `auth.md` line 277.
+Launchpad control-plane stack defines its own Cognito authoriser over the same
+platform-owned User Pool. The auth-api-stack now retains only the rollback
+copy of the public lookup-provider Lambda; the live route is owned by
+`LaunchpadControlPlaneStack`.
 
 The v4 inventory's uncertainty on this finding was well-founded;
 the answer is clean.
@@ -936,16 +969,25 @@ Users who sign in via Launchpad are silently re-authenticated by SA and
 BT (each finds the cookie and exchanges it for app-specific tokens without
 re-prompting). This is the SSO precursor for cross-app navigation.
 
-### 3.5 Platform Lambda permission model
+### 3.5 Control-plane Lambda permission model
 
-**Status: Deferred (decision pending in M2.2)**
+**Status: Resolved by #363 control-plane migration**
 
-Five platform Lambdas (`accounts`, `user`, `auth/invitations`,
-`auth/account-provisioning`, `auth/forgot-provider`) were deliberately
-not gated during sub-phase 7b.5-beta because their permission model
-needed dedicated thought. Each needs a documented decision on its
-authorisation model — including how onboarding-stage users (no app
-groups yet) interact with them.
+The former platform control-plane Lambdas (`accounts`, `user`,
+`auth/invitations`, `auth/account-provisioning`) were deliberately not gated
+during sub-phase 7b.5-beta because their permission model needed dedicated
+thought. #363 resolves this by moving live product-level control-plane
+behavior to Launchpad-owned Lambdas with route-specific authorization.
+
+The forgot-provider lookup route, account setup route, user
+profile/preferences routes, account administration routes, member-management
+routes, and invitation creation route are now Launchpad-owned control-plane behavior
+(`apps/launchpad/functions/forgot-provider`,
+`apps/launchpad/functions/account-provisioning`,
+`apps/launchpad/functions/user`, `apps/launchpad/functions/accounts`,
+`apps/launchpad/functions/invitations`). The legacy platform copies remain
+only for rollback. `/auth/switch` is not migrated because there is no current
+Launchpad caller and account switching is handled via `X-Account-Id`.
 
 M2.2 is the decision; M10 implements.
 
@@ -1024,14 +1066,21 @@ incompatibility. M7 re-enables once the upstream fix lands.
 GitHub Actions workflows in `.github/workflows/`:
 
 - `ci.yml` — PR typecheck, lint, CDK synth
-- `cd.yml` — manual full-platform redeploy
+- `cd.yml` — explicit manual full redeploy
 - `deploy-platform.yml` — triggers on `platform/infrastructure/**`,
-  `infrastructure/bin/**`, `platform/functions/**`
+  `infrastructure/bin/platform.ts`, `platform/functions/**`; deploys platform
+  substrate only and does not cascade into app workflows
 - `deploy-stock-analyser.yml` — triggers on `apps/stock-analyser/**`,
   `apps/stock-analyser/infrastructure/**`, `packages/**`
 - `deploy-budget-tracker.yml` — active Budget Tracker deployment;
   triggers on `apps/budget-tracker/**`, `infrastructure/bin/budget-tracker.ts`,
   and package paths consumed by Budget Tracker.
+- `deploy-launchpad.yml` — active Launchpad deployment; triggers on
+  `apps/launchpad/**`, `infrastructure/bin/launchpad.ts`, and Launchpad
+  package dependencies.
+- `deploy-migration-utilities.yml` — migration utilities deployment; triggers
+  on `migration-utilities/**`, `infrastructure/bin/migration-utilities.ts`,
+  and package paths consumed by migration utilities.
 
 Verified gaps (M1 #81):
 
@@ -1040,10 +1089,10 @@ Verified gaps (M1 #81):
    consumed by Budget Tracker explicitly rather than a blanket
    `packages/**` filter. M14 remains the right place to verify path
    filter completeness across all deploy workflows.
-2. **`platform/functions/**` asymmetry.** Platform Lambda source moved to
+2. **`platform/functions/**` boundary.** Platform Lambda source moved to
    `platform/functions/**` (M7 / PR #250). `deploy-platform.yml` path
-   filter updated accordingly. Whether app deploy workflows should also
-   trigger on `platform/functions/**` changes is worth investigating in M14.
+   filter covers platform-owned functions only; app workflows intentionally do
+   not trigger on `platform/functions/**` after #363 deployment decoupling.
 3. **`.github/workflows/**` not in any deploy workflow.** Changes
    to a deploy workflow don't trigger that workflow itself.
    Changes to CI machinery (`ci.yml` etc.) don't propagate to
@@ -1074,8 +1123,9 @@ actual state).
 
 Test files exist in approximately 8 places across the monorepo (~951
 total LOC of tests). Notable: `platform/functions/auth/pre-token-generation/`
-has tests; other auth Lambdas (`account-provisioning`, `accounts`,
-`user`, `forgot-provider`) do not. Tests are non-uniform.
+has tests; other auth/control-plane Lambdas (`account-provisioning`,
+`accounts`, `user`, Launchpad `forgot-provider`) do not. Tests are
+non-uniform.
 
 CI does not currently run tests on PRs — `ci.yml` runs typecheck,
 lint, and CDK synth only. Test gating in CI is post-M-setup work
@@ -1114,6 +1164,14 @@ CDK stacks — M7 #250 infrastructure split complete:
   `platform.ws-connections-{stage}` DynamoDB table. Migrated from
   `apps/budget-tracker/infrastructure/` by M7 / PR #295.
 - `storage-stack.ts` — S3 backups bucket
+
+**Launchpad stacks** (`apps/launchpad/infrastructure/`):
+- `launchpad-control-plane-stack.ts` — Launchpad-owned control-plane API
+  (`launchpad-control-plane-{stage}`), with `GET /health` and
+  `POST /auth/lookup-provider`, `POST /auth/setup`,
+  `GET /api/user/profile`, `PUT /api/user/preferences`, account
+  administration, member-management, and invitation routes. Cognito and shared
+  account tables remain platform-owned migration debt until #386.
 
 **Stock-analyser stacks** (`apps/stock-analyser/infrastructure/`):
 - `stock-analyser-api-stack.ts` — Stock Analyser-owned REST API Gateway,

@@ -76,6 +76,22 @@ jobs:
           role-to-assume: ${{ env.ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: CDK Deploy - Launchpad control plane (dev)
+        working-directory: infrastructure
+        run: pnpm exec cdk deploy --app 'npx ts-node --prefer-ts-exts bin/launchpad.ts' 'TransformotionDev-LaunchpadControlPlane' --require-approval never
+
+      - name: Extract Launchpad control plane URL
+        run: |
+          CONTROL_PLANE_API_URL=$(aws cloudformation describe-stacks \
+            --stack-name TransformotionDev-LaunchpadControlPlane \
+            --query "Stacks[0].Outputs[?OutputKey=='ControlPlaneApiUrl'].OutputValue" \
+            --output text)
+          if [ -z "$CONTROL_PLANE_API_URL" ] || [ "$CONTROL_PLANE_API_URL" = "None" ]; then
+            echo "ERROR: Could not extract ControlPlaneApiUrl from TransformotionDev-LaunchpadControlPlane stack"
+            exit 1
+          fi
+          echo "NEXT_PUBLIC_LAUNCHPAD_CONTROL_PLANE_API_URL=$CONTROL_PLANE_API_URL" >> "$GITHUB_ENV"
+
       - name: Build Next.js (static export)
         working-directory: apps/launchpad
         run: pnpm build
@@ -141,6 +157,22 @@ jobs:
         with:
           role-to-assume: ${{ env.ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
+
+      - name: CDK Deploy - Launchpad control plane (prod)
+        working-directory: infrastructure
+        run: pnpm exec cdk deploy --app 'npx ts-node --prefer-ts-exts bin/launchpad.ts' 'TransformotionProd-LaunchpadControlPlane' --require-approval never
+
+      - name: Extract Launchpad control plane URL
+        run: |
+          CONTROL_PLANE_API_URL=$(aws cloudformation describe-stacks \
+            --stack-name TransformotionProd-LaunchpadControlPlane \
+            --query "Stacks[0].Outputs[?OutputKey=='ControlPlaneApiUrl'].OutputValue" \
+            --output text)
+          if [ -z "$CONTROL_PLANE_API_URL" ] || [ "$CONTROL_PLANE_API_URL" = "None" ]; then
+            echo "ERROR: Could not extract ControlPlaneApiUrl from TransformotionProd-LaunchpadControlPlane stack"
+            exit 1
+          fi
+          echo "NEXT_PUBLIC_LAUNCHPAD_CONTROL_PLANE_API_URL=$CONTROL_PLANE_API_URL" >> "$GITHUB_ENV"
 
       - name: Build Next.js (static export)
         working-directory: apps/launchpad

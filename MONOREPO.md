@@ -30,7 +30,17 @@ transformotion-apps/
 │   │   ├── AGENTS.md                     # Canonical Budget Tracker agent guide
 │   │   ├── CLAUDE.md                     # Claude Code compatibility mirror
 │   │   └── package.json                   # @transformotion/budget-tracker
-│   ├── launchpad/                         # Platform shell — sign-in, app tile rendering
+│   ├── launchpad/                         # Platform shell and control-plane app
+│   │   ├── functions/                     # Launchpad-owned control-plane Lambda source
+│   │   │   ├── account-provisioning/
+│   │   │   ├── accounts/
+│   │   │   ├── forgot-provider/
+│   │   │   ├── invitations/
+│   │   │   └── user/
+│   │   ├── infrastructure/                # Launchpad CDK stacks
+│   │   │   └── launchpad-control-plane-stack.ts
+│   │   ├── AGENTS.md                     # Canonical Launchpad agent guide
+│   │   ├── CLAUDE.md                     # Claude Code compatibility mirror
 │   │   └── package.json                   # @transformotion/launchpad
 │   ├── stock-analyser/                    # Stock Signal Analyser, basePath /stock-analyser
 │   │   ├── app/                           # Next.js App Router pages
@@ -77,13 +87,13 @@ transformotion-apps/
 │   ├── CLAUDE.md                         # Claude Code compatibility mirror
 │   └── functions/                         # Platform Lambda source (shared across apps)
 │       ├── auth/                          # Auth-related Lambdas (own pnpm workspace glob)
-│       │   ├── account-provisioning/      # First-sign-in account creation
+│       │   ├── account-provisioning/      # Legacy rollback first-sign-in account creation
 │       │   ├── pre-token-generation/      # Cognito pre-token trigger (claims)
-│       │   ├── invitations/               # Invitation flow
-│       │   └── forgot-provider/           # Federated identity recovery
-│       ├── accounts/                      # Account management
+│       │   ├── invitations/               # Legacy rollback invitation flow
+│       │   └── forgot-provider/           # Legacy rollback federated identity recovery
+│       ├── accounts/                      # Legacy rollback account management routes
 │       ├── claude-proxy/                  # Legacy platform Anthropic API proxy (rollback/decommission path)
-│       ├── user/                          # Platform user data
+│       ├── user/                          # Legacy rollback user profile/preferences routes
 │       ├── ws-authorizer/                 # WS $connect custom authoriser (Cognito JWT + accounts claim)
 │       ├── ws-connect/                    # WS $connect handler (writes connection record)
 │       ├── ws-default/                    # WS $default handler (init handshake → connectionId)
@@ -119,6 +129,7 @@ transformotion-apps/
 │   │   ├── ci.yml                         # PR typecheck + lint + CDK synth
 │   │   ├── cd.yml                         # Manual full-platform redeploy
 │   │   ├── deploy-platform.yml            # Triggered by platform/infrastructure/** and platform/functions/** changes
+│   │   ├── deploy-launchpad.yml           # Triggered by apps/launchpad/** changes
 │   │   ├── deploy-stock-analyser.yml      # Triggered by apps/stock-analyser/** changes
 │   │   ├── deploy-budget-tracker.yml      # Triggered by apps/budget-tracker/** changes
 │   │   └── deploy-migration-utilities.yml # Triggered by migration-utilities/** changes
@@ -141,11 +152,18 @@ transformotion-apps/
 distinct from platform infrastructure and stays separate (per
 `CONTRIBUTING.md` Section 6.4).
 
+After #363, Launchpad owns the live auth/control-plane APIs. Platform still
+physically owns Cognito, auth-domain tables, and rollback control-plane routes
+as migration debt. #386 owns physical auth-domain re-home into Launchpad; do
+not treat platform auth ownership as the target topology.
+
 ## Workspace configuration
 
 `pnpm-workspace.yaml` declares the following workspace globs:
 
 - `apps/*` — direct children only (does not include nested workspaces)
+- `apps/launchpad/functions/*` — explicit nested glob for launchpad
+  control-plane Lambdas
 - `apps/stock-analyser/functions/*` — explicit nested glob for stock
   analyser Lambdas
 - `apps/budget-tracker/functions/*` — explicit nested glob for budget
@@ -205,8 +223,10 @@ import { handler as accountHandler } from '../../accounts/handler'
 
 ## How deploys work
 
-Push-triggered, path-filtered per app. Changes to one app never trigger
-the other app's deployment.
+Push-triggered workflows are path-filtered by ownership boundary. Platform
+deploys platform substrate only and does not trigger app or migration utility
+deployments. Changes to one app never trigger another app's deployment. The
+manual `cd.yml` workflow remains the explicit full redeploy escape hatch.
 
 | Changed path | Workflow triggered |
 |---|---|
@@ -216,7 +236,11 @@ the other app's deployment.
 | `apps/budget-tracker/infrastructure/**` | `deploy-budget-tracker.yml` |
 | `apps/launchpad/**` | `deploy-launchpad.yml` |
 | `platform/infrastructure/**` | `deploy-platform.yml` |
-| `infrastructure/bin/**` | `deploy-platform.yml` |
+| `infrastructure/bin/platform.ts` | `deploy-platform.yml` |
+| `infrastructure/bin/launchpad.ts` | `deploy-launchpad.yml` |
+| `infrastructure/bin/stock-analyser.ts` | `deploy-stock-analyser.yml` |
+| `infrastructure/bin/budget-tracker.ts` | `deploy-budget-tracker.yml` |
+| `infrastructure/bin/migration-utilities.ts` | `deploy-migration-utilities.yml` |
 | `platform/functions/**` | `deploy-platform.yml` |
 | `migration-utilities/**` | `deploy-migration-utilities.yml` |
 | `packages/**` | Shared package changes trigger app/migration deploy workflows where their path filters include the touched package. `deploy-budget-tracker.yml` is active and includes the Budget Tracker package dependencies explicitly. |

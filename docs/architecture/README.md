@@ -23,8 +23,10 @@ If during implementation a document is discovered to be wrong or incomplete, wor
 - **[MONOREPO.md](/MONOREPO.md)** — Workspace structure, import boundaries, build/deploy triggers.
 - **[contracts/](/contracts/)** — Per-app data and API contracts (living documentation adjacent to each app's code).
 - **[AGENTS.md](/AGENTS.md)** — Canonical AI-agent operating guide.
+- **[docs/migrations/m9-363-closeout.md](/docs/migrations/m9-363-closeout.md)** — #363 deployment and runtime validation checklist; records #386 as the physical auth-domain re-home follow-up.
 - **[apps/stock-analyser/AGENTS.md](/apps/stock-analyser/AGENTS.md)** — Stock Analyser operating guide for agents.
 - **[apps/budget-tracker/AGENTS.md](/apps/budget-tracker/AGENTS.md)** — Budget Tracker operating guide for agents.
+- **[apps/launchpad/AGENTS.md](/apps/launchpad/AGENTS.md)** — Launchpad control-plane operating guide for agents.
 - **CLAUDE.md files** — Claude Code compatibility mirrors for the corresponding AGENTS.md files.
 
 ## What is NOT in these documents

@@ -18,6 +18,7 @@
     "bin/**/*.ts",
     "lib/**/*.ts",
     "../platform/infrastructure/**/*.ts",
+    "../apps/launchpad/infrastructure/**/*.ts",
     "../apps/stock-analyser/infrastructure/**/*.ts",
     "../apps/budget-tracker/infrastructure/**/*.ts",
     "../migration-utilities/infrastructure/lib/**/*.ts"

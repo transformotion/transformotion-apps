@@ -117,11 +117,11 @@ Implemented behaviors with `SubAppIndexRewrite` — all active as of M7 #251 (ve
 
 ## Deploy triggers
 
-Deploy ordering uses a two-layer model: platform fires on push; app workflows cascade via `workflow_call` from within `deploy-platform.yml`.
-
-### Why workflow_call, not workflow_run
-
-PR #348 used `workflow_run` for the cascade. GitHub's `workflow_run` trigger only activates when the listener workflow file exists on the **repository's default branch** (`main`). With `develop` as the active integration branch and `main` as the (not-yet-active) production branch, `workflow_run` cascades from `develop` were permanently inert — every app deploy after a platform deploy required a manual `workflow_dispatch`. PR #351 replaced `workflow_run` with `workflow_call` (reusable workflows), which has no default-branch restriction and fires correctly from any branch.
+Deploy ordering uses independently triggered workflows. Platform changes deploy
+platform substrate only; application and migration utility workflows deploy
+their own stacks/assets through app-specific path filters or explicit
+`workflow_dispatch`. The manual `cd.yml` workflow remains the full redeploy
+escape hatch when an operator intentionally wants to redeploy everything.
 
 ### Platform (fires on push)
 
@@ -130,24 +130,22 @@ PR #348 used `workflow_run` for the cascade. GitHub's `workflow_run` trigger onl
 
 Also triggerable via `workflow_dispatch` with `target: dev | prod`.
 
-Deploys all platform CDK stacks (`--app bin/platform.ts`): GithubActionsRole, Storage, Network, Auth, AuthApi, PlatformTables, PlatformWs, Api (dev + prod). After the platform job succeeds, four cascade jobs call the app workflows as reusable workflows in parallel.
+Deploys platform CDK stacks (`--app bin/platform.ts`): GithubActionsRole,
+Storage, Network, Auth, AuthApi, PlatformTables, PlatformWs, Api (dev + prod).
+It does not call Launchpad, Stock Analyser, Budget Tracker, or migration utility
+deployment workflows.
 
-### App workflows (cascade via workflow_call)
+`Auth`, `AuthApi`, and `PlatformTables` still contain physical auth-domain
+resources after #363. That is migration debt retained for compatibility and
+rollback. #386 owns the physical re-home into Launchpad; Platform ownership of
+those resources is not the target architecture.
 
-`deploy-platform.yml` calls each app workflow as a reusable workflow after the platform deploy succeeds. The cascade jobs in `deploy-platform.yml` run in parallel after `deploy-dev` or `deploy-prod` completes:
+### Independent app and utility workflows
 
-| Workflow | Cascade job in platform | What it deploys |
-|---|---|---|
-| `deploy-stock-analyser.yml` | `cascade-stock-analyser` | `StockAnalyserTables` + `StockAnalyserApi` CDK stacks + S3 sync to `stock-analyser/` |
-| `deploy-budget-tracker.yml` | `cascade-budget-tracker` | `BudgetTrackerTables` + `BudgetTrackerApi` CDK stacks + S3 sync to `budget-tracker/` |
-| `deploy-migration-utilities.yml` | `cascade-migration-utilities` | `MigrationsApi` CDK stack |
-| `deploy-launchpad.yml` | `cascade-launchpad` | Static build + S3 sync to root |
-
-The cascade target (`dev` or `prod`) is computed from whichever platform job succeeded — `deploy-dev` → `dev`, `deploy-prod` → `prod`. A skipped platform job does not block the cascade; `always()` + result check handles the skipped-sibling pattern.
-
-### App-only deploys (push to app paths)
-
-App workflows also retain path-filtered push triggers for changes that don't touch platform. A push to `apps/stock-analyser/**` or `infrastructure/bin/stock-analyser.ts` fires `deploy-stock-analyser.yml` directly, without going through the platform workflow.
+App and utility workflows are path-filtered and independently deploy only their
+own stacks/assets. A push to `apps/stock-analyser/**` or
+`infrastructure/bin/stock-analyser.ts` fires `deploy-stock-analyser.yml`
+directly, without going through the platform workflow.
 
 | Workflow | Push paths |
 |---|---|
@@ -158,17 +156,20 @@ App workflows also retain path-filtered push triggers for changes that don't tou
 
 ### Manual deploys (workflow_dispatch)
 
-All five workflows retain `workflow_dispatch` as the operator escape hatch. Use it to deploy a single app without triggering a platform deploy:
+All deploy workflows retain `workflow_dispatch` as the operator escape hatch.
+Use it to deploy a single app without triggering a platform deploy:
 ```bash
 gh workflow run deploy-budget-tracker.yml --ref develop -f target=dev
 ```
 
 Each CDK deploy step passes an explicit `--app` flag pointing to the per-app entrypoint, so each workflow synthesises only its own stacks:
 
-- `deploy-stock-analyser.yml` — `StockAnalyserTables` + `StockAnalyserApi` only
-- `deploy-budget-tracker.yml` — `BudgetTrackerTables` + `BudgetTrackerApi` only
+- `deploy-stock-analyser.yml` — `StockAnalyserTables`, `StockAnalyserWs`, and `StockAnalyserApi` only
+- `deploy-budget-tracker.yml` — `BudgetTrackerTables`, `BudgetTrackerWs`, and `BudgetTrackerApi` only
 - `deploy-migration-utilities.yml` — `MigrationsApi` only
-- `deploy-platform.yml` — platform stacks only (Network, Auth, AuthApi, PlatformTables, Api, PlatformWs, Storage, GithubActionsRole)
+- `deploy-launchpad.yml` - `LaunchpadControlPlane` + static export. #386 will expand this lane as Launchpad physically owns the auth domain
+- `deploy-platform.yml` - platform stacks only (Network, Auth, AuthApi, PlatformTables, Api, PlatformWs, Storage, GithubActionsRole). Auth-domain stacks here are current migration debt, not target ownership
+- `cd.yml` - explicit manual full redeploy when an operator wants to redeploy all stacks
 
 Changing `packages/runtime-config` does not trigger a platform deploy (the APPS const was removed from that package in M7 / #346; app identity is now sourced from `platform/config/app-registry.json` at synth time).
 
@@ -194,6 +195,14 @@ Per-app deploys require these variables set in the GitHub environment (`dev` or 
 | `NEXT_PUBLIC_LAUNCHPAD_COGNITO_CLIENT_ID` | LaunchpadAppClient |
 | `NEXT_PUBLIC_STOCK_ANALYSER_COGNITO_CLIENT_ID` | StockAnalyserAppClient |
 | `NEXT_PUBLIC_BUDGET_TRACKER_COGNITO_CLIENT_ID` | BudgetTrackerAppClient |
+
+### Launchpad
+
+| Variable | Source |
+|---|---|
+| `NEXT_PUBLIC_LAUNCHPAD_CONTROL_PLANE_API_URL` | `ControlPlaneApiUrl` output from `Transformotion{Stage}-LaunchpadControlPlane`; live base URL for Launchpad control-plane routes including auth lookup, account setup, user profile/preferences, account administration, member management, and invitations |
+| `NEXT_PUBLIC_PLATFORM_AUTH_API_URL` | Optional rollback-only base URL for legacy platform AuthApi lookup-provider route |
+| `NEXT_PUBLIC_PLATFORM_API_URL` | Optional rollback-only base URL for legacy platform API account setup, user profile/preferences, account administration, member-management, and invitation routes |
 
 Client IDs are synced from CloudFormation outputs after each auth stack deploy by running:
 ```bash

@@ -10,6 +10,17 @@ Social identity providers (Google, Facebook, Microsoft) are wired at the Cognito
 
 See [cdk.md](./cdk.md) for CDK stack names. See [data.md](./data.md) for account and membership table schemas.
 
+### M9 #363 / #386 ownership note
+
+After #363, Launchpad owns the live auth/control-plane API behavior: auth
+lookup, onboarding, profile/preferences, account administration, member
+administration, and invitations. Platform still physically owns Cognito,
+pre-token claims infrastructure, auth-domain tables, and legacy rollback
+routes. That platform ownership is migration debt, not target architecture.
+
+#386 owns physical auth-domain re-home into Launchpad. Do not treat remaining
+Platform auth ownership as precedent for new auth/control-plane work.
+
 ---
 
 ## Cognito user pool
@@ -35,7 +46,7 @@ The Cognito user pool declares these custom attributes:
 | Attribute | Type | Status | Purpose |
 |---|---|---|---|
 | `custom:accounts` | String (max 2048) | Active | Comma-separated account IDs the user belongs to (all apps combined). Maintained by the Lambdas that modify account membership; read by the pre-token Lambda. Not consulted directly by frontend or API handlers. |
-| `custom:active_account` | String (max 36) | Inert (writes pending removal) | Currently still written by `account-provisioning` (`/auth/setup` and `/auth/switch`). The writes and the `/auth/switch` route are removed in M8 — they reflect a server-side approach to account switching that has been superseded by client-side switching (X-Account-Id header). The attribute itself remains declared in the user pool schema permanently — Cognito does not permit removal of existing user pool schema attributes — but is inert (no writers, no readers) post-M8. Account switching as a working feature is provided by the client-side header-based design described in *Auth middleware* below. |
+| `custom:active_account` | String (max 36) | Transitional write only | Still written by Launchpad-owned `account-provisioning` on `/auth/setup` for first-account bootstrap. The legacy platform `/auth/switch` route remains deployed only for rollback and is not migrated to Launchpad because account switching has been superseded by client-side switching (`X-Account-Id` header). The attribute itself remains declared in the user pool schema permanently — Cognito does not permit removal of existing user pool schema attributes. Account switching as a working feature is provided by the client-side header-based design described in *Auth middleware* below. |
 
 **Active account is not a Cognito attribute.** Which account a user is currently viewing in an app is browser-local UI state, persisted in localStorage per-app. API requests include the `accountId` as a request parameter. The auth middleware validates the parameter against the token's `accounts` claim and rejects requests where the caller is not a member of the stated account.
 
@@ -376,7 +387,7 @@ This is a layering rule of the same shape as the data-access layered architectur
 
 ### Deprecated helpers (retiring in M8)
 
-- `requireGroup(auth, group)` — group-name-based pattern superseded by claim-based helpers. Currently retained for the legacy `auth/forgot-provider` route's IP-based rate limiter; retires when `auth/forgot-provider` migrates to the canonical claim-based pattern.
+- `requireGroup(auth, group)` — group-name-based pattern superseded by claim-based helpers. Retained only for legacy compatibility if needed; new Launchpad-owned forgot-provider work must not use it.
 - `userInGroup(auth, group)` — utility check, also group-name-based; zero current callers; retires alongside `requireGroup`.
 
 Handlers do NOT call `requireGroup` for new work.
@@ -422,19 +433,19 @@ export const handler = withAuth(async ({ auth, account, event }) => {
 
 ## Per-Lambda permission models
 
-Five platform Lambdas have explicit permission models. Each is documented here for reference; the patterns reflect what each Lambda does and the authorization shape it requires.
+The auth/control-plane Lambdas have explicit permission models. Each is documented here for reference; the patterns reflect what each Lambda does and the authorization shape it requires.
 
 | Lambda | Wrapper | Authorization | IAM scope |
 |---|---|---|---|
-| `accounts` | `withAuth` | Per-route guards (`requireAccountAccess` / `requireAccountOwner`) | `platform.accounts` RW + `platform.account-members` RW |
-| `user` | `withAuthOnly` | None — user owns their own data | `platform.users` RW |
-| `auth/account-provisioning` | `withAuthOnly` | None — first-login flow; user has JWT but no app group memberships yet | `platform.accounts` RW + `platform.account-members` RW + `AdminUpdateUserAttributes` on user pool ARN |
-| `auth/invitations` | `withAuth` | Account-context guards | `platform.accounts` R + `platform.invitations` RW |
-| `auth/forgot-provider` | None (raw handler — pre-authentication) | None | `platform.rate-limits` RW + `AdminGetUser` on user pool ARN + SES `SendEmail` (scoped to verified sender identity ARN, pending tightening in M8) |
+| `apps/launchpad/functions/accounts` | `withAuth` | Inline per-route membership/owner checks against account tables | `platform.accounts` RW + `platform.account-members` RW |
+| `apps/launchpad/functions/user` | `withAuthOnly` | None — user owns their own data | `platform.users` RW |
+| `apps/launchpad/functions/account-provisioning` | `withAuthOnly` | None — first-login flow; user has JWT but may not have app group memberships yet | `platform.accounts` RW + `platform.account-members` RW + `AdminUpdateUserAttributes` on user pool ARN |
+| `apps/launchpad/functions/invitations` | `withAuth` | Inline owner check against `platform.accounts` | `platform.accounts` R + `platform.invitations` RW |
+| `apps/launchpad/functions/forgot-provider` | None (raw handler — pre-authentication) | None | `platform.rate-limits` RW + `AdminGetUser` on user pool ARN + SES `SendEmail` |
 
-**`accounts`, `user`, `auth/account-provisioning`, `auth/invitations`** are user-facing API endpoints. Each uses the appropriate middleware wrapper based on whether account context is required, and authorization helpers based on what the operation needs to verify.
+**Launchpad `accounts`, Launchpad `user`, Launchpad `account-provisioning`, and Launchpad `invitations`** are user-facing control-plane API endpoints. Each uses the appropriate middleware wrapper based on whether account context is required, and inline authorization based on what the operation needs to verify. The platform copies of `accounts`, `user`, `auth/account-provisioning`, and `auth/invitations` remain deployed only for rollback after #363 PR 5.
 
-**`auth/forgot-provider`** is pre-authentication by necessity (the user has forgotten their identity provider; they cannot authenticate). It uses no middleware wrapper — the handler reads the request directly. Abuse-resistance is provided by Lambda-side IP-based rate limiting, plus tightenings scheduled for M8 (API Gateway throttling, CORS allowlist to the sign-in page origin, SES grant scoping, rate-limiter fail-closed behaviour). See *Forgot-provider flow* below.
+**`apps/launchpad/functions/forgot-provider`** is pre-authentication by necessity (the user has forgotten their identity provider; they cannot authenticate). It uses no middleware wrapper — the handler reads the request directly. Abuse-resistance is provided by Lambda-side IP-based rate limiting. The legacy platform `auth/forgot-provider` route remains deployed only for rollback after #363 PR 3. See *Forgot-provider flow* below.
 
 ### Cross-Lambda trust pattern
 
@@ -634,25 +645,46 @@ Users who do not remember which identity provider they signed up with can reques
 
 **Endpoint:** `POST /auth/lookup-provider` (public — no JWT required)
 
-The Lambda `transformotion-forgot-provider-{stage}` (in `AuthApiStack`):
+The live Lambda `launchpad-forgot-provider-{stage}` (in `LaunchpadControlPlaneStack`):
 1. Rate-limits by IP/email
-2. Queries Cognito via `ListUsersCommand` with filter `email = "<email>"` (works for both native users and federated users regardless of Cognito username format)
+2. Queries the currently platform-owned Cognito User Pool via `AdminGetUserCommand`
 3. Reads the `identities` attribute to detect which IDP was used
 4. Sends an SES email to the user naming the sign-in method and a link
 
 The handler is pre-authentication by necessity. It uses no `withAuth` / `withAuthOnly` wrapper — there is no JWT to extract. Abuse-resistance is the load-bearing security property.
 
+The older platform-owned `transformotion-forgot-provider-{stage}` route in `AuthApiStack` remains deployed for rollback during #363. New Launchpad code calls `NEXT_PUBLIC_LAUNCHPAD_CONTROL_PLANE_API_URL`.
+
 ### Abuse-resistance posture
 
-Lambda-side IP-based rate limiting (5 requests per IP per 15 minutes, stored in `platform.rate-limits-{stage}`). The rate limiter fails closed: if the rate-limit table is unavailable, requests are blocked rather than bypassed. The availability trade-off is accepted for this endpoint — it is not critical-path for active users; legitimate users can retry after DDB recovers; the abuse window stays closed during outages.
+Lambda-side IP-based rate limiting (5 requests per IP per 15 minutes, stored in currently platform-owned `platform.rate-limits-{stage}`). The current handler fails open if the rate-limit table is unavailable, preserving the existing behavior during the Launchpad ownership move. #386 owns any physical table re-home or rename.
 
-M8 deployed the following additional tightenings (all active):
-
-- **SES grant scoped** to the specific verified sender identity ARN (no longer `Resource: ['*']`).
-- **API Gateway throttling** active as a second layer independent of the Lambda's DDB-based limiter.
-- **CORS allowlist** restricts to the sign-in page origin (no longer `ALL_ORIGINS`).
+Future hardening can add API Gateway throttling, CORS allowlisting to the sign-in page origin, tighter SES resource scoping, and fail-closed rate limiting.
 
 **Known limitation:** For federated users, `AdminGetUser(Username=email)` fails because their Cognito username is `Google_{sub}` (not email). The fix using `ListUsersCommand` resolves this. See sub-phase `7e-forgot-provider-fix` in `docs/sub-phase-7e-plan.md`.
+
+---
+
+## Launchpad onboarding and user profile APIs
+
+Launchpad owns the live onboarding, user profile/preference, account administration, member management, and invitation API surface in `LaunchpadControlPlaneStack`:
+
+| Route | Live Lambda | Notes |
+|---|---|---|
+| `POST /auth/setup` | `launchpad-account-provisioning-{stage}` | First-login account bootstrap. Consumes current platform-owned Cognito app-client IDs and account tables until #386 re-homes the auth domain. |
+| `GET /api/user/profile` | `launchpad-user-{stage}` | Reads the caller's profile/preferences from `platform.users-{stage}` until #386 re-homes auth-domain tables. |
+| `PUT /api/user/preferences` | `launchpad-user-{stage}` | Merges caller-owned preferences into `platform.users-{stage}` until #386 re-homes auth-domain tables. |
+| `POST /accounts` | `launchpad-accounts-{stage}` | Creates a new account and owner membership in current platform-owned auth-domain tables. |
+| `GET /accounts/{accountId}` | `launchpad-accounts-{stage}` | Returns account and member list after membership verification. |
+| `PUT /accounts/{accountId}` | `launchpad-accounts-{stage}` | Updates account name after owner verification. |
+| `DELETE /accounts/{accountId}` | `launchpad-accounts-{stage}` | Deletes account and member records after owner verification. |
+| `GET /accounts/{accountId}/members` | `launchpad-accounts-{stage}` | Lists members after membership verification. |
+| `DELETE /accounts/{accountId}/members/{userId}` | `launchpad-accounts-{stage}` | Removes a member after owner verification. |
+| `POST /accounts/{accountId}/invitations` | `launchpad-invitations-{stage}` | Creates an invitation after owner verification. |
+
+Cognito User Pool, Hosted UI domain, app clients, pre-token-generation trigger, and the account/user/invitation tables remain physically platform-owned after #363. This is temporary migration debt. The target architecture is Launchpad physical and logical ownership of the auth domain, tracked by #386.
+
+The platform `transformotion-account-provisioning-{stage}`, `transformotion-user-{stage}`, `transformotion-accounts-{stage}`, and `transformotion-invitations-{stage}` routes remain deployed in `PlatformApiStack` only for rollback during #363. `/auth/switch` is not migrated to Launchpad because there is no current Launchpad caller and active account switching is handled client-side via `X-Account-Id`.
 
 ---
 
