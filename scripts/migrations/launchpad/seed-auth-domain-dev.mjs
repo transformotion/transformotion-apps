@@ -6,6 +6,7 @@ const stage = args.stage ?? 'dev';
 const email = args.email;
 const tempPassword = args['temp-password'];
 const dryRun = args['dry-run'] === 'true';
+const sourceUserId = args['source-user-id'];
 
 if (!['dev', 'prod'].includes(stage)) {
   fail('--stage must be dev or prod');
@@ -51,12 +52,23 @@ async function main() {
 
   ensureGroups(userPoolId, userId, ['site-admin', 'stock-app-access', 'budget-app-access']);
 
+  const sourceUser = findSourceUser(email);
+  const sourceIdentityIds = [
+    sourceUserId,
+    sourceUser?.userId,
+    sourceUser?.username,
+    sourceUser?.sub,
+  ].filter(Boolean).map(String);
+
   const memberships = scanItems(source.members)
     .map(fromDynamoItem)
-    .filter(row => String(row.email ?? '').toLowerCase() === email.toLowerCase());
+    .filter(row => matchesOwner(row, email, sourceIdentityIds));
 
   if (memberships.length === 0) {
-    fail(`No source memberships found in ${source.members} for email ${email}`);
+    fail(
+      `No source memberships found in ${source.members} for email ${email}. `
+      + 'If legacy rows do not include email, re-run with --source-user-id <current-platform-user-id>.',
+    );
   }
 
   const accountIds = [...new Set(memberships.map(row => row.accountId).filter(Boolean))];
@@ -69,17 +81,14 @@ async function main() {
   }
 
   const now = new Date().toISOString();
-  const sourceUser = scanItems(source.users)
-    .map(fromDynamoItem)
-    .find(row => row.email?.toLowerCase?.() === email.toLowerCase())
-    ?? {};
+  const safeSourceUser = sourceUser ?? {};
 
   put(target.users, {
-    ...sourceUser,
+    ...safeSourceUser,
     userId,
     email,
-    updatedAt: sourceUser.updatedAt ?? now,
-    createdAt: sourceUser.createdAt ?? now,
+    updatedAt: safeSourceUser.updatedAt ?? now,
+    createdAt: safeSourceUser.createdAt ?? now,
   });
 
   for (const account of accounts) {
@@ -97,7 +106,7 @@ async function main() {
 
   console.log('');
   console.log('Seed complete.');
-  console.log('Next validation: sign in against the staged LaunchpadAuth pool and inspect token claims.');
+  console.log('Next validation: run validate-auth-domain-readiness.mjs, then sign in against the staged LaunchpadAuth pool and inspect token claims.');
 }
 
 function parseArgs(argv) {
@@ -181,6 +190,31 @@ function ensureGroups(userPoolId, username, groupNames) {
       groupName,
     ]);
   }
+}
+
+function findSourceUser(userEmail) {
+  return scanItems(source.users)
+    .map(fromDynamoItem)
+    .find(row =>
+      String(row.email ?? '').toLowerCase() === userEmail.toLowerCase()
+      || String(row.username ?? '').toLowerCase() === userEmail.toLowerCase()
+    );
+}
+
+function matchesOwner(row, userEmail, identityIds) {
+  if (String(row.email ?? '').toLowerCase() === userEmail.toLowerCase()) {
+    return true;
+  }
+
+  const candidateIds = [
+    row.userId,
+    row.username,
+    row.sub,
+    row.ownerUserId,
+    row.memberUserId,
+  ].filter(Boolean).map(String);
+
+  return candidateIds.some(id => identityIds.includes(id));
 }
 
 function stackOutput(stackName, outputKey) {
@@ -275,6 +309,6 @@ function toAttr(value) {
 function fail(message) {
   console.error(`ERROR: ${message}`);
   console.error('');
-  console.error('Usage: node scripts/migrations/launchpad/seed-auth-domain-dev.mjs --email owner@example.com [--stage dev] [--temp-password TempPassword123]');
+  console.error('Usage: node scripts/migrations/launchpad/seed-auth-domain-dev.mjs --email owner@example.com [--stage dev] [--temp-password TempPassword123] [--source-user-id current-user-id]');
   process.exit(1);
 }

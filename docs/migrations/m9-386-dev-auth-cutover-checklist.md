@@ -17,6 +17,26 @@ LAUNCHPAD_AUTH_CUTOVER_ENABLED: 'false'
 While this is `false`, Launchpad deploys `LaunchpadAuth` but builds the
 frontend with the existing Platform AuthStack Cognito environment values.
 
+## Preparation Already Front-Loaded
+
+PR 4 prepares the safe staged pieces before live cutover:
+
+- `TransformotionDev-LaunchpadAuth` creates the staged User Pool, Hosted UI
+  domain, app clients, groups, Hosted UI customization, auth tables, pre-token
+  trigger, and social IdP secret placeholders.
+- The staged app clients include the expected dev callback and logout URLs.
+- The staged pre-token trigger is attached to the staged User Pool and reads
+  only Launchpad-owned tables.
+- The reseed helper can create or confirm the owner user, add required Cognito
+  groups, and copy owner account data into Launchpad-owned tables.
+- The readiness validator can confirm outputs, groups, app client URLs, tables,
+  secrets, trigger wiring, and seeded owner rows.
+
+The PR does not pre-create live AWS data before deployment because the target
+User Pool ID and table names do not exist until `LaunchpadAuth` deploys. It also
+does not attach social IdP providers yet: the secret resources are staged, but
+real provider credentials must be populated before provider attachment.
+
 ## Phase 1 - Deploy Staged Auth
 
 1. Merge the PR containing `TransformotionDev-LaunchpadAuth`.
@@ -29,6 +49,7 @@ frontend with the existing Platform AuthStack Cognito environment values.
    - `BudgetTrackerAppClientId`
    - `CognitoDomain`
    - auth table names
+   - social IdP secret names
 4. Confirm `TransformotionDev-LaunchpadControlPlane` remains healthy.
 
 No live auth has moved at this point.
@@ -65,6 +86,14 @@ Validate:
 - `launchpad-account-members-dev` has owner memberships for both accounts.
 - `launchpad-invitations-dev` and `launchpad-rate-limits-dev` can be empty.
 
+Then run the readiness validator:
+
+```bash
+node scripts/migrations/launchpad/validate-auth-domain-readiness.mjs \
+  --stage dev \
+  --email <owner-email>
+```
+
 ## Phase 3 - Validate Staged Claims
 
 Before any live cutover:
@@ -83,6 +112,24 @@ Before any live cutover:
 Expected limitation before table cutover: current Launchpad control-plane
 Lambdas still read the live Platform tables. This staged token validation is
 primarily proving the new User Pool, app clients, groups, and pre-token claims.
+
+## Phase 3A - Populate Social IdP Secrets If Needed
+
+The staged stack creates Secrets Manager entries for Google, Facebook,
+Microsoft, and Apple provider configuration. Before enabling social provider
+sign-in for the Launchpad-owned User Pool, replace placeholder generated values
+with real provider credentials.
+
+Use the secret names from `TransformotionDev-LaunchpadAuth` outputs. Example:
+
+```bash
+aws secretsmanager put-secret-value \
+  --secret-id /launchpad/dev/cognito/google-client-id \
+  --secret-string '<google-client-id>'
+```
+
+Provider attachment is intentionally deferred until real credentials are
+available. Cognito-only sign-in can be validated without this step.
 
 ## Phase 4 - Prepare App Env Vars
 

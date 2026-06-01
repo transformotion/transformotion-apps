@@ -206,6 +206,7 @@ App stacks may resolve shared platform substrate via CloudFormation exports at d
 | `Transformotion-{stage}-LaunchpadAuth-AccountMembersTableName` | `LaunchpadAuthStack` | Staged Launchpad auth-domain table for future cutover |
 | `Transformotion-{stage}-LaunchpadAuth-InvitationsTableName` | `LaunchpadAuthStack` | Staged Launchpad auth-domain table for future cutover |
 | `Transformotion-{stage}-LaunchpadAuth-RateLimitsTableName` | `LaunchpadAuthStack` | Staged Launchpad auth-domain table for future cutover |
+| `Transformotion-{stage}-LaunchpadAuth-*SecretName` | `LaunchpadAuthStack` | Staged social IdP secret names for future provider attachment |
 | `Transformotion-{stage}-RestApiId` | `PlatformApiStack` | MU only — `RestApi.fromRestApiAttributes`; SA/BT no longer import after #366/#367 |
 | `Transformotion-{stage}-RestApiRootResourceId` | `PlatformApiStack` | MU only — `RestApi.fromRestApiAttributes`; SA/BT no longer import after #366/#367 |
 | `Transformotion-{stage}-AuthorizerId` | `PlatformApiStack` | MU only — JWT authoriser on migration utility routes; SA/BT own API authorisers after #366/#367 |

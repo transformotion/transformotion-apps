@@ -159,7 +159,8 @@ Google, Facebook, and Microsoft IDPs are registered **manually in the Cognito co
 `/launchpad/{stage}/cognito/*` for the staged auth domain. Social IdP
 configuration on the Launchpad-owned pool is a later #386 cutover step; the
 staged Launchpad app client is Cognito-only until those providers are attached
-and validated.
+and validated. The stack outputs each staged secret name so the cutover runbook
+can populate real provider credentials before provider attachment.
 
 ### Launchpad-owned staged auth tables
 

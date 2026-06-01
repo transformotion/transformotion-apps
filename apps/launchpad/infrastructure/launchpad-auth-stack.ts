@@ -95,16 +95,48 @@ export class LaunchpadAuthStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     } as const);
 
-    new secretsmanager.Secret(this, 'SecretGoogleClientId', secretCfgOf('google-client-id', 'Google OAuth 2.0 client ID'));
-    new secretsmanager.Secret(this, 'SecretGoogleClientSecret', secretCfgOf('google-client-secret', 'Google OAuth 2.0 client secret'));
-    new secretsmanager.Secret(this, 'SecretFacebookAppId', secretCfgOf('facebook-app-id', 'Facebook App ID'));
-    new secretsmanager.Secret(this, 'SecretFacebookAppSecret', secretCfgOf('facebook-app-secret', 'Facebook App secret'));
-    new secretsmanager.Secret(this, 'SecretMicrosoftClientId', secretCfgOf('microsoft-client-id', 'Microsoft OIDC client ID'));
-    new secretsmanager.Secret(this, 'SecretMicrosoftClientSecret', secretCfgOf('microsoft-client-secret', 'Microsoft OIDC client secret'));
-    new secretsmanager.Secret(this, 'SecretAppleTeamId', secretCfgOf('apple-team-id', 'Apple Sign-In team ID placeholder'));
-    new secretsmanager.Secret(this, 'SecretAppleClientId', secretCfgOf('apple-client-id', 'Apple Sign-In client ID placeholder'));
-    new secretsmanager.Secret(this, 'SecretAppleKeyId', secretCfgOf('apple-key-id', 'Apple Sign-In key ID placeholder'));
-    new secretsmanager.Secret(this, 'SecretApplePrivateKey', secretCfgOf('apple-private-key', 'Apple Sign-In private key placeholder'));
+    const socialSecrets = [
+      {
+        id: 'GoogleClientIdSecretName',
+        secret: new secretsmanager.Secret(this, 'SecretGoogleClientId', secretCfgOf('google-client-id', 'Google OAuth 2.0 client ID')),
+      },
+      {
+        id: 'GoogleClientSecretSecretName',
+        secret: new secretsmanager.Secret(this, 'SecretGoogleClientSecret', secretCfgOf('google-client-secret', 'Google OAuth 2.0 client secret')),
+      },
+      {
+        id: 'FacebookAppIdSecretName',
+        secret: new secretsmanager.Secret(this, 'SecretFacebookAppId', secretCfgOf('facebook-app-id', 'Facebook App ID')),
+      },
+      {
+        id: 'FacebookAppSecretSecretName',
+        secret: new secretsmanager.Secret(this, 'SecretFacebookAppSecret', secretCfgOf('facebook-app-secret', 'Facebook App secret')),
+      },
+      {
+        id: 'MicrosoftClientIdSecretName',
+        secret: new secretsmanager.Secret(this, 'SecretMicrosoftClientId', secretCfgOf('microsoft-client-id', 'Microsoft OIDC client ID')),
+      },
+      {
+        id: 'MicrosoftClientSecretSecretName',
+        secret: new secretsmanager.Secret(this, 'SecretMicrosoftClientSecret', secretCfgOf('microsoft-client-secret', 'Microsoft OIDC client secret')),
+      },
+      {
+        id: 'AppleTeamIdSecretName',
+        secret: new secretsmanager.Secret(this, 'SecretAppleTeamId', secretCfgOf('apple-team-id', 'Apple Sign-In team ID placeholder')),
+      },
+      {
+        id: 'AppleClientIdSecretName',
+        secret: new secretsmanager.Secret(this, 'SecretAppleClientId', secretCfgOf('apple-client-id', 'Apple Sign-In client ID placeholder')),
+      },
+      {
+        id: 'AppleKeyIdSecretName',
+        secret: new secretsmanager.Secret(this, 'SecretAppleKeyId', secretCfgOf('apple-key-id', 'Apple Sign-In key ID placeholder')),
+      },
+      {
+        id: 'ApplePrivateKeySecretName',
+        secret: new secretsmanager.Secret(this, 'SecretApplePrivateKey', secretCfgOf('apple-private-key', 'Apple Sign-In private key placeholder')),
+      },
+    ];
 
     // Social provider secrets are staged in this foundation stack, but the
     // providers themselves are configured in a later #386 cutover PR.
@@ -307,6 +339,14 @@ export class LaunchpadAuthStack extends cdk.Stack {
     this.outputTable('AccountMembersTableName', this.accountMembersTable, 'Launchpad auth account-members table name');
     this.outputTable('InvitationsTableName', this.invitationsTable, 'Launchpad auth invitations table name');
     this.outputTable('RateLimitsTableName', this.rateLimitsTable, 'Launchpad auth rate-limits table name');
+
+    for (const { id, secret } of socialSecrets) {
+      new cdk.CfnOutput(this, id, {
+        value: secret.secretName,
+        description: `Launchpad auth ${stage} staged secret name`,
+        exportName: `Transformotion-${stage}-LaunchpadAuth-${id}`,
+      });
+    }
   }
 
   private createAppClient(
