@@ -10,6 +10,17 @@ Social identity providers (Google, Facebook, Microsoft) are wired at the Cognito
 
 See [cdk.md](./cdk.md) for CDK stack names. See [data.md](./data.md) for account and membership table schemas.
 
+### M9 #363 / #386 ownership note
+
+After #363, Launchpad owns the live auth/control-plane API behavior: auth
+lookup, onboarding, profile/preferences, account administration, member
+administration, and invitations. Platform still physically owns Cognito,
+pre-token claims infrastructure, auth-domain tables, and legacy rollback
+routes. That platform ownership is migration debt, not target architecture.
+
+#386 owns physical auth-domain re-home into Launchpad. Do not treat remaining
+Platform auth ownership as precedent for new auth/control-plane work.
+
 ---
 
 ## Cognito user pool
@@ -636,7 +647,7 @@ Users who do not remember which identity provider they signed up with can reques
 
 The live Lambda `launchpad-forgot-provider-{stage}` (in `LaunchpadControlPlaneStack`):
 1. Rate-limits by IP/email
-2. Queries the platform-owned Cognito User Pool via `AdminGetUserCommand`
+2. Queries the currently platform-owned Cognito User Pool via `AdminGetUserCommand`
 3. Reads the `identities` attribute to detect which IDP was used
 4. Sends an SES email to the user naming the sign-in method and a link
 
@@ -646,7 +657,7 @@ The older platform-owned `transformotion-forgot-provider-{stage}` route in `Auth
 
 ### Abuse-resistance posture
 
-Lambda-side IP-based rate limiting (5 requests per IP per 15 minutes, stored in platform-owned substrate table `platform.rate-limits-{stage}`). The current handler fails open if the rate-limit table is unavailable, preserving the existing platform behavior during the Launchpad ownership move.
+Lambda-side IP-based rate limiting (5 requests per IP per 15 minutes, stored in currently platform-owned `platform.rate-limits-{stage}`). The current handler fails open if the rate-limit table is unavailable, preserving the existing behavior during the Launchpad ownership move. #386 owns any physical table re-home or rename.
 
 Future hardening can add API Gateway throttling, CORS allowlisting to the sign-in page origin, tighter SES resource scoping, and fail-closed rate limiting.
 
@@ -660,10 +671,10 @@ Launchpad owns the live onboarding, user profile/preference, account administrat
 
 | Route | Live Lambda | Notes |
 |---|---|---|
-| `POST /auth/setup` | `launchpad-account-provisioning-{stage}` | First-login account bootstrap. Consumes platform-owned Cognito app-client IDs and platform account tables. |
-| `GET /api/user/profile` | `launchpad-user-{stage}` | Reads the caller's profile/preferences from `platform.users-{stage}`. |
-| `PUT /api/user/preferences` | `launchpad-user-{stage}` | Merges caller-owned preferences into `platform.users-{stage}`. |
-| `POST /accounts` | `launchpad-accounts-{stage}` | Creates a new account and owner membership in platform substrate tables. |
+| `POST /auth/setup` | `launchpad-account-provisioning-{stage}` | First-login account bootstrap. Consumes current platform-owned Cognito app-client IDs and account tables until #386 re-homes the auth domain. |
+| `GET /api/user/profile` | `launchpad-user-{stage}` | Reads the caller's profile/preferences from `platform.users-{stage}` until #386 re-homes auth-domain tables. |
+| `PUT /api/user/preferences` | `launchpad-user-{stage}` | Merges caller-owned preferences into `platform.users-{stage}` until #386 re-homes auth-domain tables. |
+| `POST /accounts` | `launchpad-accounts-{stage}` | Creates a new account and owner membership in current platform-owned auth-domain tables. |
 | `GET /accounts/{accountId}` | `launchpad-accounts-{stage}` | Returns account and member list after membership verification. |
 | `PUT /accounts/{accountId}` | `launchpad-accounts-{stage}` | Updates account name after owner verification. |
 | `DELETE /accounts/{accountId}` | `launchpad-accounts-{stage}` | Deletes account and member records after owner verification. |
@@ -671,7 +682,7 @@ Launchpad owns the live onboarding, user profile/preference, account administrat
 | `DELETE /accounts/{accountId}/members/{userId}` | `launchpad-accounts-{stage}` | Removes a member after owner verification. |
 | `POST /accounts/{accountId}/invitations` | `launchpad-invitations-{stage}` | Creates an invitation after owner verification. |
 
-Cognito User Pool, Hosted UI domain, app clients, pre-token-generation trigger, and the shared account/user/invitation tables remain platform substrate. Launchpad owns the product/control-plane workflows that consume those substrate resources.
+Cognito User Pool, Hosted UI domain, app clients, pre-token-generation trigger, and the account/user/invitation tables remain physically platform-owned after #363. This is temporary migration debt. The target architecture is Launchpad physical and logical ownership of the auth domain, tracked by #386.
 
 The platform `transformotion-account-provisioning-{stage}`, `transformotion-user-{stage}`, `transformotion-accounts-{stage}`, and `transformotion-invitations-{stage}` routes remain deployed in `PlatformApiStack` only for rollback during #363. `/auth/switch` is not migrated to Launchpad because there is no current Launchpad caller and active account switching is handled client-side via `X-Account-Id`.
 

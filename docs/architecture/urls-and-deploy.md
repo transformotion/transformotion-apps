@@ -135,6 +135,11 @@ Storage, Network, Auth, AuthApi, PlatformTables, PlatformWs, Api (dev + prod).
 It does not call Launchpad, Stock Analyser, Budget Tracker, or migration utility
 deployment workflows.
 
+`Auth`, `AuthApi`, and `PlatformTables` still contain physical auth-domain
+resources after #363. That is migration debt retained for compatibility and
+rollback. #386 owns the physical re-home into Launchpad; Platform ownership of
+those resources is not the target architecture.
+
 ### Independent app and utility workflows
 
 App and utility workflows are path-filtered and independently deploy only their
@@ -162,9 +167,9 @@ Each CDK deploy step passes an explicit `--app` flag pointing to the per-app ent
 - `deploy-stock-analyser.yml` — `StockAnalyserTables`, `StockAnalyserWs`, and `StockAnalyserApi` only
 - `deploy-budget-tracker.yml` — `BudgetTrackerTables`, `BudgetTrackerWs`, and `BudgetTrackerApi` only
 - `deploy-migration-utilities.yml` — `MigrationsApi` only
-- `deploy-launchpad.yml` — `LaunchpadControlPlane` + static export only
-- `deploy-platform.yml` — platform stacks only (Network, Auth, AuthApi, PlatformTables, Api, PlatformWs, Storage, GithubActionsRole)
-- `cd.yml` — explicit manual full redeploy when an operator wants to redeploy all stacks
+- `deploy-launchpad.yml` - `LaunchpadControlPlane` + static export. #386 will expand this lane as Launchpad physically owns the auth domain
+- `deploy-platform.yml` - platform stacks only (Network, Auth, AuthApi, PlatformTables, Api, PlatformWs, Storage, GithubActionsRole). Auth-domain stacks here are current migration debt, not target ownership
+- `cd.yml` - explicit manual full redeploy when an operator wants to redeploy all stacks
 
 Changing `packages/runtime-config` does not trigger a platform deploy (the APPS const was removed from that package in M7 / #346; app identity is now sourced from `platform/config/app-registry.json` at synth time).
 

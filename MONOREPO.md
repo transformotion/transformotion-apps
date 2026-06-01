@@ -39,6 +39,8 @@ transformotion-apps/
 │   │   │   └── user/
 │   │   ├── infrastructure/                # Launchpad CDK stacks
 │   │   │   └── launchpad-control-plane-stack.ts
+│   │   ├── AGENTS.md                     # Canonical Launchpad agent guide
+│   │   ├── CLAUDE.md                     # Claude Code compatibility mirror
 │   │   └── package.json                   # @transformotion/launchpad
 │   ├── stock-analyser/                    # Stock Signal Analyser, basePath /stock-analyser
 │   │   ├── app/                           # Next.js App Router pages
@@ -149,6 +151,11 @@ transformotion-apps/
 `platform/infrastructure/` — utility infrastructure is conceptually
 distinct from platform infrastructure and stays separate (per
 `CONTRIBUTING.md` Section 6.4).
+
+After #363, Launchpad owns the live auth/control-plane APIs. Platform still
+physically owns Cognito, auth-domain tables, and rollback control-plane routes
+as migration debt. #386 owns physical auth-domain re-home into Launchpad; do
+not treat platform auth ownership as the target topology.
 
 ## Workspace configuration
 

@@ -254,7 +254,12 @@ control-plane API. It exposes `GET /health` and owns the live
 `DELETE /accounts/{accountId}/members/{userId}`, and
 `POST /accounts/{accountId}/invitations` routes after #363 PR 5. Cognito User
 Pool, Hosted UI domain, app clients, pre-token trigger, and shared account
-tables remain platform-owned substrate.
+tables remain physically platform-owned as migration debt.
+
+Target ownership is Launchpad physical and logical ownership of the auth
+domain. #386 owns the physical re-home of Cognito, auth-domain tables,
+pre-token claims infrastructure, rate limits, and remaining platform rollback
+routes.
 
 The hard-coded `userCanAccessFramework` prop in launchpad currently
 governs tile visibility for the Transformotion Framework app. M9
@@ -570,7 +575,7 @@ It must not be treated as the target pattern for new app runtime routes.
 | `platform.account-members-{stage}` | accountId | userId | Has `userId-index` GSI for reverse lookup. |
 | `platform.invitations-{stage}` | invitationId | — | Used by invitation flow (M11). |
 | `platform.users-{stage}` | userId | — | |
-| `platform.rate-limits-{stage}` | pk | — | Owned by `AuthApiStack` (not PlatformTablesStack). PK: `lookup-provider#<ip>`. Platform substrate consumed by Launchpad-owned `forgot-provider` after #363 PR 3; legacy platform route also uses it while retained for rollback. |
+| `platform.rate-limits-{stage}` | pk | — | Owned by `AuthApiStack` (not PlatformTablesStack). PK: `lookup-provider#<ip>`. Current migration-debt table consumed by Launchpad-owned `forgot-provider` after #363 PR 3; legacy platform route also uses it while retained for rollback. #386 owns physical re-home/rename. |
 | `platform.analysis-cache-{stage}` | accountId | cacheKey | Misnamed — see Section 2.7. |
 | `platform.job-results-{stage}` | accountId | cacheKey | Added M7 / PR #334 (Bucket A'). Platform-owned async AI job state (pending → retrying → complete/error). Written by `claude-proxy`, read by `analysis-cache` Lambda via `job-*` key prefix routing. TTL: 2h. |
 
@@ -1166,7 +1171,7 @@ CDK stacks — M7 #250 infrastructure split complete:
   `POST /auth/lookup-provider`, `POST /auth/setup`,
   `GET /api/user/profile`, `PUT /api/user/preferences`, account
   administration, member-management, and invitation routes. Cognito and shared
-  account tables remain platform substrate.
+  account tables remain platform-owned migration debt until #386.
 
 **Stock-analyser stacks** (`apps/stock-analyser/infrastructure/`):
 - `stock-analyser-api-stack.ts` — Stock Analyser-owned REST API Gateway,

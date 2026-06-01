@@ -21,14 +21,17 @@ Four documents define how this repository works. Read them before substantive wo
 
 For monorepo structure (current state), import boundaries, and deploy triggers, see **[`MONOREPO.md`](./MONOREPO.md)**.
 
-Current M9 #363 decisions: Cognito User Pool, Hosted UI domain, Cognito app
-clients, pre-token-generation trigger, and shared account substrate remain
-Platform-owned substrate. Launchpad owns auth/control-plane product surfaces.
-Platform deploys substrate only and does not cascade into Launchpad, Stock
-Analyser, Budget Tracker, or migration utility deploy workflows.
+Current M9 #363 close-out state: Launchpad owns live auth/control-plane APIs.
+Platform still physically owns Cognito, auth-domain tables, and rollback routes
+only as migration debt. `docs/migrations/m9-363-closeout.md` defines the
+deployment and runtime validation checklist for closing #363. #386 owns
+physical auth-domain re-home into Launchpad. Platform deploys substrate only and
+does not cascade into Launchpad, Stock Analyser, Budget Tracker, or migration
+utility deploy workflows.
 
 When working on a specific app, read that app's `AGENTS.md` first. Claude Code may also read the sibling `CLAUDE.md` compatibility mirror:
 
+- `apps/launchpad/AGENTS.md`
 - `apps/stock-analyser/AGENTS.md`
 - `apps/budget-tracker/AGENTS.md`
 - `platform/AGENTS.md` for platform-level work

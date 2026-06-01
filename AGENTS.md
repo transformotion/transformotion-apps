@@ -35,9 +35,9 @@ The platform direction is per-app ownership and independent deployment:
 
 The repository is mid-transition. Some current-state documents still describe
 shared platform REST/WSS/auth patterns. M9 is the milestone that normalizes the
-platform toward per-app ownership of REST, WSS, auth substrate, Claude proxy,
-and IAM. Agents must preserve current compatibility while avoiding any new
-shared-runtime topology that M9 is actively retiring.
+platform toward per-app ownership of REST, WSS, AI runtime, IAM, and Launchpad
+control-plane ownership. Agents must preserve current compatibility while
+avoiding any new shared-runtime topology that M9 is actively retiring.
 
 ## 2. Authoritative Documents
 
@@ -98,16 +98,16 @@ Allowed dependencies:
 ### `platform/`
 
 Platform-owned substrate and transitional shared runtime. Current state includes
-platform infrastructure, stable Cognito identity substrate, shared account
-substrate, shared REST API pieces, shared WSS pieces, and shared config.
+platform infrastructure, physically platform-owned auth-domain resources,
+shared REST/API rollback pieces, shared WSS rollback pieces, and shared config.
 
 Target state after M9:
 
-- Platform retains shared substrate only: CloudFront, DNS, ACM, build-time
-  tooling, stable Cognito identity substrate, shared account substrate, and
-  platform contracts/config where justified.
-- Launchpad owns auth/control-plane product surfaces; Cognito remains platform
-  substrate unless a future initiative explicitly revisits that decision.
+- Platform retains neutral shared substrate only: CloudFront, DNS, ACM,
+  build-time tooling, and platform contracts/config where justified.
+- Launchpad owns auth/control-plane product surfaces now; #386 owns the
+  physical auth-domain re-home so remaining platform-owned auth resources are
+  migration debt, not target architecture.
 - Shared runtime REST/WSS/Claude proxy resources are decommissioned or split
   into per-app resources.
 
@@ -276,7 +276,7 @@ Current-state transitional patterns include:
 - shared platform REST API Gateway used by app stacks
 - shared platform WebSocket API for async AI notification
 - shared platform Claude proxy paths
-- platform-owned Cognito/auth substrate
+- platform-owned physical auth-domain resources retained as migration debt
 - CloudFormation exports used by app stacks to consume platform resources
 - incomplete contract coverage and some stale documentation references
 
@@ -284,8 +284,8 @@ M9 target state:
 
 - Launchpad owns auth UX, account onboarding, invitations, user/account/app
   access administration, control-plane APIs, and auth administration workflows.
-- Platform retains Cognito User Pool, Hosted UI domain, Cognito app clients,
-  pre-token-generation trigger, and shared account substrate.
+- #386 moves remaining physical auth-domain resources from platform ownership
+  into Launchpad ownership.
 - Stock Analyser owns its REST API, WSS API, AI proxy, job-results
   table, IAM role, and deploy lifecycle.
 - Budget Tracker owns its REST API, WSS API, AI proxy, AI cache,
@@ -295,6 +295,15 @@ M9 target state:
 - Shared platform runtime REST/WSS/Claude resources are decommissioned.
 - Deploy cascade via `workflow_call` is replaced by independent path-filtered
   app deploys.
+
+#363 close-out state:
+
+- Launchpad owns live auth/control-plane APIs.
+- Platform still physically owns Cognito, auth-domain tables, and rollback
+  routes only as migration debt.
+- `docs/migrations/m9-363-closeout.md` defines the deployment and runtime
+  validation checklist for closing #363.
+- #386 owns physical auth-domain re-home into Launchpad.
 
 Agents must not treat transitional shared resources as precedent for new work.
 When modifying them, preserve compatibility and prefer changes that make the
@@ -411,7 +420,8 @@ Runtime configuration pattern:
 
 ### `platform/`
 
-- Keep platform substrate and platform-owned runtime here.
+- Keep neutral platform substrate and explicitly retained migration-debt
+  resources here.
 - Do not add app-specific runtime logic here.
 - Treat shared REST/WSS/Claude/auth resources as M9 transitional unless the
   current issue says otherwise.
@@ -460,7 +470,9 @@ Runtime configuration pattern:
 
 The intended post-M9 architecture is:
 
-- Launchpad owns auth substrate and app access presentation.
+- Launchpad owns the auth domain and app access presentation. During #363
+  close-out, remaining platform-owned auth-domain resources are temporary
+  migration debt tracked by #386.
 - Each app owns REST, WSS, app Lambdas, app tables, app IAM, app Claude proxy,
   app deploy workflow, and app-specific contracts.
 - Platform owns CloudFront, DNS, ACM, shared build tooling, and explicitly

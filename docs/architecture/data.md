@@ -4,7 +4,12 @@
 
 DynamoDB is the canonical datastore for all platform and app data. Tables are divided into two scopes:
 
-- **Platform tables** — shared account/identity substrate consumed by Launchpad control-plane APIs and platform substrate Lambdas. Managed by `PlatformTablesStack`.
+Auth-domain table ownership is currently transitional. Platform still
+physically owns the account/identity tables, but that is migration debt after
+#363. #386 owns the physical re-home of users, accounts, account memberships,
+invitations, and auth rate-limit data into Launchpad ownership.
+
+- **Platform tables** - current physical account/identity tables consumed by Launchpad control-plane APIs and rollback platform Lambdas. Managed by `PlatformTablesStack` until #386.
 - **Per-app tables** — owned exclusively by one app. Managed by that app's `TablesStack`.
 
 All records in per-app data tables are keyed by `accountId`. The account-scoping invariant (see below) means no handler may read another user's data.
@@ -31,6 +36,10 @@ Examples: `platform.accounts-dev`, `budget-tracker.transactions-prod`, `stock-an
 ## Platform tables
 
 Managed by `TransformotionDev-PlatformTables` / `TransformotionProd-PlatformTables`.
+
+These tables are current-state physical Platform resources. They are not the
+target auth-domain architecture; #386 owns re-home/rename decisions as
+Launchpad becomes the physical auth-domain owner.
 
 ### `platform.users-{stage}`
 
