@@ -106,7 +106,9 @@ Target state after M9:
 - Platform retains neutral shared substrate only: CloudFront, DNS, ACM,
   build-time tooling, and platform contracts/config where justified.
 - Launchpad owns auth/control-plane product surfaces now; #386 owns the
-  physical auth-domain re-home so remaining platform-owned auth resources are
+  physical auth-domain re-home. `Transformotion{Stage}-LaunchpadAuth` is the
+  staged Launchpad-owned auth foundation; live traffic still uses Platform
+  AuthStack until cutover, so remaining platform-owned auth resources are
   migration debt, not target architecture.
 - Shared runtime REST/WSS/Claude proxy resources are decommissioned or split
   into per-app resources.
@@ -305,8 +307,9 @@ M9 target state:
   validation checklist for closing #363.
 - #386 owns physical auth-domain re-home into Launchpad.
 - `deploy-launchpad.yml` is the deploy lane for current and future
-  `Transformotion{Stage}-Launchpad*` backend stacks. Platform deploy must not
-  orchestrate Launchpad auth/control-plane resources.
+  `Transformotion{Stage}-Launchpad*` backend stacks, including
+  `LaunchpadAuth`. Platform deploy must not orchestrate Launchpad
+  auth/control-plane resources.
 
 Agents must not treat transitional shared resources as precedent for new work.
 When modifying them, preserve compatibility and prefer changes that make the

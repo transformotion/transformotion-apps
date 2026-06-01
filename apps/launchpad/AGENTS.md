@@ -14,8 +14,10 @@ Next.js app at `apps/launchpad/`. Static export deployed to S3/CloudFront.
 Serves at the root host and `/launchpad/*` sign-in/callback paths.
 
 Launchpad is the control-plane app. After #363, it owns the live
-auth/control-plane API surface. Platform still physically owns Cognito,
-auth-domain tables, and rollback routes as migration debt until #386.
+auth/control-plane API surface. #386 adds `LaunchpadAuth` as the staged
+Launchpad-owned Cognito/auth foundation; live auth still uses Platform
+AuthStack until cutover. Platform-owned auth-domain resources are migration
+debt.
 
 ## Quick reference
 
@@ -25,7 +27,7 @@ auth-domain tables, and rollback routes as migration debt until #386.
 | Deploy workflow | `.github/workflows/deploy-launchpad.yml` |
 | CDK entrypoint | `infrastructure/bin/launchpad.ts` |
 | CDK stack target | `Transformotion{Stage}-Launchpad*` |
-| Current stack | `Transformotion{Stage}-LaunchpadControlPlane` |
+| Current stacks | `Transformotion{Stage}-LaunchpadAuth`, `Transformotion{Stage}-LaunchpadControlPlane` |
 | Control-plane API env | `NEXT_PUBLIC_LAUNCHPAD_CONTROL_PLANE_API_URL` |
 | Cognito client var | `NEXT_PUBLIC_LAUNCHPAD_COGNITO_CLIENT_ID` |
 
@@ -43,8 +45,9 @@ auth-domain tables, and rollback routes as migration debt until #386.
 
 | Stack | Contents |
 |---|---|
+| `Transformotion{Stage}-LaunchpadAuth` | Staged Launchpad-owned Cognito User Pool, Hosted UI domain, app clients, groups, Hosted UI customisation, and social credential secret placeholders |
 | `Transformotion{Stage}-LaunchpadControlPlane` | Launchpad-owned REST API, Cognito authoriser, and control-plane Lambdas |
-| Future `Transformotion{Stage}-Launchpad*` stacks | #386 auth-domain infrastructure, deployed through the Launchpad lane |
+| Future `Transformotion{Stage}-Launchpad*` stacks | Additional #386 auth-domain infrastructure, deployed through the Launchpad lane |
 
 Source: `apps/launchpad/infrastructure/`.
 
@@ -63,8 +66,10 @@ Source: `apps/launchpad/infrastructure/`.
 - Add new auth/control-plane behavior under `apps/launchpad/`, not `platform/`.
 - Keep Launchpad infrastructure under `apps/launchpad/infrastructure/`.
 - Do not add new platform-owned auth/control-plane routes as a shortcut.
-- Platform-owned Cognito, auth-domain tables, and rollback routes are current
-  migration debt, not precedent.
+- Platform-owned live Cognito, auth-domain tables, and rollback routes are
+  current migration debt, not precedent.
+- Do not cut live auth over to `LaunchpadAuth` without an explicit #386 cutover
+  PR and validation plan.
 - #386 owns physical auth-domain re-home into Launchpad.
 - Preserve platform rollback routes until the issue that removes them explicitly
   says to decommission them.
@@ -76,6 +81,8 @@ Source: `apps/launchpad/infrastructure/`.
   stacks, extracts `ControlPlaneApiUrl`, can consume future
   `LaunchpadAuth` outputs, injects frontend auth/control-plane env vars, and
   builds/deploys the frontend.
+- `LAUNCHPAD_AUTH_CUTOVER_ENABLED` must remain `false` until the explicit #386
+  auth cutover PR. Deploying `LaunchpadAuth` alone must not switch live auth.
 - Platform deploy must not cascade into Launchpad deploy.
 - Future auth-domain stacks must use `Transformotion{Stage}-Launchpad*` names
   so the Launchpad deploy lane owns them without Platform orchestration.

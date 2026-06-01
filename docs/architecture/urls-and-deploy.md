@@ -205,12 +205,15 @@ Per-app deploys require these variables set in the GitHub environment (`dev` or 
 | `NEXT_PUBLIC_PLATFORM_API_URL` | Optional rollback-only base URL for legacy platform API account setup, user profile/preferences, account administration, member-management, and invitation routes |
 
 `deploy-launchpad.yml` extracts Launchpad stack outputs after CDK deploy. It
-requires `ControlPlaneApiUrl` from `LaunchpadControlPlane` and is prepared to
-read future `Transformotion{Stage}-LaunchpadAuth` outputs for
-`UserPoolId`, `LaunchpadAppClientId`, and `CognitoDomain`. Until those outputs
-exist, the workflow falls back to the environment-scoped Cognito variables.
-Platform deploy must not source, build, or orchestrate these Launchpad frontend
-auth values.
+requires `ControlPlaneApiUrl` from `LaunchpadControlPlane` and reads staged
+`Transformotion{Stage}-LaunchpadAuth` outputs for `UserPoolId`,
+`LaunchpadAppClientId`, and `CognitoDomain` when cutover is explicitly enabled.
+The workflow currently keeps `LAUNCHPAD_AUTH_CUTOVER_ENABLED=false`, so it
+falls back to the environment-scoped Platform AuthStack Cognito variables while
+the Launchpad-owned stack is staged side-by-side. Live auth remains on the
+Platform-owned AuthStack until #386 cutover switches frontend/runtime
+configuration. Platform deploy must not source, build, or orchestrate these
+Launchpad frontend auth values.
 
 Client IDs are synced from CloudFormation outputs after each auth stack deploy by running:
 ```bash

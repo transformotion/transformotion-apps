@@ -30,8 +30,9 @@ does not cascade into Launchpad, Stock Analyser, Budget Tracker, or migration
 utility deploy workflows.
 
 For #386, `deploy-launchpad.yml` is the deploy lane for current and future
-`Transformotion{Stage}-Launchpad*` backend stacks. Platform deploy must not
-orchestrate Launchpad auth/control-plane resources.
+`Transformotion{Stage}-Launchpad*` backend stacks, including
+`LaunchpadAuth`. Platform deploy must not orchestrate Launchpad
+auth/control-plane resources.
 
 When working on a specific app, read that app's `AGENTS.md` first. Claude Code may also read the sibling `CLAUDE.md` compatibility mirror:
 

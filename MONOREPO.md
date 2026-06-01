@@ -38,6 +38,7 @@ transformotion-apps/
 │   │   │   ├── invitations/
 │   │   │   └── user/
 │   │   ├── infrastructure/                # Launchpad CDK stacks
+│   │   │   ├── launchpad-auth-stack.ts
 │   │   │   └── launchpad-control-plane-stack.ts
 │   │   ├── AGENTS.md                     # Canonical Launchpad agent guide
 │   │   ├── CLAUDE.md                     # Claude Code compatibility mirror
@@ -75,7 +76,7 @@ transformotion-apps/
 │
 ├── platform/                              # Platform-owned deployable artefacts
 │   ├── infrastructure/                    # Platform CDK stacks
-│   │   ├── auth-stack.ts                  # Cognito user pool, app clients, groups
+│   │   ├── auth-stack.ts                  # Legacy live Cognito user pool, app clients, groups (#386 migration debt)
 │   │   ├── auth-api-stack.ts              # Auth-related API endpoints
 │   │   ├── github-actions-role-stack.ts   # GitHub Actions deploy IAM roles
 │   │   ├── network-stack.ts               # CloudFront, S3, certificates
@@ -152,10 +153,12 @@ transformotion-apps/
 distinct from platform infrastructure and stays separate (per
 `CONTRIBUTING.md` Section 6.4).
 
-After #363, Launchpad owns the live auth/control-plane APIs. Platform still
+After #363, Launchpad owns the live auth/control-plane APIs. #386 adds a
+staged `Transformotion{Stage}-LaunchpadAuth` stack under
+`apps/launchpad/infrastructure/` as the Launchpad-owned Cognito/auth foundation.
+Live auth still uses the Platform AuthStack until cutover, so Platform
 physically owns Cognito, auth-domain tables, and rollback control-plane routes
-as migration debt. #386 owns physical auth-domain re-home into Launchpad; do
-not treat platform auth ownership as the target topology.
+as migration debt. Do not treat platform auth ownership as the target topology.
 
 ## Workspace configuration
 

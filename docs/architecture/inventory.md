@@ -251,6 +251,12 @@ Cognito App Client (`LaunchpadAppClient`) and dedicated
 `/launchpad/callback` OAuth return route. Auth store persist key:
 `launchpad-auth`.
 
+`Transformotion{Stage}-LaunchpadAuth` is the staged Launchpad-owned
+Cognito/auth foundation. It creates a new User Pool, Hosted UI domain, app
+clients, groups, Hosted UI customisation, and Launchpad-owned social credential
+secret placeholders. It is not live until #386 cutover work switches
+application configuration.
+
 `Transformotion{Stage}-LaunchpadControlPlane` is the Launchpad-owned
 control-plane API. It exposes `GET /health` and owns the live
 `POST /auth/lookup-provider`, `POST /auth/setup`,
@@ -260,7 +266,7 @@ control-plane API. It exposes `GET /health` and owns the live
 `DELETE /accounts/{accountId}/members/{userId}`, and
 `POST /accounts/{accountId}/invitations` routes after #363 PR 5. Cognito User
 Pool, Hosted UI domain, app clients, pre-token trigger, and shared account
-tables remain physically platform-owned as migration debt.
+tables used by live traffic remain physically platform-owned as migration debt.
 
 Target ownership is Launchpad physical and logical ownership of the auth
 domain. #386 owns the physical re-home of Cognito, auth-domain tables,
@@ -1174,6 +1180,10 @@ CDK stacks — M7 #250 infrastructure split complete:
 - `storage-stack.ts` — S3 backups bucket
 
 **Launchpad stacks** (`apps/launchpad/infrastructure/`):
+- `launchpad-auth-stack.ts` — staged Launchpad-owned Cognito/auth foundation
+  (`launchpad-auth-{stage}` User Pool, Hosted UI domain, app clients, groups,
+  Hosted UI customisation, and social credential secret placeholders). Not live
+  until #386 cutover.
 - `launchpad-control-plane-stack.ts` — Launchpad-owned control-plane API
   (`launchpad-control-plane-{stage}`), with `GET /health` and
   `POST /auth/lookup-provider`, `POST /auth/setup`,

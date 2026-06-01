@@ -18,7 +18,10 @@ administration, and invitations. Platform still physically owns Cognito,
 pre-token claims infrastructure, auth-domain tables, and legacy rollback
 routes. That platform ownership is migration debt, not target architecture.
 
-#386 owns physical auth-domain re-home into Launchpad. Do not treat remaining
+#386 owns physical auth-domain re-home into Launchpad. `Transformotion{Stage}-LaunchpadAuth`
+now exists as the staged Launchpad-owned Cognito/auth foundation, but live
+Launchpad, Stock Analyser, and Budget Tracker authentication still use
+`Transformotion{Stage}-Auth` until the cutover PR. Do not treat remaining
 Platform auth ownership as precedent for new auth/control-plane work.
 
 ---
@@ -31,6 +34,12 @@ Platform auth ownership as precedent for new auth/control-plane work.
 - **Username:** Cognito-generated UUID (`sub`) — not email
 - **Sign-in alias:** email address
 - **Email:** required; auto-verified
+
+The staged Launchpad-owned replacement pool is created by
+`Transformotion{Stage}-LaunchpadAuth` with pool name `launchpad-auth-{stage}`.
+It is not live until #386 cutover work updates application configuration and
+validates sign-in, token claims, and app access against the Launchpad-owned
+auth domain.
 
 ### Password policy
 
@@ -86,6 +95,11 @@ Three distinct Cognito app clients, one per deployable app. All share the same u
 
 Social sign-in is enabled on the launchpad client only. Per-app clients are Cognito-only because social identity sessions established at the launchpad propagate via SSO.
 
+`LaunchpadAuthStack` also creates staged Launchpad, Stock Analyser, and Budget
+Tracker app clients and emits `LaunchpadAppClientId`,
+`StockAnalyserAppClientId`, and `BudgetTrackerAppClientId` outputs. Those
+clients are not used by live frontends yet.
+
 **Dev client IDs** (set in GitHub `dev` environment variables after each auth stack deploy):
 
 | Variable | Client |
@@ -133,7 +147,13 @@ The Hosted UI domain provides the OAuth 2.0 / PKCE flow endpoint for all three a
 
 ## Social identity providers
 
-Google, Facebook, and Microsoft IDPs are registered **manually in the Cognito console** (not managed by CloudFormation, because they were configured before CDK). The `AuthStack` creates Secrets Manager entries to hold credentials and references them via dynamic `{{resolve:secretsmanager:...}}` syntax.
+Google, Facebook, and Microsoft IDPs are registered **manually in the Cognito console** for the current live Platform-owned pool (not managed by CloudFormation, because they were configured before CDK). The `AuthStack` creates Secrets Manager entries to hold credentials and references them via dynamic `{{resolve:secretsmanager:...}}` syntax.
+
+`LaunchpadAuthStack` creates Launchpad-owned placeholder secret paths under
+`/launchpad/{stage}/cognito/*` for the staged auth domain. Social IdP
+configuration on the Launchpad-owned pool is a later #386 cutover step; the
+staged Launchpad app client is Cognito-only until those providers are attached
+and validated.
 
 Apple Sign-In has placeholder secrets but is not yet active.
 

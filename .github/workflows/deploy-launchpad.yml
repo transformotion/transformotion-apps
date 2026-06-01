@@ -38,6 +38,7 @@ permissions:
 env:
   AWS_REGION: ap-southeast-2
   ROLE_ARN: arn:aws:iam::959516291617:role/TransformotionLaunchpadDeployRole
+  LAUNCHPAD_AUTH_CUTOVER_ENABLED: 'false'
 
 jobs:
   deploy-dev:
@@ -127,11 +128,18 @@ jobs:
 
           require_output TransformotionDev-LaunchpadControlPlane ControlPlaneApiUrl NEXT_PUBLIC_LAUNCHPAD_CONTROL_PLANE_API_URL
 
-          # Future #386 Launchpad auth-domain stacks should publish these outputs.
-          # Until they exist, keep using environment-scoped Cognito values.
-          optional_output TransformotionDev-LaunchpadAuth UserPoolId NEXT_PUBLIC_COGNITO_USER_POOL_ID "$NEXT_PUBLIC_COGNITO_USER_POOL_ID"
-          optional_output TransformotionDev-LaunchpadAuth LaunchpadAppClientId NEXT_PUBLIC_COGNITO_CLIENT_ID "$NEXT_PUBLIC_COGNITO_CLIENT_ID"
-          optional_output TransformotionDev-LaunchpadAuth CognitoDomain NEXT_PUBLIC_COGNITO_DOMAIN "$NEXT_PUBLIC_COGNITO_DOMAIN"
+          # #386 foundation deploys LaunchpadAuth side-by-side. Keep live auth
+          # on environment-scoped Platform AuthStack values until the explicit
+          # cutover PR flips this guard.
+          if [ "$LAUNCHPAD_AUTH_CUTOVER_ENABLED" = "true" ]; then
+            optional_output TransformotionDev-LaunchpadAuth UserPoolId NEXT_PUBLIC_COGNITO_USER_POOL_ID "$NEXT_PUBLIC_COGNITO_USER_POOL_ID"
+            optional_output TransformotionDev-LaunchpadAuth LaunchpadAppClientId NEXT_PUBLIC_COGNITO_CLIENT_ID "$NEXT_PUBLIC_COGNITO_CLIENT_ID"
+            optional_output TransformotionDev-LaunchpadAuth CognitoDomain NEXT_PUBLIC_COGNITO_DOMAIN "$NEXT_PUBLIC_COGNITO_DOMAIN"
+          else
+            echo "NEXT_PUBLIC_COGNITO_USER_POOL_ID=$NEXT_PUBLIC_COGNITO_USER_POOL_ID" >> "$GITHUB_ENV"
+            echo "NEXT_PUBLIC_COGNITO_CLIENT_ID=$NEXT_PUBLIC_COGNITO_CLIENT_ID" >> "$GITHUB_ENV"
+            echo "NEXT_PUBLIC_COGNITO_DOMAIN=$NEXT_PUBLIC_COGNITO_DOMAIN" >> "$GITHUB_ENV"
+          fi
 
       - name: Verify Launchpad output extraction
         run: |
@@ -258,11 +266,18 @@ jobs:
 
           require_output TransformotionProd-LaunchpadControlPlane ControlPlaneApiUrl NEXT_PUBLIC_LAUNCHPAD_CONTROL_PLANE_API_URL
 
-          # Future #386 Launchpad auth-domain stacks should publish these outputs.
-          # Until they exist, keep using environment-scoped Cognito values.
-          optional_output TransformotionProd-LaunchpadAuth UserPoolId NEXT_PUBLIC_COGNITO_USER_POOL_ID "$NEXT_PUBLIC_COGNITO_USER_POOL_ID"
-          optional_output TransformotionProd-LaunchpadAuth LaunchpadAppClientId NEXT_PUBLIC_COGNITO_CLIENT_ID "$NEXT_PUBLIC_COGNITO_CLIENT_ID"
-          optional_output TransformotionProd-LaunchpadAuth CognitoDomain NEXT_PUBLIC_COGNITO_DOMAIN "$NEXT_PUBLIC_COGNITO_DOMAIN"
+          # #386 foundation deploys LaunchpadAuth side-by-side. Keep live auth
+          # on environment-scoped Platform AuthStack values until the explicit
+          # cutover PR flips this guard.
+          if [ "$LAUNCHPAD_AUTH_CUTOVER_ENABLED" = "true" ]; then
+            optional_output TransformotionProd-LaunchpadAuth UserPoolId NEXT_PUBLIC_COGNITO_USER_POOL_ID "$NEXT_PUBLIC_COGNITO_USER_POOL_ID"
+            optional_output TransformotionProd-LaunchpadAuth LaunchpadAppClientId NEXT_PUBLIC_COGNITO_CLIENT_ID "$NEXT_PUBLIC_COGNITO_CLIENT_ID"
+            optional_output TransformotionProd-LaunchpadAuth CognitoDomain NEXT_PUBLIC_COGNITO_DOMAIN "$NEXT_PUBLIC_COGNITO_DOMAIN"
+          else
+            echo "NEXT_PUBLIC_COGNITO_USER_POOL_ID=$NEXT_PUBLIC_COGNITO_USER_POOL_ID" >> "$GITHUB_ENV"
+            echo "NEXT_PUBLIC_COGNITO_CLIENT_ID=$NEXT_PUBLIC_COGNITO_CLIENT_ID" >> "$GITHUB_ENV"
+            echo "NEXT_PUBLIC_COGNITO_DOMAIN=$NEXT_PUBLIC_COGNITO_DOMAIN" >> "$GITHUB_ENV"
+          fi
 
       - name: Verify Launchpad output extraction
         run: |
