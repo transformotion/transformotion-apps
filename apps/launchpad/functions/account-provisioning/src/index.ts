@@ -47,7 +47,7 @@ async function handleSetup(
   const { userId, email } = auth;
 
   const claims = event.requestContext?.authorizer?.claims as Record<string, string> | undefined;
-  const existingAccountId = claims?.['custom:active_account']?.trim();
+  const existingAccountId = claims?.['custom:active_account']?.trim() ?? firstAccountIdFromClaims(claims);
   if (existingAccountId) {
     return ok({ accountId: existingAccountId, created: false });
   }
@@ -115,4 +115,21 @@ async function handleSetup(
   }));
 
   return ok({ accountId, created: true });
+}
+
+function firstAccountIdFromClaims(claims: Record<string, string> | undefined): string | undefined {
+  const raw = claims?.accounts;
+  if (!raw) return undefined;
+
+  try {
+    const accounts = JSON.parse(raw) as Record<string, Array<{ accountId?: string }>>;
+    for (const memberships of Object.values(accounts)) {
+      const accountId = memberships.find(m => m.accountId?.trim())?.accountId?.trim();
+      if (accountId) return accountId;
+    }
+  } catch {
+    return undefined;
+  }
+
+  return undefined;
 }
