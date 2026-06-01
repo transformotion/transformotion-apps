@@ -6,6 +6,7 @@ on:
     paths:
       - 'apps/budget-tracker/**'
       - 'infrastructure/bin/budget-tracker.ts'
+      - 'infrastructure/lib/auth-domain-exports.ts'
       - 'packages/api-client/**'
       - 'packages/cache/**'
       - 'packages/data-access/**'
@@ -42,6 +43,7 @@ permissions:
 env:
   AWS_REGION: ap-southeast-2
   ROLE_ARN: arn:aws:iam::959516291617:role/TransformotionBudgetTrackerDeployRole
+  LAUNCHPAD_AUTH_CUTOVER_ENABLED: 'false'
 
 jobs:
   deploy-dev:

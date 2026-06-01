@@ -5,6 +5,7 @@ import * as cdk from 'aws-cdk-lib';
 import { StockAnalyserTablesStack } from '../../apps/stock-analyser/infrastructure/stock-analyser-tables-stack';
 import { StockAnalyserApiStack }    from '../../apps/stock-analyser/infrastructure/stock-analyser-api-stack';
 import { StockAnalyserWsStack }     from '../../apps/stock-analyser/infrastructure/sa-ws-stack';
+import { authDomainConfig } from '../lib/auth-domain-exports';
 
 const app = new cdk.App();
 
@@ -14,7 +15,7 @@ const env = {
 };
 
 // Stock Analyser owns REST, WSS, AI runtime, and app data after #366.
-// Cognito remains platform-owned until #363 and is imported by User Pool ID.
+// Auth-domain ownership is selected by LAUNCHPAD_AUTH_CUTOVER_ENABLED during #386.
 //
 // Deploy commands:
 //   cdk deploy --app bin/stock-analyser.ts TransformotionDev-StockAnalyserTables TransformotionDev-StockAnalyserWs TransformotionDev-StockAnalyserApi
@@ -25,17 +26,19 @@ const devStockAnalyserTables = new StockAnalyserTablesStack(app, 'Transformotion
   description: 'Transformotion Apps - Dev Stock Analyser DynamoDB tables',
 });
 
+const devAuth = authDomainConfig('dev');
+
 const devStockAnalyserWs = new StockAnalyserWsStack(app, 'TransformotionDev-StockAnalyserWs', {
   env,
   stage:       'dev',
-  userPoolId:  cdk.Fn.importValue('Transformotion-dev-UserPoolId'),
+  userPoolId:  devAuth.userPoolId,
   description: 'Transformotion Apps - Dev Stock Analyser WebSocket API',
 });
 
 new StockAnalyserApiStack(app, 'TransformotionDev-StockAnalyserApi', {
   env,
   stage:              'dev',
-  userPoolId:         cdk.Fn.importValue('Transformotion-dev-UserPoolId'),
+  userPoolId:         devAuth.userPoolId,
   portfolioTable:     devStockAnalyserTables.portfolioTableNew,
   watchlistTable:     devStockAnalyserTables.watchlistTableNew,
   analysisCacheTable: devStockAnalyserTables.analysisCacheTable,
@@ -51,17 +54,19 @@ const prodStockAnalyserTables = new StockAnalyserTablesStack(app, 'Transformotio
   description: 'Transformotion Apps - Prod Stock Analyser DynamoDB tables',
 });
 
+const prodAuth = authDomainConfig('prod');
+
 const prodStockAnalyserWs = new StockAnalyserWsStack(app, 'TransformotionProd-StockAnalyserWs', {
   env,
   stage:       'prod',
-  userPoolId:  cdk.Fn.importValue('Transformotion-prod-UserPoolId'),
+  userPoolId:  prodAuth.userPoolId,
   description: 'Transformotion Apps - Prod Stock Analyser WebSocket API',
 });
 
 new StockAnalyserApiStack(app, 'TransformotionProd-StockAnalyserApi', {
   env,
   stage:              'prod',
-  userPoolId:         cdk.Fn.importValue('Transformotion-prod-UserPoolId'),
+  userPoolId:         prodAuth.userPoolId,
   portfolioTable:     prodStockAnalyserTables.portfolioTableNew,
   watchlistTable:     prodStockAnalyserTables.watchlistTableNew,
   analysisCacheTable: prodStockAnalyserTables.analysisCacheTable,

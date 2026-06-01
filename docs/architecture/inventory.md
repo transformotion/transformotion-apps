@@ -259,7 +259,11 @@ secret placeholders. It also creates `launchpad-users-{stage}`,
 `launchpad-invitations-{stage}`, `launchpad-rate-limits-{stage}`, and the
 `launchpad-pre-token-generation-{stage}` trigger attached to the staged User
 Pool. It is not live until #386 cutover work reseeds data and switches
-application configuration.
+application configuration. PR 6 adds flag-driven wiring via
+`LAUNCHPAD_AUTH_CUTOVER_ENABLED`: false-mode keeps Platform auth exports and
+tables; true-mode makes Launchpad control-plane, Stock Analyser, and Budget
+Tracker synthesize against `LaunchpadAuth` outputs for authorizers and relevant
+Launchpad auth-domain table references.
 
 `Transformotion{Stage}-LaunchpadControlPlane` is the Launchpad-owned
 control-plane API. It exposes `GET /health` and owns the live

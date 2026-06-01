@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 const args = parseArgs(process.argv.slice(2));
 const stage = args.stage ?? 'dev';
 const email = args.email;
+const expectCutover = args['expect-cutover'];
 
 if (!['dev', 'prod'].includes(stage)) {
   fail('--stage must be dev or prod');
@@ -77,8 +78,109 @@ function main() {
     console.log('Owner seed validation skipped; pass --email owner@example.com after seeding to validate user/table rows.');
   }
 
+  if (expectCutover) {
+    assertCutoverWiring(expectCutover, outputs);
+  }
+
   console.log('');
   console.log('Launchpad auth readiness validation passed.');
+}
+
+function assertCutoverWiring(mode, launchpadOutputs) {
+  if (!['enabled', 'disabled'].includes(mode)) {
+    fail('--expect-cutover must be enabled or disabled');
+  }
+
+  const expected = mode === 'enabled'
+    ? launchpadOutputs
+    : platformAuthOutputs(stage);
+
+  const expectedUserPoolArn = expected.UserPoolArn;
+  const expectedUserPoolId = expected.UserPoolId;
+  const expectedTables = mode === 'enabled'
+    ? {
+        users: launchpadOutputs.UsersTableName,
+        accounts: launchpadOutputs.AccountsTableName,
+        accountMembers: launchpadOutputs.AccountMembersTableName,
+        invitations: launchpadOutputs.InvitationsTableName,
+        rateLimits: launchpadOutputs.RateLimitsTableName,
+      }
+    : {
+        users: `platform.users-${stage}`,
+        accounts: `platform.accounts-${stage}`,
+        accountMembers: `platform.account-members-${stage}`,
+        invitations: `platform.invitations-${stage}`,
+        rateLimits: `platform.rate-limits-${stage}`,
+      };
+
+  assertRestAuthorizer('LaunchpadControlPlane', controlPlaneRestApiId(stage), expectedUserPoolArn);
+  assertRestAuthorizer('StockAnalyserApi', restApiIdFromStackUrl(`Transformotion${stageCap}-StockAnalyserApi`, 'ApiUrl'), expectedUserPoolArn);
+  assertRestAuthorizer('BudgetTrackerApi', restApiIdFromStackUrl(`Transformotion${stageCap}-BudgetTrackerApi`, 'ApiUrl'), expectedUserPoolArn);
+
+  assertLambdaEnv(`stock-analyser-ws-authorizer-${stage}`, { COGNITO_USER_POOL_ID: expectedUserPoolId });
+  assertLambdaEnv(`budget-tracker-ws-authorizer-${stage}`, { COGNITO_USER_POOL_ID: expectedUserPoolId });
+
+  assertLambdaEnv(`launchpad-forgot-provider-${stage}`, {
+    USER_POOL_ID: expectedUserPoolId,
+    RATE_LIMIT_TABLE: expectedTables.rateLimits,
+  });
+  assertLambdaEnv(`launchpad-account-provisioning-${stage}`, {
+    USER_POOL_ID: expectedUserPoolId,
+    ACCOUNTS_TABLE: expectedTables.accounts,
+    ACCOUNT_MEMBERS_TABLE: expectedTables.accountMembers,
+  });
+  assertLambdaEnv(`launchpad-user-${stage}`, {
+    USERS_TABLE: expectedTables.users,
+  });
+  assertLambdaEnv(`launchpad-accounts-${stage}`, {
+    ACCOUNTS_TABLE: expectedTables.accounts,
+    ACCOUNT_MEMBERS_TABLE: expectedTables.accountMembers,
+  });
+  assertLambdaEnv(`launchpad-invitations-${stage}`, {
+    ACCOUNTS_TABLE: expectedTables.accounts,
+    INVITATIONS_TABLE: expectedTables.invitations,
+  });
+
+  console.log(`Cutover wiring validation passed for mode: ${mode}`);
+}
+
+function platformAuthOutputs(currentStage) {
+  const outputs = stackOutputs(`Transformotion${stageCap}-Auth`);
+  return {
+    UserPoolId: outputs.UserPoolId,
+    UserPoolArn: outputs.UserPoolArn,
+  };
+}
+
+function controlPlaneRestApiId(currentStage) {
+  return stackOutputs(`Transformotion${stageCap}-LaunchpadControlPlane`).ControlPlaneRestApiId;
+}
+
+function restApiIdFromStackUrl(stackName, outputKey) {
+  const url = stackOutputs(stackName)[outputKey];
+  if (!url) fail(`Missing ${outputKey} output from ${stackName}`);
+  const match = /^https:\/\/([^.]+)\.execute-api\./.exec(url);
+  if (!match) fail(`Could not parse REST API ID from ${stackName} ${outputKey}: ${url}`);
+  return match[1];
+}
+
+function assertRestAuthorizer(label, restApiId, expectedUserPoolArn) {
+  const authorizers = awsJson(['apigateway', 'get-authorizers', '--rest-api-id', restApiId]).items ?? [];
+  const providerArns = authorizers.flatMap(authorizer => authorizer.providerARNs ?? []);
+  if (!providerArns.includes(expectedUserPoolArn)) {
+    fail(`${label} authorizer on ${restApiId} does not use ${expectedUserPoolArn}; found ${providerArns.join(', ') || '<none>'}`);
+  }
+  console.log(`${label} REST authorizer uses expected User Pool`);
+}
+
+function assertLambdaEnv(functionName, expectedEnv) {
+  const configuration = awsJson(['lambda', 'get-function-configuration', '--function-name', functionName]);
+  const actual = configuration.Environment?.Variables ?? {};
+  const mismatches = Object.entries(expectedEnv).filter(([key, value]) => actual[key] !== value);
+  if (mismatches.length > 0) {
+    fail(`${functionName} env mismatch: ${mismatches.map(([key, value]) => `${key} expected ${value} got ${actual[key] ?? '<missing>'}`).join('; ')}`);
+  }
+  console.log(`${functionName} env matches expected auth-domain wiring`);
 }
 
 function assertCutoverDefaultIsFalse() {
@@ -298,6 +400,6 @@ function fromAttr(value) {
 function fail(message) {
   console.error(`ERROR: ${message}`);
   console.error('');
-  console.error('Usage: node scripts/migrations/launchpad/validate-auth-domain-readiness.mjs [--stage dev] [--email owner@example.com]');
+  console.error('Usage: node scripts/migrations/launchpad/validate-auth-domain-readiness.mjs [--stage dev] [--email owner@example.com] [--expect-cutover enabled|disabled]');
   process.exit(1);
 }

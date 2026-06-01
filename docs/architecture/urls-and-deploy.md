@@ -217,11 +217,18 @@ configuration. The staged Launchpad-owned tables must be reseeded and
 that guard is changed. Platform deploy must not source, build, or orchestrate
 these Launchpad frontend auth values.
 
+The same guard is also read by the Launchpad, Stock Analyser, and Budget
+Tracker CDK entrypoints. `false` synthesizes the current Platform-auth wiring;
+`true` synthesizes app/control-plane authorizers and Launchpad control-plane
+table references against `Transformotion{Stage}-LaunchpadAuth` outputs. The
+guard must be flipped only in the explicit #386 cutover PR.
+
 Stock Analyser and Budget Tracker do not automatically consume
 `LaunchpadAuth` outputs from the Launchpad workflow. During cutover, sync the
 Launchpad-owned auth outputs into GitHub environment variables with
 `scripts/ci/sync-launchpad-auth-client-ids.sh dev`, then redeploy SA and BT so
-their static bundles use the new User Pool, app clients, and Hosted UI domain.
+their static bundles and app-owned API/WSS authorizers use the new User Pool,
+app clients, and Hosted UI domain.
 The full dev sequence is documented in
 [`m9-386-dev-auth-cutover-checklist.md`](../migrations/m9-386-dev-auth-cutover-checklist.md).
 

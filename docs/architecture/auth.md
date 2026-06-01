@@ -733,7 +733,11 @@ and the account/user/invitation tables used by live traffic remain physically
 platform-owned after #363. This is temporary migration debt. #386 has created
 staged Launchpad-owned replacements for the User Pool, app clients, groups,
 tables, and pre-token trigger; cutover is still disabled until reseed and
-runtime validation are complete.
+runtime validation are complete. The #386 cutover path is guarded by
+`LAUNCHPAD_AUTH_CUTOVER_ENABLED`: false-mode keeps Platform auth/table wiring,
+while true-mode synthesizes Launchpad control-plane, Stock Analyser, and Budget
+Tracker authorizers against `LaunchpadAuth` and moves Launchpad control-plane
+routes to the Launchpad-owned auth tables.
 
 The platform `transformotion-account-provisioning-{stage}`, `transformotion-user-{stage}`, `transformotion-accounts-{stage}`, and `transformotion-invitations-{stage}` routes remain deployed in `PlatformApiStack` only for rollback during #363. `/auth/switch` is not migrated to Launchpad because there is no current Launchpad caller and active account switching is handled client-side via `X-Account-Id`.
 

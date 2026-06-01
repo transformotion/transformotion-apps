@@ -15,6 +15,11 @@ export interface LaunchpadControlPlaneStackProps extends cdk.StackProps {
   userPoolArn: string;
   stockAnalyserAppClientId: string;
   budgetTrackerAppClientId: string;
+  usersTableName: string;
+  accountsTableName: string;
+  accountMembersTableName: string;
+  invitationsTableName: string;
+  rateLimitsTableName: string;
   fromEmail: string;
   appUrl: string;
 }
@@ -37,6 +42,11 @@ export class LaunchpadControlPlaneStack extends cdk.Stack {
       userPoolArn,
       stockAnalyserAppClientId,
       budgetTrackerAppClientId,
+      usersTableName,
+      accountsTableName,
+      accountMembersTableName,
+      invitationsTableName,
+      rateLimitsTableName,
       fromEmail,
       appUrl,
     } = props;
@@ -80,7 +90,7 @@ export class LaunchpadControlPlaneStack extends cdk.Stack {
     const rateLimitTable = dynamodb.Table.fromTableName(
       this,
       'LookupProviderRateLimitTable',
-      `platform.rate-limits-${stage}`,
+      rateLimitsTableName,
     );
 
     const forgotProviderFn = new lambdaNodejs.NodejsFunction(this, 'ForgotProviderFn', {
@@ -123,12 +133,12 @@ export class LaunchpadControlPlaneStack extends cdk.Stack {
     const accountsTable = dynamodb.Table.fromTableName(
       this,
       'AccountsTable',
-      `platform.accounts-${stage}`,
+      accountsTableName,
     );
     const accountMembersTable = dynamodb.Table.fromTableName(
       this,
       'AccountMembersTable',
-      `platform.account-members-${stage}`,
+      accountMembersTableName,
     );
 
     const accountProvisioningFn = new lambdaNodejs.NodejsFunction(this, 'AccountProvisioningFn', {
@@ -167,7 +177,7 @@ export class LaunchpadControlPlaneStack extends cdk.Stack {
     const usersTable = dynamodb.Table.fromTableName(
       this,
       'UsersTable',
-      `platform.users-${stage}`,
+      usersTableName,
     );
 
     const userFn = new lambdaNodejs.NodejsFunction(this, 'UserFn', {
@@ -222,7 +232,7 @@ export class LaunchpadControlPlaneStack extends cdk.Stack {
     const invitationsTable = dynamodb.Table.fromTableName(
       this,
       'InvitationsTable',
-      `platform.invitations-${stage}`,
+      invitationsTableName,
     );
 
     const invitationsFn = new lambdaNodejs.NodejsFunction(this, 'InvitationsFn', {

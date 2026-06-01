@@ -161,10 +161,12 @@ Launchpad control-plane infrastructure to the Launchpad-owned auth domain:
 - `POST /auth/lookup-provider` uses the Launchpad-owned staged User Pool when
   resolving users.
 
-Validation note from PR 5: with `LAUNCHPAD_AUTH_CUTOVER_ENABLED=false`, staged
-tokens correctly fail against the live Launchpad control-plane API because that
-API still authorizes against the Platform User Pool. Do not treat the frontend
-flag flip alone as sufficient cutover.
+PR 6 adds flag-driven cutover wiring. With
+`LAUNCHPAD_AUTH_CUTOVER_ENABLED=false`, synthesized stacks keep the Platform
+User Pool and `platform.*` auth tables. With
+`LAUNCHPAD_AUTH_CUTOVER_ENABLED=true`, synthesized Launchpad, Stock Analyser,
+and Budget Tracker stacks import `TransformotionDev-LaunchpadAuth` outputs for
+auth authorizers and Launchpad control-plane table references.
 
 Create the cutover PR that changes:
 
@@ -187,6 +189,15 @@ Validate the Launchpad frontend bundle contains the Launchpad-owned:
 - Cognito Hosted UI domain
 - Control-plane API URL
 
+Then validate deployed Launchpad wiring:
+
+```bash
+node scripts/migrations/launchpad/validate-auth-domain-readiness.mjs \
+  --stage dev \
+  --email <owner-email> \
+  --expect-cutover enabled
+```
+
 ## Phase 6 - Redeploy SA/BT
 
 Before syncing app client IDs or redeploying the apps, confirm the cutover PR
@@ -197,9 +208,10 @@ also updates app infrastructure auth imports:
 - Budget Tracker API and WSS stacks must trust
   `TransformotionDev-LaunchpadAuth` `UserPoolId`.
 
-Validation note from PR 5: as staged today, SA and BT still import
-`Transformotion-dev-UserPoolId` from the Platform `AuthStack`. Updating GitHub
-client ID variables alone is not enough for app cutover.
+PR 6 adds the same flag-driven auth-domain selection to the Stock Analyser and
+Budget Tracker CDK entrypoints. Keep each app workflow guard at `false` until
+the explicit app cutover deploy, then set it to `true` with the same cutover PR
+or a tightly sequenced follow-up.
 
 After GitHub environment variables point at `LaunchpadAuth`, redeploy:
 
