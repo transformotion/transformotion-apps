@@ -18,14 +18,15 @@ administration, and invitations. Platform still physically owns Cognito,
 pre-token claims infrastructure, auth-domain tables, and legacy rollback
 routes. That platform ownership is migration debt, not target architecture.
 
-#386 owns physical auth-domain re-home into Launchpad. `Transformotion{Stage}-LaunchpadAuth`
-now exists as the staged Launchpad-owned Cognito/auth foundation. Dev cutover is
-performed by setting `LAUNCHPAD_AUTH_CUTOVER_ENABLED=true` for the dev
-Launchpad, Stock Analyser, and Budget Tracker deploy jobs after staged
-LaunchpadAuth deployment, reseed, Hosted UI validation, and claim validation.
-The workflow-level default remains `false`, so prod continues to use
-`Transformotion{Stage}-Auth` until its own explicit cutover. Do not treat
-remaining Platform auth ownership as precedent for new auth/control-plane work.
+#386 owns physical auth-domain re-home into Launchpad. `TransformotionDev-LaunchpadAuth`
+is live for dev after the explicit cutover and runtime validation. Dev
+Launchpad, Stock Analyser, and Budget Tracker deploy jobs set
+`LAUNCHPAD_AUTH_CUTOVER_ENABLED=true`, so dev frontend auth configuration,
+REST authorizers, WSS authorizers, and Launchpad control-plane tables use the
+Launchpad-owned auth domain. The workflow-level default remains `false`, so
+prod continues to use `TransformotionProd-Auth` until its own explicit
+cutover. Do not treat remaining Platform auth ownership as precedent for new
+auth/control-plane work.
 
 ---
 
@@ -731,12 +732,12 @@ Launchpad owns the live onboarding, user profile/preference, account administrat
 | `DELETE /accounts/{accountId}/members/{userId}` | `launchpad-accounts-{stage}` | Removes a member after owner verification. |
 | `POST /accounts/{accountId}/invitations` | `launchpad-invitations-{stage}` | Creates an invitation after owner verification. |
 
-Cognito User Pool, Hosted UI domain, app clients, pre-token-generation trigger,
-and the account/user/invitation tables used by live traffic remain physically
-platform-owned after #363. This is temporary migration debt. #386 has created
-staged Launchpad-owned replacements for the User Pool, app clients, groups,
-tables, and pre-token trigger; cutover is still disabled until reseed and
-runtime validation are complete. The #386 cutover path is guarded by
+Dev live traffic now uses `TransformotionDev-LaunchpadAuth` for Cognito,
+pre-token claims, app clients, Launchpad control-plane tables, and SA/BT
+authorizers. The old dev Platform AuthStack, Platform auth tables, Platform
+pre-token trigger, and legacy Platform auth/control-plane routes remain
+deployed only for rollback and later cleanup. Prod remains on the Platform
+AuthStack until its own explicit cutover. The #386 cutover path is guarded by
 `LAUNCHPAD_AUTH_CUTOVER_ENABLED`: false-mode keeps Platform auth/table wiring,
 while true-mode synthesizes Launchpad control-plane, Stock Analyser, and Budget
 Tracker authorizers against `LaunchpadAuth` and moves Launchpad control-plane

@@ -59,8 +59,8 @@ Deployed by `deploy-launchpad.yml`. Source in `apps/launchpad/infrastructure/`.
 
 | Stack name | Class | Contents |
 |---|---|---|
-| `Transformotion{Stage}-LaunchpadAuth` | `LaunchpadAuthStack` | Staged Launchpad-owned Cognito/auth foundation. Creates a new User Pool, Hosted UI domain, app clients, groups, Hosted UI customisation, Launchpad-owned social credential secret placeholders, Launchpad-owned auth-domain tables, and `launchpad-pre-token-generation-{stage}`. Not live until #386 cutover updates app/frontend configuration and flips the Launchpad workflow cutover guard. |
-| `Transformotion{Stage}-LaunchpadControlPlane` | `LaunchpadControlPlaneStack` | Launchpad-owned live control-plane API. It currently consumes platform-owned auth-domain resources as migration debt until #386. Owns `GET /health`, live auth lookup, account setup, user profile/preferences, account admin, member management, and invitation routes. |
+| `Transformotion{Stage}-LaunchpadAuth` | `LaunchpadAuthStack` | Launchpad-owned Cognito/auth foundation. Creates a new User Pool, Hosted UI domain, app clients, groups, Hosted UI customisation, Launchpad-owned social credential secret placeholders, Launchpad-owned auth-domain tables, and `launchpad-pre-token-generation-{stage}`. Live for dev after the explicit #386 cutover; prod remains guarded until its own cutover. |
+| `Transformotion{Stage}-LaunchpadControlPlane` | `LaunchpadControlPlaneStack` | Launchpad-owned live control-plane API. In dev it uses Launchpad-owned auth tables after #386 cutover; prod remains on Platform auth-domain resources until its own cutover. Owns `GET /health`, live auth lookup, account setup, user profile/preferences, account admin, member management, and invitation routes. |
 
 `deploy-launchpad.yml` targets `Transformotion{Stage}-Launchpad*`, not a
 single stack name, so the staged `LaunchpadAuth` stack and future #386
@@ -196,16 +196,16 @@ App stacks may resolve shared platform substrate via CloudFormation exports at d
 | Export name | Produced by | Consumed by |
 |---|---|---|
 | `Transformotion-{stage}-UserPoolId` | `AuthStack` | SA/BT app API/WSS stacks, Launchpad control-plane stack, and migration utilities where Cognito auth is required until #386 cutover |
-| `Transformotion-{stage}-LaunchpadAuth-UserPoolId` | `LaunchpadAuthStack` | Staged Launchpad-owned auth domain; not live until cutover |
-| `Transformotion-{stage}-LaunchpadAuth-LaunchpadAppClientId` | `LaunchpadAuthStack` | Staged Launchpad app client for future cutover |
-| `Transformotion-{stage}-LaunchpadAuth-StockAnalyserAppClientId` | `LaunchpadAuthStack` | Staged Stock Analyser app client for future cutover |
-| `Transformotion-{stage}-LaunchpadAuth-BudgetTrackerAppClientId` | `LaunchpadAuthStack` | Staged Budget Tracker app client for future cutover |
-| `Transformotion-{stage}-LaunchpadAuth-CognitoDomain` | `LaunchpadAuthStack` | Staged Launchpad-owned Hosted UI domain for future cutover |
-| `Transformotion-{stage}-LaunchpadAuth-UsersTableName` | `LaunchpadAuthStack` | Staged Launchpad auth-domain table for future cutover |
-| `Transformotion-{stage}-LaunchpadAuth-AccountsTableName` | `LaunchpadAuthStack` | Staged Launchpad auth-domain table for future cutover |
-| `Transformotion-{stage}-LaunchpadAuth-AccountMembersTableName` | `LaunchpadAuthStack` | Staged Launchpad auth-domain table for future cutover |
-| `Transformotion-{stage}-LaunchpadAuth-InvitationsTableName` | `LaunchpadAuthStack` | Staged Launchpad auth-domain table for future cutover |
-| `Transformotion-{stage}-LaunchpadAuth-RateLimitsTableName` | `LaunchpadAuthStack` | Staged Launchpad auth-domain table for future cutover |
+| `Transformotion-{stage}-LaunchpadAuth-UserPoolId` | `LaunchpadAuthStack` | Launchpad-owned auth domain; live for dev after cutover, staged for prod |
+| `Transformotion-{stage}-LaunchpadAuth-LaunchpadAppClientId` | `LaunchpadAuthStack` | Launchpad app client; live for dev after cutover, staged for prod |
+| `Transformotion-{stage}-LaunchpadAuth-StockAnalyserAppClientId` | `LaunchpadAuthStack` | Stock Analyser app client; live for dev after cutover, staged for prod |
+| `Transformotion-{stage}-LaunchpadAuth-BudgetTrackerAppClientId` | `LaunchpadAuthStack` | Budget Tracker app client; live for dev after cutover, staged for prod |
+| `Transformotion-{stage}-LaunchpadAuth-CognitoDomain` | `LaunchpadAuthStack` | Launchpad-owned Hosted UI domain; live for dev after cutover, staged for prod |
+| `Transformotion-{stage}-LaunchpadAuth-UsersTableName` | `LaunchpadAuthStack` | Launchpad auth-domain table; live for dev after cutover, staged for prod |
+| `Transformotion-{stage}-LaunchpadAuth-AccountsTableName` | `LaunchpadAuthStack` | Launchpad auth-domain table; live for dev after cutover, staged for prod |
+| `Transformotion-{stage}-LaunchpadAuth-AccountMembersTableName` | `LaunchpadAuthStack` | Launchpad auth-domain table; live for dev after cutover, staged for prod |
+| `Transformotion-{stage}-LaunchpadAuth-InvitationsTableName` | `LaunchpadAuthStack` | Launchpad auth-domain table; live for dev after cutover, staged for prod |
+| `Transformotion-{stage}-LaunchpadAuth-RateLimitsTableName` | `LaunchpadAuthStack` | Launchpad auth-domain table; live for dev after cutover, staged for prod |
 | `Transformotion-{stage}-LaunchpadAuth-*SecretName` | `LaunchpadAuthStack` | Staged social IdP secret names for future provider attachment |
 | `Transformotion-{stage}-RestApiId` | `PlatformApiStack` | MU only — `RestApi.fromRestApiAttributes`; SA/BT no longer import after #366/#367 |
 | `Transformotion-{stage}-RestApiRootResourceId` | `PlatformApiStack` | MU only — `RestApi.fromRestApiAttributes`; SA/BT no longer import after #366/#367 |
@@ -349,10 +349,10 @@ The legacy shared `GitHubActionsDeployRole` remains available temporarily as rol
 
 **Current policy shape:** roles are scoped by owned CloudFormation stack name patterns where practical, retain read access to Transformotion stack outputs for transitional dependencies, can assume CDK bootstrap roles, and keep CloudFront/Cognito smoke-test permissions needed by current deploy verification. The Launchpad role owns `TransformotionDev-Launchpad*` and `TransformotionProd-Launchpad*` stack patterns, which is the deploy boundary for current control-plane and future #386 auth-domain stacks. CDK/CloudFormation performs service-level resource creation through the bootstrap execution role; the GitHub role does not need direct broad Cognito, Lambda, API Gateway, DynamoDB, or IAM resource permissions for normal CDK deploys. The policies are intentionally pragmatic rather than final least privilege.
 
-Cognito app clients used by live traffic still come from `AuthStack` as
-current-state migration debt. `LaunchpadAuthStack` creates replacement
-Launchpad-owned clients for staged cutover; app/front-end configuration has not
-been switched yet.
+Dev frontend and app authorizer configuration now use the Launchpad-owned app
+clients from `LaunchpadAuthStack`. Prod remains on `AuthStack` app clients
+until its own explicit cutover. The old dev Platform app clients remain
+deployed as rollback/migration debt until cleanup.
 
 ---
 

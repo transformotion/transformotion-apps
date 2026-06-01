@@ -208,12 +208,12 @@ Per-app deploys require these variables set in the GitHub environment (`dev` or 
 requires `ControlPlaneApiUrl` from `LaunchpadControlPlane` and reads staged
 `Transformotion{Stage}-LaunchpadAuth` outputs for `UserPoolId`,
 `LaunchpadAppClientId`, and `CognitoDomain` when cutover is explicitly enabled.
-For dev, the `deploy-dev` job sets `LAUNCHPAD_AUTH_CUTOVER_ENABLED=true` after
-staged LaunchpadAuth deployment, reseed, Hosted UI validation, and claim
-validation. The workflow-level default remains `false`, so prod continues to
-fall back to the environment-scoped Platform AuthStack Cognito variables until
-its own cutover. Platform deploy must not source, build, or orchestrate these
-Launchpad frontend auth values.
+For dev, the `deploy-dev` job sets `LAUNCHPAD_AUTH_CUTOVER_ENABLED=true` and
+dev is live on LaunchpadAuth after deployment and runtime validation. The
+workflow-level default remains `false`, so prod continues to fall back to the
+environment-scoped Platform AuthStack Cognito variables until its own cutover.
+Platform deploy must not source, build, or orchestrate these Launchpad frontend
+auth values.
 
 The same guard is also read by the Launchpad, Stock Analyser, and Budget
 Tracker CDK entrypoints. `false` synthesizes the current Platform-auth wiring;
@@ -227,6 +227,11 @@ Launchpad-owned auth outputs into GitHub environment variables with
 `scripts/ci/sync-launchpad-auth-client-ids.sh dev`, then redeploy SA and BT so
 their static bundles and app-owned API/WSS authorizers use the new User Pool,
 app clients, and Hosted UI domain.
+
+During the first dev cutover, API Gateway REST stages required explicit
+redeployment after authorizer/table wiring changed. If a future cutover shows
+valid `test-invoke-authorizer` results but live routes return REST 401s, force
+or induce a new API Gateway stage deployment before continuing validation.
 The full dev sequence is documented in
 [`m9-386-dev-auth-cutover-checklist.md`](../migrations/m9-386-dev-auth-cutover-checklist.md).
 

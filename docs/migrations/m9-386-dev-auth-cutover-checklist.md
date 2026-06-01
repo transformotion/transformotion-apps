@@ -49,6 +49,31 @@ Pre-cutover staged validation completed:
 - ID token claims include `site_admin = "true"`, app access for
   `stock-analyser` and `budget-tracker`, and both seeded owner memberships.
 
+Dev cutover validation completed:
+
+- `deploy-launchpad.yml` succeeded with dev cutover enabled.
+- `deploy-stock-analyser.yml` succeeded with dev cutover enabled.
+- `deploy-budget-tracker.yml` succeeded with dev cutover enabled.
+- `validate-auth-domain-readiness.mjs --expect-cutover enabled` passed.
+- Launchpad Hosted UI login/logout probes passed.
+- Launchpad control-plane routes validated: auth lookup, account setup,
+  profile, preferences, account read, member list, account creation, and
+  invitation creation against a smoke-owned account.
+- Stock Analyser authenticated REST smoke passed with LaunchpadAuth token.
+- Budget Tracker authenticated REST smoke passed with LaunchpadAuth token.
+- Stock Analyser and Budget Tracker WSS connect/init/disconnect paths passed
+  with LaunchpadAuth tokens.
+- Legacy Platform AuthApi lookup route remains available for rollback.
+- Platform AuthStack, Platform auth tables, Platform pre-token trigger, and
+  legacy rollback routes were not removed.
+
+Operational note: the live API Gateway REST stages were explicitly redeployed
+during the first dev cutover because authorizer/table wiring changed while the
+stage deployments were still pointing at older deployment snapshots. If a
+future auth-domain cutover changes REST authorizers and returns unexpected
+401s while `test-invoke-authorizer` succeeds, force a new stage deployment or
+make a no-op API Gateway deployment change in CDK before continuing.
+
 ## Preparation Already Front-Loaded
 
 PR 4 prepares the safe staged pieces before live cutover:

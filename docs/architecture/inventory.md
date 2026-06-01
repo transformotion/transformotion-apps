@@ -251,16 +251,15 @@ Cognito App Client (`LaunchpadAppClient`) and dedicated
 `/launchpad/callback` OAuth return route. Auth store persist key:
 `launchpad-auth`.
 
-`Transformotion{Stage}-LaunchpadAuth` is the staged Launchpad-owned
+`Transformotion{Stage}-LaunchpadAuth` is the Launchpad-owned
 Cognito/auth foundation. It creates a new User Pool, Hosted UI domain, app
 clients, groups, Hosted UI customisation, and Launchpad-owned social credential
 secret placeholders. It also creates `launchpad-users-{stage}`,
 `launchpad-accounts-{stage}`, `launchpad-account-members-{stage}`,
 `launchpad-invitations-{stage}`, `launchpad-rate-limits-{stage}`, and the
-`launchpad-pre-token-generation-{stage}` trigger attached to the staged User
-Pool. It becomes live for dev when the dev deploy jobs run with
-`LAUNCHPAD_AUTH_CUTOVER_ENABLED=true` after reseed and staged validation. PR 6
-adds flag-driven wiring via
+`launchpad-pre-token-generation-{stage}` trigger attached to the Launchpad-owned
+User Pool. It is live for dev after the #386 explicit cutover and remains
+staged for prod until prod cutover. PR 6 adds flag-driven wiring via
 `LAUNCHPAD_AUTH_CUTOVER_ENABLED`: false-mode keeps Platform auth exports and
 tables; true-mode makes Launchpad control-plane, Stock Analyser, and Budget
 Tracker synthesize against `LaunchpadAuth` outputs for authorizers and relevant
@@ -274,9 +273,11 @@ control-plane API. It exposes `GET /health` and owns the live
 `POST /accounts`, `GET/PUT/DELETE /accounts/{accountId}`,
 `GET /accounts/{accountId}/members`,
 `DELETE /accounts/{accountId}/members/{userId}`, and
-`POST /accounts/{accountId}/invitations` routes after #363 PR 5. Cognito User
-Pool, Hosted UI domain, app clients, pre-token trigger, and shared account
-tables used by live traffic remain physically platform-owned as migration debt.
+`POST /accounts/{accountId}/invitations` routes after #363 PR 5. In dev these
+routes use Launchpad-owned Cognito and Launchpad-owned auth-domain tables after
+#386 cutover. Prod remains on Platform auth-domain resources until its own
+explicit cutover. Old dev Platform auth resources remain deployed as rollback
+migration debt.
 
 Target ownership is Launchpad physical and logical ownership of the auth
 domain. #386 owns the physical re-home of Cognito, auth-domain tables,
@@ -1203,17 +1204,18 @@ CDK stacks — M7 #250 infrastructure split complete:
 - `storage-stack.ts` — S3 backups bucket
 
 **Launchpad stacks** (`apps/launchpad/infrastructure/`):
-- `launchpad-auth-stack.ts` — staged Launchpad-owned Cognito/auth foundation
+- `launchpad-auth-stack.ts` — Launchpad-owned Cognito/auth foundation
   (`launchpad-auth-{stage}` User Pool, Hosted UI domain, app clients, groups,
   Hosted UI customisation, social credential secret placeholders,
   Launchpad-owned auth-domain tables, and `launchpad-pre-token-generation-{stage}`).
-  Not live until #386 cutover.
+  Live for dev after #386 cutover; staged for prod until prod cutover.
 - `launchpad-control-plane-stack.ts` — Launchpad-owned control-plane API
   (`launchpad-control-plane-{stage}`), with `GET /health` and
   `POST /auth/lookup-provider`, `POST /auth/setup`,
   `GET /api/user/profile`, `PUT /api/user/preferences`, account
-  administration, member-management, and invitation routes. Cognito and shared
-  account tables remain platform-owned migration debt until #386.
+  administration, member-management, and invitation routes. Dev uses
+  Launchpad-owned auth resources after #386 cutover; prod remains on Platform
+  auth-domain resources until prod cutover.
 - Future #386 Launchpad auth-domain stacks belong under
   `apps/launchpad/infrastructure/`, use `Transformotion{Stage}-Launchpad*`
   names, and deploy through `deploy-launchpad.yml`.
