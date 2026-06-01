@@ -247,10 +247,11 @@ Cognito App Client (`LaunchpadAppClient`) and dedicated
 
 `Transformotion{Stage}-LaunchpadControlPlane` is the Launchpad-owned
 control-plane API. It exposes `GET /health` and owns the live
-`POST /auth/lookup-provider` route after #363 PR 3. Additional product-level
-auth/control-plane routes migrate here during #363. Cognito User Pool, Hosted
-UI domain, app clients, pre-token trigger, and shared account tables remain
-platform-owned substrate.
+`POST /auth/lookup-provider`, `POST /auth/setup`,
+`GET /api/user/profile`, and `PUT /api/user/preferences` routes after
+#363 PR 4. Additional product-level auth/control-plane routes migrate here
+during #363. Cognito User Pool, Hosted UI domain, app clients, pre-token
+trigger, and shared account tables remain platform-owned substrate.
 
 The hard-coded `userCanAccessFramework` prop in launchpad currently
 governs tile visibility for the Transformotion Framework app. M9
@@ -432,15 +433,21 @@ proposal.
 Platform Lambdas (`platform/functions/`):
 
 - `accounts/` — account management
-- `auth/account-provisioning/` — first-sign-in account creation
-  (renamed from `first-login/`)
+- `auth/account-provisioning/` — legacy rollback copy of first-sign-in
+  account creation and superseded `/auth/switch`
 - `auth/pre-token-generation/` — Cognito pre-token trigger; emits
   the `apps`, `accounts`, `site_admin` claims into JWTs
 - `auth/invitations/` — invitation flow handlers
 - `auth/forgot-provider/` — legacy rollback copy of the federated identity
   recovery route after #363 PR 3
 - `claude-proxy/` — Anthropic API proxy
-- `user/` — platform user data
+- `user/` — legacy rollback copy of user profile/preferences routes
+
+Launchpad control-plane Lambdas (`apps/launchpad/functions/`):
+
+- `forgot-provider/` — live federated identity recovery route
+- `account-provisioning/` — live first-sign-in account creation
+- `user/` — live user profile/preferences routes
 
 Stock-analyser Lambdas (`apps/stock-analyser/functions/`):
 
@@ -908,8 +915,10 @@ launchpad routes — exactly what cross-app navigation requires.
 
 A single shared authoriser (`JwtAuthoriser`) is defined in
 `platform-api-stack.ts` and reused across all platform routes. The
-auth-api-stack now retains only the rollback copy of the public lookup-provider
-Lambda; the live route is owned by `LaunchpadControlPlaneStack`.
+Launchpad control-plane stack defines its own Cognito authoriser over the same
+platform-owned User Pool. The auth-api-stack now retains only the rollback
+copy of the public lookup-provider Lambda; the live route is owned by
+`LaunchpadControlPlaneStack`.
 
 The v4 inventory's uncertainty on this finding was well-founded;
 the answer is clean.
@@ -961,9 +970,13 @@ needed dedicated thought. Each needs a documented decision on its
 authorisation model — including how onboarding-stage users (no app
 groups yet) interact with them.
 
-The forgot-provider lookup route is now Launchpad-owned control-plane behavior
-(`apps/launchpad/functions/forgot-provider`). The legacy platform copy remains
-only for rollback.
+The forgot-provider lookup route, account setup route, and user
+profile/preferences routes are now Launchpad-owned control-plane behavior
+(`apps/launchpad/functions/forgot-provider`,
+`apps/launchpad/functions/account-provisioning`,
+`apps/launchpad/functions/user`). The legacy platform copies remain only for
+rollback. `/auth/switch` is not migrated because there is no current Launchpad
+caller and account switching is handled via `X-Account-Id`.
 
 M2.2 is the decision; M10 implements.
 
@@ -1144,8 +1157,9 @@ CDK stacks — M7 #250 infrastructure split complete:
 **Launchpad stacks** (`apps/launchpad/infrastructure/`):
 - `launchpad-control-plane-stack.ts` — Launchpad-owned control-plane API
   (`launchpad-control-plane-{stage}`), with `GET /health` and
-  `POST /auth/lookup-provider`. Cognito and shared account tables remain
-  platform substrate.
+  `POST /auth/lookup-provider`, `POST /auth/setup`,
+  `GET /api/user/profile`, and `PUT /api/user/preferences`. Cognito and shared
+  account tables remain platform substrate.
 
 **Stock-analyser stacks** (`apps/stock-analyser/infrastructure/`):
 - `stock-analyser-api-stack.ts` — Stock Analyser-owned REST API Gateway,

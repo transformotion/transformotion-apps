@@ -586,6 +586,31 @@ importers:
         specifier: 5.7.3
         version: 5.7.3
 
+  apps/launchpad/functions/account-provisioning:
+    dependencies:
+      '@transformotion/lambda-middleware':
+        specifier: workspace:*
+        version: link:../../../../packages/lambda-middleware
+    devDependencies:
+      '@aws-sdk/client-cognito-identity-provider':
+        specifier: ^3
+        version: 3.1032.0
+      '@aws-sdk/client-dynamodb':
+        specifier: ^3
+        version: 3.1032.0
+      '@aws-sdk/lib-dynamodb':
+        specifier: ^3
+        version: 3.1032.0(@aws-sdk/client-dynamodb@3.1032.0)
+      '@types/aws-lambda':
+        specifier: ^8
+        version: 8.10.161
+      '@types/node':
+        specifier: ^22
+        version: 22.19.17
+      typescript:
+        specifier: '*'
+        version: 5.7.3
+
   apps/launchpad/functions/forgot-provider:
     devDependencies:
       '@aws-sdk/client-cognito-identity-provider':
@@ -597,6 +622,28 @@ importers:
       '@aws-sdk/client-sesv2':
         specifier: ^3
         version: 3.1032.0
+      '@types/node':
+        specifier: ^22
+        version: 22.19.17
+      typescript:
+        specifier: '*'
+        version: 5.7.3
+
+  apps/launchpad/functions/user:
+    dependencies:
+      '@transformotion/lambda-middleware':
+        specifier: workspace:*
+        version: link:../../../../packages/lambda-middleware
+    devDependencies:
+      '@aws-sdk/client-dynamodb':
+        specifier: ^3
+        version: 3.1032.0
+      '@aws-sdk/lib-dynamodb':
+        specifier: ^3
+        version: 3.1032.0(@aws-sdk/client-dynamodb@3.1032.0)
+      '@types/aws-lambda':
+        specifier: ^8
+        version: 8.10.161
       '@types/node':
         specifier: ^22
         version: 22.19.17

@@ -23,6 +23,9 @@
 #   platform/functions/   platform handlers, including nested auth handlers
 #
 # Exempt (see docs/architecture/cdk.md - CI checks):
+#   apps/launchpad/functions/account-provisioning/ auth-infrastructure: withAuthOnly, no app claims
+#   apps/launchpad/functions/forgot-provider/      auth-infrastructure: public endpoint
+#   apps/launchpad/functions/user/                 auth-infrastructure: withAuthOnly user-owned profile data
 #   platform/functions/accounts/                  platform-infrastructure: inline DynamoDB authz
 #   platform/functions/auth/account-provisioning/ auth-infrastructure: withAuthOnly, no app claims
 #   platform/functions/auth/forgot-provider/      auth-infrastructure: public endpoint
@@ -41,6 +44,9 @@ SEARCH_PATHS=(
 )
 
 EXEMPT_PATH_PREFIXES=(
+  "$REPO_ROOT/apps/launchpad/functions/account-provisioning/"
+  "$REPO_ROOT/apps/launchpad/functions/forgot-provider/"
+  "$REPO_ROOT/apps/launchpad/functions/user/"
   "$REPO_ROOT/platform/functions/accounts/"
   "$REPO_ROOT/platform/functions/auth/account-provisioning/"
   "$REPO_ROOT/platform/functions/auth/forgot-provider/"

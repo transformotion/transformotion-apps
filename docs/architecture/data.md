@@ -44,7 +44,7 @@ User preferences, stored per Cognito `sub`.
 | `cycleAlertThreshold` | Number | Stock Analyser alert threshold |
 | `lastAnalysedTicker` | String | Most recently analysed ticker |
 
-Served by `transformotion-user-{stage}` Lambda (`GET /api/user/profile`, `PUT /api/user/preferences`).
+Served by Launchpad-owned `launchpad-user-{stage}` Lambda (`GET /api/user/profile`, `PUT /api/user/preferences`). The platform `transformotion-user-{stage}` route remains deployed only for rollback during #363.
 
 > **Partial implementation:** Only `notificationsEnabled` is currently read and written by the Lambda handler. The fields `defaultMode`, `cycleAlertThreshold`, and `lastAnalysedTicker` appear in `@transformotion/api-client` types but are not implemented in the Lambda — writes are silently ignored and reads return `undefined` for these fields.
 
@@ -279,7 +279,7 @@ When Liz signs in, the pre-token Lambda queries `userId-index` for `liz-sub`, fi
 }
 ```
 
-Liz's active account (`custom:active_accounts["budget-tracker"]`) determines which data she sees by default. She can switch accounts via `POST /auth/switch`.
+Liz's active account is selected client-side by sending `X-Account-Id` on account-scoped API requests. The legacy platform `POST /auth/switch` route remains deployed only for rollback and is not migrated to Launchpad control-plane ownership.
 
 ---
 

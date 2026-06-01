@@ -44,7 +44,7 @@ Deployed by `deploy-platform.yml`. Source in `platform/infrastructure/`.
 | `Transformotion{Stage}-Auth` | `AuthStack` | Cognito user pool, three app clients, Cognito groups, Secrets Manager entries for social IDP credentials, Hosted UI domain |
 | `Transformotion{Stage}-AuthApi` | `AuthApiStack` | Legacy `transformotion-forgot-provider-{stage}` Lambda + its own API Gateway (public — no JWT required on `/auth/lookup-provider`); retained for rollback while Launchpad owns the live route |
 | `Transformotion{Stage}-PlatformTables` | `PlatformTablesStack` | `platform.users`, `platform.accounts`, `platform.account-members`, `platform.invitations` DynamoDB tables |
-| `Transformotion{Stage}-Api` | `PlatformApiStack` | Shared REST API Gateway (`transformotion-api-{stage}`), Cognito JWT authoriser, platform Lambda functions (see below) |
+| `Transformotion{Stage}-Api` | `PlatformApiStack` | Shared REST API Gateway (`transformotion-api-{stage}`), Cognito JWT authoriser, platform Lambda functions (see below); account setup and user profile routes retained for rollback while Launchpad owns the live routes |
 | `Transformotion{Stage}-PlatformWs` | `PlatformWsStack` | WebSocket API Gateway `platform-ws-{stage}`, 4 WS Lambdas, `platform.ws-connections-{stage}` table; transitional shared WSS retained during M9 dual-run |
 
 ### Launchpad stacks
@@ -53,7 +53,7 @@ Deployed by `deploy-launchpad.yml`. Source in `apps/launchpad/infrastructure/`.
 
 | Stack name | Class | Contents |
 |---|---|---|
-| `Transformotion{Stage}-LaunchpadControlPlane` | `LaunchpadControlPlaneStack` | Launchpad-owned control-plane API. Cognito and shared account tables remain platform substrate. Owns `GET /health` and live `POST /auth/lookup-provider`. |
+| `Transformotion{Stage}-LaunchpadControlPlane` | `LaunchpadControlPlaneStack` | Launchpad-owned control-plane API. Cognito and shared account tables remain platform substrate. Owns `GET /health`, live auth lookup, account setup, and user profile/preferences routes. |
 
 ### Stock Analyser stacks
 
@@ -83,8 +83,8 @@ Deployed by `deploy-budget-tracker.yml`. Source in `apps/budget-tracker/infrastr
 
 | Function name | Handler | Routes |
 |---|---|---|
-| `transformotion-account-provisioning-{stage}` | `functions/auth/account-provisioning` | `POST /auth/setup`, `POST /auth/switch` |
-| `transformotion-user-{stage}` | `functions/user` | `GET /api/user/profile`, `PUT /api/user/preferences` |
+| `transformotion-account-provisioning-{stage}` | `functions/auth/account-provisioning` | `POST /auth/setup`, `POST /auth/switch` (rollback-only after #363 PR 4; `/auth/switch` is not migrated because no current Launchpad caller uses it) |
+| `transformotion-user-{stage}` | `functions/user` | `GET /api/user/profile`, `PUT /api/user/preferences` (rollback-only after #363 PR 4) |
 | `transformotion-claude-proxy-{stage}` | `functions/claude-proxy` | `POST /api/claude` |
 | `transformotion-accounts-{stage}` | `functions/accounts` | `POST /accounts`, `GET/PUT/DELETE /accounts/{id}`, `GET /accounts/{id}/members`, `DELETE /accounts/{id}/members/{userId}` |
 | `transformotion-invitations-{stage}` | `functions/auth/invitations` | `POST /accounts/{id}/invitations` |
@@ -94,6 +94,8 @@ Deployed by `deploy-budget-tracker.yml`. Source in `apps/budget-tracker/infrastr
 | Function name | Handler | Routes |
 |---|---|---|
 | `launchpad-forgot-provider-{stage}` | `apps/launchpad/functions/forgot-provider` | `POST /auth/lookup-provider` (public) |
+| `launchpad-account-provisioning-{stage}` | `apps/launchpad/functions/account-provisioning` | `POST /auth/setup` |
+| `launchpad-user-{stage}` | `apps/launchpad/functions/user` | `GET /api/user/profile`, `PUT /api/user/preferences` |
 
 ### Auth API Lambda functions (`Transformotion{Stage}-AuthApi`)
 
@@ -217,18 +219,20 @@ Common environment variables available to all Lambda functions:
 | `REGION` | `ap-southeast-2` (via CDK `this.region`) |
 | `AWS_REGION` | Set automatically by Lambda runtime |
 
-Platform Lambda environment variables:
+Control-plane and platform Lambda environment variables:
 
 | Variable | Lambda | Value |
 |---|---|---|
-| `ACCOUNTS_TABLE` | account-provisioning, accounts, invitations | `platform.accounts-{stage}` |
-| `ACCOUNT_MEMBERS_TABLE` | account-provisioning, accounts, pre-token-generation | `platform.account-members-{stage}` |
+| `ACCOUNTS_TABLE` | Launchpad account-provisioning, accounts, invitations | `platform.accounts-{stage}` |
+| `ACCOUNT_MEMBERS_TABLE` | Launchpad account-provisioning, accounts, pre-token-generation | `platform.account-members-{stage}` |
 | `INVITATIONS_TABLE` | invitations | `platform.invitations-{stage}` |
-| `USERS_TABLE` | user | `platform.users-{stage}` |
+| `USERS_TABLE` | Launchpad user | `platform.users-{stage}` |
 | `CACHE_TABLE` | claude-proxy | `stock-analyser.analysis-cache-{stage}` |
 | `ANTHROPIC_SECRET_NAME` | claude-proxy | `{stage}/anthropic/api-key` (Secrets Manager) |
 | `WS_API_ENDPOINT` | claude-proxy | `https://{wsApiId}.execute-api.{region}.amazonaws.com/{stage}` — management endpoint for WSS push |
-| `USER_POOL_ID` | account-provisioning, pre-token-generation | Cognito user pool ID |
+| `USER_POOL_ID` | Launchpad account-provisioning, pre-token-generation | Cognito user pool ID |
+| `APP_CLIENT_STOCK_ANALYSER` / `APP_CLIENT_BUDGET_TRACKER` | Launchpad account-provisioning | Cognito app client IDs imported from `AuthStack` outputs |
+| `APP_SLUGS` | Launchpad account-provisioning | App slugs from `platform/config/app-registry.json` |
 | `ACCOUNTS_TABLE` | pre-token-generation | `platform.accounts-{stage}` (read for appSlug resolution) |
 
 Platform WS Lambda environment variables:
@@ -324,7 +328,7 @@ There are three categories of Lambda in this repo. Category determines authoriza
 
 **App handlers** — Lambdas serving authenticated user requests for a specific app. Located in `apps/*/functions/` (per-app) or `platform/functions/claude-proxy/` (transitional platform multi-app runtime). Subject to the documented authorization pattern: `requireAppAccess` (or `requireAnyAppAccess`) at the top, then `requireAccountAccess` before account-scoped data operations. CI enforces this pattern.
 
-**Auth infrastructure** — Lambdas that produce, verify, or recover identity-related state. Located in `platform/functions/auth/` for platform substrate/rollback handlers and `apps/launchpad/functions/` for Launchpad-owned control-plane handlers. Examples: `pre-token-generation`, Launchpad `forgot-provider`, `account-provisioning`, `invitations`. Each has a bespoke authorization pattern (some unauthenticated, some `withAuthOnly`, some `requireAccountOwner`, etc.). Not subject to the CI handler-authz check.
+**Auth infrastructure** — Lambdas that produce, verify, or recover identity-related state. Located in `platform/functions/auth/` for platform substrate/rollback handlers and `apps/launchpad/functions/` for Launchpad-owned control-plane handlers. Examples: `pre-token-generation`, Launchpad `forgot-provider`, Launchpad `account-provisioning`, Launchpad `user`, `invitations`. Each has a bespoke authorization pattern (some unauthenticated, some `withAuthOnly`, some `requireAccountOwner`, etc.). Not subject to the CI handler-authz check.
 
 **Platform infrastructure** — Lambdas managing platform-level data. Currently: `functions/accounts/`. Uses inline membership checks against the data it manages rather than consuming JWT claims. Not subject to the CI handler-authz check.
 
@@ -357,8 +361,11 @@ Both checks cover the same scope:
 |---|---|---|
 | `functions/auth/pre-token-generation/` | auth-infrastructure | Cognito trigger (`PreTokenGenerationTriggerEvent`), not API Gateway — reads DynamoDB to build JWT claims, cannot consume them |
 | `apps/launchpad/functions/forgot-provider/` | auth-infrastructure | Public endpoint; DynamoDB used for rate-limiting only, no JWT context |
+| `apps/launchpad/functions/account-provisioning/` | auth-infrastructure | First-login route (`withAuthOnly`); user is authenticated but may not have app claims yet — `requireAppAccess` is inapplicable by design |
+| `apps/launchpad/functions/user/` | auth-infrastructure | User profile/preferences routes (`withAuthOnly`); user owns their own profile data |
 | `functions/auth/forgot-provider/` | auth-infrastructure | Legacy rollback copy of the public lookup-provider endpoint |
-| `functions/auth/account-provisioning/` | auth-infrastructure | First-login route (`withAuthOnly`); user is authenticated but has no app claims yet — `requireAppAccess` is inapplicable by design |
+| `functions/auth/account-provisioning/` | auth-infrastructure | Legacy rollback copy of first-login and superseded switch routes |
+| `functions/user/` | auth-infrastructure | Legacy rollback copy of user profile/preferences routes |
 | `functions/accounts/` | platform-infrastructure | Platform accounts API — manages the accounts table that the pre-token Lambda reads; does inline DynamoDB membership checks rather than consuming JWT claims (it IS the accounts system) |
 
 ---

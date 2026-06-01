@@ -32,7 +32,9 @@ transformotion-apps/
 │   │   └── package.json                   # @transformotion/budget-tracker
 │   ├── launchpad/                         # Platform shell and control-plane app
 │   │   ├── functions/                     # Launchpad-owned control-plane Lambda source
-│   │   │   └── forgot-provider/
+│   │   │   ├── account-provisioning/
+│   │   │   ├── forgot-provider/
+│   │   │   └── user/
 │   │   ├── infrastructure/                # Launchpad CDK stacks
 │   │   │   └── launchpad-control-plane-stack.ts
 │   │   └── package.json                   # @transformotion/launchpad
@@ -81,13 +83,13 @@ transformotion-apps/
 │   ├── CLAUDE.md                         # Claude Code compatibility mirror
 │   └── functions/                         # Platform Lambda source (shared across apps)
 │       ├── auth/                          # Auth-related Lambdas (own pnpm workspace glob)
-│       │   ├── account-provisioning/      # First-sign-in account creation
+│       │   ├── account-provisioning/      # Legacy rollback first-sign-in account creation
 │       │   ├── pre-token-generation/      # Cognito pre-token trigger (claims)
 │       │   ├── invitations/               # Invitation flow
-│       │   └── forgot-provider/           # Federated identity recovery
+│       │   └── forgot-provider/           # Legacy rollback federated identity recovery
 │       ├── accounts/                      # Account management
 │       ├── claude-proxy/                  # Legacy platform Anthropic API proxy (rollback/decommission path)
-│       ├── user/                          # Platform user data
+│       ├── user/                          # Legacy rollback user profile/preferences routes
 │       ├── ws-authorizer/                 # WS $connect custom authoriser (Cognito JWT + accounts claim)
 │       ├── ws-connect/                    # WS $connect handler (writes connection record)
 │       ├── ws-default/                    # WS $default handler (init handshake → connectionId)
