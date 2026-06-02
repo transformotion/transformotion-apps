@@ -194,12 +194,10 @@ implemented:
   (signIn/signedOut path constants). Consumed by platform Lambdas
   (account-provisioning, pre-token-generation, claude-proxy), CDK stacks
   (PlatformWsStack, AuthStack, NetworkStack), launchpad, and both app
-  configs. WebSocket URL env var unified at that point:
-  `NEXT_PUBLIC_PLATFORM_WSS_URL` replaced the per-app
-  `NEXT_PUBLIC_CLAUDE_WSS_URL` (SA) and `NEXT_PUBLIC_BUDGET_WSS_URL` (BT)
-  in both deploy workflows and configs. M9 #365 moves Budget Tracker back to
-  an app-owned WSS URL via `NEXT_PUBLIC_BT_WSS_URL`, with
-  `NEXT_PUBLIC_PLATFORM_WSS_URL` retained only as rollback fallback.
+  configs. WebSocket URL env var unified at that point, then M9 split WSS
+  ownership back into app-owned URLs: `NEXT_PUBLIC_SA_WSS_URL` for Stock
+  Analyser and `NEXT_PUBLIC_BT_WSS_URL` for Budget Tracker. Platform WSS is
+  no longer part of live SA/BT runtime.
   **Resolved by M7 / PR #346:** The `APPS` const, `APP_SLUGS`, `AppDescriptor`,
   and `AppSlug` exports were removed from `packages/runtime-config/` as part of
   the deploy-isolation work. The canonical app registry moved to
@@ -230,14 +228,16 @@ app) per `CONTRIBUTING.md` Section 3.2.
 M9 #363 extends Launchpad from frontend-only platform shell into the
 control-plane app. Launchpad-owned infrastructure lives under
 `apps/launchpad/infrastructure/` and is synthesised by
+M9 #363 extends Launchpad from frontend-only platform shell into the
+control-plane app. Launchpad-owned infrastructure lives under
+`apps/launchpad/infrastructure/` and is synthesised by
 `infrastructure/bin/launchpad.ts`, matching the Stock Analyser and Budget
 Tracker app-owned infrastructure pattern.
 
-For #386, `deploy-launchpad.yml` is hardened as the Launchpad backend deploy
-lane. It deploys all `Transformotion{Stage}-Launchpad*` stacks from the
-Launchpad CDK entrypoint, extracts current control-plane outputs, and is ready
-to consume future Launchpad-owned auth outputs without Platform deploy
-orchestration.
+For #386, `deploy-launchpad.yml` is the Launchpad backend deploy lane. It
+deploys all `Transformotion{Stage}-Launchpad*` stacks from the Launchpad CDK
+entrypoint and extracts Launchpad-owned control-plane and auth outputs without
+Platform deploy orchestration.
 
 Per M0 verification: `apps/launchpad/` contains no public signup UI
 (no `signUp`, `register`, `createAccount` references in any `.ts` or
@@ -251,20 +251,16 @@ Cognito App Client (`LaunchpadAppClient`) and dedicated
 `/launchpad/callback` OAuth return route. Auth store persist key:
 `launchpad-auth`.
 
-`Transformotion{Stage}-LaunchpadAuth` is the Launchpad-owned
-Cognito/auth foundation. It creates a new User Pool, Hosted UI domain, app
-clients, groups, Hosted UI customisation, and Launchpad-owned social credential
-secret placeholders. It also creates `launchpad-users-{stage}`,
-`launchpad-accounts-{stage}`, `launchpad-account-members-{stage}`,
-`launchpad-invitations-{stage}`, `launchpad-rate-limits-{stage}`, and the
-`launchpad-pre-token-generation-{stage}` trigger attached to the Launchpad-owned
-User Pool. It is live for dev after the #386 explicit cutover and remains
-staged for prod until prod cutover. PR 6 adds flag-driven wiring via
-`LAUNCHPAD_AUTH_CUTOVER_ENABLED`: false-mode keeps Platform auth exports and
-tables; true-mode makes Launchpad control-plane, Stock Analyser, and Budget
-Tracker synthesize against `LaunchpadAuth` outputs for authorizers and relevant
-Launchpad auth-domain table references. The workflow-level default remains
-false for prod safety.
+`Transformotion{Stage}-LaunchpadAuth` is the Launchpad-owned Cognito/auth
+foundation. It creates a User Pool, Hosted UI domain, app clients, groups,
+Hosted UI customisation, Launchpad-owned social credential secret placeholders,
+`launchpad-users-{stage}`, `launchpad-accounts-{stage}`,
+`launchpad-account-members-{stage}`, `launchpad-invitations-{stage}`,
+`launchpad-rate-limits-{stage}`, and the `launchpad-pre-token-generation-{stage}`
+trigger attached to the Launchpad-owned User Pool. It is live for dev after
+the #386 cutover. There is no live production environment; `TransformotionProd-*`
+resources are non-live unless they affect synth/shared code. Auth-domain
+exports now resolve to LaunchpadAuth without a Platform-auth false mode.
 
 `Transformotion{Stage}-LaunchpadControlPlane` is the Launchpad-owned
 control-plane API. It exposes `GET /health` and owns the live
@@ -273,17 +269,14 @@ control-plane API. It exposes `GET /health` and owns the live
 `POST /accounts`, `GET/PUT/DELETE /accounts/{accountId}`,
 `GET /accounts/{accountId}/members`,
 `DELETE /accounts/{accountId}/members/{userId}`, and
-`POST /accounts/{accountId}/invitations` routes after #363 PR 5. In dev these
-routes use Launchpad-owned Cognito and Launchpad-owned auth-domain tables after
-#386 cutover. Prod remains on Platform auth-domain resources until its own
-explicit cutover. Old dev Platform auth resources remain deployed as rollback
-migration debt.
+`POST /accounts/{accountId}/invitations` routes. These routes use
+Launchpad-owned Cognito and Launchpad-owned auth-domain tables after #386
+cutover. Old Platform auth resources remain deployed only as decommission debt.
 
 Target ownership is Launchpad physical and logical ownership of the auth
-domain. #386 owns the physical re-home of Cognito, auth-domain tables,
-pre-token claims infrastructure, rate limits, and remaining platform rollback
-routes.
-
+domain. The next #386 decommission PR removes remaining Platform AuthStack,
+AuthApi, PlatformTables, PlatformWs, and rollback/control-plane resources once
+the diff is verified safe.
 The hard-coded `userCanAccessFramework` prop in launchpad currently
 governs tile visibility for the Transformotion Framework app. M9
 (per-app architecture restructure) includes LP's frontend refactor;
@@ -598,22 +591,22 @@ It must not be treated as the target pattern for new app runtime routes.
 | `platform.account-members-{stage}` | accountId | userId | Has `userId-index` GSI for reverse lookup. |
 | `platform.invitations-{stage}` | invitationId | — | Used by invitation flow (M11). |
 | `platform.users-{stage}` | userId | — | |
-| `platform.rate-limits-{stage}` | pk | — | Owned by `AuthApiStack` (not PlatformTablesStack). PK: `lookup-provider#<ip>`. Current migration-debt table consumed by Launchpad-owned `forgot-provider` after #363 PR 3; legacy platform route also uses it while retained for rollback. #386 owns physical re-home/rename. |
+| `platform.rate-limits-{stage}` | pk | — | Legacy AuthApiStack table. No live Launchpad path should consume it after LaunchpadAuth cutover; retained only until Platform auth decommission. |
 | `platform.analysis-cache-{stage}` | accountId | cacheKey | Misnamed — see Section 2.7. |
 | `platform.job-results-{stage}` | accountId | cacheKey | Added M7 / PR #334 (Bucket A'). Platform-owned async AI job state (pending → retrying → complete/error). Written by `claude-proxy`, read by `analysis-cache` Lambda via `job-*` key prefix routing. TTL: 2h. |
 
 #### 2.10.1a Launchpad auth tables
 
-These tables are staged in `Transformotion{Stage}-LaunchpadAuth` for #386 and
-are not live until reseed/cutover:
+These tables are live for dev in `Transformotion{Stage}-LaunchpadAuth` after
+the #386 cutover:
 
 | Table | PK | SK | Notes |
 |---|---|---|---|
-| `launchpad-users-{stage}` | userId | — | Staged replacement for `platform.users-{stage}` |
-| `launchpad-accounts-{stage}` | accountId | — | Staged replacement for `platform.accounts-{stage}`; `appSlug` is required for claims |
-| `launchpad-account-members-{stage}` | accountId | userId | Staged replacement for `platform.account-members-{stage}`; includes `userId-index` |
-| `launchpad-invitations-{stage}` | invitationId | — | Staged replacement for `platform.invitations-{stage}`; includes `email-index`, TTL `expiresAt` |
-| `launchpad-rate-limits-{stage}` | key | — | Staged replacement for `platform.rate-limits-{stage}`; TTL `expiresAt` |
+| `launchpad-users-{stage}` | userId | - | Active Launchpad-owned replacement for `platform.users-{stage}` |
+| `launchpad-accounts-{stage}` | accountId | - | Active Launchpad-owned replacement for `platform.accounts-{stage}`; `appSlug` is required for claims |
+| `launchpad-account-members-{stage}` | accountId | userId | Active Launchpad-owned replacement for `platform.account-members-{stage}`; includes `userId-index` |
+| `launchpad-invitations-{stage}` | invitationId | - | Active Launchpad-owned replacement for `platform.invitations-{stage}`; includes `email-index`, TTL `expiresAt` |
+| `launchpad-rate-limits-{stage}` | key | - | Active Launchpad-owned replacement for `platform.rate-limits-{stage}`; TTL `expiresAt` |
 
 #### 2.10.2 Stock-analyser tables
 
@@ -1208,14 +1201,15 @@ CDK stacks — M7 #250 infrastructure split complete:
   (`launchpad-auth-{stage}` User Pool, Hosted UI domain, app clients, groups,
   Hosted UI customisation, social credential secret placeholders,
   Launchpad-owned auth-domain tables, and `launchpad-pre-token-generation-{stage}`).
-  Live for dev after #386 cutover; staged for prod until prod cutover.
+  Live for dev after #386 cutover. There is no live production environment;
+  `TransformotionProd-*` resources are non-live unless they affect synth/shared
+  code.
 - `launchpad-control-plane-stack.ts` — Launchpad-owned control-plane API
   (`launchpad-control-plane-{stage}`), with `GET /health` and
   `POST /auth/lookup-provider`, `POST /auth/setup`,
   `GET /api/user/profile`, `PUT /api/user/preferences`, account
-  administration, member-management, and invitation routes. Dev uses
-  Launchpad-owned auth resources after #386 cutover; prod remains on Platform
-  auth-domain resources until prod cutover.
+  administration, member-management, and invitation routes. Uses
+  Launchpad-owned auth resources after #386 cutover.
 - Future #386 Launchpad auth-domain stacks belong under
   `apps/launchpad/infrastructure/`, use `Transformotion{Stage}-Launchpad*`
   names, and deploy through `deploy-launchpad.yml`.

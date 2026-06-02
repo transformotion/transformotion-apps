@@ -4,13 +4,12 @@
 
 DynamoDB is the canonical datastore for all platform and app data. Tables are divided into two scopes:
 
-Auth-domain table ownership is currently transitional. Platform still
-physically owns the account/identity tables, but that is migration debt after
-#363. #386 owns the physical re-home of users, accounts, account memberships,
-invitations, and auth rate-limit data into Launchpad ownership.
+Auth-domain table ownership has moved to Launchpad for dev after the #386
+cutover. Platform still physically contains legacy auth-domain tables, but they
+are decommission debt rather than live ownership.
 
-- **Platform tables** - current physical account/identity tables consumed by live Launchpad control-plane APIs and rollback platform Lambdas. Managed by `PlatformTablesStack` until #386 cutover.
-- **Launchpad auth tables** - staged physical auth-domain tables created by `LaunchpadAuthStack` for #386 cutover. They are not live until reseed and runtime validation are complete.
+- **Platform tables** - legacy account/identity tables managed by `PlatformTablesStack`; retained only until the Platform auth decommission PR.
+- **Launchpad auth tables** - active auth-domain tables created by `LaunchpadAuthStack` and consumed by Launchpad control-plane APIs and token claims.
 - **Per-app tables** — owned exclusively by one app. Managed by that app's `TablesStack`.
 
 All records in per-app data tables are keyed by `accountId`. The account-scoping invariant (see below) means no handler may read another user's data.
@@ -41,9 +40,9 @@ without the legacy `platform.` prefix, for example `launchpad-accounts-dev`.
 
 Managed by `TransformotionDev-PlatformTables` / `TransformotionProd-PlatformTables`.
 
-These tables are current-state physical Platform resources. They are not the
-target auth-domain architecture; #386 owns re-home/rename decisions as
-Launchpad becomes the physical auth-domain owner.
+These tables are legacy Platform resources. They are not the live auth-domain
+architecture after the #386 dev cutover and should be removed during Platform
+auth decommission.
 
 ### `platform.users-{stage}`
 
@@ -57,7 +56,7 @@ User preferences, stored per Cognito `sub`.
 | `cycleAlertThreshold` | Number | Stock Analyser alert threshold |
 | `lastAnalysedTicker` | String | Most recently analysed ticker |
 
-Served by Launchpad-owned `launchpad-user-{stage}` Lambda (`GET /api/user/profile`, `PUT /api/user/preferences`). The platform `transformotion-user-{stage}` route remains deployed only for rollback during #363.
+Previously served by Launchpad-owned `launchpad-user-{stage}` Lambda before the #386 table cutover. The platform `transformotion-user-{stage}` route remains deployed only as decommission debt.
 
 > **Partial implementation:** Only `notificationsEnabled` is currently read and written by the Lambda handler. The fields `defaultMode`, `cycleAlertThreshold`, and `lastAnalysedTicker` appear in `@transformotion/api-client` types but are not implemented in the Lambda — writes are silently ignored and reads return `undefined` for these fields.
 
@@ -73,7 +72,7 @@ Account container records, shared across all apps.
 | `createdAt` | String | ISO 8601 |
 | `ownerId` | String | userId of the account creator |
 
-Served by Launchpad-owned `launchpad-accounts-{stage}` Lambda. The platform `transformotion-accounts-{stage}` route remains deployed only for rollback during #363.
+Previously served by Launchpad-owned `launchpad-accounts-{stage}` Lambda before the #386 table cutover. The platform `transformotion-accounts-{stage}` route remains deployed only as decommission debt.
 
 ### `platform.account-members-{stage}`
 
@@ -89,7 +88,7 @@ Membership records: which users belong to which accounts, and in what role.
 
 **GSI:** `userId-index` (PK: `userId`) — look up all accounts a given user belongs to.
 
-Read by the pre-token generation Lambda to build the `accounts` claim. Also read and written by Launchpad-owned account administration handlers. The platform account handlers remain deployed only for rollback during #363.
+Previously read by the Platform pre-token generation Lambda and rollback account handlers. Live token claims and Launchpad account administration now use `launchpad-account-members-{stage}`.
 
 ### `platform.invitations-{stage}`
 
@@ -106,17 +105,17 @@ Pending, redeemed, and expired invitations.
 
 **GSI:** `email-index` (PK: `email`) — look up pending invitations for a newly registered user.
 
-Created by Launchpad-owned `launchpad-invitations-{stage}` Lambda through `POST /accounts/{accountId}/invitations`. The platform `transformotion-invitations-{stage}` route remains deployed only for rollback during #363.
+Legacy invitation table retained only until Platform auth decommission. Live invitation creation uses `launchpad-invitations-{stage}`.
 
 ## Launchpad auth tables
 
 Managed by `TransformotionDev-LaunchpadAuth` /
 `TransformotionProd-LaunchpadAuth`.
 
-These tables are staged for #386 auth-domain cutover and are not yet consumed
-by live Launchpad APIs or live token issuance. See
-[`m9-386-auth-reseed.md`](../migrations/m9-386-auth-reseed.md) for manual
-reseed steps.
+These tables are live for dev after the #386 auth cutover and are consumed by
+Launchpad control-plane APIs and the LaunchpadAuth pre-token trigger. See
+[`m9-386-auth-reseed.md`](../migrations/m9-386-auth-reseed.md) for the reseed
+process used during cutover.
 
 ### `launchpad-users-{stage}`
 
@@ -124,7 +123,7 @@ Same intended shape as `platform.users-{stage}`.
 
 ### `launchpad-accounts-{stage}`
 
-Same intended shape as `platform.accounts-{stage}`. The staged
+Same intended shape as `platform.accounts-{stage}`. The
 `launchpad-pre-token-generation-{stage}` trigger reads `appSlug` from this
 table to build the `accounts` claim.
 
@@ -132,21 +131,18 @@ table to build the `accounts` claim.
 
 Same intended shape as `platform.account-members-{stage}`.
 
-**GSI:** `userId-index` (PK: `userId`) - required by the staged
+**GSI:** `userId-index` (PK: `userId`) - required by the
 Launchpad-owned pre-token trigger.
 
 ### `launchpad-invitations-{stage}`
 
 Same intended shape as `platform.invitations-{stage}`.
 
-**GSI:** `email-index` (PK: `email`) - required for invitation lookup during a
-future control-plane table cutover.
+**GSI:** `email-index` (PK: `email`) - required for invitation lookup.
 
 ### `launchpad-rate-limits-{stage}`
 
-Rate-limit state for Launchpad auth/control-plane endpoints. Current live
-forgot-provider rate limiting still uses `platform.rate-limits-{stage}` until
-the control-plane table cutover PR.
+Rate-limit state for Launchpad auth/control-plane endpoints.
 
 ### `platform.job-results-{stage}`
 

@@ -19,7 +19,7 @@ export interface StockAnalyserWsStackProps extends cdk.StackProps {
  *
  * After #366, the Stock Analyser AI runtime sends job_complete notifications
  * through this app-owned WSS endpoint. PlatformWsStack remains deployed only
- * for rollback and later #372 decommissioning.
+ * as decommission debt.
  */
 export class StockAnalyserWsStack extends cdk.Stack {
   public readonly webSocketApi: apigatewayv2.WebSocketApi;

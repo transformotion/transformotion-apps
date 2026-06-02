@@ -70,7 +70,7 @@ function loadConfig(): AppConfig {
         validValues: ['mock', 'claude'] as const,
       }),
       model:    process.env.NEXT_PUBLIC_AI_MODEL || 'claude-3-sonnet',
-      wssUrl:   process.env.NEXT_PUBLIC_SA_WSS_URL || process.env.NEXT_PUBLIC_PLATFORM_WSS_URL || '',
+      wssUrl:   process.env.NEXT_PUBLIC_SA_WSS_URL || '',
       saWssUrl: process.env.NEXT_PUBLIC_SA_WSS_URL || '',
     },
     storage: {

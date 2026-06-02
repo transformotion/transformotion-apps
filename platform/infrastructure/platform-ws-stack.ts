@@ -12,7 +12,7 @@ import { Construct } from 'constructs';
 import { loadAppRegistry } from '../../infrastructure/lib/app-registry';
 
 export interface PlatformWsStackProps extends cdk.StackProps {
-  userPool: cognito.IUserPool;
+  userPoolId: string;
   stage: 'dev' | 'prod';
 }
 
@@ -47,7 +47,8 @@ export class PlatformWsStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: PlatformWsStackProps) {
     super(scope, id, props);
 
-    const { stage, userPool } = props;
+    const { stage, userPoolId } = props;
+    const userPool = cognito.UserPool.fromUserPoolId(this, 'UserPool', userPoolId);
 
     // App registry — read once at synth time, passed to authoriser as env var.
     const permittedApps = loadAppRegistry().apps.map(a => a.slug).join(',');

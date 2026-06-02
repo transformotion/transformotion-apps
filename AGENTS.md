@@ -105,14 +105,14 @@ Target state after M9:
 
 - Platform retains neutral shared substrate only: CloudFront, DNS, ACM,
   build-time tooling, and platform contracts/config where justified.
-- Launchpad owns auth/control-plane product surfaces now; #386 owns the
-  physical auth-domain re-home. `Transformotion{Stage}-LaunchpadAuth` is the
-  staged Launchpad-owned auth foundation, including staged auth-domain tables
-  and a staged pre-token trigger; live traffic still uses Platform AuthStack
-  until cutover, so remaining platform-owned auth resources are migration debt,
-  not target architecture.
-- Use `docs/migrations/m9-386-dev-auth-cutover-checklist.md` for the dev
-  LaunchpadAuth cutover sequence. Do not improvise the cutover order.
+- Launchpad owns auth/control-plane product surfaces now.
+  `Transformotion{Stage}-LaunchpadAuth` is the active Launchpad-owned auth
+  foundation for dev, including auth-domain tables and the pre-token trigger.
+  Remaining platform-owned auth resources are decommission debt, not fallback
+  architecture or target ownership.
+- Use `docs/migrations/m9-386-dev-auth-cutover-checklist.md` as the cutover
+  record and validation checklist. Do not reintroduce Platform auth fallback
+  paths without an explicit architecture issue.
 - Shared runtime REST/WSS/Claude proxy resources are decommissioned or split
   into per-app resources.
 

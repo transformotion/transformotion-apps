@@ -154,13 +154,12 @@ transformotion-apps/
 distinct from platform infrastructure and stays separate (per
 `CONTRIBUTING.md` Section 6.4).
 
-After #363, Launchpad owns the live auth/control-plane APIs. #386 adds a
-staged `Transformotion{Stage}-LaunchpadAuth` stack under
-`apps/launchpad/infrastructure/` as the Launchpad-owned Cognito/auth foundation.
-`LaunchpadAuth` includes staged auth-domain tables and a staged pre-token
-trigger. Live auth still uses the Platform AuthStack until cutover, so Platform
-physically owns Cognito, auth-domain tables, and rollback control-plane routes
-as migration debt. Do not treat platform auth ownership as the target topology.
+After #363 and the #386 dev cutover, Launchpad owns the live auth/control-plane
+APIs and the active `Transformotion{Stage}-LaunchpadAuth` auth foundation under
+`apps/launchpad/infrastructure/`. `LaunchpadAuth` includes Cognito, app
+clients, auth-domain tables, and the pre-token trigger. Platform still contains
+legacy AuthStack/AuthApi/PlatformTables resources only as decommission debt. Do
+not treat platform auth ownership as target topology or fallback architecture.
 
 ## Workspace configuration
 

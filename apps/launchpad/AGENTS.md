@@ -13,11 +13,10 @@ branching strategy, architecture governance, and operating mode.
 Next.js app at `apps/launchpad/`. Static export deployed to S3/CloudFront.
 Serves at the root host and `/launchpad/*` sign-in/callback paths.
 
-Launchpad is the control-plane app. After #363, it owns the live
-auth/control-plane API surface. #386 adds `LaunchpadAuth` as the staged
-Launchpad-owned Cognito/auth foundation; live auth still uses Platform
-AuthStack until cutover. Platform-owned auth-domain resources are migration
-debt.
+Launchpad is the control-plane app. After #363 and the #386 dev cutover, it
+owns the live auth/control-plane API surface and the active Launchpad-owned
+Cognito/auth foundation. Remaining Platform auth-domain resources are
+decommission debt.
 
 ## Quick reference
 
@@ -45,7 +44,7 @@ debt.
 
 | Stack | Contents |
 |---|---|
-| `Transformotion{Stage}-LaunchpadAuth` | Staged Launchpad-owned Cognito User Pool, Hosted UI domain, app clients, groups, Hosted UI customisation, social credential secret placeholders, auth-domain tables, and pre-token trigger |
+| `Transformotion{Stage}-LaunchpadAuth` | Launchpad-owned Cognito User Pool, Hosted UI domain, app clients, groups, Hosted UI customisation, social credential secret placeholders, auth-domain tables, and pre-token trigger |
 | `Transformotion{Stage}-LaunchpadControlPlane` | Launchpad-owned REST API, Cognito authoriser, and control-plane Lambdas |
 | Future `Transformotion{Stage}-Launchpad*` stacks | Additional #386 auth-domain infrastructure, deployed through the Launchpad lane |
 
@@ -60,33 +59,29 @@ Source: `apps/launchpad/infrastructure/`.
 | `launchpad-user-{stage}` | `apps/launchpad/functions/user` | `GET /api/user/profile`, `PUT /api/user/preferences` |
 | `launchpad-accounts-{stage}` | `apps/launchpad/functions/accounts` | account and member administration routes |
 | `launchpad-invitations-{stage}` | `apps/launchpad/functions/invitations` | `POST /accounts/{accountId}/invitations` |
-| `launchpad-pre-token-generation-{stage}` | `apps/launchpad/functions/pre-token-generation` | Staged Cognito pre-token trigger for `LaunchpadAuth` |
+| `launchpad-pre-token-generation-{stage}` | `apps/launchpad/functions/pre-token-generation` | Cognito pre-token trigger for `LaunchpadAuth` |
 
 ## Ownership rules
 
 - Add new auth/control-plane behavior under `apps/launchpad/`, not `platform/`.
 - Keep Launchpad infrastructure under `apps/launchpad/infrastructure/`.
 - Do not add new platform-owned auth/control-plane routes as a shortcut.
-- Platform-owned live Cognito, auth-domain tables, and rollback routes are
-  current migration debt, not precedent.
-- Do not cut live auth over to `LaunchpadAuth` without an explicit #386 cutover
-  PR and validation plan.
-- Reseed/validate the staged `launchpad-*` auth tables before any cutover.
-- #386 owns physical auth-domain re-home into Launchpad.
-- Preserve platform rollback routes until the issue that removes them explicitly
-  says to decommission them.
+- Platform-owned AuthStack/AuthApi/PlatformTables resources are decommission
+  debt, not precedent.
+- LaunchpadAuth is the active auth source for dev. Do not reintroduce
+  Platform-auth fallback paths without an explicit architecture issue.
+- #386 owns the remaining Platform auth decommissioning.
+- Preserve legacy Platform auth resources only until the issue that removes
+  them explicitly says to decommission them.
 
 ## Deployment rules
 
 - Launchpad deploys through `.github/workflows/deploy-launchpad.yml`.
 - The Launchpad workflow deploys all `Transformotion{Stage}-Launchpad*`
-  stacks, extracts `ControlPlaneApiUrl`, can consume future
-  `LaunchpadAuth` outputs, injects frontend auth/control-plane env vars, and
-  builds/deploys the frontend.
-- `LAUNCHPAD_AUTH_CUTOVER_ENABLED` must remain `false` until the explicit #386
-  auth cutover PR. Deploying `LaunchpadAuth` alone must not switch live auth.
-- Dev cutover must follow
-  `docs/migrations/m9-386-dev-auth-cutover-checklist.md`.
+  stacks, extracts `ControlPlaneApiUrl` and `LaunchpadAuth` outputs, injects
+  frontend auth/control-plane env vars, and builds/deploys the frontend.
+- `docs/migrations/m9-386-dev-auth-cutover-checklist.md` records the completed
+  dev cutover and the validation expectations for future auth-domain changes.
 - Platform deploy must not cascade into Launchpad deploy.
 - Future auth-domain stacks must use `Transformotion{Stage}-Launchpad*` names
   so the Launchpad deploy lane owns them without Platform orchestration.

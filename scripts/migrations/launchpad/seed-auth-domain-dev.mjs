@@ -106,7 +106,7 @@ async function main() {
 
   console.log('');
   console.log('Seed complete.');
-  console.log('Next validation: run validate-auth-domain-readiness.mjs, then sign in against the staged LaunchpadAuth pool and inspect token claims.');
+  console.log('Next validation: run validate-auth-domain-readiness.mjs, then sign in against the LaunchpadAuth pool and inspect token claims.');
 }
 
 function parseArgs(argv) {

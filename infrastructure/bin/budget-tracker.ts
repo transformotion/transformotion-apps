@@ -14,8 +14,8 @@ const env = {
   region: 'ap-southeast-2',
 };
 
-// Budget Tracker owns its REST API and WSS runtime. Auth-domain ownership is
-// selected by LAUNCHPAD_AUTH_CUTOVER_ENABLED during #386.
+// Budget Tracker owns its REST API and WSS runtime. Auth-domain ownership
+// resolves to LaunchpadAuth through auth-domain-exports.
 //
 // Deploy commands:
 //   cdk deploy --app bin/budget-tracker.ts TransformotionDev-BudgetTrackerTables TransformotionDev-BudgetTrackerWs TransformotionDev-BudgetTrackerApi

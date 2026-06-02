@@ -1,30 +1,15 @@
 # M9 #386 Dev Auth Cutover Checklist
 
-This checklist defines exactly how dev moves from Platform-owned auth to the
-Launchpad-owned auth stack.
+This checklist records how dev moved from Platform-owned auth to the
+Launchpad-owned auth stack and defines validation expectations for future
+auth-domain changes.
 
-Do not perform the cutover until PR 4 is merged and
-`TransformotionDev-LaunchpadAuth` has deployed successfully.
+## Current Post-Cutover State
 
-## Current Guardrail
-
-`deploy-launchpad.yml`, `deploy-stock-analyser.yml`, and
-`deploy-budget-tracker.yml` keep the workflow-level default at:
-
-```yaml
-LAUNCHPAD_AUTH_CUTOVER_ENABLED: 'false'
-```
-
-For the dev cutover, each `deploy-dev` job overrides the guard to:
-
-```yaml
-LAUNCHPAD_AUTH_CUTOVER_ENABLED: 'true'
-```
-
-This intentionally cuts over dev while keeping prod on Platform AuthStack until
-its own explicit cutover. While the flag is `false`, Launchpad deploys
-`LaunchpadAuth` but builds the frontend with the existing Platform AuthStack
-Cognito environment values.
+Dev is cut over to LaunchpadAuth. `LAUNCHPAD_AUTH_CUTOVER_ENABLED` and the
+Platform-auth false mode were removed after successful cutover validation.
+Launchpad, Stock Analyser, Budget Tracker, PlatformWs while retained, and
+Migration Utilities now resolve auth through LaunchpadAuth outputs.
 
 ## Dev Cutover Record
 
@@ -63,9 +48,10 @@ Dev cutover validation completed:
 - Budget Tracker authenticated REST smoke passed with LaunchpadAuth token.
 - Stock Analyser and Budget Tracker WSS connect/init/disconnect paths passed
   with LaunchpadAuth tokens.
-- Legacy Platform AuthApi lookup route remains available for rollback.
-- Platform AuthStack, Platform auth tables, Platform pre-token trigger, and
-  legacy rollback routes were not removed.
+- Platform AuthStack, Platform AuthApi, Platform auth tables, Platform
+  pre-token trigger, PlatformWs, and legacy control-plane routes were not
+  removed during cutover. They are decommission debt for the follow-up cleanup
+  PR.
 
 Operational note: the live API Gateway REST stages were explicitly redeployed
 during the first dev cutover because authorizer/table wiring changed while the
@@ -218,26 +204,11 @@ Launchpad control-plane infrastructure to the Launchpad-owned auth domain:
 - `POST /auth/lookup-provider` uses the Launchpad-owned staged User Pool when
   resolving users.
 
-PR 6 adds flag-driven cutover wiring. With
-`LAUNCHPAD_AUTH_CUTOVER_ENABLED=false`, synthesized stacks keep the Platform
-User Pool and `platform.*` auth tables. With
-`LAUNCHPAD_AUTH_CUTOVER_ENABLED=true`, synthesized Launchpad, Stock Analyser,
-and Budget Tracker stacks import `TransformotionDev-LaunchpadAuth` outputs for
-auth authorizers and Launchpad control-plane table references.
-
-Create the cutover PR that changes the dev deploy jobs from:
-
-```yaml
-LAUNCHPAD_AUTH_CUTOVER_ENABLED: 'false'
-```
-
-to:
-
-```yaml
-LAUNCHPAD_AUTH_CUTOVER_ENABLED: 'true'
-```
-
-Merge that PR, then run `deploy-launchpad.yml` for dev.
+PR 6 added cutover wiring. After validation, the false-mode fallback was
+removed. Synthesized Launchpad, Stock Analyser, Budget Tracker, PlatformWs
+while retained, and migration utilities stacks import
+`TransformotionDev-LaunchpadAuth` outputs for auth authorizers and Launchpad
+control-plane table references.
 
 Validate the Launchpad frontend bundle contains the Launchpad-owned:
 
@@ -265,10 +236,8 @@ also updates app infrastructure auth imports:
 - Budget Tracker API and WSS stacks must trust
   `TransformotionDev-LaunchpadAuth` `UserPoolId`.
 
-PR 6 adds the same flag-driven auth-domain selection to the Stock Analyser and
-Budget Tracker CDK entrypoints. Keep each app workflow guard at `false` until
-the explicit app cutover deploy, then set it to `true` with the same cutover PR
-or a tightly sequenced follow-up.
+Stock Analyser and Budget Tracker CDK entrypoints resolve auth through
+LaunchpadAuth exports. There is no Platform-auth false mode.
 
 After GitHub environment variables point at `LaunchpadAuth`, redeploy:
 
@@ -300,29 +269,22 @@ Validate:
 
 ## Rollback
 
-Fast rollback is:
-
-1. Revert the cutover PR or set:
-
-   ```yaml
-   LAUNCHPAD_AUTH_CUTOVER_ENABLED: 'false'
-   ```
-
-2. Restore GitHub environment variables to the Platform AuthStack values. If
-   needed, use the existing Platform helper:
+Rollback to Platform auth now requires reverting the dependency-removal PR that
+deleted false-mode wiring, then restoring GitHub environment variables to the
+Platform AuthStack values. If needed, use the existing legacy Platform helper:
 
    ```bash
    bash scripts/ci/sync-cognito-client-ids.sh dev
    ```
 
-3. Redeploy Launchpad:
+Then redeploy Launchpad:
 
    ```bash
    gh workflow run deploy-launchpad.yml --ref develop -f target=dev
    ```
 
-4. Redeploy Stock Analyser and Budget Tracker if their builds were already
-   rebuilt against LaunchpadAuth values.
+Redeploy Stock Analyser and Budget Tracker if their builds were already rebuilt
+against LaunchpadAuth values.
 
 Old Platform AuthStack, Platform tables, Platform pre-token trigger, and legacy
 rollback routes remain deployed during this cutover.

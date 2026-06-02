@@ -42,7 +42,6 @@ permissions:
 env:
   AWS_REGION: ap-southeast-2
   ROLE_ARN: arn:aws:iam::959516291617:role/TransformotionStockAnalyserDeployRole
-  LAUNCHPAD_AUTH_CUTOVER_ENABLED: 'false'
 
 jobs:
   deploy-dev:
@@ -51,7 +50,6 @@ jobs:
     if: (github.event_name == 'push' && github.ref_name == 'develop') || (github.event_name == 'workflow_call' && inputs.target == 'dev') || (github.event_name == 'workflow_dispatch' && inputs.target == 'dev')
     environment: dev
     env:
-      LAUNCHPAD_AUTH_CUTOVER_ENABLED: 'true'
       NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
       NEXT_PUBLIC_AI_API_URL: ${{ vars.NEXT_PUBLIC_AI_API_URL }}
       NEXT_PUBLIC_AI_CACHE_URL: ${{ vars.NEXT_PUBLIC_AI_CACHE_URL }}
@@ -66,7 +64,6 @@ jobs:
       NEXT_PUBLIC_SIGNIN_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}/sign-in/
       NEXT_PUBLIC_SIGNOUT_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}/signed-out/
       NEXT_PUBLIC_COMMIT_HASH: ${{ github.sha }}
-      NEXT_PUBLIC_PLATFORM_WSS_URL: ${{ vars.NEXT_PUBLIC_PLATFORM_WSS_URL }}
       NEXT_PUBLIC_SA_WSS_URL: ${{ vars.NEXT_PUBLIC_SA_WSS_URL }}
     steps:
       - uses: actions/checkout@v4
@@ -186,7 +183,6 @@ jobs:
       NEXT_PUBLIC_SIGNIN_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}/sign-in/
       NEXT_PUBLIC_SIGNOUT_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}/signed-out/
       NEXT_PUBLIC_COMMIT_HASH: ${{ github.sha }}
-      NEXT_PUBLIC_PLATFORM_WSS_URL: ${{ vars.NEXT_PUBLIC_PLATFORM_WSS_URL }}
       NEXT_PUBLIC_SA_WSS_URL: ${{ vars.NEXT_PUBLIC_SA_WSS_URL }}
     steps:
       - uses: actions/checkout@v4

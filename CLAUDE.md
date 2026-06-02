@@ -34,12 +34,13 @@ For #386, `deploy-launchpad.yml` is the deploy lane for current and future
 `LaunchpadAuth`. Platform deploy must not orchestrate Launchpad
 auth/control-plane resources.
 
-`LaunchpadAuth` includes staged auth-domain tables and a staged pre-token
-trigger, but live auth remains on the Platform AuthStack until the explicit
-#386 cutover PR.
+`LaunchpadAuth` is the active Launchpad-owned auth source for dev. Remaining
+Platform AuthStack/AuthApi/PlatformTables resources are decommission debt, not
+fallback architecture or target ownership.
 
-Use `docs/migrations/m9-386-dev-auth-cutover-checklist.md` for the dev
-LaunchpadAuth cutover sequence. Do not improvise the cutover order.
+Use `docs/migrations/m9-386-dev-auth-cutover-checklist.md` as the cutover
+record and validation checklist. Do not reintroduce Platform auth fallback
+paths without an explicit architecture issue.
 
 When working on a specific app, read that app's `AGENTS.md` first. Claude Code may also read the sibling `CLAUDE.md` compatibility mirror:
 

@@ -45,7 +45,7 @@ Source: `apps/budget-tracker/infrastructure/`
 
 The WebSocket stack is Budget Tracker-owned: `Transformotion{Stage}-BudgetTrackerWs` in `apps/budget-tracker/infrastructure/bt-ws-stack.ts`. BT may still send `?app=budget-tracker` during transition, but the app-owned authoriser only permits Budget Tracker scope.
 
-> Current state after #367: Budget Tracker owns its REST API Gateway and AI runtime. Cognito remains platform-owned until the M9 auth ownership migration. The shared platform API Gateway and legacy platform Claude proxy remain deployed only for rollback/decommission.
+> Current state after #367/#386: Budget Tracker owns its REST API Gateway and AI runtime. Authentication is issued by LaunchpadAuth. The shared platform API Gateway and legacy platform Claude proxy remain deployed only as decommission debt.
 
 ## Lambda functions
 
@@ -215,6 +215,5 @@ Environment: copy `apps/budget-tracker/.env.example` to `.env.local` and fill in
 | `NEXT_PUBLIC_RUNTIME_PROFILE` | `mock` (default; local development) or `live` (deployed environments). Determines defaults for auth, data, AI, and future concerns. See root `AGENTS.md` for the design map. |
 | `NEXT_PUBLIC_API_URL` | Budget Tracker-owned API Gateway base URL; deploy workflow extracts it from `Transformotion{Stage}-BudgetTrackerApi` |
 | `NEXT_PUBLIC_BT_WSS_URL` | Budget Tracker-owned WebSocket URL for AI review streaming; deploy workflow extracts it from `Transformotion{Stage}-BudgetTrackerWs` |
-| `NEXT_PUBLIC_PLATFORM_WSS_URL` | Transitional rollback fallback only; do not use for new Budget Tracker deploys |
 
 **Cognito client variable rebind:** The GitHub Actions variable `NEXT_PUBLIC_BUDGET_TRACKER_COGNITO_CLIENT_ID` is mapped to the generic runtime env var `NEXT_PUBLIC_COGNITO_CLIENT_ID` in the deploy workflow's env block. This allows each app to have its own Cognito App Client (established in sub-phase 7b.5-alpha) while the runtime code (`@transformotion/auth-client`) reads a single generic name. Local development reads `NEXT_PUBLIC_COGNITO_CLIENT_ID` directly from `.env.local`.

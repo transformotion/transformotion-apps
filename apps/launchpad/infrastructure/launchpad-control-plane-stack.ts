@@ -27,8 +27,8 @@ export interface LaunchpadControlPlaneStackProps extends cdk.StackProps {
 /**
  * LaunchpadControlPlaneStack - Launchpad-owned control-plane API foundation.
  *
- * Cognito and shared account data remain platform-owned substrate. Launchpad
- * owns the product/control-plane API surface that will migrate here during #363.
+ * LaunchpadAuth owns Cognito and auth-domain data. This stack owns the
+ * Launchpad product/control-plane API surface that consumes that auth domain.
  */
 export class LaunchpadControlPlaneStack extends cdk.Stack {
   public readonly api: apigateway.RestApi;

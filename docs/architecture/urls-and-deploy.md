@@ -135,10 +135,10 @@ Storage, Network, Auth, AuthApi, PlatformTables, PlatformWs, Api (dev + prod).
 It does not call Launchpad, Stock Analyser, Budget Tracker, or migration utility
 deployment workflows.
 
-`Auth`, `AuthApi`, and `PlatformTables` still contain physical auth-domain
-resources after #363. That is migration debt retained for compatibility and
-rollback. #386 owns the physical re-home into Launchpad; Platform ownership of
-those resources is not the target architecture.
+`Auth`, `AuthApi`, and `PlatformTables` still contain legacy auth-domain
+resources after the #386 dev cutover. They are decommission debt only.
+LaunchpadAuth is the active auth source for dev; Platform ownership of auth
+resources is not target architecture or a live fallback path.
 
 ### Independent app and utility workflows
 
@@ -201,32 +201,23 @@ Per-app deploys require these variables set in the GitHub environment (`dev` or 
 | Variable | Source |
 |---|---|
 | `NEXT_PUBLIC_LAUNCHPAD_CONTROL_PLANE_API_URL` | `ControlPlaneApiUrl` output from `Transformotion{Stage}-LaunchpadControlPlane`; live base URL for Launchpad control-plane routes including auth lookup, account setup, user profile/preferences, account administration, member management, and invitations |
-| `NEXT_PUBLIC_PLATFORM_AUTH_API_URL` | Optional rollback-only base URL for legacy platform AuthApi lookup-provider route |
-| `NEXT_PUBLIC_PLATFORM_API_URL` | Optional rollback-only base URL for legacy platform API account setup, user profile/preferences, account administration, member-management, and invitation routes |
-
 `deploy-launchpad.yml` extracts Launchpad stack outputs after CDK deploy. It
-requires `ControlPlaneApiUrl` from `LaunchpadControlPlane` and reads staged
+requires `ControlPlaneApiUrl` from `LaunchpadControlPlane` and reads
 `Transformotion{Stage}-LaunchpadAuth` outputs for `UserPoolId`,
-`LaunchpadAppClientId`, and `CognitoDomain` when cutover is explicitly enabled.
-For dev, the `deploy-dev` job sets `LAUNCHPAD_AUTH_CUTOVER_ENABLED=true` and
-dev is live on LaunchpadAuth after deployment and runtime validation. The
-workflow-level default remains `false`, so prod continues to fall back to the
-environment-scoped Platform AuthStack Cognito variables until its own cutover.
-Platform deploy must not source, build, or orchestrate these Launchpad frontend
-auth values.
+`LaunchpadAppClientId`, and `CognitoDomain`. Platform deploy must not source,
+build, or orchestrate these Launchpad frontend auth values.
 
-The same guard is also read by the Launchpad, Stock Analyser, and Budget
-Tracker CDK entrypoints. `false` synthesizes the current Platform-auth wiring;
-`true` synthesizes app/control-plane authorizers and Launchpad control-plane
-table references against `Transformotion{Stage}-LaunchpadAuth` outputs. The
-guard must be flipped only in an explicit #386 cutover PR.
+The Launchpad, Stock Analyser, Budget Tracker, and migration-utilities CDK
+entrypoints resolve auth via `infrastructure/lib/auth-domain-exports.ts`, which
+now points at LaunchpadAuth. Platform AuthStack/AuthApi/PlatformTables remain
+only for the follow-up destructive decommission PR.
 
-Stock Analyser and Budget Tracker do not automatically consume
-`LaunchpadAuth` outputs from the Launchpad workflow. During cutover, sync the
-Launchpad-owned auth outputs into GitHub environment variables with
-`scripts/ci/sync-launchpad-auth-client-ids.sh dev`, then redeploy SA and BT so
-their static bundles and app-owned API/WSS authorizers use the new User Pool,
-app clients, and Hosted UI domain.
+Stock Analyser and Budget Tracker consume Launchpad-owned auth outputs through
+GitHub environment variables and app stack synthesis. Use
+`scripts/ci/sync-launchpad-auth-client-ids.sh dev` after LaunchpadAuth output
+changes, then redeploy SA and BT so their static bundles and app-owned API/WSS
+authorizers use the current LaunchpadAuth User Pool, app clients, and Hosted UI
+domain.
 
 During the first dev cutover, API Gateway REST stages required explicit
 redeployment after authorizer/table wiring changed. If a future cutover shows

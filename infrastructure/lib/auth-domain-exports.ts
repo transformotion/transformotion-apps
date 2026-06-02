@@ -3,7 +3,6 @@ import * as cdk from 'aws-cdk-lib';
 export type Stage = 'dev' | 'prod';
 
 export interface AuthDomainConfig {
-  cutoverEnabled: boolean;
   userPoolId: string;
   userPoolArn: string;
   launchpadAppClientId: string;
@@ -16,31 +15,8 @@ export interface AuthDomainConfig {
   rateLimitsTableName: string;
 }
 
-export function isLaunchpadAuthCutoverEnabled(): boolean {
-  return process.env.LAUNCHPAD_AUTH_CUTOVER_ENABLED === 'true';
-}
-
 export function authDomainConfig(stage: Stage): AuthDomainConfig {
-  const cutoverEnabled = isLaunchpadAuthCutoverEnabled();
-
-  if (!cutoverEnabled) {
-    return {
-      cutoverEnabled,
-      userPoolId: cdk.Fn.importValue(`Transformotion-${stage}-UserPoolId`),
-      userPoolArn: cdk.Fn.importValue(`Transformotion-${stage}-UserPoolArn`),
-      launchpadAppClientId: cdk.Fn.importValue(`Transformotion-${stage}-LaunchpadAppClientId`),
-      stockAnalyserAppClientId: cdk.Fn.importValue(`Transformotion-${stage}-StockAnalyserAppClientId`),
-      budgetTrackerAppClientId: cdk.Fn.importValue(`Transformotion-${stage}-BudgetTrackerAppClientId`),
-      usersTableName: `platform.users-${stage}`,
-      accountsTableName: `platform.accounts-${stage}`,
-      accountMembersTableName: `platform.account-members-${stage}`,
-      invitationsTableName: `platform.invitations-${stage}`,
-      rateLimitsTableName: `platform.rate-limits-${stage}`,
-    };
-  }
-
   return {
-    cutoverEnabled,
     userPoolId: cdk.Fn.importValue(`Transformotion-${stage}-LaunchpadAuth-UserPoolId`),
     userPoolArn: cdk.Fn.importValue(`Transformotion-${stage}-LaunchpadAuth-UserPoolArn`),
     launchpadAppClientId: cdk.Fn.importValue(`Transformotion-${stage}-LaunchpadAuth-LaunchpadAppClientId`),

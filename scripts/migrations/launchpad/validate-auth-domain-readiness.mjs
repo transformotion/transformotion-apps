@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
 
 const args = parseArgs(process.argv.slice(2));
 const stage = args.stage ?? 'dev';
@@ -13,7 +12,6 @@ if (!['dev', 'prod'].includes(stage)) {
 
 const stageCap = stage[0].toUpperCase() + stage.slice(1);
 const authStack = `Transformotion${stageCap}-LaunchpadAuth`;
-const workflowPath = '.github/workflows/deploy-launchpad.yml';
 
 const expectedGroups = ['site-admin', 'stock-app-access', 'budget-app-access'];
 const expectedTableOutputs = [
@@ -40,7 +38,6 @@ main();
 
 function main() {
   console.log(`Validating Launchpad auth readiness for ${stage}`);
-  assertCutoverDefaultIsFalse();
 
   const outputs = stackOutputs(authStack);
   requireOutputs(outputs, [
@@ -87,31 +84,21 @@ function main() {
 }
 
 function assertCutoverWiring(mode, launchpadOutputs) {
-  if (!['enabled', 'disabled'].includes(mode)) {
-    fail('--expect-cutover must be enabled or disabled');
+  if (mode !== 'enabled') {
+    fail('--expect-cutover must be enabled; Platform auth fallback mode has been removed');
   }
 
-  const expected = mode === 'enabled'
-    ? launchpadOutputs
-    : platformAuthOutputs(stage);
+  const expected = launchpadOutputs;
 
   const expectedUserPoolArn = expected.UserPoolArn;
   const expectedUserPoolId = expected.UserPoolId;
-  const expectedTables = mode === 'enabled'
-    ? {
-        users: launchpadOutputs.UsersTableName,
-        accounts: launchpadOutputs.AccountsTableName,
-        accountMembers: launchpadOutputs.AccountMembersTableName,
-        invitations: launchpadOutputs.InvitationsTableName,
-        rateLimits: launchpadOutputs.RateLimitsTableName,
-      }
-    : {
-        users: `platform.users-${stage}`,
-        accounts: `platform.accounts-${stage}`,
-        accountMembers: `platform.account-members-${stage}`,
-        invitations: `platform.invitations-${stage}`,
-        rateLimits: `platform.rate-limits-${stage}`,
-      };
+  const expectedTables = {
+    users: launchpadOutputs.UsersTableName,
+    accounts: launchpadOutputs.AccountsTableName,
+    accountMembers: launchpadOutputs.AccountMembersTableName,
+    invitations: launchpadOutputs.InvitationsTableName,
+    rateLimits: launchpadOutputs.RateLimitsTableName,
+  };
 
   assertRestAuthorizer('LaunchpadControlPlane', controlPlaneRestApiId(stage), expectedUserPoolArn);
   assertRestAuthorizer('StockAnalyserApi', restApiIdFromStackUrl(`Transformotion${stageCap}-StockAnalyserApi`, 'ApiUrl'), expectedUserPoolArn);
@@ -144,14 +131,6 @@ function assertCutoverWiring(mode, launchpadOutputs) {
   console.log(`Cutover wiring validation passed for mode: ${mode}`);
 }
 
-function platformAuthOutputs(currentStage) {
-  const outputs = stackOutputs(`Transformotion${stageCap}-Auth`);
-  return {
-    UserPoolId: outputs.UserPoolId,
-    UserPoolArn: outputs.UserPoolArn,
-  };
-}
-
 function controlPlaneRestApiId(currentStage) {
   return stackOutputs(`Transformotion${stageCap}-LaunchpadControlPlane`).ControlPlaneRestApiId;
 }
@@ -181,14 +160,6 @@ function assertLambdaEnv(functionName, expectedEnv) {
     fail(`${functionName} env mismatch: ${mismatches.map(([key, value]) => `${key} expected ${value} got ${actual[key] ?? '<missing>'}`).join('; ')}`);
   }
   console.log(`${functionName} env matches expected auth-domain wiring`);
-}
-
-function assertCutoverDefaultIsFalse() {
-  const workflow = readFileSync(workflowPath, 'utf8');
-  if (!workflow.includes("LAUNCHPAD_AUTH_CUTOVER_ENABLED: 'false'")) {
-    fail(`${workflowPath} does not keep LAUNCHPAD_AUTH_CUTOVER_ENABLED at false`);
-  }
-  console.log('Cutover flag default: false');
 }
 
 function stackOutputs(stackName) {

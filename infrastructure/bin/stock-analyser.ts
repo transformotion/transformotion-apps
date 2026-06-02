@@ -15,7 +15,7 @@ const env = {
 };
 
 // Stock Analyser owns REST, WSS, AI runtime, and app data after #366.
-// Auth-domain ownership is selected by LAUNCHPAD_AUTH_CUTOVER_ENABLED during #386.
+// Auth-domain ownership resolves to LaunchpadAuth through auth-domain-exports.
 //
 // Deploy commands:
 //   cdk deploy --app bin/stock-analyser.ts TransformotionDev-StockAnalyserTables TransformotionDev-StockAnalyserWs TransformotionDev-StockAnalyserApi

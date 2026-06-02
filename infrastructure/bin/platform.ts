@@ -10,6 +10,7 @@ import { PlatformTablesStack }    from '../../platform/infrastructure/platform-t
 import { PlatformWsStack }        from '../../platform/infrastructure/platform-ws-stack';
 import { StorageStack }           from '../../platform/infrastructure/storage-stack';
 import { GithubActionsRoleStack } from '../../platform/infrastructure/github-actions-role-stack';
+import { authDomainConfig }       from '../lib/auth-domain-exports';
 
 const app = new cdk.App();
 
@@ -47,6 +48,8 @@ const devAuth = new AuthStack(app, 'TransformotionDev-Auth', {
   description: 'Transformotion Apps — Dev auth stack (Cognito User Pool)',
 });
 
+const devLaunchpadAuth = authDomainConfig('dev');
+
 new AuthApiStack(app, 'TransformotionDev-AuthApi', {
   env,
   stage:       'dev',
@@ -62,11 +65,11 @@ new PlatformTablesStack(app, 'TransformotionDev-PlatformTables', {
   description: 'Transformotion Apps — Dev platform DynamoDB tables (users, accounts, invitations)',
 });
 
-const devPlatformWs = new PlatformWsStack(app, 'TransformotionDev-PlatformWs', {
+new PlatformWsStack(app, 'TransformotionDev-PlatformWs', {
   env,
   stage:       'dev',
   description: 'Transformotion Apps — Dev platform WebSocket API (AI services)',
-  userPool:    devAuth.userPool,
+  userPoolId:  devLaunchpadAuth.userPoolId,
 });
 
 new PlatformApiStack(app, 'TransformotionDev-Api', {
@@ -77,8 +80,6 @@ new PlatformApiStack(app, 'TransformotionDev-Api', {
   stockAnalyserAppClientId:   devAuth.stockAnalyserAppClient.userPoolClientId,
   budgetTrackerAppClientId: devAuth.budgetTrackerAppClient.userPoolClientId,
   jobResultsTableName:      'platform.job-results-dev',
-  wsApiEndpoint:            devPlatformWs.wsApiEndpoint,
-  wsApiId:                  devPlatformWs.webSocketApi.apiId,
 });
 
 // ── Prod stacks ────────────────────────────────────────────────────────────────
@@ -101,6 +102,8 @@ const prodAuth = new AuthStack(app, 'TransformotionProd-Auth', {
   description: 'Transformotion Apps — Prod auth stack (Cognito User Pool)',
 });
 
+const prodLaunchpadAuth = authDomainConfig('prod');
+
 new AuthApiStack(app, 'TransformotionProd-AuthApi', {
   env,
   stage:       'prod',
@@ -116,11 +119,11 @@ new PlatformTablesStack(app, 'TransformotionProd-PlatformTables', {
   description: 'Transformotion Apps — Prod platform DynamoDB tables (users, accounts, invitations)',
 });
 
-const prodPlatformWs = new PlatformWsStack(app, 'TransformotionProd-PlatformWs', {
+new PlatformWsStack(app, 'TransformotionProd-PlatformWs', {
   env,
   stage:       'prod',
   description: 'Transformotion Apps — Prod platform WebSocket API (AI services)',
-  userPool:    prodAuth.userPool,
+  userPoolId:  prodLaunchpadAuth.userPoolId,
 });
 
 new PlatformApiStack(app, 'TransformotionProd-Api', {
@@ -131,6 +134,4 @@ new PlatformApiStack(app, 'TransformotionProd-Api', {
   stockAnalyserAppClientId:   prodAuth.stockAnalyserAppClient.userPoolClientId,
   budgetTrackerAppClientId: prodAuth.budgetTrackerAppClient.userPoolClientId,
   jobResultsTableName:      'platform.job-results-prod',
-  wsApiEndpoint:            prodPlatformWs.wsApiEndpoint,
-  wsApiId:                  prodPlatformWs.webSocketApi.apiId,
 });

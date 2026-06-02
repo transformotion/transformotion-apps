@@ -17,8 +17,8 @@ export interface BudgetTrackerWsStackProps extends cdk.StackProps {
 /**
  * BudgetTrackerWsStack - Budget Tracker-owned WebSocket runtime.
  *
- * The shared PlatformWsStack remains deployed during M9 migration, but Budget
- * Tracker runtime traffic should use this app-owned stack after #365.
+ * Budget Tracker owns the live WSS path. The legacy PlatformWsStack is
+ * decommission debt and is not part of the Budget Tracker runtime.
  */
 export class BudgetTrackerWsStack extends cdk.Stack {
   public readonly webSocketApi: apigatewayv2.WebSocketApi;
