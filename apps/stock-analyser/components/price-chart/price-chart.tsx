@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { createChart, CrosshairMode, type IChartApi, type ISeriesApi, type CandlestickSeriesOptions, type Time } from 'lightweight-charts';
+import { createChart, CrosshairMode, type IChartApi, type ISeriesApi, type Time } from 'lightweight-charts';
 import type { OhlcvDataResponse } from '@transformotion/api-client';
+import { CANDLESTICK_COLORS, CHART_THEME } from '@/lib/chart/chart-theme';
 
 interface PriceChartProps {
   data: OhlcvDataResponse;
@@ -23,25 +24,18 @@ export function PriceChart({ data, height = 280 }: PriceChartProps) {
       height,
       layout: {
         background: { color: 'transparent' },
-        textColor:  'hsl(var(--muted-foreground))',
+        textColor:  CHART_THEME.text,
       },
       grid: {
-        vertLines: { color: 'hsl(var(--border))' },
-        horzLines: { color: 'hsl(var(--border))' },
+        vertLines: { color: CHART_THEME.grid },
+        horzLines: { color: CHART_THEME.grid },
       },
       crosshair: { mode: CrosshairMode.Normal },
-      rightPriceScale: { borderColor: 'hsl(var(--border))' },
-      timeScale:       { borderColor: 'hsl(var(--border))', timeVisible: false },
+      rightPriceScale: { borderColor: CHART_THEME.grid },
+      timeScale:       { borderColor: CHART_THEME.grid, timeVisible: false },
     });
 
-    const series = chart.addCandlestickSeries({
-      upColor:          'hsl(var(--signal-green, 142 76% 36%))',
-      downColor:        'hsl(var(--signal-red, 0 84% 60%))',
-      borderUpColor:    'hsl(var(--signal-green, 142 76% 36%))',
-      borderDownColor:  'hsl(var(--signal-red, 0 84% 60%))',
-      wickUpColor:      'hsl(var(--signal-green, 142 76% 36%))',
-      wickDownColor:    'hsl(var(--signal-red, 0 84% 60%))',
-    } as Partial<CandlestickSeriesOptions>);
+    const series = chart.addCandlestickSeries(CANDLESTICK_COLORS);
 
     chartRef.current  = chart;
     seriesRef.current = series;

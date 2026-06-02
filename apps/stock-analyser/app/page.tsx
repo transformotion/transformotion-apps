@@ -1,5 +1,6 @@
 "use client"
 
+import type React from "react"
 import { getConfig } from "@/lib/config"
 import { NavigationProvider, AppShell, useNavigation } from "@/components/stock-analyser/app-shell"
 import { MarketAnalysisTab } from "@/components/stock-analyser/tabs/market-analysis-tab"
@@ -16,24 +17,38 @@ import { TabErrorBoundary } from "@transformotion/ui-error-boundaries"
 function TabRouter() {
   const { activeTab, analyserTicker, analyserSource } = useNavigation()
 
+  let tab: React.ReactNode
   switch (activeTab) {
     case "market":
-      return <MarketAnalysisTab />
+      tab = <MarketAnalysisTab />
+      break
     case "recs":
-      return <RecommendationsTab />
+      tab = <RecommendationsTab />
+      break
     case "etfs":
-      return <ETFsTab />
+      tab = <ETFsTab />
+      break
     case "metals":
-      return <MetalsTab />
+      tab = <MetalsTab />
+      break
     case "analyser":
-      return <AnalyserTab initialTicker={analyserTicker} source={analyserSource} />
+      tab = <AnalyserTab initialTicker={analyserTicker} source={analyserSource} />
+      break
     case "portfolio":
-      return <PortfolioTab />
+      tab = <PortfolioTab />
+      break
     case "watchlist":
-      return <WatchlistTab />
+      tab = <WatchlistTab />
+      break
     default:
-      return <MarketAnalysisTab />
+      tab = <MarketAnalysisTab />
   }
+
+  return (
+    <TabErrorBoundary key={activeTab} label="Stock Analyser">
+      {tab}
+    </TabErrorBoundary>
+  )
 }
 
 function StockAnalyserContent() {
@@ -55,9 +70,7 @@ function StockAnalyserContent() {
       onGoToLaunchpad={handleGoToLaunchpad}
     >
       <AppShell>
-        <TabErrorBoundary label="Stock Analyser">
-          <TabRouter />
-        </TabErrorBoundary>
+        <TabRouter />
       </AppShell>
     </NavigationProvider>
   )

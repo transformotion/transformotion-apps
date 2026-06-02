@@ -23,23 +23,23 @@ export const metadata: Metadata = {
   title: 'Transformotion - Stock Signal Analyser',
   description: 'Market Analysis, sector rotation signals, and enter/exit calls for informed trading decisions',
   generator: 'v0.app',
-  manifest: '/manifest.json',
+  manifest: '/stock-analyser/manifest.json',
   icons: {
     icon: [
       {
-        url: '/icon-light-32x32.png',
+        url: '/stock-analyser/icon-light-32x32.png',
         media: '(prefers-color-scheme: light)',
       },
       {
-        url: '/icon-dark-32x32.png',
+        url: '/stock-analyser/icon-dark-32x32.png',
         media: '(prefers-color-scheme: dark)',
       },
       {
-        url: '/icon.svg',
+        url: '/stock-analyser/icon.svg',
         type: 'image/svg+xml',
       },
     ],
-    apple: '/apple-icon.png',
+    apple: '/stock-analyser/apple-icon.png',
   },
 }
 
