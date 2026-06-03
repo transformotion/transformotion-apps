@@ -68,9 +68,25 @@ jobs:
         working-directory: infrastructure
         run: pnpm exec cdk deploy --app 'npx ts-node --prefer-ts-exts bin/platform.ts' 'TransformotionDev-Storage' 'TransformotionDev-Network' --require-approval never
 
-      - name: CDK Deploy - Decommission legacy platform stacks (dev)
+      - name: CDK Deploy - Decommission legacy Platform API (dev)
         working-directory: infrastructure
-        run: pnpm exec cdk deploy --app 'npx ts-node --prefer-ts-exts bin/platform.ts' 'TransformotionDev-Auth' 'TransformotionDev-AuthApi' 'TransformotionDev-PlatformTables' 'TransformotionDev-Api' 'TransformotionDev-PlatformWs' --require-approval never
+        run: pnpm exec cdk deploy --app 'npx ts-node --prefer-ts-exts bin/platform.ts' 'TransformotionDev-Api' --require-approval never
+
+      - name: CDK Deploy - Decommission legacy Platform AuthApi (dev)
+        working-directory: infrastructure
+        run: pnpm exec cdk deploy --app 'npx ts-node --prefer-ts-exts bin/platform.ts' 'TransformotionDev-AuthApi' --require-approval never
+
+      - name: CDK Deploy - Decommission legacy Platform WSS (dev)
+        working-directory: infrastructure
+        run: pnpm exec cdk deploy --app 'npx ts-node --prefer-ts-exts bin/platform.ts' 'TransformotionDev-PlatformWs' --require-approval never
+
+      - name: CDK Deploy - Decommission legacy Platform Auth (dev)
+        working-directory: infrastructure
+        run: pnpm exec cdk deploy --app 'npx ts-node --prefer-ts-exts bin/platform.ts' 'TransformotionDev-Auth' --require-approval never
+
+      - name: CDK Deploy - Decommission legacy Platform tables (dev)
+        working-directory: infrastructure
+        run: pnpm exec cdk deploy --app 'npx ts-node --prefer-ts-exts bin/platform.ts' 'TransformotionDev-PlatformTables' --require-approval never
 
   deploy-prod:
     name: Platform -> Prod
@@ -111,6 +127,22 @@ jobs:
         working-directory: infrastructure
         run: pnpm exec cdk deploy --app 'npx ts-node --prefer-ts-exts bin/platform.ts' 'TransformotionProd-Storage' 'TransformotionProd-Network' --require-approval never
 
-      - name: CDK Deploy - Decommission legacy platform stacks (prod)
+      - name: CDK Deploy - Decommission legacy Platform API (prod)
         working-directory: infrastructure
-        run: pnpm exec cdk deploy --app 'npx ts-node --prefer-ts-exts bin/platform.ts' 'TransformotionProd-Auth' 'TransformotionProd-AuthApi' 'TransformotionProd-PlatformTables' 'TransformotionProd-Api' 'TransformotionProd-PlatformWs' --require-approval never
+        run: pnpm exec cdk deploy --app 'npx ts-node --prefer-ts-exts bin/platform.ts' 'TransformotionProd-Api' --require-approval never
+
+      - name: CDK Deploy - Decommission legacy Platform AuthApi (prod)
+        working-directory: infrastructure
+        run: pnpm exec cdk deploy --app 'npx ts-node --prefer-ts-exts bin/platform.ts' 'TransformotionProd-AuthApi' --require-approval never
+
+      - name: CDK Deploy - Decommission legacy Platform WSS (prod)
+        working-directory: infrastructure
+        run: pnpm exec cdk deploy --app 'npx ts-node --prefer-ts-exts bin/platform.ts' 'TransformotionProd-PlatformWs' --require-approval never
+
+      - name: CDK Deploy - Decommission legacy Platform Auth (prod)
+        working-directory: infrastructure
+        run: pnpm exec cdk deploy --app 'npx ts-node --prefer-ts-exts bin/platform.ts' 'TransformotionProd-Auth' --require-approval never
+
+      - name: CDK Deploy - Decommission legacy Platform tables (prod)
+        working-directory: infrastructure
+        run: pnpm exec cdk deploy --app 'npx ts-node --prefer-ts-exts bin/platform.ts' 'TransformotionProd-PlatformTables' --require-approval never
