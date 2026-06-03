@@ -131,7 +131,7 @@ function assertCutoverWiring(mode, launchpadOutputs) {
   console.log(`Cutover wiring validation passed for mode: ${mode}`);
 }
 
-function controlPlaneRestApiId(currentStage) {
+function controlPlaneRestApiId() {
   return stackOutputs(`Transformotion${stageCap}-LaunchpadControlPlane`).ControlPlaneRestApiId;
 }
 
