@@ -25,6 +25,7 @@
 #   apps/launchpad/functions/accounts/             control-plane accounts API: inline DynamoDB membership checks
 #   apps/launchpad/functions/forgot-provider/      auth-infrastructure: public endpoint
 #   apps/launchpad/functions/invitations/          control-plane invitation API: inline owner check
+#   apps/launchpad/functions/pre-token-generation/ Cognito trigger: no request-time API caller
 #   apps/launchpad/functions/user/                 auth-infrastructure: withAuthOnly user-owned profile data
 #
 # Usage: bash scripts/ci/check-handler-authz-pattern.sh
@@ -43,6 +44,7 @@ EXEMPT_PATH_PREFIXES=(
   "$REPO_ROOT/apps/launchpad/functions/accounts/"
   "$REPO_ROOT/apps/launchpad/functions/forgot-provider/"
   "$REPO_ROOT/apps/launchpad/functions/invitations/"
+  "$REPO_ROOT/apps/launchpad/functions/pre-token-generation/"
   "$REPO_ROOT/apps/launchpad/functions/user/"
 )
 
