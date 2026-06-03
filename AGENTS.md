@@ -17,15 +17,15 @@ currently contains:
 - `apps/launchpad` - platform shell, sign-in entry point, app tile rendering.
 - `apps/stock-analyser` - Stock Signal Analyser.
 - `apps/budget-tracker` - Budget Tracker.
-- `platform` - shared substrate and platform-owned runtime code.
+- `platform` - neutral shared substrate.
 - `packages` - explicitly shared libraries.
 
 The platform direction is per-app ownership and independent deployment:
 
 - Apps own their runtime infrastructure: REST, WSS, app Lambdas, app tables,
   app IAM, app auth integration, and app deploy workflows.
-- The shared platform substrate shrinks to CloudFront, DNS, ACM, build tooling,
-  and carefully governed shared packages/constructs.
+- The shared platform substrate is CloudFront, DNS, ACM, storage/deploy
+  foundations, and carefully governed shared packages/constructs.
 - Cross-app runtime coupling is forbidden unless explicitly documented as a
   transitional migration state.
 - Shared code exists only where the abstraction is truly cross-app or
@@ -33,11 +33,9 @@ The platform direction is per-app ownership and independent deployment:
 - Contracts are explicit. Hidden API, auth, data, or Lambda-to-Lambda behaviour
   is architecture debt.
 
-The repository is mid-transition. Some current-state documents still describe
-shared platform REST/WSS/auth patterns. M9 is the milestone that normalizes the
-platform toward per-app ownership of REST, WSS, AI runtime, IAM, and Launchpad
-control-plane ownership. Agents must preserve current compatibility while
-avoiding any new shared-runtime topology that M9 is actively retiring.
+M9 normalizes the repository toward app-owned REST, WSS, AI runtime, IAM, and
+Launchpad-owned authentication/control-plane ownership. Agents must not
+reintroduce shared Platform runtime topology that M9 has retired.
 
 ## 2. Authoritative Documents
 
@@ -97,22 +95,16 @@ Allowed dependencies:
 
 ### `platform/`
 
-Platform-owned substrate and transitional shared runtime. Current state includes
-platform infrastructure, physically platform-owned auth-domain resources,
-shared REST/API rollback pieces, shared WSS rollback pieces, and shared config.
-
-Target state after M9:
+Platform-owned neutral substrate. Platform does not own auth-domain resources,
+app runtime resources, product APIs, WSS paths, or control-plane behavior.
 
 - Platform retains neutral shared substrate only: CloudFront, DNS, ACM,
-  build-time tooling, and platform contracts/config where justified.
-- Launchpad owns auth/control-plane product surfaces now.
-  `Transformotion{Stage}-LaunchpadAuth` is the active Launchpad-owned auth
-  foundation for dev, including auth-domain tables and the pre-token trigger.
-  Remaining platform-owned auth resources are decommission debt, not fallback
-  architecture or target ownership.
-- Use `docs/migrations/m9-386-dev-auth-cutover-checklist.md` as the cutover
-  record and validation checklist. Do not reintroduce Platform auth fallback
-  paths without an explicit architecture issue.
+  shared storage/deploy foundations, and platform contracts/config where
+  justified.
+- Launchpad owns the auth domain and control-plane product surfaces:
+  `Transformotion{Stage}-LaunchpadAuth` and
+  `Transformotion{Stage}-LaunchpadControlPlane`.
+- Stock Analyser and Budget Tracker own their app runtimes.
 - Shared runtime REST/WSS/Claude proxy resources are decommissioned or split
   into per-app resources.
 
@@ -122,7 +114,7 @@ architecture issue explicitly approves it.
 ### `packages/`
 
 Shared libraries consumed by multiple apps or by platform/app Lambdas. Packages
-must not import from `apps/`, `platform/functions/`, or `infrastructure/`.
+must not import from `apps/`, `platform/`, or `infrastructure/`.
 
 Shared package additions must pass the "real shared concern" test. If the code
 is app-specific, keep it in `apps/<app>`. If it is borderline, open an
@@ -431,12 +423,10 @@ Runtime configuration pattern:
 
 ### `platform/`
 
-- Keep neutral platform substrate and explicitly retained migration-debt
-  resources here.
+- Keep neutral platform substrate here.
 - Do not add app-specific runtime logic here.
-- Treat shared REST/WSS/Claude/auth resources as M9 transitional unless the
-  current issue says otherwise.
-- Platform functions must not import app code.
+- Do not add shared REST, WSS, AI, auth, or control-plane resources here.
+- Platform does not contain Lambda function packages.
 
 ### `packages/`
 
@@ -481,9 +471,8 @@ Runtime configuration pattern:
 
 The intended post-M9 architecture is:
 
-- Launchpad owns the auth domain and app access presentation. During #363
-  close-out, remaining platform-owned auth-domain resources are temporary
-  migration debt tracked by #386.
+- Launchpad owns the auth domain, control-plane APIs, app access
+  administration, and app access presentation.
 - Each app owns REST, WSS, app Lambdas, app tables, app IAM, app Claude proxy,
   app deploy workflow, and app-specific contracts.
 - Platform owns CloudFront, DNS, ACM, shared build tooling, and explicitly

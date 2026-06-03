@@ -2,21 +2,24 @@
 
 ## Overview
 
-DynamoDB is the canonical datastore for all platform and app data. Tables are divided into two scopes:
+DynamoDB is the canonical datastore for auth-domain data and app data.
+Ownership follows runtime ownership:
 
-Auth-domain table ownership has moved to Launchpad for dev after the #386
-cutover. Platform still physically contains legacy auth-domain tables, but they
-are decommission debt rather than live ownership.
+- **Launchpad auth tables** are owned by `LaunchpadAuthStack` and back
+  authentication, token claims, account onboarding, user profile/preferences,
+  account administration, member administration, invitations, and auth
+  rate-limiting.
+- **Per-app tables** are owned by the app that reads/writes them.
+- **Platform tables are not part of the active architecture.** The old
+  Platform auth/job/WSS tables were removed from Platform CDK ownership during
+  #386 auth decommission.
 
-- **Platform tables** - legacy account/identity tables managed by `PlatformTablesStack`; retained only until the Platform auth decommission PR.
-- **Launchpad auth tables** - active auth-domain tables created by `LaunchpadAuthStack` and consumed by Launchpad control-plane APIs and token claims.
-- **Per-app tables** — owned exclusively by one app. Managed by that app's `TablesStack`.
+All records in per-app data tables are keyed by `accountId`. The
+account-scoping invariant means no handler may read or write another user's
+account data.
 
-All records in per-app data tables are keyed by `accountId`. The account-scoping invariant (see below) means no handler may read another user's data.
-
-See [auth.md](./auth.md) for the account membership model. See [cdk.md](./cdk.md) for stack names.
-
----
+See [auth.md](./auth.md) for the account membership model and
+[cdk.md](./cdk.md) for stack ownership.
 
 ## Table naming convention
 
@@ -24,57 +27,58 @@ See [auth.md](./auth.md) for the account membership model. See [cdk.md](./cdk.md
 {scope}.{entity}-{stage}
 ```
 
-- `scope` is either `platform` (cross-app) or an app slug (`stock-analyser`, `budget-tracker`)
-- `stage` is `dev` or `prod`
+or, for Launchpad-owned auth-domain tables:
 
-Examples: `platform.accounts-dev`, `budget-tracker.transactions-prod`, `stock-analyser.portfolio-dev`
+```
+launchpad-{entity}-{stage}
+```
 
-Launchpad-owned auth-domain tables intentionally use clean Launchpad names
-without the legacy `platform.` prefix, for example `launchpad-accounts-dev`.
+Examples:
 
-**Enforcement rule:** App-specific tables must never use the `platform.` prefix. If a table is only read or written by one app's Lambdas, it belongs in that app's scope (e.g. `stock-analyser.*`, `budget-tracker.*`) and in that app's `TablesStack`.
+- `launchpad-accounts-dev`
+- `budget-tracker.transactions-prod`
+- `stock-analyser.portfolio-dev`
 
----
+App-specific tables must never use the `platform.` prefix. If a table is only
+read or written by one app's Lambdas, it belongs in that app's scope and in that
+app's infrastructure stack.
 
-## Platform tables
+## Launchpad auth tables
 
-Managed by `TransformotionDev-PlatformTables` / `TransformotionProd-PlatformTables`.
+Managed by `TransformotionDev-LaunchpadAuth` /
+`TransformotionProd-LaunchpadAuth`.
 
-These tables are legacy Platform resources. They are not the live auth-domain
-architecture after the #386 dev cutover and should be removed during Platform
-auth decommission.
+These tables are consumed by Launchpad control-plane APIs and by the
+LaunchpadAuth pre-token trigger.
 
-### `platform.users-{stage}`
+### `launchpad-users-{stage}`
 
-User preferences, stored per Cognito `sub`.
+User profile and preferences keyed by Cognito `sub`.
 
 | Attribute | Type | Notes |
 |---|---|---|
 | `userId` (PK) | String | Cognito `sub` |
-| `defaultMode` | String | UI preference |
-| `notificationsEnabled` | Boolean | |
-| `cycleAlertThreshold` | Number | Stock Analyser alert threshold |
-| `lastAnalysedTicker` | String | Most recently analysed ticker |
+| `email` | String | User email |
+| `name` | String | Display name |
+| `preferences` | Map | Launchpad/app UI preferences |
+| `createdAt` / `updatedAt` | String | ISO 8601 |
 
-Previously served by Launchpad-owned `launchpad-user-{stage}` Lambda before the #386 table cutover. The platform `transformotion-user-{stage}` route remains deployed only as decommission debt.
+### `launchpad-accounts-{stage}`
 
-> **Partial implementation:** Only `notificationsEnabled` is currently read and written by the Lambda handler. The fields `defaultMode`, `cycleAlertThreshold`, and `lastAnalysedTicker` appear in `@transformotion/api-client` types but are not implemented in the Lambda — writes are silently ignored and reads return `undefined` for these fields.
-
-### `platform.accounts-{stage}`
-
-Account container records, shared across all apps.
+Account container records.
 
 | Attribute | Type | Notes |
 |---|---|---|
 | `accountId` (PK) | String | UUID |
 | `name` | String | Human-readable account name |
-| `appSlug` | String | Which app this account belongs to (`stock-analyser`, `budget-tracker`) |
+| `appSlug` | String | App this account belongs to, e.g. `stock-analyser`, `budget-tracker` |
 | `createdAt` | String | ISO 8601 |
-| `ownerId` | String | userId of the account creator |
+| `ownerId` | String | Cognito `sub` of the creator |
 
-Previously served by Launchpad-owned `launchpad-accounts-{stage}` Lambda before the #386 table cutover. The platform `transformotion-accounts-{stage}` route remains deployed only as decommission debt.
+The `launchpad-pre-token-generation-{stage}` trigger reads `appSlug` from this
+table to build the `accounts` claim.
 
-### `platform.account-members-{stage}`
+### `launchpad-account-members-{stage}`
 
 Membership records: which users belong to which accounts, and in what role.
 
@@ -86,11 +90,10 @@ Membership records: which users belong to which accounts, and in what role.
 | `email` | String | Denormalised for display |
 | `joinedAt` | String | ISO 8601 |
 
-**GSI:** `userId-index` (PK: `userId`) — look up all accounts a given user belongs to.
+**GSI:** `userId-index` (PK: `userId`) - required by the pre-token trigger to
+find all account memberships for a user.
 
-Previously read by the Platform pre-token generation Lambda and rollback account handlers. Live token claims and Launchpad account administration now use `launchpad-account-members-{stage}`.
-
-### `platform.invitations-{stage}`
+### `launchpad-invitations-{stage}`
 
 Pending, redeemed, and expired invitations.
 
@@ -98,74 +101,29 @@ Pending, redeemed, and expired invitations.
 |---|---|---|
 | `invitationId` (PK) | String | UUID |
 | `email` | String | Normalised lowercase |
-| `invitedBy` | String | userId of the inviting admin |
-| `expiresAt` | Number | Epoch-seconds (TTL attribute — 7 days) |
+| `invitedBy` | String | Cognito `sub` of the inviting admin |
+| `expiresAt` | Number | Epoch seconds, TTL |
 | `status` | String | `pending \| redeemed \| expired` |
-| `perApp` | Map | Per-app access configuration — see [auth.md](./auth.md) for shape |
+| `perApp` | Map | Per-app access configuration |
 
-**GSI:** `email-index` (PK: `email`) — look up pending invitations for a newly registered user.
-
-Legacy invitation table retained only until Platform auth decommission. Live invitation creation uses `launchpad-invitations-{stage}`.
-
-## Launchpad auth tables
-
-Managed by `TransformotionDev-LaunchpadAuth` /
-`TransformotionProd-LaunchpadAuth`.
-
-These tables are live for dev after the #386 auth cutover and are consumed by
-Launchpad control-plane APIs and the LaunchpadAuth pre-token trigger. See
-[`m9-386-auth-reseed.md`](../migrations/m9-386-auth-reseed.md) for the reseed
-process used during cutover.
-
-### `launchpad-users-{stage}`
-
-Same intended shape as `platform.users-{stage}`.
-
-### `launchpad-accounts-{stage}`
-
-Same intended shape as `platform.accounts-{stage}`. The
-`launchpad-pre-token-generation-{stage}` trigger reads `appSlug` from this
-table to build the `accounts` claim.
-
-### `launchpad-account-members-{stage}`
-
-Same intended shape as `platform.account-members-{stage}`.
-
-**GSI:** `userId-index` (PK: `userId`) - required by the
-Launchpad-owned pre-token trigger.
-
-### `launchpad-invitations-{stage}`
-
-Same intended shape as `platform.invitations-{stage}`.
-
-**GSI:** `email-index` (PK: `email`) - required for invitation lookup.
+**GSI:** `email-index` (PK: `email`) - invitation lookup.
 
 ### `launchpad-rate-limits-{stage}`
 
 Rate-limit state for Launchpad auth/control-plane endpoints.
 
-### `platform.job-results-{stage}`
-
-Async Claude AI job results, written by `transformotion-claude-proxy-{stage}` after self-invoked async jobs complete. Read by `transformotion-analysis-cache-{stage}` when the requested cache key matches the `job-*` prefix.
-
 | Attribute | Type | Notes |
 |---|---|---|
-| `accountId` (PK) | String | |
-| `jobId` (SK) | String | UUID — also used as analysis-cache key suffix (`job-{jobId}`) |
-| `result` | Map | Claude AI response payload |
-| `expiresAt` | Number | Epoch-seconds (TTL attribute) |
+| `key` (PK) | String | Rate-limit key |
+| `expiresAt` | Number | Epoch seconds, TTL |
+| `count` | Number | Window counter |
 
-Managed by `PlatformTablesStack`.
+## Stock Analyser tables
 
----
+Managed by `TransformotionDev-StockAnalyserTables` /
+`TransformotionProd-StockAnalyserTables`.
 
-## Per-app tables
-
-### Stock Analyser
-
-Managed by `TransformotionDev-StockAnalyserTables` / `TransformotionProd-StockAnalyserTables`.
-
-#### `stock-analyser.portfolio-{stage}`
+### `stock-analyser.portfolio-{stage}`
 
 | Attribute | Type | Notes |
 |---|---|---|
@@ -176,7 +134,7 @@ Managed by `TransformotionDev-StockAnalyserTables` / `TransformotionProd-StockAn
 | `addedAt` | Number | Epoch ms |
 | `isGifted` | Boolean | |
 
-#### `stock-analyser.watchlist-{stage}`
+### `stock-analyser.watchlist-{stage}`
 
 | Attribute | Type | Notes |
 |---|---|---|
@@ -184,81 +142,86 @@ Managed by `TransformotionDev-StockAnalyserTables` / `TransformotionProd-StockAn
 | `ticker` (SK) | String | |
 | `name` | String | Company or instrument name |
 | `addedAt` | Number | Epoch ms |
-| `addedPrice` | Number | Price at time of addition (optional) |
+| `addedPrice` | Number | Optional price at addition |
 
-#### `stock-analyser.analysis-cache-{stage}`
+### `stock-analyser.analysis-cache-{stage}`
 
-Cache of Claude AI analysis results and shared market data.
+Cache of AI analysis results and shared market data.
 
 | Attribute | Type | Notes |
 |---|---|---|
-| `accountId` (PK) | String | `SHARED` for entries not scoped to one account (market data, ETFs, raw OHLCV) |
-| `cacheKey` (SK) | String | Namespaced cache key (e.g. `MARKET#ASX`, `ANALYSIS#CBA.AX`, `MARKET-DATA#CBA.AX#1y#1d`) |
+| `accountId` (PK) | String | `SHARED` for market-wide data |
+| `cacheKey` (SK) | String | Namespaced cache key |
 | `data` | String | JSON-serialised cached response |
 | `cachedAt` | String | ISO 8601 |
-| `dataType` | String | Identifies the type of cached data |
-| `mode` | String | Cache mode flag |
-| `expiresAt` | Number | Epoch-seconds (TTL attribute) |
+| `dataType` | String | Cached data type |
+| `mode` | String | Cache mode |
+| `expiresAt` | Number | Epoch seconds, TTL |
 
-`accountId = 'SHARED'` is used for data shared across accounts (raw OHLCV, market-wide analysis). Account-specific entries use the account UUID.
+### `stock-analyser.job-results-{stage}`
 
-Served by `transformotion-analysis-cache-{stage}` Lambda (`GET/PUT/DELETE /analysis-cache/{key}`).
+Stock Analyser-owned async AI job results used by its app-owned AI proxy.
 
-For full type definitions see [contracts/stock-analyser/DATA_CONTRACTS.md](/contracts/stock-analyser/DATA_CONTRACTS.md).
+| Attribute | Type | Notes |
+|---|---|---|
+| `accountId` (PK) | String | |
+| `cacheKey` (SK) | String | `job-{jobId}` |
+| `result` | Map | AI response payload |
+| `status` | String | Job status |
+| `expiresAt` | Number | Epoch seconds, TTL |
 
-### Budget Tracker
+## Budget Tracker tables
 
-Managed by `TransformotionDev-BudgetTrackerTables` / `TransformotionProd-BudgetTrackerTables`.
+Managed by `TransformotionDev-BudgetTrackerTables` /
+`TransformotionProd-BudgetTrackerTables`.
 
-#### `budget-tracker.transactions-{stage}`
+### `budget-tracker.transactions-{stage}`
 
 | Attribute | Type | Notes |
 |---|---|---|
 | `accountId` (PK) | String | |
 | `transactionId` (SK) | String | UUID |
-| `date` | String | DD/MM/YYYY (preserved for display) |
-| `dateIso` | String | YYYY-MM-DD (for range queries) |
-| `amount` | String | Signed — preserved as imported to avoid floating-point issues |
-| `description` | String | Original description from CSV |
+| `date` | String | DD/MM/YYYY |
+| `dateIso` | String | YYYY-MM-DD |
+| `amount` | String | Signed string, preserves imported precision |
+| `description` | String | Original CSV description |
 | `category` | String | |
 | `subcategory` | String | |
 | `file` | String | Source CSV filename |
-| `_manual` | Boolean | `true` = user manually categorised; rules engine will not overwrite |
-| `_business` | Boolean | `true` = excluded from personal P&L |
+| `_manual` | Boolean | User manually categorised |
+| `_business` | Boolean | Excluded from personal P&L |
 
-**GSI:** `accountId-dateIso-index` (PK: `accountId`, SK: `dateIso`) — efficient date-range queries.
+**GSI:** `accountId-dateIso-index` (PK: `accountId`, SK: `dateIso`).
 
-#### `budget-tracker.rules-{stage}`
+### `budget-tracker.rules-{stage}`
 
 | Attribute | Type | Notes |
 |---|---|---|
 | `accountId` (PK) | String | |
 | `ruleId` (SK) | String | UUID |
 | `name` | String | Human-readable rule name |
-| `match` | String | Keyword or regex pattern, case-insensitive |
+| `match` | String | Keyword or regex pattern |
 | `matchType` | String | `keyword` or `regex` |
-| `categoryId` | String | UUID FK — category reference |
-| `subcategoryId` | String | UUID FK — subcategory reference |
+| `categoryId` | String | Category reference |
+| `subcategoryId` | String | Subcategory reference |
 | `enabled` | Boolean | |
 | `priority` | Number | Lower value = higher priority |
-| `learned` | Boolean | `true` = created via "Learn" button; `false` = manually authored |
+| `learned` | Boolean | Created via Learn button |
 | `createdAt` | String | ISO 8601 |
 
-#### `budget-tracker.settings-{stage}`
+### `budget-tracker.settings-{stage}`
 
-Key-value store — each settings field is its own DynamoDB item.
+Key-value store for per-account settings.
 
 | Attribute | Type | Notes |
 |---|---|---|
 | `accountId` (PK) | String | |
-| `settingKey` (SK) | String | `csvFormatMappings`, `aiReviewBatchSize`, `aiReviewParallelLimit`, `aiReviewConfidenceThreshold` |
-| `value` | Map or List | Shape depends on `settingKey` — see [v0-reference/contracts/budget-tracker/data-models.md](/v0-reference/contracts/budget-tracker/data-models.md) |
+| `settingKey` (SK) | String | Settings concept key |
+| `value` | Map or List | Shape depends on `settingKey` |
 
-For full type definitions see [v0-reference/contracts/budget-tracker/data-models.md](/v0-reference/contracts/budget-tracker/data-models.md).
+### `budget-tracker.budget-data-{stage}`
 
-#### `budget-tracker.budget-data-{stage}`
-
-Key-value store for structured budget configuration (categories, budget amounts, frequencies). Kept on a dedicated table rather than in `budget-tracker.settings-{stage}` to avoid packing unrelated concepts into one key-value store.
+Structured budget configuration.
 
 | Attribute | Type | Notes |
 |---|---|---|
@@ -266,7 +229,7 @@ Key-value store for structured budget configuration (categories, budget amounts,
 | `concept` (SK) | String | `categories`, `budgetAmounts`, `budgetFrequencies` |
 | `value` | Map or List | Shape depends on `concept` |
 
-#### `budget-tracker.ai-jobs-{stage}`
+### `budget-tracker.ai-jobs-{stage}`
 
 Tracks in-progress and completed AI review jobs per account.
 
@@ -274,18 +237,18 @@ Tracks in-progress and completed AI review jobs per account.
 |---|---|---|
 | `accountId` (PK) | String | |
 | `jobId` (SK) | String | UUID |
-| `userId` | String | Cognito sub of the requesting user |
+| `userId` | String | Cognito `sub` |
 | `status` | String | Job status |
 | `createdAt` | String | ISO 8601 |
-| `expiresAt` | Number | Epoch-seconds (TTL attribute — 24h) |
+| `expiresAt` | Number | Epoch seconds, TTL |
 
-**GSI:** `userId-index` (PK: `userId`) — look up jobs by user.
+**GSI:** `userId-index` (PK: `userId`).
 
----
+## Account-scoping invariant
 
-## The account-scoping invariant
-
-**Every record in a per-app data table must be keyed by `accountId`. Every handler that reads or writes per-app data must verify the caller's membership in that account before touching DynamoDB.**
+Every record in a per-app data table must be keyed by `accountId`. Every
+handler that reads or writes per-app data must verify the caller's membership
+in that account before touching DynamoDB.
 
 Handlers enforce this by calling:
 
@@ -295,54 +258,52 @@ requireAccountAccess(auth, 'stock-analyser', accountId)
 requireAccountAccess(auth, 'budget-tracker', accountId, 'member')
 ```
 
-before any DynamoDB operation. The `accountId` used in DynamoDB operations is always the one already verified against the caller's `accounts` claim — never trusted directly from a query parameter without verification.
-
-This invariant means: even if a user knows another account's UUID, they cannot read or write its data. Authorization is enforced at the handler layer, not at DynamoDB's IAM level (LeadingKeys conditions are aspirational — see Issue #42 for platform Lambda IAM hardening).
-
----
+The `accountId` used in DynamoDB operations is always the one already verified
+against the caller's LaunchpadAuth-issued `accounts` claim.
 
 ## Account relationships example
 
-Steve creates a Budget Tracker account (`steve-bt-uuid`). He invites Liz. The resulting records:
+Steve creates a Budget Tracker account (`steve-bt-uuid`) and invites Liz. The
+resulting Launchpad auth-domain records:
 
-```
-platform.accounts-dev:
+```text
+launchpad-accounts-dev:
   accountId=steve-bt-uuid  name="Moodie Family"  appSlug=budget-tracker  ownerId=steve-sub
 
-platform.account-members-dev:
+launchpad-account-members-dev:
   accountId=steve-bt-uuid  userId=steve-sub   role=owner
   accountId=steve-bt-uuid  userId=liz-sub     role=member
 ```
 
-When Liz signs in, the pre-token Lambda queries `userId-index` for `liz-sub`, finds both rows (Liz's own account + Steve's), and builds:
+When Liz signs in, the pre-token Lambda queries `userId-index`, resolves
+`appSlug` from `launchpad-accounts-dev`, and emits:
 
 ```json
 {
   "accounts": {
     "budget-tracker": [
-      { "accountId": "liz-bt-uuid",   "role": "owner"  },
       { "accountId": "steve-bt-uuid", "role": "member" }
     ]
   }
 }
 ```
 
-Liz's active account is selected client-side by sending `X-Account-Id` on account-scoped API requests. The legacy platform `POST /auth/switch` route remains deployed only for rollback and is not migrated to Launchpad control-plane ownership.
-
----
+The active account is selected client-side by sending `X-Account-Id` on
+account-scoped API requests.
 
 ## CDK constraints to remember
 
-These CDK and CloudFormation constraints are not obvious and have cost real deploy failures. Noted here so future work doesn't rediscover them.
+**1. `Table.fromTableName()` does not know about GSIs.** When a handler queries
+a GSI, use `Table.fromTableAttributes()` with explicit `globalIndexes`.
 
-**1. `Table.fromTableName()` doesn't know about GSIs.** When imported this way, `grantReadData()` only covers the table ARN, not the index ARN. For tables with GSIs that handlers query, use `Table.fromTableAttributes()` with explicit `globalIndexes` list. For tables without GSIs (or where the handler doesn't query the index), `fromTableName` is fine.
+**2. Cognito user pool schemas are append-only.** Custom attributes declared on
+a user pool cannot be removed. Plan names and types carefully.
 
-**2. Cognito user pool schemas are append-only.** Custom attributes declared on a user pool cannot be removed. They can be abandoned (not written, not read) but remain declared forever. Plan custom attribute names and types carefully — they are permanent.
+**3. Removing CDK cross-stack dependencies does not reorder deploys.** Workflows
+must deploy stacks in the required order explicitly.
 
-**3. Removing CDK cross-stack dependencies doesn't reorder deploys.** If you move a resource between stacks or change how stacks reference each other, CDK no longer has a basis to sequence deploys. The workflow-level sequence (which stacks deploy first) may need explicit ordering, often via separate `cdk deploy` steps in CI. The `deploy-platform.yml` file has examples of this pattern (PlatformTables runs in its own step after Api releases its imports).
+**4. S3 buckets containing important data should not use `autoDeleteObjects`.**
+Use `removalPolicy: RETAIN` for durable buckets.
 
-**4. S3 buckets containing important data should NEVER have `autoDeleteObjects: true`.** This is a CDK convenience for ephemeral dev buckets. For backups buckets, use `removalPolicy: RETAIN` alone and allow manual deletion only.
-
-**5. `cdk import` requires CDK config to match deployed reality exactly.** If the deployed table has a sort key but the CDK construct doesn't declare it (or vice versa), the import changeset will fail. Run `aws dynamodb describe-table` before writing the CDK construct for any table being imported.
-
-**6. App stacks that mount routes onto the shared API Gateway do not own a `Deployment` resource.** `StockAnalyserApiStack` and `BudgetTrackerApiStack` add routes to the shared `RestApi` via `Fn.importValue`, but they never create an `AWS::ApiGateway::Deployment`. The platform deploy workflow creates the deployment resource; until the next platform deploy, the active stage continues serving the snapshot from the last platform deploy — newly added routes return 403 "Missing Authentication Token" even though they exist in the API configuration. Workaround for the current architecture: trigger a platform deploy after adding new routes in an app stack. Per-app architecture (M9) removes this constraint by giving each app ownership of its own RestApi and deployment lifecycle.
+**5. `cdk import` requires CDK config to match deployed reality exactly.** Run
+`aws dynamodb describe-table` before writing import constructs.

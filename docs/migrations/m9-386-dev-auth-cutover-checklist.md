@@ -50,8 +50,8 @@ Dev cutover validation completed:
   with LaunchpadAuth tokens.
 - Platform AuthStack, Platform AuthApi, Platform auth tables, Platform
   pre-token trigger, PlatformWs, and legacy control-plane routes were not
-  removed during cutover. They are decommission debt for the follow-up cleanup
-  PR.
+  removed during the initial cutover. They were removed by the final #386
+  Platform auth decommission work.
 
 Operational note: the live API Gateway REST stages were explicitly redeployed
 during the first dev cutover because authorizer/table wiring changed while the
@@ -269,22 +269,9 @@ Validate:
 
 ## Rollback
 
-Rollback to Platform auth now requires reverting the dependency-removal PR that
-deleted false-mode wiring, then restoring GitHub environment variables to the
-Platform AuthStack values. If needed, use the existing legacy Platform helper:
-
-   ```bash
-   bash scripts/ci/sync-cognito-client-ids.sh dev
-   ```
-
-Then redeploy Launchpad:
-
-   ```bash
-   gh workflow run deploy-launchpad.yml --ref develop -f target=dev
-   ```
-
-Redeploy Stock Analyser and Budget Tracker if their builds were already rebuilt
-against LaunchpadAuth values.
-
-Old Platform AuthStack, Platform tables, Platform pre-token trigger, and legacy
-rollback routes remain deployed during this cutover.
+This checklist is a historical record of the dev cutover. After the final #386
+Platform auth decommission, Platform auth rollback resources are no longer the
+operational rollback path. Rollback from a future LaunchpadAuth issue should
+restore from the affected Launchpad stack/template revision or from AWS backup
+where applicable, then redeploy Launchpad, Stock Analyser, and Budget Tracker
+as needed.

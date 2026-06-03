@@ -37,18 +37,6 @@ export class GithubActionsRoleStack extends cdk.Stack {
             Action:   'cloudformation:DescribeStacks',
             Resource: `arn:aws:cloudformation:${this.region}:${this.account}:stack/Transformotion*`,
           },
-          {
-            // Required for #252 O17 CI smoke check (admin-initiate-auth, ADMIN_USER_PASSWORD_AUTH flow).
-            // Pool ARNs are hardcoded because GithubActionsRole deploys before AuthStack in
-            // deploy-platform.yml, so Fn::ImportValue on AuthStack exports is unavailable at
-            // first deploy. TODO(#263): migrate to cross-stack reference once deploy ordering allows.
-            Effect:   'Allow',
-            Action:   'cognito-idp:AdminInitiateAuth',
-            Resource: [
-              `arn:aws:cognito-idp:${this.region}:${this.account}:userpool/ap-southeast-2_7QhxUvefw`,
-              `arn:aws:cognito-idp:${this.region}:${this.account}:userpool/ap-southeast-2_8hHCARUWq`,
-            ],
-          },
         ],
       },
     });
@@ -72,12 +60,9 @@ export class GithubActionsRoleStack extends cdk.Stack {
       `arn:aws:cloudformation:${this.region}:${this.account}:stack/${pattern}/*`;
 
     const transformotionUserPoolArns = [
-      // Legacy Platform-owned pools retained for rollback during #386.
-      `arn:aws:cognito-idp:${this.region}:${this.account}:userpool/ap-southeast-2_7QhxUvefw`,
-      `arn:aws:cognito-idp:${this.region}:${this.account}:userpool/ap-southeast-2_8hHCARUWq`,
       // Launchpad-owned pools created during #386. Keep this scoped to
       // Transformotion's account/region while avoiding another deploy-role
-      // edit for the prod LaunchpadAuth pool ID.
+      // edit for each environment-specific LaunchpadAuth pool ID.
       `arn:aws:cognito-idp:${this.region}:${this.account}:userpool/*`,
     ];
     const webBucketArns = [
@@ -193,15 +178,15 @@ export class GithubActionsRoleStack extends cdk.Stack {
       'TransformotionDev-Auth',
       'TransformotionDev-AuthApi',
       'TransformotionDev-PlatformTables',
-      'TransformotionDev-PlatformWs',
       'TransformotionDev-Api',
+      'TransformotionDev-PlatformWs',
       'TransformotionProd-Storage',
       'TransformotionProd-Network',
       'TransformotionProd-Auth',
       'TransformotionProd-AuthApi',
       'TransformotionProd-PlatformTables',
-      'TransformotionProd-PlatformWs',
       'TransformotionProd-Api',
+      'TransformotionProd-PlatformWs',
     ], []);
 
     createDeployRole('TransformotionLaunchpadDeployRole', [

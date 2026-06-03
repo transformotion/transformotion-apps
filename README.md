@@ -49,13 +49,12 @@ tracked in `PLAN.md`.
 
 ```
 apps/                   User-facing applications
-  launchpad/            Platform shell — sign-in, app tile rendering
+  launchpad/            Auth domain, control plane, sign-in, app tile rendering
   stock-analyser/       Stock Signal Analyser
   budget-tracker/       Budget Tracker
 
-platform/               Platform-owned deployable artefacts
-  functions/            Platform Lambda handlers (auth, accounts, claude-proxy, user)
-  infrastructure/       Platform CDK stacks (Network, Auth, PlatformTables, PlatformApi)
+platform/               Neutral substrate only
+  infrastructure/       Platform CDK stacks (Network, Storage, deploy roles)
 
 packages/               Shared code consumed by 2+ apps or platform
   api-client/           Typed API client

@@ -10,31 +10,26 @@ Social identity providers (Google, Facebook, Microsoft) are wired at the Cognito
 
 See [cdk.md](./cdk.md) for CDK stack names. See [data.md](./data.md) for account and membership table schemas.
 
-### M9 #363 / #386 ownership note
+### Ownership
 
-After #363 and the #386 dev cutover, Launchpad owns the live auth/control-plane
-API behavior and the active auth domain: auth lookup, onboarding,
+Launchpad owns the auth domain: auth lookup, onboarding,
 profile/preferences, account administration, member administration,
 invitations, Cognito, app clients, pre-token claims, and auth-domain tables.
-Platform still physically contains legacy AuthStack/AuthApi/PlatformTables
-resources only as decommission debt. Do not treat remaining Platform auth
-ownership as precedent, fallback architecture, or target topology for new
-auth/control-plane work.
+Platform owns neutral substrate only and does not own auth-domain resources.
 
 ---
 
 ## Cognito user pool
 
-- **Pool name:** `transformotion-{stage}` (dev / prod)
+- **Pool name:** `launchpad-auth-{stage}` (dev / prod)
 - **Region:** `ap-southeast-2`
 - **Account ID:** `959516291617`
 - **Username:** Cognito-generated UUID (`sub`) — not email
 - **Sign-in alias:** email address
 - **Email:** required; auto-verified
 
-The Launchpad-owned pool is created by `Transformotion{Stage}-LaunchpadAuth`
-with pool name `launchpad-auth-{stage}`. Dev live traffic uses this pool after
-the #386 cutover and runtime validation.
+The Launchpad-owned pool is created by `Transformotion{Stage}-LaunchpadAuth`.
+Live traffic uses this pool after the #386 cutover and runtime validation.
 
 ### Password policy
 
@@ -50,7 +45,7 @@ The Cognito user pool declares these custom attributes:
 | Attribute | Type | Status | Purpose |
 |---|---|---|---|
 | `custom:accounts` | String (max 2048) | Active | Comma-separated account IDs the user belongs to (all apps combined). Maintained by the Lambdas that modify account membership; read by the pre-token Lambda. Not consulted directly by frontend or API handlers. |
-| `custom:active_account` | String (max 36) | Transitional write only | Still written by Launchpad-owned `account-provisioning` on `/auth/setup` for first-account bootstrap. The legacy platform `/auth/switch` route remains deployed only for rollback and is not migrated to Launchpad because account switching has been superseded by client-side switching (`X-Account-Id` header). The attribute itself remains declared in the user pool schema permanently — Cognito does not permit removal of existing user pool schema attributes. Account switching as a working feature is provided by the client-side header-based design described in *Auth middleware* below. |
+| `custom:active_account` | String (max 36) | Transitional write only | Still written by Launchpad-owned `account-provisioning` on `/auth/setup` for first-account bootstrap. Account switching has been superseded by client-side switching (`X-Account-Id` header). The attribute itself remains declared in the user pool schema permanently because Cognito does not permit removal of existing user pool schema attributes. Account switching as a working feature is provided by the client-side header-based design described in *Auth middleware* below. |
 
 **Active account is not a Cognito attribute.** Which account a user is currently viewing in an app is browser-local UI state, persisted in localStorage per-app. API requests include the `accountId` as a request parameter. The auth middleware validates the parameter against the token's `accounts` claim and rejects requests where the caller is not a member of the stated account.
 
@@ -88,11 +83,11 @@ Analyser, and Budget Tracker.
 
 Three distinct Cognito app clients, one per deployable app. All share the same user pool; SSO works via the shared Hosted UI domain session cookie.
 
-| Client | Serving path | Identity providers | CDK logical ID |
-|---|---|---|---|
-| `LaunchpadAppClient` | `{host}/launchpad/callback`, `{host}/sign-in/callback` | `{host}/signed-out/` |
-| `StockAnalyserAppClient` | `{host}/stock-analyser/callback` | `{host}/signed-out/` |
-| `BudgetTrackerAppClient` | `{host}/budget-tracker/callback` | `{host}/signed-out/` |
+| Client | Callback URLs | Logout URLs | Identity providers | CDK logical ID |
+|---|---|---|---|---|
+| `LaunchpadAppClient` | `{host}/launchpad/callback`, `{host}/sign-in/callback` | `{host}/signed-out/` | Cognito, Google, Facebook, Microsoft where configured | `LaunchpadAppClient` in `LaunchpadAuthStack` |
+| `StockAnalyserAppClient` | `{host}/stock-analyser/callback` | `{host}/signed-out/` | Cognito only | `StockAnalyserAppClient` in `LaunchpadAuthStack` |
+| `BudgetTrackerAppClient` | `{host}/budget-tracker/callback` | `{host}/signed-out/` | Cognito only | `BudgetTrackerAppClient` in `LaunchpadAuthStack` |
 
 Social sign-in is enabled on the launchpad client only. Per-app clients are Cognito-only because social identity sessions established at the launchpad propagate via SSO.
 
@@ -112,16 +107,6 @@ clients and emits `LaunchpadAppClientId`, `StockAnalyserAppClientId`, and
 **Logout URL convention:** `{host}/signed-out/`
 
 **Launchpad dual callback:** The launchpad app client registers two callback URLs: `{host}/launchpad/callback` (flows initiated from launchpad pages) and `{host}/sign-in/callback` (flows initiated via the sign-in route). Both are registered; SSO flows may originate from either path.
-
-### Registered callback URLs (operational state)
-
-The following callback and logout URLs are registered on the dev Cognito app clients:
-
-| Client | Callback URLs | Logout URL |
-|---|---|---|
-| `LaunchpadAppClient` | `/`, `/sign-in/*`, `/launchpad/*` | Cognito, Google, Facebook, Microsoft where configured | `LaunchpadAppClient` in `LaunchpadAuthStack` |
-| `StockAnalyserAppClient` | `/stock-analyser/*` | Cognito only | `StockAnalyserAppClient` in `LaunchpadAuthStack` |
-| `BudgetTrackerAppClient` | `/budget-tracker/*` | Cognito only | `BudgetTrackerAppClient` in `LaunchpadAuthStack` |
 
 For current client IDs, read from CloudFormation outputs:
 
@@ -147,7 +132,8 @@ The Hosted UI domain provides the OAuth 2.0 / PKCE flow endpoint for all three a
 
 ## Social identity providers
 
-Google, Facebook, and Microsoft IDPs are registered through the Launchpad-owned Cognito configuration where configured. Platform-owned provider configuration is legacy decommission debt.
+Google, Facebook, and Microsoft IDPs are registered through the Launchpad-owned
+Cognito configuration where configured.
 
 `LaunchpadAuthStack` creates Launchpad-owned secret paths under
 `/launchpad/{stage}/cognito/*` for the Launchpad-owned auth domain. The stack
@@ -166,11 +152,8 @@ Platform ownership.
 | `launchpad-invitations-{stage}` | Invitation records with `email-index` and TTL |
 | `launchpad-rate-limits-{stage}` | Rate-limit state for Launchpad auth/control-plane endpoints |
 
-These tables are staged and not yet used by live APIs. See
-[`m9-386-auth-reseed.md`](../migrations/m9-386-auth-reseed.md) for the reseed
-steps required before cutover.
-
-The dev cutover checklist is
+These tables back live Launchpad control-plane APIs and token-claim generation.
+The historical dev cutover checklist is
 [`m9-386-dev-auth-cutover-checklist.md`](../migrations/m9-386-dev-auth-cutover-checklist.md).
 
 Apple Sign-In has placeholder secrets but is not yet active.
@@ -685,16 +668,13 @@ Users who do not remember which identity provider they signed up with can reques
 
 The live Lambda `launchpad-forgot-provider-{stage}` (in `LaunchpadControlPlaneStack`):
 1. Rate-limits by IP/email
-2. Queries the currently platform-owned Cognito User Pool via `AdminGetUserCommand`
+2. Queries the Launchpad-owned Cognito User Pool via `AdminGetUserCommand`
 3. Reads the `identities` attribute to detect which IDP was used
 4. Sends an SES email to the user naming the sign-in method and a link
 
 The handler is pre-authentication by necessity. It uses no `withAuth` / `withAuthOnly` wrapper — there is no JWT to extract. Abuse-resistance is the load-bearing security property.
 
-The older platform-owned `transformotion-forgot-provider-{stage}` route in `AuthApiStack` remains deployed for rollback during #363. New Launchpad code calls `NEXT_PUBLIC_LAUNCHPAD_CONTROL_PLANE_API_URL`.
-
 ### Abuse-resistance posture
-Lambda-side IP-based rate limiting (5 requests per IP per 15 minutes, stored in `launchpad-rate-limits-{stage}`). The current handler fails open if the rate-limit table is unavailable, preserving the existing behavior.
 Lambda-side IP-based rate limiting (5 requests per IP per 15 minutes, stored in `launchpad-rate-limits-{stage}`). The current handler fails open if the rate-limit table is unavailable, preserving the existing behavior.
 
 Future hardening can add API Gateway throttling, CORS allowlisting to the sign-in page origin, tighter SES resource scoping, and fail-closed rate limiting.
@@ -722,13 +702,9 @@ Launchpad owns the live onboarding, user profile/preference, account administrat
 
 Dev live traffic now uses `TransformotionDev-LaunchpadAuth` for Cognito,
 pre-token claims, app clients, Launchpad control-plane tables, and SA/BT
-authorizers. The old dev Platform AuthStack, Platform auth tables, Platform
-pre-token trigger, and legacy Platform auth/control-plane routes remain
-deployed only as decommission debt. There is no live production environment;
-`TransformotionProd-*` resources are non-live unless they affect synth/shared
-code.
-
-The platform `transformotion-account-provisioning-{stage}`, `transformotion-user-{stage}`, `transformotion-accounts-{stage}`, and `transformotion-invitations-{stage}` routes remain deployed in `PlatformApiStack` only as decommission debt. `/auth/switch` is not migrated to Launchpad because there is no current Launchpad caller and active account switching is handled client-side via `X-Account-Id`.
+authorizers. Platform does not own live or rollback auth/control-plane routes.
+There is no live production environment; `TransformotionProd-*` resources are
+non-live unless they affect synth/shared code.
 
 ---
 

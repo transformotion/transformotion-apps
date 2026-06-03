@@ -21,26 +21,20 @@ Four documents define how this repository works. Read them before substantive wo
 
 For monorepo structure (current state), import boundaries, and deploy triggers, see **[`MONOREPO.md`](./MONOREPO.md)**.
 
-Current M9 #363 close-out state: Launchpad owns live auth/control-plane APIs.
-Platform still physically owns Cognito, auth-domain tables, and rollback routes
-only as migration debt. `docs/migrations/m9-363-closeout.md` defines the
-deployment and runtime validation checklist for closing #363. #386 owns
-physical auth-domain re-home into Launchpad. Platform deploys substrate only and
-does not cascade into Launchpad, Stock Analyser, Budget Tracker, or migration
-utility deploy workflows.
+Current M9 state: Launchpad owns authentication and live control-plane APIs.
+Platform deploys neutral substrate only and does not cascade into Launchpad,
+Stock Analyser, Budget Tracker, or migration utility deploy workflows.
 
 For #386, `deploy-launchpad.yml` is the deploy lane for current and future
 `Transformotion{Stage}-Launchpad*` backend stacks, including
 `LaunchpadAuth`. Platform deploy must not orchestrate Launchpad
 auth/control-plane resources.
 
-`LaunchpadAuth` is the active Launchpad-owned auth source for dev. Remaining
-Platform AuthStack/AuthApi/PlatformTables resources are decommission debt, not
-fallback architecture or target ownership.
+`LaunchpadAuth` is the active Launchpad-owned auth source. Do not reintroduce
+Platform auth fallback paths without an explicit architecture issue.
 
-Use `docs/migrations/m9-386-dev-auth-cutover-checklist.md` as the cutover
-record and validation checklist. Do not reintroduce Platform auth fallback
-paths without an explicit architecture issue.
+Use `docs/migrations/m9-386-dev-auth-cutover-checklist.md` as the historical
+dev cutover record.
 
 When working on a specific app, read that app's `AGENTS.md` first. Claude Code may also read the sibling `CLAUDE.md` compatibility mirror:
 
@@ -122,7 +116,6 @@ Note: some paths are migrating per `CONTRIBUTING.md` Section 3 — see `MONOREPO
 |---|---|
 | Cross-app contracts | `/contracts/<scope>/` |
 | Shared packages | `/packages/` |
-| Platform Lambda handlers | `/platform/functions/` |
 | Platform infrastructure | `/platform/infrastructure/` |
 | Per-app infrastructure | `/apps/<app>/infrastructure/` |
 | Migration data artefacts | `/migration-artifacts/<app>/` |

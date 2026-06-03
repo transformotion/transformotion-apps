@@ -154,8 +154,7 @@ When ready, refer to the [Cognito Apple IDP docs](https://docs.aws.amazon.com/co
 After loading all three active providers (Google, Microsoft, Facebook), redeploy:
 
 ```bash
-cd infra
-npx cdk deploy TransformotionDev-Auth --require-approval never
+pnpm --dir infrastructure exec cdk deploy --app 'npx ts-node --prefer-ts-exts bin/launchpad.ts' TransformotionDev-LaunchpadAuth --require-approval never
 ```
 
 CloudFormation resolves the `{{resolve:secretsmanager:...}}` dynamic references at

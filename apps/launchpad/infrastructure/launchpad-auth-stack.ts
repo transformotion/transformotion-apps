@@ -16,9 +16,8 @@ export interface LaunchpadAuthStackProps extends cdk.StackProps {
 /**
  * LaunchpadAuthStack - Launchpad-owned Cognito/auth-domain foundation.
  *
- * This stack is the active auth domain after the #386 dev cutover. Legacy
- * Platform auth resources remain only as decommission debt until the Platform
- * cleanup PR removes them.
+ * This stack is the active auth domain for Launchpad, Stock Analyser, and
+ * Budget Tracker.
  */
 export class LaunchpadAuthStack extends cdk.Stack {
   public readonly userPool: cognito.UserPool;

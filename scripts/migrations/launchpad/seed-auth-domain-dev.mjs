@@ -20,9 +20,9 @@ const stageCap = stage[0].toUpperCase() + stage.slice(1);
 const authStack = `Transformotion${stageCap}-LaunchpadAuth`;
 
 const source = {
-  users: `platform.users-${stage}`,
-  accounts: `platform.accounts-${stage}`,
-  members: `platform.account-members-${stage}`,
+  users: `launchpad-users-${stage}`,
+  accounts: `launchpad-accounts-${stage}`,
+  members: `launchpad-account-members-${stage}`,
 };
 
 const target = {

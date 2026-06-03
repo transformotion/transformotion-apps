@@ -1,8 +1,8 @@
 /**
  * CSS for the Cognito Classic Hosted UI owned by the Launchpad auth domain.
  *
- * This mirrors the current Transformotion dark theme while the Platform-owned
- * AuthStack remains deployed for rollback during #386.
+ * This mirrors the current Transformotion dark theme for the Launchpad-owned
+ * Cognito User Pool.
  */
 export const cognitoHostedUiCss = `
 .background-customizable {

@@ -104,9 +104,9 @@ The manual commands below are retained for debugging and one-off repair.
 Use the current live Platform tables as the source of truth:
 
 ```bash
-aws dynamodb scan --table-name platform.users-dev
-aws dynamodb scan --table-name platform.accounts-dev
-aws dynamodb scan --table-name platform.account-members-dev
+aws dynamodb scan --table-name launchpad-users-dev
+aws dynamodb scan --table-name launchpad-accounts-dev
+aws dynamodb scan --table-name launchpad-account-members-dev
 ```
 
 Write equivalent rows to the Launchpad-owned tables:

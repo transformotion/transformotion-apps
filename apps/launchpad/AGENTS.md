@@ -13,10 +13,9 @@ branching strategy, architecture governance, and operating mode.
 Next.js app at `apps/launchpad/`. Static export deployed to S3/CloudFront.
 Serves at the root host and `/launchpad/*` sign-in/callback paths.
 
-Launchpad is the control-plane app. After #363 and the #386 dev cutover, it
-owns the live auth/control-plane API surface and the active Launchpad-owned
-Cognito/auth foundation. Remaining Platform auth-domain resources are
-decommission debt.
+Launchpad is the control-plane app. It owns the auth domain, live
+auth/control-plane API surface, and active Launchpad-owned Cognito/auth
+foundation.
 
 ## Quick reference
 
@@ -66,13 +65,8 @@ Source: `apps/launchpad/infrastructure/`.
 - Add new auth/control-plane behavior under `apps/launchpad/`, not `platform/`.
 - Keep Launchpad infrastructure under `apps/launchpad/infrastructure/`.
 - Do not add new platform-owned auth/control-plane routes as a shortcut.
-- Platform-owned AuthStack/AuthApi/PlatformTables resources are decommission
-  debt, not precedent.
-- LaunchpadAuth is the active auth source for dev. Do not reintroduce
+- LaunchpadAuth is the active auth source. Do not reintroduce
   Platform-auth fallback paths without an explicit architecture issue.
-- #386 owns the remaining Platform auth decommissioning.
-- Preserve legacy Platform auth resources only until the issue that removes
-  them explicitly says to decommission them.
 
 ## Deployment rules
 
@@ -81,7 +75,7 @@ Source: `apps/launchpad/infrastructure/`.
   stacks, extracts `ControlPlaneApiUrl` and `LaunchpadAuth` outputs, injects
   frontend auth/control-plane env vars, and builds/deploys the frontend.
 - `docs/migrations/m9-386-dev-auth-cutover-checklist.md` records the completed
-  dev cutover and the validation expectations for future auth-domain changes.
+  dev cutover and historical validation evidence.
 - Platform deploy must not cascade into Launchpad deploy.
 - Future auth-domain stacks must use `Transformotion{Stage}-Launchpad*` names
   so the Launchpad deploy lane owns them without Platform orchestration.
