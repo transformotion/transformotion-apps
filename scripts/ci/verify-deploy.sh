@@ -231,14 +231,17 @@ if [[ -n "$SMOKE_ENDPOINT" ]]; then
   : "${API_BASE_URL:?API_BASE_URL must be set for the smoke check}"
 
   echo "      Acquiring Cognito token (ADMIN_USER_PASSWORD_AUTH)..."
+  set +e
   auth_response=$(aws cognito-idp admin-initiate-auth \
     --auth-flow ADMIN_USER_PASSWORD_AUTH \
     --client-id "$COGNITO_APP_CLIENT_ID" \
     --user-pool-id "$COGNITO_USER_POOL_ID" \
     --auth-parameters "USERNAME=${CI_COGNITO_USERNAME},PASSWORD=${CI_COGNITO_PASSWORD}" \
     --output json 2>&1)
+  auth_exit=$?
+  set -e
 
-  if ! echo "$auth_response" | grep -q '"IdToken"'; then
+  if [[ "$auth_exit" -ne 0 ]] || ! echo "$auth_response" | grep -q '"IdToken"'; then
     cat >&2 <<EOF
 
 FAIL: Cognito token acquisition failed.

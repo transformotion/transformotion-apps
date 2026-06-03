@@ -1,6 +1,7 @@
 import * as path from 'path';
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
+import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as lambdaNodejs from 'aws-cdk-lib/aws-lambda-nodejs';
@@ -9,16 +10,17 @@ import { Construct } from 'constructs';
 
 export interface MigrationsApiStackProps extends cdk.StackProps {
   stage: 'dev' | 'prod';
+  userPoolId: string;
 }
 
 /**
  * MigrationsApiStack — API namespace for migration utilities.
  *
- * Imports the shared platform API Gateway and JWT authoriser from CloudFormation
- * exports produced by PlatformApiStack. This allows bin/migration-utilities.ts to
- * synthesise only MU stacks without instantiating platform stacks.
+ * Owns an app-independent migration utility API Gateway and authorises requests
+ * with the Launchpad-owned auth domain. It intentionally does not import
+ * PlatformApiStack REST or authoriser exports.
  *
- * Establishes /api/migrations on the shared platform API Gateway.
+ * Establishes /api/migrations on the migration utility API Gateway.
  * Routes (owned by this stack's CF template):
  *   POST /api/migrations/budget-tracker/transactions/import
  *   POST /api/migrations/budget-tracker/budget-data/run
@@ -35,26 +37,31 @@ export class MigrationsApiStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: MigrationsApiStackProps) {
     super(scope, id, props);
 
-    const { stage } = props;
+    const { stage, userPoolId } = props;
 
-    // Import shared platform API Gateway, /api resource, and JWT authoriser from CF exports.
-    const api = apigateway.RestApi.fromRestApiAttributes(this, 'PlatformApi', {
-      restApiId:      cdk.Fn.importValue(`Transformotion-${stage}-RestApiId`),
-      rootResourceId: cdk.Fn.importValue(`Transformotion-${stage}-RestApiRootResourceId`),
+    const api = new apigateway.RestApi(this, 'MigrationsApi', {
+      restApiName: `migration-utilities-api-${stage}`,
+      description: `Transformotion ${stage} migration utilities API`,
+      deployOptions: { stageName: stage },
+      defaultCorsPreflightOptions: {
+        allowOrigins: apigateway.Cors.ALL_ORIGINS,
+        allowMethods: apigateway.Cors.ALL_METHODS,
+        allowHeaders: ['Content-Type', 'Authorization', 'X-Account-Id'],
+        maxAge: cdk.Duration.hours(1),
+      },
     });
 
-    const platformApiResource = apigateway.Resource.fromResourceAttributes(this, 'PlatformApiResource', {
-      restApi:    api,
-      resourceId: cdk.Fn.importValue(`Transformotion-${stage}-ApiResourceId`),
-      path:       '/api',
+    const userPool = cognito.UserPool.fromUserPoolId(this, 'UserPool', userPoolId);
+    const authorizer = new apigateway.CognitoUserPoolsAuthorizer(this, 'JwtAuthoriser', {
+      cognitoUserPools: [userPool],
+      authorizerName: `migration-utilities-jwt-${stage}`,
+      resultsCacheTtl: cdk.Duration.minutes(5),
     });
 
-    const auth = authMethodOptions({
-      authorizerId:      cdk.Fn.importValue(`Transformotion-${stage}-AuthorizerId`),
-      authorizationType: apigateway.AuthorizationType.COGNITO,
-    });
+    const auth = authMethodOptions(authorizer);
 
-    this.migrationsResource = platformApiResource.addResource('migrations');
+    const apiResource = api.root.addResource('api');
+    this.migrationsResource = apiResource.addResource('migrations');
 
     cdk.Tags.of(this).add('app', 'migration-utilities');
     cdk.Tags.of(this).add('environment', stage);
@@ -149,12 +156,17 @@ export class MigrationsApiStack extends cdk.Stack {
       .addResource('budget-data')
       .addResource('run')
       .addMethod('POST', new apigateway.LambdaIntegration(budgetDataMigrateFn, { proxy: true }), auth);
+
+    new cdk.CfnOutput(this, 'ApiUrl', {
+      value: api.url,
+      exportName: `Transformotion-${stage}-MigrationsApiUrl`,
+    });
   }
 }
 
-function authMethodOptions(authoriser: apigateway.IAuthorizer): apigateway.MethodOptions {
+function authMethodOptions(authorizer: apigateway.IAuthorizer): apigateway.MethodOptions {
   return {
-    authorizer:        authoriser,
+    authorizer,
     authorizationType: apigateway.AuthorizationType.COGNITO,
     methodResponses: [
       {

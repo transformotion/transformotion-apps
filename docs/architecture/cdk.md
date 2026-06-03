@@ -2,221 +2,138 @@
 
 ## Overview
 
-AWS CDK in TypeScript at `infrastructure/`. Each group of stacks has its own CDK app entrypoint in `infrastructure/bin/`; stacks are never shared across environments.
+AWS CDK is implemented in TypeScript under `infrastructure/`. Each deployable
+owner has its own CDK app entrypoint in `infrastructure/bin/`; stacks are never
+shared across environments and deploy workflows target only the stacks they own.
 
-Account ID: `959516291617`  
+Account ID: `959516291617`
 Region: `ap-southeast-2`
 
 | Entrypoint | Stacks synthesised | Deploy workflow |
 |---|---|---|
-| `infrastructure/bin/platform.ts` | All platform stacks (Network, Auth, AuthApi, PlatformTables, Api, PlatformWs, Storage, GithubActionsRole) | `deploy-platform.yml` |
+| `infrastructure/bin/platform.ts` | `GithubActionsRole`, `Storage`, `Network`, empty legacy decommission placeholders | `deploy-platform.yml` |
+| `infrastructure/bin/launchpad.ts` | `LaunchpadAuth`, `LaunchpadControlPlane` | `deploy-launchpad.yml` |
 | `infrastructure/bin/stock-analyser.ts` | `StockAnalyserTables`, `StockAnalyserWs`, `StockAnalyserApi` | `deploy-stock-analyser.yml` |
 | `infrastructure/bin/budget-tracker.ts` | `BudgetTrackerTables`, `BudgetTrackerWs`, `BudgetTrackerApi` | `deploy-budget-tracker.yml` |
 | `infrastructure/bin/migration-utilities.ts` | `MigrationsApi` | `deploy-migration-utilities.yml` |
-| `infrastructure/bin/launchpad.ts` | `LaunchpadControlPlane` | `deploy-launchpad.yml` |
 
-Each entrypoint synthesises *only* the stacks it owns. App stacks resolve remaining shared substrate resources via CloudFormation imports at deploy time where needed — not via construct references passed through props. After #366, Stock Analyser owns its REST API, WSS, AI proxy, and job-results runtime.
+Platform is neutral substrate only. Launchpad owns the auth domain and
+control-plane. Stock Analyser and Budget Tracker own their app runtimes.
 
-Stacks are deployed by GitHub Actions workflows — see [urls-and-deploy.md](./urls-and-deploy.md) for workflow triggers.
+## Platform stacks
 
----
-
-Auth-domain ownership is mid-migration. After #363, Launchpad owns the live
-auth/control-plane API surface, while Platform still physically owns Cognito,
-auth-domain tables, and rollback routes. That Platform ownership is migration
-debt, not target architecture. #386 owns physical auth-domain re-home into
-Launchpad.
-
-## Stack inventory
-
-### Storage stack
-
-`TransformotionDev-Storage` / `TransformotionProd-Storage`.
-
-Contains the platform-level S3 buckets that are not tied to a specific app. Currently holds:
-
-- `transformotion-backups-{account}` — dedicated bucket for one-shot backups (e.g., pre-migration data exports, configuration snapshots). Versioned, encrypted, with lifecycle rules on the `migration-backups/` prefix transitioning to Infrequent Access after 30 days and expiring after 365 days.
-
-The Storage stack is independent of other stacks (no cross-stack exports or imports).
-
-### Platform stacks
-
-Deployed by `deploy-platform.yml`. Source in `platform/infrastructure/`.
+Deployed by `deploy-platform.yml`. Source: `platform/infrastructure/`.
 
 | Stack name | Class | Contents |
 |---|---|---|
-| `Transformotion{Stage}-Storage` | `StorageStack` | S3 backups bucket `transformotion-backups-{account}` for platform migrations and one-shot backups |
-| `Transformotion{Stage}-Network` | `NetworkStack` | S3 bucket `transformotion-web-{stage}-959516291617`, CloudFront distribution, ACM cert wiring |
-| `Transformotion{Stage}-Auth` | `AuthStack` | Current physical owner of Cognito user pool, three app clients, Cognito groups, Secrets Manager entries for social IDP credentials, and Hosted UI domain; migration debt tracked by #386 |
-| `Transformotion{Stage}-AuthApi` | `AuthApiStack` | Legacy `transformotion-forgot-provider-{stage}` Lambda + its own API Gateway (public — no JWT required on `/auth/lookup-provider`); retained for rollback while Launchpad owns the live route |
-| `Transformotion{Stage}-PlatformTables` | `PlatformTablesStack` | Current physical owner of `platform.users`, `platform.accounts`, `platform.account-members`, `platform.invitations`; auth-domain table re-home tracked by #386 |
-| `Transformotion{Stage}-Api` | `PlatformApiStack` | Shared REST API Gateway (`transformotion-api-{stage}`), Cognito JWT authoriser, platform Lambda functions (see below); control-plane routes retained for rollback while Launchpad owns the live routes |
-| `Transformotion{Stage}-PlatformWs` | `PlatformWsStack` | WebSocket API Gateway `platform-ws-{stage}`, 4 WS Lambdas, `platform.ws-connections-{stage}` table; transitional shared WSS retained during M9 dual-run |
+| `Transformotion-GithubActionsRole` | `GithubActionsRoleStack` | GitHub Actions OIDC deploy roles |
+| `Transformotion{Stage}-Storage` | `StorageStack` | S3 backups bucket `transformotion-backups-{account}` |
+| `Transformotion{Stage}-Network` | `NetworkStack` | Web S3 bucket, CloudFront distribution, ACM certificate wiring |
 
-### Launchpad stacks
+Platform no longer owns Cognito, auth/control-plane APIs, auth-domain tables,
+shared app REST APIs, shared app WSS, or shared AI runtime.
 
-Deployed by `deploy-launchpad.yml`. Source in `apps/launchpad/infrastructure/`.
+During the Platform auth decommission, `infrastructure/bin/platform.ts`
+synthesizes empty templates for legacy stack names (`Auth`, `AuthApi`,
+`PlatformTables`, `Api`, `PlatformWs`). Deploying those empty templates deletes
+the old resources from CloudFormation. They are not live ownership surfaces.
 
-| Stack name | Class | Contents |
-|---|---|---|
-| `Transformotion{Stage}-LaunchpadControlPlane` | `LaunchpadControlPlaneStack` | Launchpad-owned live control-plane API. It currently consumes platform-owned auth-domain resources as migration debt until #386. Owns `GET /health`, live auth lookup, account setup, user profile/preferences, account admin, member management, and invitation routes. |
+## Launchpad stacks
 
-### Stock Analyser stacks
-
-Deployed by `deploy-stock-analyser.yml`. Source in `apps/stock-analyser/infrastructure/`.
+Deployed by `deploy-launchpad.yml`. Source: `apps/launchpad/infrastructure/`.
 
 | Stack name | Class | Contents |
 |---|---|---|
-| `Transformotion{Stage}-StockAnalyserTables` | `StockAnalyserTablesStack` | `stock-analyser.portfolio-{stage}`, `stock-analyser.watchlist-{stage}`, `stock-analyser.analysis-cache-{stage}`, `stock-analyser.job-results-{stage}` |
-| `Transformotion{Stage}-StockAnalyserWs` | `StockAnalyserWsStack` | Stock Analyser-owned WebSocket API, WS Lambdas, and `stock-analyser.ws-connections-{stage}` |
-| `Transformotion{Stage}-StockAnalyserApi` | `StockAnalyserApiStack` | Stock Analyser-owned REST API Gateway, app Lambda functions, Cognito authoriser, and `stock-analyser-ai-proxy-{stage}` |
+| `Transformotion{Stage}-LaunchpadAuth` | `LaunchpadAuthStack` | Cognito User Pool, Hosted UI domain, app clients, groups, Hosted UI customisation, social credential secret placeholders, Launchpad-owned auth-domain tables, and `launchpad-pre-token-generation-{stage}` |
+| `Transformotion{Stage}-LaunchpadControlPlane` | `LaunchpadControlPlaneStack` | Launchpad-owned REST API, Cognito authoriser, and control-plane Lambdas |
 
-### Budget Tracker stacks
+Launchpad owns authentication, token claims, account onboarding, user
+profile/preferences, account administration, member administration, and
+invitations.
 
-Deployed by `deploy-budget-tracker.yml`. Source in `apps/budget-tracker/infrastructure/`.
+### Launchpad Lambdas
 
-| Stack name | Class | Contents |
+| Function name | Handler | Routes / trigger |
 |---|---|---|
-| `Transformotion{Stage}-BudgetTrackerTables` | `BudgetTrackerTablesStack` | `budget-tracker.accounts`, `budget-tracker.transactions`, `budget-tracker.rules`, `budget-tracker.settings` |
-| `Transformotion{Stage}-BudgetTrackerApi` | `BudgetTrackerApiStack` | Budget Tracker-owned REST API Gateway, Lambda functions, and AI proxy runtime |
-| `Transformotion{Stage}-BudgetTrackerWs` | `BudgetTrackerWsStack` | Budget Tracker-owned WebSocket API, WS Lambdas, and `budget-tracker.ws-connections-{stage}` |
-
----
-
-## Lambda functions
-
-### Platform API Lambda functions (`Transformotion{Stage}-Api`)
-
-| Function name | Handler | Routes |
-|---|---|---|
-| `transformotion-account-provisioning-{stage}` | `functions/auth/account-provisioning` | `POST /auth/setup`, `POST /auth/switch` (rollback-only after #363 PR 4; `/auth/switch` is not migrated because no current Launchpad caller uses it) |
-| `transformotion-user-{stage}` | `functions/user` | `GET /api/user/profile`, `PUT /api/user/preferences` (rollback-only after #363 PR 4) |
-| `transformotion-claude-proxy-{stage}` | `functions/claude-proxy` | `POST /api/claude` |
-| `transformotion-accounts-{stage}` | `functions/accounts` | `POST /accounts`, `GET/PUT/DELETE /accounts/{id}`, `GET /accounts/{id}/members`, `DELETE /accounts/{id}/members/{userId}` (rollback-only after #363 PR 5) |
-| `transformotion-invitations-{stage}` | `functions/auth/invitations` | `POST /accounts/{id}/invitations` (rollback-only after #363 PR 5) |
-
-### Launchpad control-plane Lambda functions (`Transformotion{Stage}-LaunchpadControlPlane`)
-
-| Function name | Handler | Routes |
-|---|---|---|
-| `launchpad-forgot-provider-{stage}` | `apps/launchpad/functions/forgot-provider` | `POST /auth/lookup-provider` (public) |
+| `launchpad-forgot-provider-{stage}` | `apps/launchpad/functions/forgot-provider` | `POST /auth/lookup-provider` |
 | `launchpad-account-provisioning-{stage}` | `apps/launchpad/functions/account-provisioning` | `POST /auth/setup` |
 | `launchpad-user-{stage}` | `apps/launchpad/functions/user` | `GET /api/user/profile`, `PUT /api/user/preferences` |
 | `launchpad-accounts-{stage}` | `apps/launchpad/functions/accounts` | `POST /accounts`, `GET/PUT/DELETE /accounts/{id}`, `GET /accounts/{id}/members`, `DELETE /accounts/{id}/members/{userId}` |
 | `launchpad-invitations-{stage}` | `apps/launchpad/functions/invitations` | `POST /accounts/{id}/invitations` |
+| `launchpad-pre-token-generation-{stage}` | `apps/launchpad/functions/pre-token-generation` | Cognito pre-token generation trigger |
 
-### Auth API Lambda functions (`Transformotion{Stage}-AuthApi`)
+## Stock Analyser stacks
 
-| Function name | Handler | Routes |
+Deployed by `deploy-stock-analyser.yml`. Source:
+`apps/stock-analyser/infrastructure/`.
+
+| Stack name | Class | Contents |
 |---|---|---|
-| `transformotion-forgot-provider-{stage}` | `functions/auth/forgot-provider` | `POST /auth/lookup-provider` (public; rollback-only after #363 PR 3) |
+| `Transformotion{Stage}-StockAnalyserTables` | `StockAnalyserTablesStack` | `stock-analyser.portfolio-{stage}`, `stock-analyser.watchlist-{stage}`, `stock-analyser.analysis-cache-{stage}`, `stock-analyser.job-results-{stage}` |
+| `Transformotion{Stage}-StockAnalyserWs` | `StockAnalyserWsStack` | Stock Analyser-owned WebSocket API, WSS Lambdas, and `stock-analyser.ws-connections-{stage}` |
+| `Transformotion{Stage}-StockAnalyserApi` | `StockAnalyserApiStack` | Stock Analyser-owned REST API Gateway, Lambda functions, Cognito authoriser, and `stock-analyser-ai-proxy-{stage}` |
 
-### Pre-token generation Lambda (`Transformotion{Stage}-Auth`)
+## Budget Tracker stacks
 
-| Function name | Handler | Trigger |
+Deployed by `deploy-budget-tracker.yml`. Source:
+`apps/budget-tracker/infrastructure/`.
+
+| Stack name | Class | Contents |
 |---|---|---|
-| `transformotion-pre-token-generation-{stage}` | `functions/auth/pre-token-generation` | Cognito pre-token-generation trigger |
+| `Transformotion{Stage}-BudgetTrackerTables` | `BudgetTrackerTablesStack` | Budget Tracker app data tables |
+| `Transformotion{Stage}-BudgetTrackerWs` | `BudgetTrackerWsStack` | Budget Tracker-owned WebSocket API, WSS Lambdas, and `budget-tracker.ws-connections-{stage}` |
+| `Transformotion{Stage}-BudgetTrackerApi` | `BudgetTrackerApiStack` | Budget Tracker-owned REST API Gateway, Lambda functions, and `budget-tracker-ai-proxy-{stage}` |
 
-### Stock Analyser Lambda functions (`Transformotion{Stage}-StockAnalyserApi`)
+## Migration Utilities
 
-| Function name | Handler | Routes |
+Deployed by `deploy-migration-utilities.yml`. Source:
+`migration-utilities/infrastructure/`.
+
+| Stack name | Class | Contents |
 |---|---|---|
-| `transformotion-portfolio-{stage}` | `apps/stock-analyser/functions/portfolio` | `GET/PUT /portfolio` |
-| `transformotion-watchlist-{stage}` | `apps/stock-analyser/functions/watchlist` | `GET/PUT /watchlist` |
-| `transformotion-analysis-cache-{stage}` | `apps/stock-analyser/functions/analysis-cache` | `GET/PUT/DELETE /analysis-cache/{key}` |
-| `transformotion-cycle-data-{stage}` | `apps/stock-analyser/functions/cycle-data` | `GET /cycle/ohlcv?ticker=` |
-| `transformotion-market-data-{stage}` | `apps/stock-analyser/functions/market-data` | `GET /price/ohlcv?ticker=&range=&interval=` |
-| `stock-analyser-ai-proxy-{stage}` | `apps/stock-analyser/functions/ai-proxy` | `POST /api/claude` |
+| `Transformotion{Stage}-MigrationsApi` | `MigrationsApiStack` | Migration-only API Gateway and Lambda routes |
 
-### Budget Tracker Lambda functions (`Transformotion{Stage}-BudgetTrackerApi`)
+Migration utilities use their own API Gateway and the LaunchpadAuth User Pool
+authoriser. They do not import Platform API/Auth outputs.
 
-| Function name | Handler | Routes |
-|---|---|---|
-| `budget-transactions-handler-{stage}` | Budget Tracker transactions Lambda | `GET/POST/PATCH/DELETE /api/budget/v1/transactions` |
-| `budget-rules-handler-{stage}` | Budget Tracker rules Lambda | `GET/POST/PATCH/DELETE /api/budget/v1/rules` |
-| `budget-settings-handler-{stage}` | Budget Tracker settings Lambda | `GET/PATCH /api/budget/v1/settings` |
-| `budget-ai-handler-{stage}` | Budget Tracker unified AI Lambda | `POST /api/budget/v1/ai/review`, `POST /api/budget/v1/ai/csv-analysis` |
-| `budget-tracker-ai-proxy-{stage}` | `apps/budget-tracker/functions/ai-proxy` | Invoked synchronously by `budget-ai-handler-{stage}` |
-| `budget-data-handler-{stage}` | Budget Tracker budget data Lambda | `GET/PATCH /api/budget/v1/budget-data` |
-| `budget-export-handler-{stage}` | Budget Tracker export Lambda | `GET /api/budget/v1/business-export` |
+## CloudFormation exports
 
-> **Current state after #367:** Budget Tracker owns its REST API Gateway and AI runtime. `budget-ai-handler-{stage}` invokes `budget-tracker-ai-proxy-{stage}` synchronously for Anthropic calls and continues to own review orchestration, `budget-tracker.ai-jobs-{stage}`, and BT WSS streaming. The legacy platform `claude-proxy` remains deployed only for rollback/decommission.
-
-### Migration Utilities Lambda functions (`MigrationsApi`)
-
-| Function name | Handler | Routes |
-|---|---|---|
-| `migration-budget-tracker-transactions-{stage}` | `migration-utilities/budget-tracker/transactions` | `POST /api/migrations/budget-tracker/transactions/import` |
-| `migration-budget-tracker-budget-data-{stage}` | `migration-utilities/budget-tracker/budget-data` | `POST /api/migrations/budget-tracker/budget-data/run` |
-
-### Platform WS Lambda functions (`Transformotion{Stage}-PlatformWs`)
-
-API Gateway v2 WebSocket — does not use `CognitoUserPoolsAuthorizer`; uses a custom Lambda authoriser instead. Shared by all apps.
-
-| Function name | Handler | Route / trigger |
-|---|---|---|
-| `platform-ws-authorizer-{stage}` | `platform/functions/ws-authorizer` | Custom Lambda authoriser for `$connect`; validates Cognito ID token from `?token=` query string; checks `accounts[appName]` membership; `?app=` selects app scope |
-| `platform-ws-connect-{stage}` | `platform/functions/ws-connect` | `$connect` route — writes `{ connectionId, userId, accountId, app, expiresAt }` to `platform.ws-connections-{stage}` |
-| `platform-ws-disconnect-{stage}` | `platform/functions/ws-disconnect` | `$disconnect` route — deletes connection record |
-| `platform-ws-default-{stage}` | `platform/functions/ws-default` | `$default` route — handles `{ action: 'init' }` handshake, responds with `{ type: 'connected', connectionId }`; has `execute-api:ManageConnections` IAM grant |
-
----
-
-## Cross-stack dependencies
-
-### Platform-internal construct passing (within `bin/platform.ts`)
-
-Stacks in the same entrypoint share constructs via props as usual. CDK resolves these as `Fn::ImportValue` in the CloudFormation template.
-
-| Consumer stack | Receives from | Props |
-|---|---|---|
-| `AuthApiStack` | `AuthStack` | `userPoolId` (string — avoids construct reference) |
-| `PlatformApiStack` | `AuthStack` | `userPool` (construct) |
-| `PlatformApiStack` | `PlatformWsStack` | `wsApiEndpoint`, `wsApiId` (strings — for claude-proxy WSS push permission) |
-| `PlatformWsStack` | `AuthStack` | `userPool` (construct — for custom authoriser JWKS validation) |
-
-### CF export pattern — cross-entrypoint platform substrate
-
-App stacks may resolve shared platform substrate via CloudFormation exports at deploy time. After #366 and #367, `StockAnalyserApiStack` and `BudgetTrackerApiStack` no longer import `PlatformApiStack` REST resources; they import Cognito user pool identity from `AuthStack`, which is current-state migration debt until #386 re-homes the auth domain. `MigrationsApiStack` still imports shared Platform API REST resources for migration utility routes. No construct references cross entrypoint boundaries.
-
-`AuthStack`, `PlatformApiStack`, `PlatformWsStack`, and app stacks emit these exports:
+Cross-entrypoint references use CloudFormation exports via `Fn.importValue`.
+Constructs are not passed across entrypoint boundaries.
 
 | Export name | Produced by | Consumed by |
 |---|---|---|
-| `Transformotion-{stage}-UserPoolId` | `AuthStack` | SA/BT app API/WSS stacks, Launchpad control-plane stack, and migration utilities where Cognito auth is required until #386 re-homes auth-domain ownership |
-| `Transformotion-{stage}-RestApiId` | `PlatformApiStack` | MU only — `RestApi.fromRestApiAttributes`; SA/BT no longer import after #366/#367 |
-| `Transformotion-{stage}-RestApiRootResourceId` | `PlatformApiStack` | MU only — `RestApi.fromRestApiAttributes`; SA/BT no longer import after #366/#367 |
-| `Transformotion-{stage}-AuthorizerId` | `PlatformApiStack` | MU only — JWT authoriser on migration utility routes; SA/BT own API authorisers after #366/#367 |
-| `Transformotion-{stage}-ApiResourceId` | `PlatformApiStack` | MU only — `Resource.fromResourceAttributes` to mount under `/api/` |
-| `PlatformWs-{stage}-WsApiId` | `PlatformWsStack` | Transitional platform WSS consumers; SA and BT no longer consume after #366/#365 |
-| `StockAnalyserWs-{stage}-Url` | `StockAnalyserWsStack` | Deploy workflow injects `NEXT_PUBLIC_SA_WSS_URL` |
-| `StockAnalyserApi-{stage}-Url` | `StockAnalyserApiStack` | Deploy workflow injects `NEXT_PUBLIC_API_URL` |
-| `BudgetTrackerApi-{stage}-Url` | `BudgetTrackerApiStack` | Deploy workflow injects `NEXT_PUBLIC_API_URL` |
-
-The rule: cross-entrypoint references always go through CF exports (`Fn.importValue`), never through L2 construct passing. This allows each entrypoint to synthesise independently — no platform stacks are instantiated in app entrypoints.
-
----
+| `Transformotion-{stage}-LaunchpadAuth-UserPoolId` | `LaunchpadAuthStack` | Launchpad, Stock Analyser, Budget Tracker, migration utilities |
+| `Transformotion-{stage}-LaunchpadAuth-UserPoolArn` | `LaunchpadAuthStack` | Launchpad control-plane and app infrastructure |
+| `Transformotion-{stage}-LaunchpadAuth-LaunchpadAppClientId` | `LaunchpadAuthStack` | Launchpad frontend env injection |
+| `Transformotion-{stage}-LaunchpadAuth-StockAnalyserAppClientId` | `LaunchpadAuthStack` | Stock Analyser frontend env injection |
+| `Transformotion-{stage}-LaunchpadAuth-BudgetTrackerAppClientId` | `LaunchpadAuthStack` | Budget Tracker frontend env injection |
+| `Transformotion-{stage}-LaunchpadAuth-CognitoDomain` | `LaunchpadAuthStack` | Frontend Hosted UI env injection |
+| `Transformotion-{stage}-LaunchpadAuth-UsersTableName` | `LaunchpadAuthStack` | Launchpad control-plane stack |
+| `Transformotion-{stage}-LaunchpadAuth-AccountsTableName` | `LaunchpadAuthStack` | Launchpad control-plane stack |
+| `Transformotion-{stage}-LaunchpadAuth-AccountMembersTableName` | `LaunchpadAuthStack` | Launchpad control-plane stack |
+| `Transformotion-{stage}-LaunchpadAuth-InvitationsTableName` | `LaunchpadAuthStack` | Launchpad control-plane stack |
+| `Transformotion-{stage}-LaunchpadAuth-RateLimitsTableName` | `LaunchpadAuthStack` | Launchpad control-plane stack |
+| `Transformotion-{stage}-LaunchpadControlPlaneApiUrl` | `LaunchpadControlPlaneStack` | Launchpad frontend env injection |
+| `StockAnalyserApi-{stage}-Url` | `StockAnalyserApiStack` | Stock Analyser frontend env injection |
+| `StockAnalyserWs-{stage}-Url` | `StockAnalyserWsStack` | Stock Analyser frontend env injection |
+| `BudgetTrackerApi-{stage}-Url` | `BudgetTrackerApiStack` | Budget Tracker frontend env injection |
+| `BudgetTrackerWs-{stage}-Url` | `BudgetTrackerWsStack` | Budget Tracker frontend env injection |
 
 ## Deploy ordering
 
-`deploy-platform.yml` sequences its CDK steps explicitly to avoid CloudFormation dependency conflicts:
+`deploy-platform.yml` deploys platform substrate and the empty legacy
+decommission placeholders:
 
-1. **Step 1 - GithubActionsRole** - account-level stack; deployed first as a one-off.
-2. **Step 2 - PlatformTables** - deployed in isolation before Auth, to release any stale export dependencies.
-3. **Step 3 - Main platform stacks** - deploys `Storage`, `Network`, `Auth`, `AuthApi`, `Api` together. CDK runs independent stacks in parallel within this step. `AuthStack` emits the Cognito user pool export that app stacks consume during the #363/#386 transition, and `PlatformApiStack` emits legacy/shared REST exports still used by migration utilities and rollback/decommission paths.
-4. **Step 4 - PlatformWs** - deployed after `Api`; retained during M9 dual-run until app-owned WSS cutovers and decommissioning.
+1. `Transformotion-GithubActionsRole`
+2. `Transformotion{Stage}-Storage`
+3. `Transformotion{Stage}-Network`
+4. Empty templates for the old `Auth`, `AuthApi`, `PlatformTables`, `Api`, and
+   `PlatformWs` stack names, to remove former resources
 
-App stacks (`deploy-stock-analyser.yml`, `deploy-budget-tracker.yml`, `deploy-migration-utilities.yml`) consume the CF exports produced in Step 3/4 above where they still have transitional dependencies. Budget Tracker owns `Transformotion{Stage}-BudgetTrackerWs`, `Transformotion{Stage}-BudgetTrackerApi`, and `budget-tracker-ai-proxy-{stage}` after #367 and no longer uses platform REST/WSS/Claude runtime for live Budget Tracker flow. Stock Analyser owns `Transformotion{Stage}-StockAnalyserWs`, `Transformotion{Stage}-StockAnalyserApi`, and `stock-analyser-ai-proxy-{stage}` after #366, and no longer uses platform REST/WSS/Claude runtime for live AI flow. On first-ever deploy, the platform auth stack must exist before app stacks until #386 re-homes the auth domain. Platform deploys do not cascade into app workflows; each app/utility workflow is independently triggered and independently deploys only its own stacks.
-
----
-
-## Stack naming convention
-
-All stacks follow the pattern `Transformotion{Stage}-{Name}` where `Stage` is `Dev` or `Prod` (capitalised).
-
-CDK logical IDs within stacks use PascalCase resource names. Renaming a logical ID forces CloudFormation to replace the resource — avoid unless intentional.
-
----
+Launchpad, Stock Analyser, Budget Tracker, and migration utilities deploy
+independently through their own workflows. Platform deploys must not orchestrate
+application, auth-domain, control-plane, WSS, REST, or AI runtime resources.
 
 ## Environment variables injected into Lambda functions
 
@@ -224,170 +141,61 @@ Common environment variables available to all Lambda functions:
 
 | Variable | Value |
 |---|---|
-| `REGION` | `ap-southeast-2` (via CDK `this.region`) |
+| `REGION` | `ap-southeast-2` where explicitly set by CDK |
 | `AWS_REGION` | Set automatically by Lambda runtime |
 
-Control-plane and platform Lambda environment variables:
+Launchpad control-plane and auth-domain variables:
 
 | Variable | Lambda | Value |
 |---|---|---|
-| `ACCOUNTS_TABLE` | Launchpad account-provisioning, Launchpad accounts, Launchpad invitations, pre-token-generation | `platform.accounts-{stage}` |
-| `ACCOUNT_MEMBERS_TABLE` | Launchpad account-provisioning, Launchpad accounts, pre-token-generation | `platform.account-members-{stage}` |
-| `INVITATIONS_TABLE` | Launchpad invitations | `platform.invitations-{stage}` |
-| `USERS_TABLE` | Launchpad user | `platform.users-{stage}` |
-| `CACHE_TABLE` | claude-proxy | `stock-analyser.analysis-cache-{stage}` |
-| `ANTHROPIC_SECRET_NAME` | claude-proxy | `{stage}/anthropic/api-key` (Secrets Manager) |
-| `WS_API_ENDPOINT` | claude-proxy | `https://{wsApiId}.execute-api.{region}.amazonaws.com/{stage}` — management endpoint for WSS push |
-| `USER_POOL_ID` | Launchpad account-provisioning, pre-token-generation | Cognito user pool ID |
-| `APP_CLIENT_STOCK_ANALYSER` / `APP_CLIENT_BUDGET_TRACKER` | Launchpad account-provisioning | Cognito app client IDs imported from `AuthStack` outputs |
-| `APP_SLUGS` | Launchpad account-provisioning | App slugs from `platform/config/app-registry.json` |
-| `ACCOUNTS_TABLE` | pre-token-generation | `platform.accounts-{stage}` (read for appSlug resolution) |
+| `USERS_TABLE` | `launchpad-user-{stage}` | `launchpad-users-{stage}` |
+| `ACCOUNTS_TABLE` | Launchpad account-provisioning, accounts, invitations, pre-token generation | `launchpad-accounts-{stage}` |
+| `ACCOUNT_MEMBERS_TABLE` | Launchpad account-provisioning, accounts, pre-token generation | `launchpad-account-members-{stage}` |
+| `INVITATIONS_TABLE` | `launchpad-invitations-{stage}` | `launchpad-invitations-{stage}` |
+| `RATE_LIMIT_TABLE` | `launchpad-forgot-provider-{stage}` | `launchpad-rate-limits-{stage}` |
+| `USER_POOL_ID` | Launchpad control-plane/auth Lambdas | LaunchpadAuth User Pool ID |
+| `APP_CLIENT_STOCK_ANALYSER` / `APP_CLIENT_BUDGET_TRACKER` | `launchpad-account-provisioning-{stage}` | LaunchpadAuth app client IDs |
+| `APP_REGISTRY` | `launchpad-pre-token-generation-{stage}` | App registry JSON from `platform/config/app-registry.json` |
 
-Platform WS Lambda environment variables:
-
-| Variable | Lambda | Value |
-|---|---|---|
-| `COGNITO_USER_POOL_ID` | `platform-ws-authorizer-{stage}` | Cognito user pool ID (for JWKS verification) |
-| `PERMITTED_APPS` | `platform-ws-authorizer-{stage}` | `budget-tracker,stock-analyser` (comma-separated allowlist) |
-| `APP_NAME` | `platform-ws-authorizer-{stage}` | Default app slug when `?app=` is absent (currently `budget-tracker`) |
-| `CONNECTIONS_TABLE` | `platform-ws-connect-{stage}`, `platform-ws-disconnect-{stage}` | `platform.ws-connections-{stage}` |
-
-Stock Analyser WS Lambda environment variables:
-
-| Variable | Lambda | Value |
-|---|---|---|
-| `COGNITO_USER_POOL_ID` | `stock-analyser-ws-authorizer-{stage}` | Cognito user pool ID (for JWKS verification) |
-| `APP_NAME` | `stock-analyser-ws-authorizer-{stage}` | `stock-analyser` |
-| `CONNECTIONS_TABLE` | `stock-analyser-ws-connect-{stage}`, `stock-analyser-ws-disconnect-{stage}` | `stock-analyser.ws-connections-{stage}` |
-
-Stock Analyser AI proxy environment variables:
-
-| Variable | Lambda | Value |
-|---|---|---|
-| `ANTHROPIC_SECRET_NAME` | `stock-analyser-ai-proxy-{stage}` | `{stage}/anthropic/api-key` |
-| `JOB_RESULTS_TABLE` | `stock-analyser-ai-proxy-{stage}` | `stock-analyser.job-results-{stage}` |
-| `WS_API_ENDPOINT` | `stock-analyser-ai-proxy-{stage}` | Stock Analyser-owned WSS management endpoint |
-
-Budget Tracker WS Lambda environment variables:
-
-| Variable | Lambda | Value |
-|---|---|---|
-| `COGNITO_USER_POOL_ID` | `budget-tracker-ws-authorizer-{stage}` | Cognito user pool ID (for JWKS verification) |
-| `APP_NAME` | `budget-tracker-ws-authorizer-{stage}` | `budget-tracker` |
-| `CONNECTIONS_TABLE` | `budget-tracker-ws-connect-{stage}`, `budget-tracker-ws-disconnect-{stage}` | `budget-tracker.ws-connections-{stage}` |
-
-Budget Tracker API Lambda WSS environment variables:
-
-| Variable | Lambda | Value |
-|---|---|---|
-| `WS_CONNECTIONS_TABLE` | `budget-ai-handler-{stage}` | `budget-tracker.ws-connections-{stage}` |
-| `WS_API_ID` | `budget-ai-handler-{stage}` | Budget Tracker-owned WebSocket API ID from `BudgetTrackerWsStack` |
-| `WS_STAGE` | `budget-ai-handler-{stage}` | `dev` or `prod` |
-
-Budget Tracker AI proxy environment variables:
-
-| Variable | Lambda | Value |
-|---|---|---|
-| `ANTHROPIC_SECRET_NAME` | `budget-tracker-ai-proxy-{stage}` | `{stage}/anthropic/api-key` |
-| `CLAUDE_PROXY_FUNCTION_NAME` | `budget-ai-handler-{stage}` | `budget-tracker-ai-proxy-{stage}` compatibility env name; points at the app-owned AI proxy after #367 |
-
----
+App-owned REST/WSS/AI environment variables are documented in each app's
+`AGENTS.md`/`CLAUDE.md` and stack source.
 
 ## Removal policies
 
 | Stage | Tables / User Pool | Other resources |
 |---|---|---|
-| `dev` | `DESTROY` (data not permanent) | `DESTROY` with `autoDeleteObjects` on S3 |
-| `prod` | `RETAIN` (data is permanent) | `RETAIN` on user pool, Secrets Manager entries |
+| `dev` | `DESTROY` for app/auth-domain data unless a stack states otherwise | `DESTROY` with `autoDeleteObjects` only where the resource is explicitly ephemeral |
+| `prod` | `RETAIN` for durable user/data resources | `RETAIN` where deleting data would be unsafe |
 
-Secrets Manager entries for social IDP credentials are always `RETAIN` in both environments (credentials should not be destroyed if the stack is torn down).
-
----
+Secrets Manager entries for social IdP credentials are retained.
 
 ## GitHub Actions deploy IAM
 
-M9 deploy isolation uses scoped GitHub Actions deploy roles for the path-filtered deploy workflows. Source: `platform/infrastructure/github-actions-role-stack.ts`.
-
-The legacy shared `GitHubActionsDeployRole` remains available temporarily as rollback. `deploy-platform.yml` still uses it only for the account-level `Transformotion-GithubActionsRole` bootstrap step so newly defined deploy roles can be created before the same workflow assumes `TransformotionPlatformDeployRole`.
-
-**OIDC trust:** Federated trust from `token.actions.githubusercontent.com`, scoped to `repo:transformotion/transformotion-apps:*`.
-
-**Deploy roles:**
+M9 deploy isolation uses scoped GitHub Actions deploy roles. Source:
+`platform/infrastructure/github-actions-role-stack.ts`.
 
 | Role | Workflow | Primary ownership scope |
 |---|---|---|
-| `TransformotionPlatformDeployRole` | `deploy-platform.yml` | Platform stacks: storage, network, and transitional auth/API/WSS rollback resources until #386/#372 remove them |
-| `TransformotionLaunchpadDeployRole` | `deploy-launchpad.yml` | Launchpad control-plane stack and frontend deploy |
+| `TransformotionPlatformDeployRole` | `deploy-platform.yml` | Platform substrate stacks |
+| `TransformotionLaunchpadDeployRole` | `deploy-launchpad.yml` | All `Transformotion{Stage}-Launchpad*` stacks and Launchpad frontend deploy |
 | `TransformotionStockAnalyserDeployRole` | `deploy-stock-analyser.yml` | Stock Analyser stacks and `/stock-analyser` web assets |
 | `TransformotionBudgetTrackerDeployRole` | `deploy-budget-tracker.yml` | Budget Tracker stacks and `/budget-tracker` web assets |
 | `TransformotionMigrationUtilitiesDeployRole` | `deploy-migration-utilities.yml` | Migration utilities stacks |
-| `GitHubActionsDeployRole` | `cd.yml`; platform role bootstrap step | Legacy shared rollback role retained during M9 transition |
-
-**Current policy shape:** roles are scoped by owned CloudFormation stack name patterns where practical, retain read access to Transformotion stack outputs for transitional dependencies, can assume CDK bootstrap roles, and keep CloudFront/Cognito smoke-test permissions needed by current deploy verification. The policies are intentionally pragmatic rather than final least privilege.
-
-Cognito app clients still live in `AuthStack` as current-state migration debt. #386 owns any physical re-home, recreation, or rotation decision.
-
----
+| `GitHubActionsDeployRole` | `cd.yml`; platform role bootstrap step | Legacy broad deploy role retained for bootstrap/rollback |
 
 ## CI checks
-### Lambda categories
 
-There are three categories of Lambda in this repo. Category determines authorization pattern and CI check applicability.
-
-**App handlers** — Lambdas serving authenticated user requests for a specific app. Located in `apps/*/functions/` (per-app) or `platform/functions/claude-proxy/` (transitional platform multi-app runtime). Subject to the documented authorization pattern: `requireAppAccess` (or `requireAnyAppAccess`) at the top, then `requireAccountAccess` before account-scoped data operations. CI enforces this pattern.
-
-**Auth infrastructure and control-plane handlers** — Lambdas that produce, verify, recover, or administer identity/account-related state. Located in `platform/functions/auth/` for current physical auth ownership and rollback handlers, and `apps/launchpad/functions/` for Launchpad-owned live control-plane handlers. Examples: `pre-token-generation`, Launchpad `forgot-provider`, Launchpad `account-provisioning`, Launchpad `user`, Launchpad `accounts`, and Launchpad `invitations`. Each has a bespoke authorization pattern (some unauthenticated, some `withAuthOnly`, some inline owner/member checks, etc.). Not subject to the CI handler-authz check. #386 owns the physical auth-domain re-home away from platform.
-
-**Platform rollback/control-plane debt** - legacy platform Lambdas retained after #363 for rollback while Launchpad owns the live control-plane routes. Examples include `platform/functions/accounts/` and `platform/functions/user/`. Not subject to the CI handler-authz check. #386 owns the physical auth-domain re-home and cleanup away from platform.
-
----
-
-Two grep-based checks run in the `Typecheck & Lint` CI job on every PR. They enforce the handler authorization patterns described in [auth.md](./auth.md).
-
-### `check-no-new-require-group.sh`
-
-Fails if any handler file calls `requireGroup`. `requireGroup` is deprecated — all handlers were migrated to `requireAppAccess` / `requireAccountAccess` in sub-phase 7e. Zero usages is the expected baseline.
-
-Removal: delete this script when 7e-cleanup removes `requireGroup` from the middleware package entirely.
-
-### `check-handler-authz-pattern.sh`
-
-Fails if any handler file performs a DynamoDB operation (`PutItemCommand`, `GetItemCommand`, `QueryCommand`, `ScanCommand`, `UpdateItemCommand`, `DeleteItemCommand`, `TransactWriteCommand`, `BatchGetCommand`, `BatchWriteCommand`) without also calling at least one of `requireAppAccess`, `requireAnyAppAccess`, `requireAccountAccess`, `requireAccountOwner`, or `requireSiteAdmin`.
-
-This is a coarse file-level check — it confirms authorization helpers are present; it does not verify call ordering.
-
-### Checked paths
-
-Both checks cover the same scope:
-
-- `apps/*/functions/` — app-specific handlers (Budget Tracker, Stock Analyser)
-- `platform/functions/claude-proxy/` — transitional platform multi-app handler
-
-### Exempt paths
-
-| Path | Category | Reason |
-|---|---|---|
-| `functions/auth/pre-token-generation/` | auth-infrastructure | Cognito trigger (`PreTokenGenerationTriggerEvent`), not API Gateway — reads DynamoDB to build JWT claims, cannot consume them |
-| `apps/launchpad/functions/forgot-provider/` | auth-infrastructure | Public endpoint; DynamoDB used for rate-limiting only, no JWT context |
-| `apps/launchpad/functions/account-provisioning/` | auth-infrastructure | First-login route (`withAuthOnly`); user is authenticated but may not have app claims yet — `requireAppAccess` is inapplicable by design |
-| `apps/launchpad/functions/user/` | auth-infrastructure | User profile/preferences routes (`withAuthOnly`); user owns their own profile data |
-| `apps/launchpad/functions/accounts/` | control-plane | Account administration routes; performs inline DynamoDB membership/owner checks because it is the accounts system |
-| `apps/launchpad/functions/invitations/` | control-plane | Invitation route; performs inline DynamoDB owner check before creating invitation |
-| `functions/auth/forgot-provider/` | auth-infrastructure | Legacy rollback copy of the public lookup-provider endpoint |
-| `functions/auth/account-provisioning/` | auth-infrastructure | Legacy rollback copy of first-login and superseded switch routes |
-| `functions/user/` | auth-infrastructure | Legacy rollback copy of user profile/preferences routes |
-| `functions/accounts/` | platform-infrastructure | Legacy rollback copy of account administration routes |
-| `functions/auth/invitations/` | auth-infrastructure | Legacy rollback copy of invitation route |
-
----
+The handler authorization CI checks scan app-owned Lambda handlers under
+`apps/*/functions/`. Launchpad control-plane/auth-domain handlers have bespoke
+authorization patterns and are explicitly exempted where the generic app-data
+authorization check is not applicable.
 
 ## Adding a new app's CDK stacks
 
-When a new app is added to the platform:
-
-1. Create `apps/{app-name}/infrastructure/{app-name}-tables-stack.ts` — DynamoDB tables
-2. Create `apps/{app-name}/infrastructure/{app-name}-api-stack.ts` — app-owned API Gateway, Lambda functions, routes, and authorizer. Do not mount new app runtime routes on the shared platform API Gateway.
-3. Create `infrastructure/bin/{app-name}.ts` containing only the new app's stacks. Use `cdk.Fn.importValue` only for documented transitional platform exports that the app still needs; new runtime ownership should be app-owned, including REST and WebSocket resources.
-4. Create `.github/workflows/deploy-{app-name}.yml` with `--app 'bin/{app-name}.ts'` on all CDK deploy steps.
-5. Add a Cognito app client for the new app in `auth-stack.ts`.
-6. Update `docs/architecture/cdk.md` (this file), `docs/architecture/urls-and-deploy.md`, and `CONTRIBUTING.md §3.4` with the new stacks.
+1. Create `apps/{app-name}/infrastructure/{app-name}-tables-stack.ts` for app-owned tables where needed.
+2. Create `apps/{app-name}/infrastructure/{app-name}-api-stack.ts` for the app-owned API Gateway, routes, Lambdas, and authorizer.
+3. Create WSS and AI runtime stacks/packages only if the app needs those capabilities.
+4. Create `infrastructure/bin/{app-name}.ts` containing only the new app's stacks.
+5. Create `.github/workflows/deploy-{app-name}.yml` with explicit `--app 'bin/{app-name}.ts'` CDK commands.
+6. Add the new app to `platform/config/app-registry.json` if it participates in Launchpad app access claims.
+7. Update architecture docs and `MONOREPO.md` in the same PR.

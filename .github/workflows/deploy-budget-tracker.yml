@@ -6,6 +6,7 @@ on:
     paths:
       - 'apps/budget-tracker/**'
       - 'infrastructure/bin/budget-tracker.ts'
+      - 'infrastructure/lib/auth-domain-exports.ts'
       - 'packages/api-client/**'
       - 'packages/cache/**'
       - 'packages/data-access/**'

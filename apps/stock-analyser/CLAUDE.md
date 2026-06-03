@@ -1,8 +1,11 @@
 # Stock Analyser - Claude Code compatibility mirror
 
-`AGENTS.md` is the authoritative Stock Analyser agent guide. This `CLAUDE.md` file is maintained for Claude Code compatibility and must remain semantically equivalent to `AGENTS.md`. Changes to one without the other are governance drift.
+`apps/stock-analyser/AGENTS.md` is the authoritative Stock Analyser agent guide.
+This file is maintained for Claude Code compatibility and must remain
+semantically equivalent. Any instruction added, removed, or modified in
+`AGENTS.md` must be reflected here in the same PR.
 
-Read `apps/stock-analyser/AGENTS.md` before any Stock Analyser work. Read the root `AGENTS.md` for branching strategy, architecture governance, and operating mode.
+Read this file before any Stock Analyser work. Read the root `AGENTS.md` for branching strategy, architecture governance, and operating mode.
 
 ## Overview
 
@@ -43,7 +46,7 @@ Source: `apps/stock-analyser/infrastructure/`
 
 ## Lambda functions
 
-Current state after #366: Stock Analyser owns its REST API Gateway, AI proxy runtime, WSS completion path, and job-results table. Cognito remains platform-owned until #363. Platform REST/WSS/Claude runtime remains deployed only for rollback and #372 decommissioning.
+Current state after #366/#386: Stock Analyser owns its REST API Gateway, AI proxy runtime, WSS completion path, and job-results table. Authentication is issued by LaunchpadAuth. Platform REST/WSS/Claude runtime remains deployed only as decommission debt.
 
 | Lambda | Source | Routes |
 |---|---|---|
@@ -99,8 +102,6 @@ The `useClaude<T>()` hook handles the full async request cycle via Stock Analyse
 5. Read result from `/analysis-cache/job-{jobId}` and return typed result
 
 See `apps/stock-analyser/docs/claude-ai-pattern.md` for usage examples and configuration.
-
-`NEXT_PUBLIC_PLATFORM_WSS_URL` is retained only as rollback fallback while platform WSS remains deployed for #372 decommissioning.
 
 ### Adding a new AI feature
 
@@ -177,7 +178,6 @@ Required env vars marked `[REQUIRED]` in `.env.example` must be set before the d
 | `NEXT_PUBLIC_COGNITO_DOMAIN` | Hosted UI domain |
 | `NEXT_PUBLIC_RUNTIME_PROFILE` | `mock` (default; local development) or `live` (deployed environments). Determines defaults for auth, data, AI, and future concerns. See root `AGENTS.md` for the design map. |
 | `NEXT_PUBLIC_API_URL` | Stock Analyser-owned API Gateway URL from `Transformotion{Stage}-StockAnalyserApi` |
-| `NEXT_PUBLIC_PLATFORM_WSS_URL` | Rollback fallback while `PlatformWsStack` remains deployed for #372 decommissioning |
 | `NEXT_PUBLIC_SA_WSS_URL` | Stock Analyser-owned WebSocket URL from `Transformotion{Stage}-StockAnalyserWs`; live AI WSS endpoint after #366 |
 
 **Cognito client variable rebind:** The GitHub Actions variable `NEXT_PUBLIC_STOCK_ANALYSER_COGNITO_CLIENT_ID` is mapped to the generic runtime env var `NEXT_PUBLIC_COGNITO_CLIENT_ID` in the deploy workflow's env block. This allows each app to have its own Cognito App Client (established in sub-phase 7b.5-alpha) while the runtime code (`@transformotion/auth-client`) reads a single generic name. Local development reads `NEXT_PUBLIC_COGNITO_CLIENT_ID` directly from `.env.local`.

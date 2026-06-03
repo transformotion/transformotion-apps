@@ -1,4 +1,4 @@
-name: Deploy — Platform Infrastructure
+name: Deploy - Platform Infrastructure
 
 on:
   push:
@@ -6,7 +6,6 @@ on:
     paths:
       - 'platform/infrastructure/**'
       - 'infrastructure/bin/platform.ts'
-      - 'platform/functions/**'
   workflow_dispatch:
     inputs:
       target:
@@ -31,7 +30,7 @@ env:
 
 jobs:
   deploy-dev:
-    name: Platform → Dev
+    name: Platform -> Dev
     runs-on: ubuntu-latest
     if: github.ref_name == 'develop' || (github.event_name == 'workflow_dispatch' && inputs.target == 'dev')
     environment: dev
@@ -55,7 +54,7 @@ jobs:
           role-to-assume: ${{ env.LEGACY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: CDK Deploy — GithubActionsRole (account-level, deploy once)
+      - name: CDK Deploy - GithubActionsRole (account-level, deploy once)
         working-directory: infrastructure
         run: pnpm exec cdk deploy --app 'npx ts-node --prefer-ts-exts bin/platform.ts' 'Transformotion-GithubActionsRole' --require-approval never
 
@@ -65,20 +64,16 @@ jobs:
           role-to-assume: ${{ env.ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: CDK Deploy — PlatformTables (dev)
+      - name: CDK Deploy - Platform substrate (dev)
         working-directory: infrastructure
-        run: pnpm exec cdk deploy --app 'npx ts-node --prefer-ts-exts bin/platform.ts' 'TransformotionDev-PlatformTables' --require-approval never
+        run: pnpm exec cdk deploy --app 'npx ts-node --prefer-ts-exts bin/platform.ts' 'TransformotionDev-Storage' 'TransformotionDev-Network' --require-approval never
 
-      - name: CDK Deploy — Platform stacks (dev)
+      - name: CDK Deploy - Decommission legacy platform stacks (dev)
         working-directory: infrastructure
-        run: pnpm exec cdk deploy --app 'npx ts-node --prefer-ts-exts bin/platform.ts' 'TransformotionDev-Storage' 'TransformotionDev-Network' 'TransformotionDev-Auth' 'TransformotionDev-AuthApi' 'TransformotionDev-Api' --require-approval never
-
-      - name: CDK Deploy — PlatformWs (dev)
-        working-directory: infrastructure
-        run: pnpm exec cdk deploy --app 'npx ts-node --prefer-ts-exts bin/platform.ts' 'TransformotionDev-PlatformWs' --require-approval never
+        run: pnpm exec cdk deploy --app 'npx ts-node --prefer-ts-exts bin/platform.ts' 'TransformotionDev-Auth' 'TransformotionDev-AuthApi' 'TransformotionDev-PlatformTables' 'TransformotionDev-Api' 'TransformotionDev-PlatformWs' --require-approval never
 
   deploy-prod:
-    name: Platform → Prod
+    name: Platform -> Prod
     runs-on: ubuntu-latest
     if: github.ref_name == 'main' || (github.event_name == 'workflow_dispatch' && inputs.target == 'prod')
     environment: prod
@@ -102,7 +97,7 @@ jobs:
           role-to-assume: ${{ env.LEGACY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: CDK Deploy — GithubActionsRole (account-level, deploy once)
+      - name: CDK Deploy - GithubActionsRole (account-level, deploy once)
         working-directory: infrastructure
         run: pnpm exec cdk deploy --app 'npx ts-node --prefer-ts-exts bin/platform.ts' 'Transformotion-GithubActionsRole' --require-approval never
 
@@ -112,14 +107,10 @@ jobs:
           role-to-assume: ${{ env.ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: CDK Deploy — PlatformTables (prod)
+      - name: CDK Deploy - Platform substrate (prod)
         working-directory: infrastructure
-        run: pnpm exec cdk deploy --app 'npx ts-node --prefer-ts-exts bin/platform.ts' 'TransformotionProd-PlatformTables' --require-approval never
+        run: pnpm exec cdk deploy --app 'npx ts-node --prefer-ts-exts bin/platform.ts' 'TransformotionProd-Storage' 'TransformotionProd-Network' --require-approval never
 
-      - name: CDK Deploy — Platform stacks (prod)
+      - name: CDK Deploy - Decommission legacy platform stacks (prod)
         working-directory: infrastructure
-        run: pnpm exec cdk deploy --app 'npx ts-node --prefer-ts-exts bin/platform.ts' 'TransformotionProd-Storage' 'TransformotionProd-Network' 'TransformotionProd-Auth' 'TransformotionProd-AuthApi' 'TransformotionProd-Api' --require-approval never
-
-      - name: CDK Deploy — PlatformWs (prod)
-        working-directory: infrastructure
-        run: pnpm exec cdk deploy --app 'npx ts-node --prefer-ts-exts bin/platform.ts' 'TransformotionProd-PlatformWs' --require-approval never
+        run: pnpm exec cdk deploy --app 'npx ts-node --prefer-ts-exts bin/platform.ts' 'TransformotionProd-Auth' 'TransformotionProd-AuthApi' 'TransformotionProd-PlatformTables' 'TransformotionProd-Api' 'TransformotionProd-PlatformWs' --require-approval never

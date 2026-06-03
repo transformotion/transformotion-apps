@@ -7,16 +7,6 @@
 #
 # Checked paths:
 #   apps/                 app-specific handlers (Budget Tracker, Stock Analyser)
-#   platform/functions/   platform handlers, including nested auth handlers
-#
-# Exempt from DynamoDB authz-helper checks, but still checked here:
-#   platform/functions/accounts/
-#   platform/functions/auth/account-provisioning/
-#   platform/functions/auth/forgot-provider/
-#   platform/functions/auth/pre-token-generation/
-#   platform/functions/user/
-#   platform/functions/auth/invitations/
-#
 # When 7e-cleanup removes requireGroup from the middleware package entirely,
 # delete this script (it becomes redundant).
 #
@@ -29,7 +19,6 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 SEARCH_PATHS=(
   "$REPO_ROOT/apps"
-  "$REPO_ROOT/platform/functions"
 )
 
 echo "Checking for requireGroup usage in handler paths..."

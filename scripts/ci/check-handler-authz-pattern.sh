@@ -20,18 +20,13 @@
 #
 # Checked paths:
 #   apps/                 app-specific handlers (Budget Tracker, Stock Analyser)
-#   platform/functions/   platform handlers, including nested auth handlers
-#
 # Exempt (see docs/architecture/cdk.md - CI checks):
 #   apps/launchpad/functions/account-provisioning/ auth-infrastructure: withAuthOnly, no app claims
 #   apps/launchpad/functions/accounts/             control-plane accounts API: inline DynamoDB membership checks
 #   apps/launchpad/functions/forgot-provider/      auth-infrastructure: public endpoint
 #   apps/launchpad/functions/invitations/          control-plane invitation API: inline owner check
+#   apps/launchpad/functions/pre-token-generation/ Cognito trigger: no request-time API caller
 #   apps/launchpad/functions/user/                 auth-infrastructure: withAuthOnly user-owned profile data
-#   platform/functions/accounts/                  platform-infrastructure: inline DynamoDB authz
-#   platform/functions/auth/account-provisioning/ auth-infrastructure: withAuthOnly, no app claims
-#   platform/functions/auth/forgot-provider/      auth-infrastructure: public endpoint
-#   platform/functions/auth/pre-token-generation/ auth-infrastructure: Cognito trigger
 #
 # Usage: bash scripts/ci/check-handler-authz-pattern.sh
 # Exits 0 if all checked files pass; 1 if any violation found.
@@ -42,7 +37,6 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 SEARCH_PATHS=(
   "$REPO_ROOT/apps"
-  "$REPO_ROOT/platform/functions"
 )
 
 EXEMPT_PATH_PREFIXES=(
@@ -50,11 +44,8 @@ EXEMPT_PATH_PREFIXES=(
   "$REPO_ROOT/apps/launchpad/functions/accounts/"
   "$REPO_ROOT/apps/launchpad/functions/forgot-provider/"
   "$REPO_ROOT/apps/launchpad/functions/invitations/"
+  "$REPO_ROOT/apps/launchpad/functions/pre-token-generation/"
   "$REPO_ROOT/apps/launchpad/functions/user/"
-  "$REPO_ROOT/platform/functions/accounts/"
-  "$REPO_ROOT/platform/functions/auth/account-provisioning/"
-  "$REPO_ROOT/platform/functions/auth/forgot-provider/"
-  "$REPO_ROOT/platform/functions/auth/pre-token-generation/"
 )
 
 DYNAMO_PATTERN='PutItemCommand|GetItemCommand|QueryCommand|ScanCommand|UpdateItemCommand|DeleteItemCommand|TransactWriteCommand|BatchGetCommand|BatchWriteCommand'

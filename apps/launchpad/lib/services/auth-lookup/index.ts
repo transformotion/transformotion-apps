@@ -5,9 +5,7 @@ export interface AuthLookupResult {
 }
 
 export async function lookupAuthProvider(email: string): Promise<AuthLookupResult> {
-  const primaryBaseUrl = getConfig().controlPlane.apiUrl;
-  const rollbackBaseUrl = process.env.NEXT_PUBLIC_PLATFORM_AUTH_API_URL ?? '';
-  const baseUrl = primaryBaseUrl || rollbackBaseUrl;
+  const baseUrl = getConfig().controlPlane.apiUrl;
 
   if (!baseUrl) {
     throw new Error('Launchpad control-plane API URL is not configured');

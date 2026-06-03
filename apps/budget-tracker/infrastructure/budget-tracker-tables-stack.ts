@@ -15,7 +15,8 @@ export interface BudgetTrackerTablesStackProps extends cdk.StackProps {
  *   budget-tracker.rules         PK: accountId  SK: ruleId
  *   budget-tracker.settings      PK: accountId  SK: settingKey
  *
- * The Cognito app client (BudgetTrackerAppClient) lives in AuthStack, not here.
+ * The Cognito app client (BudgetTrackerAppClient) lives in LaunchpadAuthStack,
+ * not here.
  *
  * Tags: app=budget-tracker, environment=dev|prod applied at stack level.
  */

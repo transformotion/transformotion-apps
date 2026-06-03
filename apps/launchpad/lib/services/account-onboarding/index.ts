@@ -6,9 +6,7 @@ export interface AccountSetupResponse {
 }
 
 function resolveControlPlaneBaseUrl(): string {
-  const primaryBaseUrl = getConfig().controlPlane.apiUrl;
-  const rollbackBaseUrl = process.env.NEXT_PUBLIC_PLATFORM_API_URL ?? '';
-  return primaryBaseUrl || rollbackBaseUrl;
+  return getConfig().controlPlane.apiUrl;
 }
 
 export async function setupAccount(idToken: string): Promise<AccountSetupResponse> {

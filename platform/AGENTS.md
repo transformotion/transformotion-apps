@@ -1,44 +1,47 @@
-# Platform - AI Agent operating guide
+# Platform - AI Agent Operating Guide
 
-This file is the authoritative Platform agent guide. The sibling `CLAUDE.md` file is a Claude Code compatibility mirror and must remain semantically equivalent. Any instruction added, removed, or modified here must be reflected in `CLAUDE.md` in the same PR.
+This file is the authoritative Platform agent guide. The sibling `CLAUDE.md`
+file is a Claude Code compatibility mirror and must remain semantically
+equivalent.
 
-Read this file before any platform-level work. Read the root `AGENTS.md` for branching strategy, architecture governance, and operating mode.
+Read this file before platform-level work. Read the root `AGENTS.md` for
+branching strategy, architecture governance, and operating mode.
 
 ## Overview
 
-Platform code lives at `platform/`. It owns neutral substrate plus explicitly retained migration-debt resources. Platform deploys must not cascade into app deploys.
+Platform code lives at `platform/`. Platform is neutral substrate only. It does
+not own auth-domain resources, app runtime resources, app APIs, app WSS paths,
+or product control-plane behavior.
 
 | Directory | Contents |
 |---|---|
-| `platform/infrastructure/` | CDK stack definitions for platform-level AWS resources |
-| `platform/functions/` | Lambda function source code for platform substrate and temporary rollback/decommission paths |
+| `platform/infrastructure/` | CDK stack definitions for neutral substrate |
 
-## Infrastructure stacks
+## Infrastructure Stacks
 
 | Stack | Class | Deploy workflow |
 |---|---|---|
 | `Transformotion{Stage}-Storage` | `StorageStack` | `deploy-platform.yml` |
 | `Transformotion{Stage}-Network` | `NetworkStack` | `deploy-platform.yml` |
-| `Transformotion{Stage}-Auth` | `AuthStack` | `deploy-platform.yml` |
-| `Transformotion{Stage}-AuthApi` | `AuthApiStack` | `deploy-platform.yml` |
-| `Transformotion{Stage}-PlatformTables` | `PlatformTablesStack` | `deploy-platform.yml` |
-| `Transformotion{Stage}-Api` | `PlatformApiStack` | `deploy-platform.yml` |
-| `Transformotion{Stage}-PlatformWs` | `PlatformWsStack` | `deploy-platform.yml` |
+| `Transformotion-GithubActionsRole` | `GithubActionsRoleStack` | `deploy-platform.yml` |
 
 Full stack topology: [/docs/architecture/cdk.md](/docs/architecture/cdk.md)
 
-## Current migration-debt resources
+## Ownership Boundaries
 
-After #363, Launchpad owns live auth/control-plane APIs. Platform still physically owns Cognito, auth-domain tables, pre-token-generation, and legacy rollback routes only as migration debt. #386 owns physical auth-domain re-home into Launchpad.
+- Launchpad owns authentication, Cognito, auth tables, control-plane APIs, and
+  auth administration workflows.
+- Stock Analyser owns its REST, WSS, AI runtime, tables, and deployment.
+- Budget Tracker owns its REST, WSS, AI runtime, tables, and deployment.
+- Migration utilities own their own migration API.
+- Platform deploys must not cascade into app deploys.
 
-After #364/#365, app-owned WSS stacks own live app WSS flows. `PlatformWsStack` is retained during M9 as rollback/decommission debt.
+## Platform Work Rules
 
-After #366/#367, app-owned AI proxies own live app AI runtime. `platform/functions/claude-proxy` is retained during M9 as rollback/decommission debt.
-
-## Platform work rules
-
-- Do not add new app runtime behavior under `platform/`.
-- Do not add new auth/control-plane product behavior under `platform/`.
-- Do not add new platform deploy steps that cascade into app deploy workflows.
-- Preserve rollback resources unless the current issue explicitly decommissions them.
-- Update `docs/architecture/*`, `MONOREPO.md`, and this guide when platform ownership or deploy boundaries change.
+- Do not add app runtime behavior under `platform/`.
+- Do not add auth/control-plane product behavior under `platform/`.
+- Do not add Lambda function packages under `platform/functions/`; that path
+  has been decommissioned.
+- Do not add platform deploy steps that orchestrate app deploy workflows.
+- Update `docs/architecture/*`, `MONOREPO.md`, and this guide when platform
+  ownership or deploy boundaries change.
