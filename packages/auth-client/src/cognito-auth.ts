@@ -43,10 +43,12 @@ export class CognitoAuthService implements AuthService {
       const email      = claims['email'] as string
       const givenName  = claims['given_name'] as string | undefined
       const familyName = claims['family_name'] as string | undefined
+      const groups     = Array.isArray(claims['cognito:groups']) ? claims['cognito:groups'] as string[] : []
+      const siteAdmin  = claims['site_admin'] === 'true' || groups.includes('site-admin')
       const name       = (givenName && familyName)
         ? `${givenName} ${familyName}`
         : (givenName ?? email)
-      return { id: cognitoUser.userId, email, name }
+      return { id: cognitoUser.userId, email, name, metadata: { siteAdmin } }
     } catch {
       return null
     }

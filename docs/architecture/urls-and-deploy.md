@@ -85,7 +85,7 @@ APIs, or AI runtime.
 
 | Workflow | Push paths |
 |---|---|
-| `deploy-launchpad.yml` | `.github/workflows/deploy-launchpad.yml`, `apps/launchpad/**`, `infrastructure/bin/launchpad.ts`, `infrastructure/lib/**`, `platform/config/app-registry.json`, `packages/auth-client/**`, `packages/lambda-middleware/**`, `packages/runtime-config/**` |
+| `deploy-launchpad.yml` | `.github/workflows/deploy-launchpad.yml`, `apps/launchpad/**`, `infrastructure/bin/launchpad.ts`, `infrastructure/lib/**`, `platform/config/app-registry.json`, `packages/auth-client/**`, `packages/lambda-middleware/**`, `packages/fn-ai-proxy-core/**`, `packages/runtime-config/**` |
 | `deploy-stock-analyser.yml` | `apps/stock-analyser/**`, `infrastructure/bin/stock-analyser.ts`, `packages/api-client/**`, `packages/cache/**`, `packages/data-access/**`, `packages/logger/**`, `packages/ui/**`, `packages/auth-client/**`, `packages/runtime-config/**`, `packages/lambda-middleware/**` |
 | `deploy-budget-tracker.yml` | `apps/budget-tracker/**`, `infrastructure/bin/budget-tracker.ts`, `packages/api-client/**`, `packages/cache/**`, `packages/data-access/**`, `packages/logger/**`, `packages/ui/**`, `packages/auth-client/**`, `packages/runtime-config/**`, `packages/lambda-middleware/**`, `packages/budget-domain/**` |
 | `deploy-migration-utilities.yml` | `migration-utilities/**`, `infrastructure/bin/migration-utilities.ts`, `packages/**` |

@@ -219,4 +219,10 @@ Environment: copy `apps/budget-tracker/.env.example` to `.env.local` and fill in
 | `NEXT_PUBLIC_API_URL` | Budget Tracker-owned API Gateway base URL; deploy workflow extracts it from `Transformotion{Stage}-BudgetTrackerApi` |
 | `NEXT_PUBLIC_BT_WSS_URL` | Budget Tracker-owned WebSocket URL for AI review streaming; deploy workflow extracts it from `Transformotion{Stage}-BudgetTrackerWs` |
 
+Server-side AI proxy env includes `AI_CONFIG_TABLE`, `AI_FALLBACK_PROVIDER`,
+`AI_FALLBACK_MODEL`, `ANTHROPIC_SECRET_NAME`, and `OPENAI_SECRET_NAME` for
+runtime provider/model resolution and provider execution. The config table is
+Launchpad-owned control-plane state; provider secrets and execution remain
+Budget Tracker-owned runtime concerns.
+
 **Cognito client variable rebind:** The GitHub Actions variable `NEXT_PUBLIC_BUDGET_TRACKER_COGNITO_CLIENT_ID` is mapped to the generic runtime env var `NEXT_PUBLIC_COGNITO_CLIENT_ID` in the deploy workflow's env block. This allows each app to have its own Cognito App Client (established in sub-phase 7b.5-alpha) while the runtime code (`@transformotion/auth-client`) reads a single generic name. Local development reads `NEXT_PUBLIC_COGNITO_CLIENT_ID` directly from `.env.local`.

@@ -11,6 +11,7 @@ on:
       - 'platform/config/app-registry.json'
       - 'packages/auth-client/**'
       - 'packages/lambda-middleware/**'
+      - 'packages/fn-ai-proxy-core/**'
       - 'packages/runtime-config/**'
   workflow_call:
     inputs:

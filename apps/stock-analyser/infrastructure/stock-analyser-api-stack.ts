@@ -170,6 +170,14 @@ export class StockAnalyserApiStack extends cdk.Stack {
     const anthropicSecret = secretsmanager.Secret.fromSecretNameV2(
       this, 'AnthropicApiKey', `${stage}/anthropic/api-key`,
     );
+    const openaiSecret = secretsmanager.Secret.fromSecretNameV2(
+      this, 'OpenAIApiKey', `${stage}/openai/api-key`,
+    );
+    const aiRuntimeConfigTable = dynamodb.Table.fromTableName(
+      this,
+      'AiRuntimeConfigTable',
+      `launchpad-ai-runtime-config-${stage}`,
+    );
 
     const aiProxyFn = new lambdaNodejs.NodejsFunction(this, 'AiProxyFn', {
       functionName: `stock-analyser-ai-proxy-${stage}`,
@@ -180,12 +188,18 @@ export class StockAnalyserApiStack extends cdk.Stack {
       memorySize: 512,
       environment: {
         ANTHROPIC_SECRET_NAME: anthropicSecret.secretName,
+        OPENAI_SECRET_NAME: openaiSecret.secretName,
+        AI_CONFIG_TABLE: aiRuntimeConfigTable.tableName,
+        AI_FALLBACK_PROVIDER: 'claude',
+        AI_FALLBACK_MODEL: 'claude-sonnet-4-6',
         JOB_RESULTS_TABLE: jobResultsTable.tableName,
         WS_API_ENDPOINT: wsApiEndpoint,
       },
       bundling,
     });
     anthropicSecret.grantRead(aiProxyFn);
+    openaiSecret.grantRead(aiProxyFn);
+    aiRuntimeConfigTable.grantReadData(aiProxyFn);
     jobResultsTable.grantReadWriteData(aiProxyFn);
     aiProxyFn.addToRolePolicy(new iam.PolicyStatement({
       actions: ['lambda:InvokeFunction'],

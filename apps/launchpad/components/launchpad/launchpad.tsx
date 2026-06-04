@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { cn } from '@/lib/utils'
 import { Wordmark } from '@/components/brand/wordmark'
+import { AiEngineSettings } from '@/components/launchpad/ai-engine-settings'
 import { TrendingUp, Wallet, Layers, LogOut, Settings, User as UserIcon, Check } from 'lucide-react'
 import type { User } from '@transformotion/auth-client'
 
@@ -221,12 +222,14 @@ function ProfileMenu({
   onClose,
   onLogout,
   onAccountChange,
+  onOpenSettings,
 }: {
   user: UserProfile
   isOpen: boolean
   onClose: () => void
   onLogout: () => void
   onAccountChange: (accountId: string) => void
+  onOpenSettings?: () => void
 }) {
   if (!isOpen) return null
 
@@ -277,10 +280,18 @@ function ProfileMenu({
             <UserIcon className="size-4 text-muted-foreground" />
             Profile
           </button>
-          <button className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-surface2 transition-colors">
-            <Settings className="size-4 text-muted-foreground" />
-            Settings
-          </button>
+          {onOpenSettings ? (
+            <button
+              onClick={() => {
+                onClose()
+                onOpenSettings()
+              }}
+              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-surface2 transition-colors"
+            >
+              <Settings className="size-4 text-muted-foreground" />
+              Settings
+            </button>
+          ) : null}
         </div>
 
         <div className="border-t border-border py-2">
@@ -321,7 +332,9 @@ export function Launchpad({
   onSignOut?: () => void
 }) {
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const [activeAccount, setActiveAccount] = useState(PLACEHOLDER_ACCOUNTS[0].id)
+  const isSiteAdmin = authUser?.metadata?.siteAdmin === true
 
   const user: UserProfile = {
     name:          authUser?.name  ?? 'User',
@@ -356,6 +369,12 @@ export function Launchpad({
         onClose={() => setProfileMenuOpen(false)}
         onLogout={onSignOut || (() => {})}
         onAccountChange={handleAccountChange}
+        onOpenSettings={isSiteAdmin ? () => setSettingsOpen(true) : undefined}
+      />
+
+      <AiEngineSettings
+        isOpen={settingsOpen && isSiteAdmin}
+        onClose={() => setSettingsOpen(false)}
       />
 
       <Footer />

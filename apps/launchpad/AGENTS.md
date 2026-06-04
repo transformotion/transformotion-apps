@@ -44,7 +44,7 @@ foundation.
 | Stack | Contents |
 |---|---|
 | `Transformotion{Stage}-LaunchpadAuth` | Launchpad-owned Cognito User Pool, Hosted UI domain, app clients, groups, Hosted UI customisation, social credential secret placeholders, auth-domain tables, and pre-token trigger |
-| `Transformotion{Stage}-LaunchpadControlPlane` | Launchpad-owned REST API, Cognito authoriser, and control-plane Lambdas |
+| `Transformotion{Stage}-LaunchpadControlPlane` | Launchpad-owned REST API, Cognito authoriser, AI runtime config table, and control-plane Lambdas |
 | Future `Transformotion{Stage}-Launchpad*` stacks | Additional #386 auth-domain infrastructure, deployed through the Launchpad lane |
 
 Source: `apps/launchpad/infrastructure/`.
@@ -58,11 +58,17 @@ Source: `apps/launchpad/infrastructure/`.
 | `launchpad-user-{stage}` | `apps/launchpad/functions/user` | `GET /api/user/profile`, `PUT /api/user/preferences` |
 | `launchpad-accounts-{stage}` | `apps/launchpad/functions/accounts` | account and member administration routes |
 | `launchpad-invitations-{stage}` | `apps/launchpad/functions/invitations` | `POST /accounts/{accountId}/invitations` |
+| `launchpad-ai-runtime-config-{stage}` | `apps/launchpad/functions/ai-runtime-config` | site-admin AI provider/model config routes |
 | `launchpad-pre-token-generation-{stage}` | `apps/launchpad/functions/pre-token-generation` | Cognito pre-token trigger for `LaunchpadAuth` |
 
 ## Ownership rules
 
 - Add new auth/control-plane behavior under `apps/launchpad/`, not `platform/`.
+- Launchpad owns AI provider/model configuration as control-plane state, but
+  app-owned AI proxy Lambdas own provider execution.
+- Launchpad Settings exposes the site-admin-only AI Engine Settings UI for
+  provider/model selection. It must not manage provider secrets or app runtime
+  execution.
 - Keep Launchpad infrastructure under `apps/launchpad/infrastructure/`.
 - Do not add new platform-owned auth/control-plane routes as a shortcut.
 - LaunchpadAuth is the active auth source. Do not reintroduce

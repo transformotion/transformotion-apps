@@ -177,6 +177,12 @@ Required env vars marked `[REQUIRED]` in `.env.example` must be set before the d
 | `NEXT_PUBLIC_API_URL` | Stock Analyser-owned API Gateway URL from `Transformotion{Stage}-StockAnalyserApi` |
 | `NEXT_PUBLIC_SA_WSS_URL` | Stock Analyser-owned WebSocket URL from `Transformotion{Stage}-StockAnalyserWs`; live AI WSS endpoint after #366 |
 
+Server-side AI proxy env includes `AI_CONFIG_TABLE`, `AI_FALLBACK_PROVIDER`,
+`AI_FALLBACK_MODEL`, `ANTHROPIC_SECRET_NAME`, and `OPENAI_SECRET_NAME` for
+runtime provider/model resolution and provider execution. The config table is
+Launchpad-owned control-plane state; provider secrets and execution remain
+Stock Analyser-owned runtime concerns.
+
 **Cognito client variable rebind:** The GitHub Actions variable `NEXT_PUBLIC_STOCK_ANALYSER_COGNITO_CLIENT_ID` is mapped to the generic runtime env var `NEXT_PUBLIC_COGNITO_CLIENT_ID` in the deploy workflow's env block. This allows each app to have its own Cognito App Client (established in sub-phase 7b.5-alpha) while the runtime code (`@transformotion/auth-client`) reads a single generic name. Local development reads `NEXT_PUBLIC_COGNITO_CLIENT_ID` directly from `.env.local`.
 
 ## Known constraints

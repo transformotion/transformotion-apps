@@ -1,12 +1,13 @@
 {
-  "name": "@transformotion/fn-claude-proxy-core",
+  "name": "@transformotion/fn-ai-proxy-core",
   "version": "0.0.0",
   "private": true,
   "main": "./src/index.ts",
   "scripts": {
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test": "vitest run"
   },
   "dependencies": {
     "@transformotion/lambda-middleware": "workspace:*"
@@ -19,6 +20,7 @@
     "@aws-sdk/lib-dynamodb": "^3.1030.0",
     "@types/aws-lambda": "^8",
     "@types/node": "^22",
-    "typescript": "*"
+    "typescript": "*",
+    "vitest": "^1"
   }
 }

@@ -10,7 +10,7 @@ export class ClaudeAIService implements AIService {
     })
     return {
       content: typeof content === 'string' ? content : JSON.stringify(content),
-      model: options?.model || 'claude-sonnet-4-20250514',
+      model: options?.model || 'claude-sonnet-4-6',
       usage: { inputTokens: 0, outputTokens: 0 },
       stopReason: 'end_turn',
     }

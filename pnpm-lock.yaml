@@ -264,9 +264,9 @@ importers:
 
   apps/budget-tracker/functions/ai-proxy:
     dependencies:
-      '@transformotion/fn-claude-proxy-core':
+      '@transformotion/fn-ai-proxy-core':
         specifier: workspace:*
-        version: link:../../../../packages/fn-claude-proxy-core
+        version: link:../../../../packages/fn-ai-proxy-core
     devDependencies:
       '@types/aws-lambda':
         specifier: ^8
@@ -633,6 +633,34 @@ importers:
         specifier: '*'
         version: 5.7.3
 
+  apps/launchpad/functions/ai-runtime-config:
+    dependencies:
+      '@transformotion/fn-ai-proxy-core':
+        specifier: workspace:*
+        version: link:../../../../packages/fn-ai-proxy-core
+      '@transformotion/lambda-middleware':
+        specifier: workspace:*
+        version: link:../../../../packages/lambda-middleware
+    devDependencies:
+      '@aws-sdk/client-dynamodb':
+        specifier: ^3
+        version: 3.1032.0
+      '@aws-sdk/lib-dynamodb':
+        specifier: ^3
+        version: 3.1032.0(@aws-sdk/client-dynamodb@3.1032.0)
+      '@types/aws-lambda':
+        specifier: ^8
+        version: 8.10.161
+      '@types/node':
+        specifier: ^22
+        version: 22.19.17
+      typescript:
+        specifier: '*'
+        version: 5.7.3
+      vitest:
+        specifier: ^1
+        version: 1.6.1(@types/node@22.19.17)(jsdom@29.1.1)(lightningcss@1.32.0)
+
   apps/launchpad/functions/forgot-provider:
     devDependencies:
       '@aws-sdk/client-cognito-identity-provider':
@@ -939,9 +967,9 @@ importers:
 
   apps/stock-analyser/functions/ai-proxy:
     dependencies:
-      '@transformotion/fn-claude-proxy-core':
+      '@transformotion/fn-ai-proxy-core':
         specifier: workspace:*
-        version: link:../../../../packages/fn-claude-proxy-core
+        version: link:../../../../packages/fn-ai-proxy-core
     devDependencies:
       '@types/aws-lambda':
         specifier: ^8
@@ -1279,7 +1307,7 @@ importers:
         specifier: '*'
         version: 5.7.3
 
-  packages/fn-claude-proxy-core:
+  packages/fn-ai-proxy-core:
     dependencies:
       '@transformotion/lambda-middleware':
         specifier: workspace:*
@@ -1309,6 +1337,9 @@ importers:
       typescript:
         specifier: '*'
         version: 5.7.3
+      vitest:
+        specifier: ^1
+        version: 1.6.1(@types/node@22.19.17)(jsdom@29.1.1)(lightningcss@1.32.0)
 
   packages/lambda-middleware:
     devDependencies:

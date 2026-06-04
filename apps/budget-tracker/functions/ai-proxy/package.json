@@ -9,7 +9,7 @@
     "lint": "echo \"lint: budget-tracker-ai-proxy\""
   },
   "dependencies": {
-    "@transformotion/fn-claude-proxy-core": "workspace:*"
+    "@transformotion/fn-ai-proxy-core": "workspace:*"
   },
   "devDependencies": {
     "@types/aws-lambda": "^8",

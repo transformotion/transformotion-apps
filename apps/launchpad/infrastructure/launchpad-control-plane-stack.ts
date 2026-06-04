@@ -93,6 +93,14 @@ export class LaunchpadControlPlaneStack extends cdk.Stack {
       rateLimitsTableName,
     );
 
+    const aiRuntimeConfigTable = new dynamodb.Table(this, 'AiRuntimeConfigTable', {
+      tableName: `launchpad-ai-runtime-config-${stage}`,
+      partitionKey: { name: 'pk', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'sk', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      removalPolicy: stage === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+    });
+
     const forgotProviderFn = new lambdaNodejs.NodejsFunction(this, 'ForgotProviderFn', {
       functionName: `launchpad-forgot-provider-${stage}`,
       entry: path.join(__dirname, '../functions/forgot-provider/src/index.ts'),
@@ -275,6 +283,43 @@ export class LaunchpadControlPlaneStack extends cdk.Stack {
       .addResource('invitations')
       .addMethod('POST', new apigateway.LambdaIntegration(invitationsFn, { proxy: true }), authOptions);
 
+    const aiRuntimeConfigFn = new lambdaNodejs.NodejsFunction(this, 'AiRuntimeConfigFn', {
+      functionName: `launchpad-ai-runtime-config-${stage}`,
+      entry: path.join(__dirname, '../functions/ai-runtime-config/src/index.ts'),
+      handler: 'handler',
+      runtime: lambda.Runtime.NODEJS_20_X,
+      timeout: cdk.Duration.seconds(15),
+      memorySize: 256,
+      environment: {
+        AI_CONFIG_TABLE: aiRuntimeConfigTable.tableName,
+      },
+      bundling: {
+        externalModules: ['@aws-sdk/*'],
+        minify: true,
+        sourceMap: false,
+      },
+    });
+
+    aiRuntimeConfigTable.grantReadWriteData(aiRuntimeConfigFn);
+
+    const adminResource = apiResource.addResource('admin');
+    const aiRuntimeConfigResource = adminResource.addResource('ai-runtime-config');
+    const aiRuntimeConfigIntegration = new apigateway.LambdaIntegration(aiRuntimeConfigFn, { proxy: true });
+    aiRuntimeConfigResource.addMethod('GET', aiRuntimeConfigIntegration, authOptions);
+    aiRuntimeConfigResource
+      .addResource('platform-default')
+      .addMethod('PUT', aiRuntimeConfigIntegration, authOptions);
+    aiRuntimeConfigResource
+      .addResource('apps')
+      .addResource('{appSlug}')
+      .addResource('override')
+      .addMethod('PUT', aiRuntimeConfigIntegration, authOptions);
+    aiRuntimeConfigResource
+      .getResource('apps')!
+      .getResource('{appSlug}')!
+      .getResource('override')!
+      .addMethod('DELETE', aiRuntimeConfigIntegration, authOptions);
+
     const corsHeaders = {
       'Access-Control-Allow-Origin': "'*'",
       'Access-Control-Allow-Headers': "'Content-Type,Authorization,X-Account-Id'",
@@ -300,6 +345,11 @@ export class LaunchpadControlPlaneStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'ControlPlaneRestApiId', {
       value: this.api.restApiId,
       exportName: `Transformotion-${stage}-LaunchpadControlPlaneRestApiId`,
+    });
+
+    new cdk.CfnOutput(this, 'AiRuntimeConfigTableName', {
+      value: aiRuntimeConfigTable.tableName,
+      exportName: `Transformotion-${stage}-LaunchpadAiRuntimeConfigTableName`,
     });
   }
 }

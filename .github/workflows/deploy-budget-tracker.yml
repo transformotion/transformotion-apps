@@ -15,7 +15,7 @@ on:
       - 'packages/auth-client/**'
       - 'packages/runtime-config/**'
       - 'packages/lambda-middleware/**'
-      - 'packages/fn-claude-proxy-core/**'
+      - 'packages/fn-ai-proxy-core/**'
       - 'packages/budget-domain/**'
   workflow_call:
     inputs:
