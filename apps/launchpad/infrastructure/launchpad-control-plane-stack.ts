@@ -52,15 +52,18 @@ export class LaunchpadControlPlaneStack extends cdk.Stack {
     } = props;
     const registry = loadAppRegistry();
     const appSlugs = registry.apps.map(a => a.slug);
+    const corsAllowOrigin = appUrl.replace(/\/*$/, '');
+    const corsAllowHeaders = ['Content-Type', 'Authorization', 'X-Account-Id'];
+    const corsAllowMethods = ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'];
 
     this.api = new apigateway.RestApi(this, 'LaunchpadControlPlaneApi', {
       restApiName: `launchpad-control-plane-${stage}`,
       description: `Launchpad ${stage} control-plane API`,
       deployOptions: { stageName: stage },
       defaultCorsPreflightOptions: {
-        allowOrigins: apigateway.Cors.ALL_ORIGINS,
-        allowMethods: apigateway.Cors.ALL_METHODS,
-        allowHeaders: ['Content-Type', 'Authorization', 'X-Account-Id'],
+        allowOrigins: [corsAllowOrigin],
+        allowMethods: corsAllowMethods,
+        allowHeaders: corsAllowHeaders,
       },
     });
 
@@ -321,8 +324,9 @@ export class LaunchpadControlPlaneStack extends cdk.Stack {
       .addMethod('DELETE', aiRuntimeConfigIntegration, authOptions);
 
     const corsHeaders = {
-      'Access-Control-Allow-Origin': "'*'",
-      'Access-Control-Allow-Headers': "'Content-Type,Authorization,X-Account-Id'",
+      'Access-Control-Allow-Origin': `'${corsAllowOrigin}'`,
+      'Access-Control-Allow-Headers': `'${corsAllowHeaders.join(',')}'`,
+      'Access-Control-Allow-Methods': `'${corsAllowMethods.join(',')}'`,
     };
     [
       apigateway.ResponseType.UNAUTHORIZED,

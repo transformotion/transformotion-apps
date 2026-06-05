@@ -46,6 +46,17 @@ function resolveControlPlaneBaseUrl(): string {
   return getConfig().controlPlane.apiUrl
 }
 
+function buildControlPlaneUrl(path: string): string {
+  const baseUrl = resolveControlPlaneBaseUrl()
+  if (!baseUrl) {
+    throw new Error('Launchpad control-plane API URL is not configured')
+  }
+
+  const normalizedBase = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`
+  const normalizedPath = path.replace(/^\/+/, '')
+  return new URL(normalizedPath, normalizedBase).toString()
+}
+
 async function readError(response: Response, fallback: string): Promise<string> {
   try {
     const body = await response.json() as { message?: string; error?: string }
@@ -60,12 +71,7 @@ async function request<T>(
   path: string,
   init: RequestInit = {},
 ): Promise<T> {
-  const baseUrl = resolveControlPlaneBaseUrl()
-  if (!baseUrl) {
-    throw new Error('Launchpad control-plane API URL is not configured')
-  }
-
-  const response = await fetch(new URL(path, baseUrl).toString(), {
+  const response = await fetch(buildControlPlaneUrl(path), {
     ...init,
     headers: {
       Authorization: `Bearer ${idToken}`,
