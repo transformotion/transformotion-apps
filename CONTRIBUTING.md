@@ -148,7 +148,7 @@ ways of working change. Changes are themselves PRs.
 | URLs and deploy | `/docs/architecture/urls-and-deploy.md` | Normative | URL routing, CloudFront, S3 layout, deploy triggers, Next.js basePath per app. | Steve |
 | CDK | `/docs/architecture/cdk.md` | Normative | CDK stack topology, cross-stack references, deploy ordering. | Steve |
 | Contracts policy | `/docs/architecture/contracts.md` (TBD by Stage 0b) | Normative | The policy for how contracts are organised: where they live, what is normative vs descriptive, single-source-of-truth rules. Location may shift to an extension of an existing document per Stage 0b ratification. | Steve |
-| Per-app contracts | `/contracts/<scope>/*.md` where `<scope>` is `platform` or an app slug | Normative | The actual contracts: data models, API endpoints, state management. Per-app mirrors at `apps/<app>/contracts/` are not allowed. | Per-app team |
+| Per-app contracts | `transformotion-apps-b8/contracts/<scope>/` in the v0 repo, synced read-only into `/v0-reference/contracts/<scope>/` in this runtime repo | Normative | The actual contracts: TypeScript shapes, API endpoints, data models, state management, and behavioural notes. Runtime-side contract mirrors and direct edits to `/v0-reference/contracts/` are not allowed. | Per-app team |
 | Agent guide | `/AGENTS.md` and `/apps/<app>/AGENTS.md` | Operational | Canonical AI-agent operating guidance. Required at root and for every app. Minimum per-app content: app's purpose, key entry points, app-specific conventions, app-specific gotchas, sync flow if v0-driven. | Root / per-app team |
 | Claude Code mirror | `/CLAUDE.md` and `/apps/<app>/CLAUDE.md` | Operational | Claude Code compatibility mirror for the corresponding AGENTS.md file. Must remain semantically equivalent; changes to one without the other are governance drift. | Root / per-app team |
 | Architectural inventory | `/docs/architecture/inventory.md` | Normative (living document) | The current-state inventory of the platform — what is true about code, infrastructure, and operating state right now. Updated as state changes per the discipline rule (Section 2.1). Findings carry status tags including **Resolved by M*N* / PR #*N*** and **Superseded by [reference]** for living-document use. | Steve |
@@ -171,9 +171,11 @@ compatibility mirrors. They cover only app-specific concerns and must remain
 semantically equivalent to the corresponding AGENTS file.
 
 The contracts policy document (location ratified in Stage 0b) governs the
-per-app contract files at `contracts/<scope>/`. Drift between contracts
-policy and per-app contract content is a documentation reconciliation
-concern.
+per-app contract files in the v0 repo at
+`transformotion-apps-b8/contracts/<scope>/`. This runtime repo consumes those
+contracts through the generated, gitignored `v0-reference/contracts/<scope>/`
+sync target. Drift between contracts policy and per-app contract content is a
+documentation reconciliation concern.
 
 ---
 
@@ -298,23 +300,30 @@ packages/ui/
 
 The decision rule for "should this go in a package?" is in Section 3.6.
 
-### 3.5 The `contracts/` directory
+### 3.5 Contracts and `v0-reference/`
 
-Contracts live at `contracts/<scope>/*.md` where `<scope>` is `platform` or
-an app slug.
+Contracts are authored in the v0 repo at
+`transformotion-apps-b8/contracts/<scope>/`, where `<scope>` is `platform`,
+`launchpad`, an app slug, or a future ratified scope. This runtime repo
+consumes a generated read-only copy at `v0-reference/contracts/<scope>/`.
 
 ```
-contracts/
-├── platform/              # Platform-wide contracts (Account, User, AccountMember shapes; auth claims)
+transformotion-apps-b8/contracts/
+├── _shared/               # Shared contract shapes and version metadata
+├── launchpad/             # Launchpad auth/control-plane contracts
+├── platform/              # Neutral substrate contracts
 ├── stock-analyser/        # Stock Analyser contracts
 ├── budget-tracker/        # Budget Tracker contracts
-└── <future-app>/
+└── <future-scope>/
 ```
 
-Per-app mirrors of contracts at `apps/<app>/contracts/` are forbidden. A
-contract has exactly one canonical location at `contracts/<scope>/`. If a
-contract drifts between locations, the canonical version wins; the mirror
-is removed.
+Per-app mirrors of contracts at `apps/<app>/contracts/` are forbidden.
+Direct edits to `v0-reference/contracts/` are also forbidden because that tree
+is generated from v0. A contract has exactly one canonical location: the v0
+repo. If runtime implementation requires a contract change, make the contract
+change in `transformotion-apps-b8/contracts/`, commit and push it there, run
+`pnpm sync:v0` in this runtime repo, and then implement runtime changes against
+the synced copy.
 
 The contracts policy document (location ratified in Stage 0b) governs what
 goes in each contract file, the normative-vs-descriptive classification,
@@ -775,7 +784,7 @@ The layered architecture applies broadly. All data access goes through domain in
 
 ### 5.2 Domain interfaces and implementations
 
-**Domain interfaces** declare data-access shapes in store-agnostic terms. They live in `contracts/<scope>/`. A domain interface specifies what operations exist (`findAll`, `getById`, `save`, `delete`) and what types they take and return. It does not specify how those operations are implemented.
+**Domain interfaces** declare data-access shapes in store-agnostic terms. They live canonically in `transformotion-apps-b8/contracts/<scope>/` and are consumed in this runtime repo through `v0-reference/contracts/<scope>/`. A domain interface specifies what operations exist (`findAll`, `getById`, `save`, `delete`) and what types they take and return. It does not specify how those operations are implemented.
 
 **Implementations** of a domain interface live in the data-access layer. Each implementation is named for its physical store. Examples:
 
@@ -902,7 +911,10 @@ A **contract** documents the binding interface between a provider and one or mor
 
 Contracts live canonically in the **v0 repo** (`transformotion-apps-b8`), not the Claude repo. The v0 repo is the only location both AIs (v0 and Claude Code) can read natively — v0 cannot access the Claude repo; Claude Code can access the v0 repo.
 
-The Claude repo accesses contracts via a one-way sync from v0 repo into a gitignored location. Runtime code imports contracts from the gitignored synced location. The sync is implemented in `scripts/sync-v0.sh` and runs as part of CI before tests.
+The Claude/runtime repo accesses contracts via a one-way sync from v0 repo into
+the gitignored `v0-reference/contracts/` location. Runtime code imports
+contracts from the synced location. The sync is implemented in
+`scripts/sync-v0.sh` and exposed as `pnpm sync:v0`.
 
 #### Single source of truth
 
@@ -912,14 +924,22 @@ This is a strict rule. Independent type declarations in runtime code that match 
 
 #### Authoring discipline
 
-Contracts are edited in the v0 repo first. Claude-side work that needs a contract change goes through this workflow:
+Contracts are edited in the v0 repo first. Runtime-side work that needs a
+contract change goes through this workflow:
 
 1. Edit the contract in the v0 repo (`transformotion-apps-b8/contracts/...`)
 2. Commit and push the v0 repo change
-3. Run sync into Claude repo (or wait for CI to do it)
-4. Then proceed with Claude-side implementation work that depends on the change
+3. Run `pnpm sync:v0` in this runtime repo
+4. Then proceed with runtime implementation work that depends on the change
 
-The discipline is enforced by CI verification (Level 3): Claude repo's CI verifies the gitignored sync target is byte-identical to v0 repo's contracts at HEAD. Mechanical guardrails (gitignore, sync target README warning against direct edits, sync script refusing to run if it detects local modifications) reduce the chance of mistakes reaching CI.
+The discipline is enforced by CI verification (Level 3): this runtime repo's CI
+uses `V0_REPO_READ_TOKEN` only for read-only verification that the gitignored
+sync target is byte-identical to v0 repo's contracts at HEAD. CI must never
+auto-write to the v0 repo, auto-fix v0 contracts, or treat runtime repo state
+as authoritative over `transformotion-apps-b8/contracts/`. Mechanical
+guardrails (gitignore, sync target README warning against direct edits, sync
+script refusing to run if it detects local modifications) reduce the chance of
+mistakes reaching CI.
 
 #### Bucket structure
 
@@ -1312,8 +1332,10 @@ When removing a field from `BudgetSettings`, the required steps are:
 
 1. Remove from `SETTING_KEYS` and `DEFAULT_SETTINGS` in the settings
    Lambda.
-2. Remove from the `BudgetSettings` type in `packages/budget-domain/src/contracts.ts`
-   and `v0-reference/contracts/budget-tracker/data-models.md`.
+2. Update the canonical contract in
+   `transformotion-apps-b8/contracts/budget-tracker/`, commit and push the v0
+   repo change, run `pnpm sync:v0`, then remove any runtime mirrors such as the
+   `BudgetSettings` type in `packages/budget-domain/src/contracts.ts`.
 3. Create a one-shot migration script in
    `scripts/migrations/budget-tracker/` to delete the orphaned rows.
    Use `DRY_RUN=true` by default.

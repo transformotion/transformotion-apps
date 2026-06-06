@@ -28,7 +28,7 @@ React + TypeScript + Tailwind CSS.
 | DynamoDB table schemas | [/docs/architecture/data.md](/docs/architecture/data.md) |
 | CDK stacks, Lambda names | [/docs/architecture/cdk.md](/docs/architecture/cdk.md) |
 | URL routing, CloudFront, deploy triggers | [/docs/architecture/urls-and-deploy.md](/docs/architecture/urls-and-deploy.md) |
-| Stock Analyser API contracts and types | [contracts/stock-analyser/DATA_CONTRACTS.md](/contracts/stock-analyser/DATA_CONTRACTS.md) |
+| Stock Analyser API contracts and types | Authored in `transformotion-apps-b8/contracts/stock-analyser/`; consumed here from generated read-only [/v0-reference/contracts/stock-analyser/](/v0-reference/contracts/stock-analyser/) |
 | Migration invariants from HTML version | [apps/stock-analyser/MIGRATION_INVARIANTS.md](./MIGRATION_INVARIANTS.md) |
 
 ## CDK stacks owned
@@ -84,7 +84,11 @@ Call `requireAppAccess` at the top of every handler, then `requireAccountAccess`
 
 The app uses a service-adaptor pattern: components call service methods → service handles mock vs real internally. Components never check provider flags directly.
 
-Key service methods defined in [contracts/DATA_CONTRACTS.md](./contracts/DATA_CONTRACTS.md):
+Contracted service/API shapes are authored in the v0 repo first and consumed
+here from `v0-reference/contracts/stock-analyser/`. Do not edit the synced
+runtime copy directly; follow the root M15 contract authoring rule.
+
+Key service methods currently covered by the Stock Analyser contract set:
 - `portfolioService.getHoldings()` / `saveHoldings()` / `enrichHoldings()`
 - `watchlistService.getItems()` / `saveItems()`
 - `useClaude()` hook — POST to `/api/claude` + async polling pattern

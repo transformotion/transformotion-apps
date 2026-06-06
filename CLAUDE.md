@@ -66,12 +66,20 @@ This rule emerged from M7 recons where the named attribute checked out cleanly b
 Categories to consider in the impact check:
 - IAM policies, infrastructure resources → `cdk.md`, `inventory.md`
 - Auth flows, identity providers, claims → `auth.md`
-- Lambda handlers, API endpoints → `MONOREPO.md`, `CONTRIBUTING.md` §3, `contracts/<scope>/`, `inventory.md`
+- Lambda handlers, API endpoints → `MONOREPO.md`, `CONTRIBUTING.md` §3, v0-authored contracts synced through `v0-reference/contracts/<scope>/`, `inventory.md`
 - Build patterns, env vars, runtime config → `CONTRIBUTING.md` §5, `inventory.md`, deploy workflow env blocks, GH Actions variables/secrets
 - Repository structure → `CONTRIBUTING.md` §3, `MONOREPO.md`
 - Operating mode, agent behaviour → `AGENTS.md` and this compatibility mirror
 
 This rule emerged from cumulative M7 evidence. PRs #259, #261 (multiple rounds), the M6 launchpad-at-root work, the budget-tracker gateway consolidation, and the platform-functions migration all shipped code without their accompanying §2.1 obligations, requiring downstream cleanup PRs (#262, #266, #267, #269, #279, #283 among others) to make up the gap.
+
+**M15 contract authoring rule**: Contracts are authored only in the v0 repo
+(`transformotion-apps-b8/contracts/`). Do not edit
+`v0-reference/contracts/` directly; it is generated and read-only. If runtime
+implementation requires a contract change, edit the v0 repo contract first,
+commit and push that v0 repo change, run `pnpm sync:v0` in this runtime repo,
+then implement against the synced contract. Stop and ask if v0 repo access is
+unavailable.
 
 ## Boundary Discipline
 
@@ -114,7 +122,7 @@ Note: some paths are migrating per `CONTRIBUTING.md` Section 3 — see `MONOREPO
 
 | What | Where (current) |
 |---|---|
-| Cross-app contracts | `/contracts/<scope>/` |
+| Cross-app contracts | Authored in `transformotion-apps-b8/contracts/<scope>/`; consumed here from generated read-only `/v0-reference/contracts/<scope>/` |
 | Shared packages | `/packages/` |
 | Platform infrastructure | `/platform/infrastructure/` |
 | Per-app infrastructure | `/apps/<app>/infrastructure/` |
