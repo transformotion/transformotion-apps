@@ -9,6 +9,37 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  v0-contracts-sync:
+    name: v0 Contracts Sync
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout runtime repo
+        uses: actions/checkout@v4
+        with:
+          path: transformotion-apps
+
+      - name: Require v0 repo read token
+        env:
+          V0_REPO_READ_TOKEN: ${{ secrets.V0_REPO_READ_TOKEN }}
+        run: |
+          if [ -z "$V0_REPO_READ_TOKEN" ]; then
+            echo "::error::Missing V0_REPO_READ_TOKEN secret. Configure a read-only PAT or GitHub App token with access to transformotion/transformotion-apps-b8."
+            exit 1
+          fi
+
+      - name: Checkout v0 repo
+        uses: actions/checkout@v4
+        with:
+          repository: transformotion/transformotion-apps-b8
+          token: ${{ secrets.V0_REPO_READ_TOKEN }}
+          path: transformotion-apps-b8
+
+      - name: Verify v0 contracts byte identity
+        working-directory: transformotion-apps
+        env:
+          V0_REPO_PATH: ${{ github.workspace }}/transformotion-apps-b8
+        run: bash scripts/ci/check-v0-contracts-synced.sh
+
   typecheck-and-lint:
     name: Typecheck & Lint
     runs-on: ubuntu-latest
