@@ -109,7 +109,7 @@ The three Zustand stores:
 - `useAiStore` — AI review queue and CSV analysis
 - `useAuthStore` — current user and sign-in/out
 
-Repository interfaces are defined in `v0-reference/contracts/budget-tracker/state-management.md`. **Do not add methods to a repository without updating the contract file in the v0 repo first, then re-running `scripts/sync-v0.sh`.**
+Repository interfaces are defined in the generated read-only `v0-reference/contracts/budget-tracker/state-management.md`. **Do not add methods to a repository without updating the contract file in the v0 repo first, committing and pushing that v0 change, then running `pnpm sync:v0`.**
 
 ### Forbidden patterns
 
@@ -184,7 +184,7 @@ Provider is selected via `config.ai.provider` (`'mock'` or `'claude'`), resolved
 
 **Adding a new AI feature:**
 1. Add the method to the `AIService` interface in `lib/services/ai/index.ts`
-2. Update the contract in the v0 repo (`transformotion-apps-b8/contracts/budget-tracker/state-management.md`) and re-run `scripts/sync-v0.sh`
+2. Update the contract in the v0 repo (`transformotion-apps-b8/contracts/budget-tracker/state-management.md`), commit and push that v0 change, then run `pnpm sync:v0`
 3. Add a matching Lambda route to `apps/budget-tracker/functions/budget-ai/src/index.ts` with `requireAppAccess` + `requireAccountAccess`
 4. Implement the method in `MockAIService` (mock-ai.ts) and `ClaudeAIService` (claude-ai.ts)
 5. Add prompt text in the Lambda (server-side only — never in client code)

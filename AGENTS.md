@@ -48,7 +48,8 @@ Use these documents in this order:
 - `MONOREPO.md` - current repository topology, imports, deploy triggers.
 - `CONTRIBUTING.md` - workflow, discipline rule, contracts policy, branch/PR
   expectations.
-- `contracts/<scope>/` - explicit contract source of truth.
+- `v0-reference/contracts/<scope>/` - generated read-only sync of the v0
+  contract source of truth.
 - `apps/<app>/AGENTS.md` - app-specific operating notes when present.
 - `apps/<app>/CLAUDE.md` - Claude Code compatibility mirror for app-specific
   operating notes.
@@ -131,20 +132,21 @@ stacks themselves live with their owner:
 
 Do not reintroduce root `infrastructure/lib/<scope>` stack ownership.
 
-### `contracts/`
+### Contracts
 
-Normative contracts by scope. Contract mirrors under `apps/<app>/contracts/`
-are forbidden. Contract changes must be paired with code changes that depend on
-them, or code must be held until the contract is ratified.
+M15 makes the v0 repo (`transformotion-apps-b8`) canonical for contracts.
+Contracts are authored only under `transformotion-apps-b8/contracts/`. This
+runtime repo consumes them through the generated, gitignored
+`v0-reference/contracts/` sync target.
 
-Target shape:
-
-- `contracts/platform/`
-- `contracts/stock-analyser/`
-- `contracts/budget-tracker/`
+Do not edit `v0-reference/contracts/` directly. If runtime implementation
+requires a contract change, edit `transformotion-apps-b8/contracts/` first,
+commit and push that v0 repo change, run `pnpm sync:v0` in this runtime repo,
+then implement runtime changes against the synced contract. Stop and ask if v0
+repo access is unavailable.
 
 Use TypeScript contract files for shapes and markdown for behaviour when
-creating new contracts, following `CONTRIBUTING.md`.
+creating new contracts in the v0 repo, following `CONTRIBUTING.md`.
 
 ### `docs/`
 
@@ -241,6 +243,9 @@ AI agents must follow these rules:
 - Never reintroduce deprecated shared-platform patterns retired by M9 child
   issues.
 - Prefer explicit contracts over inferred behaviour.
+- Never edit `v0-reference/contracts/` directly. Contract changes are authored
+  in `transformotion-apps-b8/contracts/`, committed and pushed there, then
+  synced into this runtime repo with `pnpm sync:v0`.
 - Preserve migration compatibility unless explicitly instructed to perform a
   breaking migration.
 - Respect explicit scope boundaries such as "diagnose only", "recon only",
@@ -441,12 +446,15 @@ Runtime configuration pattern:
 - Do not recreate root stack libraries.
 - Each entrypoint should synthesize only the stacks it owns.
 
-### `contracts/`
+### Contracts
 
-- Use one canonical contract location per scope.
+- Use one canonical contract location per scope:
+  `transformotion-apps-b8/contracts/<scope>/`.
+- Treat `v0-reference/contracts/` as generated and read-only.
 - Keep shape authority in `.ts` files and behavioural authority in `.md` files
-  for new hybrid contracts.
-- Update contracts before or with implementation changes that depend on them.
+  for new hybrid contracts authored in the v0 repo.
+- Update and push v0 contracts before implementation changes that depend on
+  them, then run `pnpm sync:v0` in this runtime repo.
 
 ### `docs/`
 
