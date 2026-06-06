@@ -42,6 +42,7 @@ new BudgetTrackerApiStack(app, 'TransformotionDev-BudgetTrackerApi', {
   description:            'Transformotion Apps — Dev Budget Tracker API routes',
   budgetDataTableName:    devBudgetTrackerTables.budgetDataTable.tableName,
   aiJobsTableName:        devBudgetTrackerTables.aiJobsTable.tableName,
+  aiCacheTableName:       devBudgetTrackerTables.aiCacheTable.tableName,
   wsConnectionsTableName: devBudgetTrackerWs.connectionsTable.tableName,
   wsApiId:                devBudgetTrackerWs.webSocketApi.apiId,
 });
@@ -68,6 +69,7 @@ new BudgetTrackerApiStack(app, 'TransformotionProd-BudgetTrackerApi', {
   description:            'Transformotion Apps — Prod Budget Tracker API routes',
   budgetDataTableName:    prodBudgetTrackerTables.budgetDataTable.tableName,
   aiJobsTableName:        prodBudgetTrackerTables.aiJobsTable.tableName,
+  aiCacheTableName:       prodBudgetTrackerTables.aiCacheTable.tableName,
   wsConnectionsTableName: prodBudgetTrackerWs.connectionsTable.tableName,
   wsApiId:                prodBudgetTrackerWs.webSocketApi.apiId,
 });

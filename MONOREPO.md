@@ -96,7 +96,9 @@ There are no Platform Lambda workspaces.
 
 Push-triggered workflows are path-filtered by ownership boundary. Platform
 deploys substrate only and does not trigger app or migration utility deploys.
-The manual `cd.yml` workflow remains the explicit full redeploy escape hatch.
+Deploy workflows do not expose `workflow_call`; cross-owner deployments use
+independent path filters or explicit `workflow_dispatch`. The manual `cd.yml`
+workflow remains the explicit full redeploy escape hatch.
 
 | Changed path | Workflow |
 |---|---|

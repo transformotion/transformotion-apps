@@ -16,12 +16,6 @@ on:
       - 'packages/runtime-config/**'
       - 'packages/lambda-middleware/**'
       - 'packages/fn-ai-proxy-core/**'
-  workflow_call:
-    inputs:
-      target:
-        required: true
-        type: string
-        description: 'Deploy target: dev or prod'
   workflow_dispatch:
     inputs:
       target:
@@ -47,7 +41,7 @@ jobs:
   deploy-dev:
     name: Stock Analyser → Dev
     runs-on: ubuntu-latest
-    if: (github.event_name == 'push' && github.ref_name == 'develop') || (github.event_name == 'workflow_call' && inputs.target == 'dev') || (github.event_name == 'workflow_dispatch' && inputs.target == 'dev')
+    if: (github.event_name == 'push' && github.ref_name == 'develop') || (github.event_name == 'workflow_dispatch' && inputs.target == 'dev')
     environment: dev
     env:
       NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
@@ -166,7 +160,7 @@ jobs:
   deploy-prod:
     name: Stock Analyser → Prod
     runs-on: ubuntu-latest
-    if: (github.event_name == 'push' && github.ref_name == 'main') || (github.event_name == 'workflow_call' && inputs.target == 'prod') || (github.event_name == 'workflow_dispatch' && inputs.target == 'prod')
+    if: (github.event_name == 'push' && github.ref_name == 'main') || (github.event_name == 'workflow_dispatch' && inputs.target == 'prod')
     environment: prod
     env:
       NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}

@@ -257,7 +257,7 @@ platform/
 ├── functions/             # Platform Lambda handlers
 │   ├── auth/              # Auth-related Lambdas (account-provisioning, pre-token-generation, forgot-provider, invitations)
 │   ├── accounts/          # Account management Lambda
-│   ├── claude-proxy/      # Anthropic API proxy
+│   ├── ai-proxy/          # App-owned AI proxy runtime
 │   └── user/              # Platform user data Lambda
 └── infrastructure/        # Platform CDK stacks (Network, Auth, AuthApi, PlatformTables, PlatformApi)
 ```
@@ -878,7 +878,7 @@ The full interface and per-helper semantics are documented in `auth.md`.
 
 This is a layering rule of the same shape as 5.1's data-access architecture. The middleware layer encapsulates raw-claim concerns; business logic operates on typed values. Direct claim access in business-logic code is non-conforming and migrates to helper-mediated access.
 
-**Cross-Lambda trust uses Pattern B with strict constraints.** When one platform Lambda invokes another (currently only `budget-ai → claude-proxy`), the receiving Lambda does not validate JWT signatures itself. Trust comes from IAM scope strictly limiting which callers can invoke. The caller propagates JWT claims via a synthetic event; the receiver reads them as if validated.
+**Cross-Lambda trust uses Pattern B with strict constraints.** When one app-owned Lambda invokes another app-owned Lambda in the same app boundary, the receiving Lambda does not validate JWT signatures itself. Trust comes from IAM scope strictly limiting which callers can invoke. The caller propagates JWT claims via a synthetic event; the receiver reads them as if validated.
 
 This is consistent with the platform's general edge-validation posture (API Gateway validates at the edge; claim-reading helpers trust prior validation). Pattern A — per-hop JWT re-validation — would create an asymmetric posture inside the platform and adds operational complexity without proportionate benefit at the platform's current threat model (single trust domain, all Lambdas under common operational control).
 
@@ -1281,7 +1281,7 @@ is the expected outcome when stabilisation is done correctly.
 
 ### 7.6 Lambda-to-Lambda interface contracts must be verified against the target handler's actual API
 
-When one Lambda invokes another (e.g., `budget-ai` → `claude-proxy`),
+When one Lambda invokes another (for example, Budget Tracker `budget-ai` invokes its app-owned AI proxy),
 the request body field names and response shape must match the *target
 Lambda's handler code*, not the documentation or prior mental model.
 

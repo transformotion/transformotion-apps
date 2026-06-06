@@ -17,12 +17,6 @@ on:
       - 'packages/lambda-middleware/**'
       - 'packages/fn-ai-proxy-core/**'
       - 'packages/budget-domain/**'
-  workflow_call:
-    inputs:
-      target:
-        required: true
-        type: string
-        description: 'Deploy target: dev or prod'
   workflow_dispatch:
     inputs:
       target:
@@ -48,7 +42,7 @@ jobs:
   deploy-dev:
     name: Budget Tracker → Dev
     runs-on: ubuntu-latest
-    if: (github.event_name == 'push' && github.ref_name == 'develop') || (github.event_name == 'workflow_call' && inputs.target == 'dev') || (github.event_name == 'workflow_dispatch' && inputs.target == 'dev')
+    if: (github.event_name == 'push' && github.ref_name == 'develop') || (github.event_name == 'workflow_dispatch' && inputs.target == 'dev')
     environment: dev
     env:
       NEXT_PUBLIC_RUNTIME_PROFILE: live
@@ -156,7 +150,7 @@ jobs:
   deploy-prod:
     name: Budget Tracker → Prod
     runs-on: ubuntu-latest
-    if: (github.event_name == 'push' && github.ref_name == 'main') || (github.event_name == 'workflow_call' && inputs.target == 'prod') || (github.event_name == 'workflow_dispatch' && inputs.target == 'prod')
+    if: (github.event_name == 'push' && github.ref_name == 'main') || (github.event_name == 'workflow_dispatch' && inputs.target == 'prod')
     environment: prod
     env:
       NEXT_PUBLIC_RUNTIME_PROFILE: live

@@ -1,45 +1,15 @@
-import { AIService, AIOptions, AIMessage, AIResponse, AIStreamChunk, JSONSchema } from './index'
-import { callClaudeAPI } from '@/lib/hooks/use-claude'
+import { getConfig } from '@/lib/config'
+import { callWithAIResponseCache } from './cache'
+import { subscribeViaWss } from './wss-transport'
+import type { AIServiceCallOptions, ClaudeRequest, StockAnalyserAIService } from './index'
 
-export class ClaudeAIService implements AIService {
-  async complete(prompt: string, options?: AIOptions): Promise<AIResponse> {
-    const content = await callClaudeAPI<string>({
-      prompt,
-      systemPrompt: options?.systemPrompt,
-      maxTokens: options?.maxTokens,
-    })
-    return {
-      content: typeof content === 'string' ? content : JSON.stringify(content),
-      model: options?.model || 'claude-sonnet-4-6',
-      usage: { inputTokens: 0, outputTokens: 0 },
-      stopReason: 'end_turn',
-    }
+export class ClaudeAIService implements StockAnalyserAIService {
+  async call<T>(request: ClaudeRequest, options: AIServiceCallOptions = {}): Promise<T> {
+    const signal = options.signal ?? new AbortController().signal
+    const { cacheKey: _cacheKey, forceRefresh: _forceRefresh, ...executionRequest } = request
+
+    return callWithAIResponseCache(request, () =>
+      subscribeViaWss<T>(executionRequest, getConfig().ai.wssUrl, signal),
+    )
   }
-
-  async chat(messages: AIMessage[], options?: AIOptions): Promise<AIResponse> {
-    const lastUserMessage = [...messages].reverse().find(m => m.role === 'user')
-    return this.complete(lastUserMessage?.content || '', options)
-  }
-
-  async *streamComplete(prompt: string, options?: AIOptions): AsyncIterable<AIStreamChunk> {
-    const response = await this.complete(prompt, options)
-    yield { type: 'text', content: response.content }
-    yield { type: 'done' }
-  }
-
-  async analyse<T>(prompt: string, schema: JSONSchema, options?: AIOptions): Promise<T> {
-    return callClaudeAPI<T>({
-      prompt,
-      systemPrompt: options?.systemPrompt || `You are a helpful assistant that responds with valid JSON matching this schema: ${JSON.stringify(schema)}`,
-      maxTokens: options?.maxTokens,
-    })
-  }
-
-  async isAvailable(): Promise<boolean> {
-    return true
-  }
-}
-
-export function createClaudeAIService(): ClaudeAIService {
-  return new ClaudeAIService()
 }

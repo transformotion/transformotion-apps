@@ -17,8 +17,8 @@ import type {
   ListMembersResponse,
   CreateInvitationRequest,
   CreateInvitationResponse,
-  ClaudeProxyRequest,
-  ClaudeProxyResponse,
+  AiProxyRequest,
+  AiProxyResponse,
   GetUserProfileResponse,
   PutUserPreferencesRequest,
   PutUserPreferencesResponse,
@@ -67,8 +67,8 @@ export class ApiClient {
   // ── Claude proxy (S2.3) ────────────────────────────────────────────────────
 
   /** POST /api/claude — proxy a prompt to the Anthropic API server-side. */
-  async claude(req: ClaudeProxyRequest): Promise<ClaudeProxyResponse> {
-    return this.http.post<ClaudeProxyResponse>('api/claude', req);
+  async claude(req: AiProxyRequest): Promise<AiProxyResponse> {
+    return this.http.post<AiProxyResponse>('api/claude', req);
   }
 
   // ── Portfolio (S2.4) ───────────────────────────────────────────────────────

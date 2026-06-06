@@ -40,7 +40,7 @@ React + TypeScript + Tailwind CSS + shadcn/ui.
 
 | Stack | Contents |
 |---|---|
-| `Transformotion{Stage}-BudgetTrackerTables` | `budget-tracker.accounts`, `budget-tracker.transactions`, `budget-tracker.rules`, `budget-tracker.settings` |
+| `Transformotion{Stage}-BudgetTrackerTables` | `budget-tracker.transactions`, `budget-tracker.rules`, `budget-tracker.settings`, `budget-tracker.budget-data`, `budget-tracker.ai-jobs`, `budget-tracker.ai-cache` |
 | `Transformotion{Stage}-BudgetTrackerApi` | Budget Tracker-owned REST API Gateway, Lambda functions, and AI proxy runtime |
 | `Transformotion{Stage}-BudgetTrackerWs` | Budget Tracker WebSocket API, WS Lambdas, and `budget-tracker.ws-connections-{stage}` |
 
@@ -76,6 +76,9 @@ The connections DynamoDB table is `budget-tracker.ws-connections-{stage}`. `Budg
 | `budget-tracker.transactions-{stage}` | `accountId` | `transactionId` | Transactions; GSI: `accountId-dateIso-index` |
 | `budget-tracker.rules-{stage}` | `accountId` | `ruleId` | Custom categorisation rules |
 | `budget-tracker.settings-{stage}` | `accountId` | `settingKey` | Per-account settings (key-value) |
+| `budget-tracker.budget-data-{stage}` | `accountId` | `concept` | Categories, budget amounts, budget frequencies |
+| `budget-tracker.ai-jobs-{stage}` | `jobId` | - | AI review job metadata, TTL: `expiresAt` |
+| `budget-tracker.ai-cache-{stage}` | `accountId` | `transactionsHash` | Completed AI review batch-message cache, TTL: `expiresAt` |
 
 WebSocket connection state is in `budget-tracker.ws-connections-{stage}` (owned by `BudgetTrackerWsStack`).
 
@@ -179,8 +182,12 @@ Budget Tracker has its own AI service layer at `lib/services/ai/`:
 | `index.ts` | `AIService` interface (`reviewTransactions`, `analyseCsvFormat`); `getAIService()` singleton |
 | `mock-ai.ts` | `MockAIService` — keyword-based mock for local dev |
 | `claude-ai.ts` | `ClaudeAIService` — calls `budget-ai` Lambda routes (`/api/budget/v1/ai/*`) via `getBudgetHttp()` |
+| `lib/hooks/use-ai-review.ts` | Thin React hook for AI review loading/error state and service invocation |
 
 Provider is selected via `config.ai.provider` (`'mock'` or `'claude'`), resolved from `NEXT_PUBLIC_AI_OVERRIDE` / `NEXT_PUBLIC_RUNTIME_PROFILE`.
+Provider/model resolution for live execution remains in `budget-tracker-ai-proxy-{stage}`. `budget-ai-handler-{stage}` does not read Launchpad AI runtime config directly.
+
+AI review cache is backend-mediated through `budget-ai-handler-{stage}` and stored in `budget-tracker.ai-cache-{stage}`. The cache key is a deterministic hash of normalized review transactions, active category/subcategory inputs, confidence threshold, and a schema version. `forceFullSearch` bypasses cache reads. The cache stores replayable WSS batch-result messages, not prompts, secrets, user claims, or raw transaction arrays.
 
 **Adding a new AI feature:**
 1. Add the method to the `AIService` interface in `lib/services/ai/index.ts`
@@ -189,7 +196,7 @@ Provider is selected via `config.ai.provider` (`'mock'` or `'claude'`), resolved
 4. Implement the method in `MockAIService` (mock-ai.ts) and `ClaudeAIService` (claude-ai.ts)
 5. Add prompt text in the Lambda (server-side only — never in client code)
 
-AI flows use `getAIService()` directly from components.
+AI review UI flows use `useAIReview()`; components must not call `getAIService().reviewTransactions()` directly.
 
 ## v0 origins
 

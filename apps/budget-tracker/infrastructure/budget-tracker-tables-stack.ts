@@ -26,6 +26,7 @@ export class BudgetTrackerTablesStack extends cdk.Stack {
   public readonly settingsTable:     dynamodb.Table;
   public readonly budgetDataTable:   dynamodb.Table;
   public readonly aiJobsTable:       dynamodb.Table;
+  public readonly aiCacheTable:      dynamodb.Table;
 
   constructor(scope: Construct, id: string, props: BudgetTrackerTablesStackProps) {
     super(scope, id, props);
@@ -101,6 +102,18 @@ export class BudgetTrackerTablesStack extends cdk.Stack {
       projectionType: dynamodb.ProjectionType.ALL,
     });
 
+    // â”€â”€ budget-tracker.ai-cache â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Caches completed AI review batch messages. PK: accountId, SK: transactionsHash.
+    // TTL: expiresAt (7 days) for automatic cleanup.
+    this.aiCacheTable = new dynamodb.Table(this, 'AiCacheTable', {
+      tableName:           `budget-tracker.ai-cache-${stage}`,
+      partitionKey:        { name: 'accountId',        type: dynamodb.AttributeType.STRING },
+      sortKey:             { name: 'transactionsHash', type: dynamodb.AttributeType.STRING },
+      billingMode:         dynamodb.BillingMode.PAY_PER_REQUEST,
+      timeToLiveAttribute: 'expiresAt',
+      removalPolicy:       removal,
+    });
+
     // ── Outputs ───────────────────────────────────────────────────────────────
     const out = (id: string, value: string, description: string) =>
       new cdk.CfnOutput(this, id, { value, description, exportName: `Transformotion-${stage}-${id}` });
@@ -110,5 +123,6 @@ export class BudgetTrackerTablesStack extends cdk.Stack {
     out('BTSettingsTableArn',     this.settingsTable.tableArn,     'budget-tracker.settings table ARN');
     out('BTBudgetDataTableArn',   this.budgetDataTable.tableArn,   'budget-tracker.budget-data table ARN');
     out('BTAiJobsTableArn',       this.aiJobsTable.tableArn,       'budget-tracker.ai-jobs table ARN');
+    out('BTAiCacheTableArn',      this.aiCacheTable.tableArn,      'budget-tracker.ai-cache table ARN');
   }
 }

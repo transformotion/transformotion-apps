@@ -7,12 +7,6 @@ on:
       - 'migration-utilities/**'
       - 'infrastructure/bin/migration-utilities.ts'
       - 'packages/**'
-  workflow_call:
-    inputs:
-      target:
-        required: true
-        type: string
-        description: 'Deploy target: dev or prod'
   workflow_dispatch:
     inputs:
       target:
@@ -38,7 +32,7 @@ jobs:
   deploy-dev:
     name: Migration Utilities → Dev
     runs-on: ubuntu-latest
-    if: (github.event_name == 'push' && github.ref_name == 'develop') || (github.event_name == 'workflow_call' && inputs.target == 'dev') || (github.event_name == 'workflow_dispatch' && inputs.target == 'dev')
+    if: (github.event_name == 'push' && github.ref_name == 'develop') || (github.event_name == 'workflow_dispatch' && inputs.target == 'dev')
     environment: dev
     steps:
       - uses: actions/checkout@v4
@@ -67,7 +61,7 @@ jobs:
   deploy-prod:
     name: Migration Utilities → Prod
     runs-on: ubuntu-latest
-    if: (github.event_name == 'push' && github.ref_name == 'main') || (github.event_name == 'workflow_call' && inputs.target == 'prod') || (github.event_name == 'workflow_dispatch' && inputs.target == 'prod')
+    if: (github.event_name == 'push' && github.ref_name == 'main') || (github.event_name == 'workflow_dispatch' && inputs.target == 'prod')
     environment: prod
     steps:
       - uses: actions/checkout@v4

@@ -3,8 +3,11 @@ import { DynamoDBDocumentClient, PutCommand, QueryCommand } from '@aws-sdk/lib-d
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
 import { ok, parseBody, requireAccountAccess } from '@transformotion/lambda-middleware';
 import type { AuthClaims } from '@transformotion/lambda-middleware';
+import type { WsMessageComplete } from '@transformotion/budget-domain';
 import type { Category } from '@transformotion/budget-domain';
+import { buildReviewTransactionsHash, getCachedReview } from './review-cache';
 import type { ReviewWorkerPayload } from './review-worker';
+import { pushToConnection } from './shared';
 
 const ddb          = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const lambdaClient = new LambdaClient({});
@@ -12,6 +15,7 @@ const lambdaClient = new LambdaClient({});
 const JOBS_TABLE  = process.env.AI_JOBS_TABLE!;
 const CONN_TABLE  = process.env.WS_CONNECTIONS_TABLE!;
 const SELF_FN     = process.env.AWS_LAMBDA_FUNCTION_NAME!;
+const CACHE_TABLE = process.env.AI_CACHE_TABLE;
 
 export async function reviewStart(
   auth: AuthClaims,
@@ -44,6 +48,11 @@ export async function reviewStart(
   const jobId    = crypto.randomUUID();
   const now      = Math.floor(Date.now() / 1000);
   const expiresAt = now + 86400; // 24h TTL
+  const transactionsHash = buildReviewTransactionsHash({
+    transactions,
+    categories,
+    settings,
+  });
 
   await ddb.send(new PutCommand({
     TableName: JOBS_TABLE,
@@ -54,8 +63,21 @@ export async function reviewStart(
       status:    'pending',
       createdAt: new Date().toISOString(),
       expiresAt,
+      transactionsHash,
     },
   }));
+
+  if (forceFullSearch !== true) {
+    const cached = await getCachedReview(CACHE_TABLE, accountId, transactionsHash);
+    if (cached) {
+      for (const batch of cached.batches) {
+        await pushToConnection(connectionId, { ...batch, jobId });
+      }
+      const complete: WsMessageComplete = { type: 'complete', jobId };
+      await pushToConnection(connectionId, complete);
+      return ok({ jobId, cached: true });
+    }
+  }
 
   const batchSize            = Math.min(Math.max(settings?.batchSize ?? 5, 1), 20);
   const parallelLimit        = Math.min(Math.max(settings?.parallelLimit ?? 4, 1), 10);
@@ -73,6 +95,7 @@ export async function reviewStart(
     parallelLimit,
     confidenceThreshold,
     forceFullSearch: forceFullSearch === true,
+    transactionsHash,
     auth,
   };
 

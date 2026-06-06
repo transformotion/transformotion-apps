@@ -83,7 +83,7 @@ Deployed by `deploy-budget-tracker.yml`. Source:
 
 | Stack name | Class | Contents |
 |---|---|---|
-| `Transformotion{Stage}-BudgetTrackerTables` | `BudgetTrackerTablesStack` | Budget Tracker app data tables |
+| `Transformotion{Stage}-BudgetTrackerTables` | `BudgetTrackerTablesStack` | Budget Tracker app data tables, AI jobs table, and AI review cache table |
 | `Transformotion{Stage}-BudgetTrackerWs` | `BudgetTrackerWsStack` | Budget Tracker-owned WebSocket API, WSS Lambdas, and `budget-tracker.ws-connections-{stage}` |
 | `Transformotion{Stage}-BudgetTrackerApi` | `BudgetTrackerApiStack` | Budget Tracker-owned REST API Gateway, Lambda functions, and `budget-tracker-ai-proxy-{stage}` |
 

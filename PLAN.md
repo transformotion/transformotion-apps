@@ -992,7 +992,7 @@ Phase 6 - LP frontend and admin settings:
 Phase 7 - Isolation close and cleanup (after ownership and runtime switching):
 - #371 M9-9: Deploy cascade restructure (workflow_call to independent
   path-filtered triggers)
-- #372 M9-11: Platform cleanup - decommission shared claude-proxy, platform-ws,
+- #372 M9-11: Platform cleanup - decommission shared legacy AI proxy, platform-ws,
   platform.job-results
 
 ### Architectural decisions incorporated
@@ -1264,7 +1264,7 @@ ceremonial.
   - `functions/**` asymmetry investigated for `deploy-budget-tracker.yml`. Stock-analyser triggers on `functions/**`; budget-tracker does not. Whether budget-tracker Lambdas have dependencies on `functions/**` changes determines whether the asymmetry is intentional or a gap.
   - `deploy-migration-utilities.yml` path filters verified for completeness — triggers on `migration-utilities/**` and `migration-utilities/infrastructure/**` plus the same CI machinery paths (`.github/workflows/**`, `scripts/ci/**`).
 - Post-deploy smoke testing: a known-good request hits each app's primary endpoint after deploy, asserts a 2xx response or expected redirect. Failure rolls back or alerts. Existing PR #28 verification reviewed and extended if it doesn't already do this. Smoke testing extends to migration-utilities deployments — a known-good request hits a deployed migration utility's endpoint after deploy.
-- **Pattern B IAM scope CI verification** (per M2.2 #110): a CI check confirms that receiving Lambdas using Pattern B (cross-Lambda invocation with synthetic-event claim propagation, currently `claude-proxy`) have their `lambda:InvokeFunction` IAM policy locked to expected callers only. If the policy drifts to allow unexpected callers, CI fails. This verification is the load-bearing constraint that makes Pattern B acceptable; without it, the platform's cross-Lambda trust posture is weaker.
+- **Pattern B IAM scope CI verification** (per M2.2 #110): a CI check confirms that receiving Lambdas using Pattern B (cross-Lambda invocation with synthetic-event claim propagation, currently app-owned AI proxy calls such as Budget Tracker `budget-ai` to `budget-tracker-ai-proxy`) have their `lambda:InvokeFunction` IAM policy locked to expected callers only. If the policy drifts to allow unexpected callers, CI fails. This verification is the load-bearing constraint that makes Pattern B acceptable; without it, the platform's cross-Lambda trust posture is weaker.
 - A first prod deploy executed against the populated environment as the milestone's verification — confirms the pipeline works end-to-end against prod.
 
 ### Goals served

@@ -381,7 +381,7 @@ requireAppAccess(auth, appSlug)
 
 requireAnyAppAccess(auth, appSlugs)
 // Throws 403 unless auth.apps includes at least one of appSlugs OR auth.siteAdmin === true.
-// Use only in platform handlers that serve multiple apps (currently: claude-proxy).
+// Use only for explicitly governed multi-app handlers.
 
 requireAccountAccess(auth, appSlug, accountId, minRole?)
 // Throws 403 unless the caller is a member of accountId for appSlug
@@ -430,7 +430,7 @@ export const handler = withAuth(async ({ auth, account, event }) => {
 });
 ```
 
-### Multi-app platform handler (currently: claude-proxy only)
+### Multi-app handler
 
 ```typescript
 export const handler = withAuth(async ({ auth, account, event }) => {
@@ -470,9 +470,9 @@ The auth/control-plane Lambdas have explicit permission models. Each is document
 
 ### Cross-Lambda trust pattern
 
-`claude-proxy` is invoked by `budget-ai` (a Lambda-to-Lambda call, not API-Gateway-to-Lambda). The trust model for this path is documented in `CONTRIBUTING.md` Section 5 as the canonical pattern for cross-Lambda invocations: **Pattern B with strict constraints** — the receiving Lambda does not validate JWT signatures itself; trust comes from IAM scope strictly limiting which callers can invoke. The caller propagates JWT claims via a synthetic event; the receiver reads them as if validated.
+Budget Tracker's udget-ai Lambda invokes its app-owned AI proxy directly (a Lambda-to-Lambda call, not API-Gateway-to-Lambda). The trust model for this path is documented in CONTRIBUTING.md Section 5 as the canonical pattern for governed cross-Lambda invocations: **Pattern B with strict constraints** - the receiving Lambda does not validate JWT signatures itself; trust comes from IAM scope strictly limiting which callers can invoke. The caller propagates JWT claims via a synthetic event; the receiver reads them as if validated.
 
-This pattern is binding only for cross-Lambda invocations between platform Lambdas under common operational control. External services or third-party callers must use API-Gateway-validated paths (the standard `withAuth` flow).
+This pattern is binding only for cross-Lambda invocations under common operational control and within the same app ownership boundary unless an architecture issue explicitly approves otherwise. External services or third-party callers must use API-Gateway-validated paths (the standard `withAuth` flow).
 
 ---
 

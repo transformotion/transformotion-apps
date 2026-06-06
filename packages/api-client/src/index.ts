@@ -51,8 +51,8 @@ export type {
   CreateInvitationResponse,
 
   // Claude proxy
-  ClaudeProxyRequest,
-  ClaudeProxyResponse,
+  AiProxyRequest,
+  AiProxyResponse,
 
   // User preferences
   UserPreferences,

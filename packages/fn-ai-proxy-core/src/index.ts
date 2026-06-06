@@ -38,9 +38,6 @@ export type {
   OpenAIResponse,
   ClaudeInvocationRequest,
   ClaudeInvocationResult,
-  ClaudeProxyAsyncResponse,
-  ClaudeProxyOptions,
-  ClaudeProxySyncResponse,
   ClaudeRequest,
   JobResultsRecord,
 } from './types';

@@ -150,7 +150,7 @@ export interface OhlcvDataResponse {
 
 // ── Claude proxy ──────────────────────────────────────────────────────────────
 
-export interface ClaudeProxyRequest {
+export interface AiProxyRequest {
   prompt:     string;
   system?:    string;
   model?:     string;
@@ -165,7 +165,7 @@ export interface ClaudeProxyRequest {
   asyncMode?: boolean;
 }
 
-export interface ClaudeProxyResponse {
+export interface AiProxyResponse {
   content: string;
   model:   string;
   usage: {
@@ -173,4 +173,3 @@ export interface ClaudeProxyResponse {
     outputTokens: number;
   };
 }
-

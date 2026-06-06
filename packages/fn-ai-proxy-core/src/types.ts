@@ -177,10 +177,6 @@ export interface OpenAIResponse {
   };
 }
 
-export type ClaudeProxyOptions = AiProxyOptions;
 export type ClaudeRequest = AiProxyRequest;
 export type ClaudeInvocationRequest = AiProviderRequest;
 export type ClaudeInvocationResult = AiProviderResult;
-export type ClaudeProxySyncResponse = AiProxySyncResponse;
-export type ClaudeProxyAsyncResponse = AiProxyAsyncResponse;
-export type ClaudeProxyAuthContext = AiProxyAuthContext;

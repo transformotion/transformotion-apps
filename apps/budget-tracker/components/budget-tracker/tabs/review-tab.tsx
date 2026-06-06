@@ -10,8 +10,8 @@ import { Sparkles, Check, X, ChevronRight, Pencil, AlertCircle, RefreshCw } from
 import { getCategoryBadgeClasses } from "../data/category-colors"
 import { getActiveCategories, getActiveSubcategories, getCategoryName, getSubcategoryName } from "@/lib/categories"
 import { cn } from "@/lib/utils"
-import { getAIService } from "@/lib/services/ai"
 import type { ReviewResult as AIReviewResult } from "@/lib/services/ai"
+import { useAIReview } from "@/lib/hooks/use-ai-review"
 import type { MatchingRule } from "@transformotion/budget-domain"
 
 function ConfidenceBadge({ confidence }: { confidence: 'high' | 'medium' | 'low' }) {
@@ -52,6 +52,7 @@ export function ReviewTab() {
   const [editSubcategoryId, setEditSubcategoryId] = useState("")
   const [acceptError, setAcceptError] = useState<string | null>(null)
   const [acceptAllProgress, setAcceptAllProgress] = useState<{ current: number; total: number } | null>(null)
+  const { startReview } = useAIReview()
 
   const categories = budgetData.categories
   const uncategorizedTransactions = transactions.filter(t => !t.categoryId && !t.category)
@@ -99,7 +100,7 @@ export function ReviewTab() {
     }))
 
     try {
-      await getAIService().reviewTransactions({
+      await startReview({
         transactions: indexedTxs,
         categories,
         settings: {

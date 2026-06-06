@@ -61,8 +61,7 @@ export class MockAIService implements AIService {
       }
     }
 
-    // Fire and forget — caller receives jobId immediately
-    run().catch(console.error)
+    await run()
 
     return { jobId }
   }

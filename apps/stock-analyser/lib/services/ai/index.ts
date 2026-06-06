@@ -1,71 +1,70 @@
-/**
- * AI Service Interface
- *
- * Abstraction for AI model interactions.
- * Provider selected at startup via runtime-config (NEXT_PUBLIC_AI_OVERRIDE / NEXT_PUBLIC_RUNTIME_PROFILE).
- */
+import { getConfig } from '@/lib/config'
+import { ClaudeAIService } from './claude-ai'
+import { MockAIService } from './mock-ai'
 
-export interface AIOptions {
-  model?: string              // e.g., 'claude-3-opus', 'claude-3-sonnet'
-  maxTokens?: number
-  temperature?: number
+export interface ClaudeRequest {
+  prompt: string
+  webSearch?: boolean
   systemPrompt?: string
-  stopSequences?: string[]
+  maxTokens?: number
+  /**
+   * DynamoDB cache key, e.g. MARKET#ASX or ANALYSIS#CBA.AX.
+   * When provided, the service checks cache before AI execution and writes
+   * successful responses back after execution.
+   */
+  cacheKey?: string
+  /**
+   * Skip the cache read and call the selected service directly.
+   * Successful responses are still written back to cache.
+   */
+  forceRefresh?: boolean
 }
 
-export interface AIMessage {
-  role: 'user' | 'assistant' | 'system'
-  content: string
-}
-
-export interface AIResponse {
-  content: string
-  model: string
-  usage: {
+export interface ClaudeResponse<T = unknown> {
+  content: T
+  usage?: {
     inputTokens: number
     outputTokens: number
   }
-  stopReason: 'end_turn' | 'max_tokens' | 'stop_sequence'
 }
 
-export interface AIStreamChunk {
-  type: 'text' | 'error' | 'done'
-  content?: string
+export interface ClaudeJobStatus<T = unknown> {
+  status: 'pending' | 'processing' | 'complete' | 'error'
+  content?: T
   error?: string
+  createdAt?: string
+  completedAt?: string
 }
 
-export interface JSONSchema {
-  type: string
-  properties?: Record<string, unknown>
-  required?: string[]
-  [key: string]: unknown
+export interface AIServiceCallOptions {
+  signal?: AbortSignal
 }
 
-export interface AIService {
-  /**
-   * Single-turn completion.
-   */
-  complete(prompt: string, options?: AIOptions): Promise<AIResponse>
-
-  /**
-   * Multi-turn chat completion.
-   */
-  chat(messages: AIMessage[], options?: AIOptions): Promise<AIResponse>
-
-  /**
-   * Streaming completion (returns async iterator).
-   */
-  streamComplete(prompt: string, options?: AIOptions): AsyncIterable<AIStreamChunk>
-
-  /**
-   * Structured output with JSON schema validation.
-   */
-  analyse<T>(prompt: string, schema: JSONSchema, options?: AIOptions): Promise<T>
-
-  /**
-   * Check if service is available.
-   */
-  isAvailable(): Promise<boolean>
+export interface StockAnalyserAIService {
+  call<T>(request: ClaudeRequest, options?: AIServiceCallOptions): Promise<T>
 }
 
-export { ClaudeAIService, createClaudeAIService } from './claude-ai'
+let aiService: StockAnalyserAIService | null = null
+
+export function getAIService(): StockAnalyserAIService {
+  if (!aiService) {
+    aiService = getConfig().ai.provider === 'mock'
+      ? new MockAIService()
+      : new ClaudeAIService()
+  }
+  return aiService
+}
+
+export function resetAIService(): void {
+  aiService = null
+}
+
+export async function callClaudeAPI<T = unknown>(
+  request: ClaudeRequest,
+  options: AIServiceCallOptions = {},
+): Promise<T> {
+  return getAIService().call<T>(request, options)
+}
+
+export { ClaudeAIService } from './claude-ai'
+export { MockAIService } from './mock-ai'

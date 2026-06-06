@@ -16,6 +16,9 @@ Serves at the root host and `/launchpad/*` sign-in/callback paths.
 Launchpad is the control-plane app. It owns the auth domain, live
 auth/control-plane API surface, and active Launchpad-owned Cognito/auth
 foundation.
+Launchpad app tile visibility is driven by the decoded JWT `apps` claim exposed
+through `@transformotion/auth-client`; site-admin users retain override
+visibility for configured app tiles.
 
 ## Quick reference
 

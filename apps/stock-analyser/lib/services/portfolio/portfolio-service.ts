@@ -1,14 +1,13 @@
 /**
  * Portfolio Service
  *
- * Wraps GET/PUT /portfolio Lambda calls and coordinates Claude enrichment
- * (checking ANALYSIS#ticker cache before calling the proxy).
+ * Wraps GET/PUT /portfolio Lambda calls and coordinates AI enrichment.
  */
 
 import { getStockAnalyserClient } from '@/lib/api'
 import { getConfig } from '@/lib/config'
 import { dynamoCache } from '@/lib/services/cache/dynamo-ttl-cache'
-import { callClaudeAPI } from '@/lib/hooks/use-claude'
+import { callClaudeAPI } from '@/lib/services/ai'
 import type { PortfolioHolding, StockAnalysisResult } from './types'
 
 // ── Mock holdings ─────────────────────────────────────────────────────────────
@@ -96,18 +95,19 @@ export const portfolioService = {
       if (cached) onResult(ticker, cached)
     }
 
-    // 3. Call Claude sequentially for cache misses
+    // 3. Call AI sequentially for cache misses
     const misses = cacheChecks.filter(r => !r.cached).map(r => r.ticker)
 
     for (const ticker of misses) {
       if (signal?.aborted) break
       try {
         const result = await callClaudeAPI<StockAnalysisResult>(
-          { prompt: analysisPrompt(ticker), systemPrompt: ANALYSIS_SYSTEM },
-          { signal }
-        )
-        dynamoCache.set(`ANALYSIS#${ticker}`, result).catch(err =>
-          console.warn('[portfolio] cache write failed for', ticker, err)
+          {
+            prompt: analysisPrompt(ticker),
+            systemPrompt: ANALYSIS_SYSTEM,
+            cacheKey: `ANALYSIS#${ticker}`,
+          },
+          { signal },
         )
         onResult(ticker, result)
       } catch (err) {

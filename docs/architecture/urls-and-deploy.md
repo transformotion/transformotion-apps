@@ -61,7 +61,9 @@ Single distribution, configured in `NetworkStack`.
 Deploy ordering uses independently triggered workflows. Platform changes deploy
 neutral substrate only. App and migration utility workflows deploy their own
 stacks/assets through app-specific path filters or explicit `workflow_dispatch`.
-The manual `cd.yml` workflow remains the full redeploy escape hatch.
+No deploy workflow exposes `workflow_call`; there are no deploy workflow chains
+between Platform, Launchpad, Stock Analyser, Budget Tracker, or Migration
+Utilities. The manual `cd.yml` workflow remains the full redeploy escape hatch.
 
 ### Platform
 

@@ -261,14 +261,30 @@ Tracks in-progress and completed AI review jobs per account.
 
 | Attribute | Type | Notes |
 |---|---|---|
-| `accountId` (PK) | String | |
-| `jobId` (SK) | String | UUID |
+| `jobId` (PK) | String | UUID |
+| `accountId` | String | Verified Budget Tracker account |
 | `userId` | String | Cognito `sub` |
 | `status` | String | Job status |
+| `transactionsHash` | String | Deterministic review cache key for the request |
 | `createdAt` | String | ISO 8601 |
 | `expiresAt` | Number | Epoch seconds, TTL |
 
 **GSI:** `userId-index` (PK: `userId`).
+
+### `budget-tracker.ai-cache-{stage}`
+
+Budget Tracker-owned cache of completed AI review WSS batch messages. The cache
+is mediated by `budget-ai-handler-{stage}`; frontend code never reads this table
+directly.
+
+| Attribute | Type | Notes |
+|---|---|---|
+| `accountId` (PK) | String | Verified Budget Tracker account |
+| `transactionsHash` (SK) | String | SHA-256 of normalized review inputs and schema version |
+| `batches` | List | Replayable `batch_result` WSS messages without raw prompts or claims |
+| `schemaVersion` | String | Includes provider-agnostic cache schema marker |
+| `createdAt` | String | ISO 8601 |
+| `expiresAt` | Number | Epoch seconds, 7-day TTL |
 
 ## Account-scoping invariant
 

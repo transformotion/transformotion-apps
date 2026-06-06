@@ -6,7 +6,8 @@
   "scripts": {
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
-    "lint": "echo \"lint: budget-ai\""
+    "lint": "echo \"lint: budget-ai\"",
+    "test": "vitest run"
   },
   "dependencies": {
     "@transformotion/budget-domain": "workspace:*",
@@ -19,6 +20,7 @@
     "@aws-sdk/client-lambda": "^3",
     "@types/aws-lambda": "^8",
     "@types/node": "^22",
-    "typescript": "*"
+    "typescript": "*",
+    "vitest": "^3"
   }
 }

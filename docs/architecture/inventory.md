@@ -62,6 +62,9 @@ those stacks. They are not live ownership surfaces.
 
 The pre-token trigger emits the `apps`, `accounts`, and `site_admin` claims
 consumed by Launchpad, Stock Analyser, Budget Tracker, and migration utilities.
+Launchpad tile visibility consumes the decoded `apps` claim through
+`@transformotion/auth-client`; site-admin users can see configured app tiles
+even when their token has no app-specific `apps` entry.
 
 ## Launchpad Control Plane
 
@@ -125,6 +128,7 @@ Budget Tracker owns:
 - `Transformotion{Stage}-BudgetTrackerApi`
 - WSS connection table: `budget-tracker.ws-connections-{stage}`
 - AI jobs table: `budget-tracker.ai-jobs-{stage}`
+- AI review cache table: `budget-tracker.ai-cache-{stage}`
 - AI runtime Lambda: `budget-tracker-ai-proxy-{stage}`
 - AI runtime selection: app override -> platform default -> env fallback, using
   app-owned Anthropic/OpenAI secrets

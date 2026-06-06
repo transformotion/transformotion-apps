@@ -7,7 +7,7 @@ const MOCK_USER: User = {
   email: 'user@example.com',
   name: 'Demo User',
   avatarUrl: undefined,
-  metadata: { siteAdmin: true },
+  metadata: { apps: ['stock-analyser', 'budget-tracker'], siteAdmin: true },
 }
 
 const MOCK_ACCOUNTS: Account[] = [

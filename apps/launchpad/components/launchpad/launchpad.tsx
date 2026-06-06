@@ -6,6 +6,7 @@ import { Wordmark } from '@/components/brand/wordmark'
 import { AiEngineSettings } from '@/components/launchpad/ai-engine-settings'
 import { TrendingUp, Wallet, Layers, LogOut, Settings, User as UserIcon, Check } from 'lucide-react'
 import type { User } from '@transformotion/auth-client'
+import appRegistry from '../../../../platform/config/app-registry.json'
 
 interface App {
   id: string
@@ -35,25 +36,32 @@ const PLACEHOLDER_ACCOUNTS: Account[] = [
   { id: '1', name: 'Personal', type: 'Personal' },
 ]
 
-const APPS: App[] = [
-  {
-    id: 'stock-analyser',
-    name: 'Stock Signal Analyser',
-    description: 'Cycle position analysis across ASX, NASDAQ, Dow Jones, FTSE',
-    icon: TrendingUp,
-    available: true,
-    color: 'text-primary',
+const APP_VISUALS: Record<string, Pick<App, 'icon' | 'color' | 'bgGradient'>> = {
+  'stock-analyser': {
+    icon:       TrendingUp,
+    color:      'text-primary',
     bgGradient: 'from-primary/20 via-primary/5 to-transparent',
   },
-  {
-    id: 'budget-tracker',
-    name: 'Budget Tracker',
-    description: 'Track income, expenses and savings across accounts',
-    icon: Wallet,
-    available: true,
-    color: 'text-signal-green',
+  'budget-tracker': {
+    icon:       Wallet,
+    color:      'text-signal-green',
     bgGradient: 'from-signal-green/20 via-signal-green/5 to-transparent',
   },
+}
+
+const CONFIGURED_APPS: App[] = appRegistry.apps.map((app) => ({
+  id:          app.slug,
+  name:        app.displayName,
+  description: app.description,
+  available:   true,
+  ...(APP_VISUALS[app.slug] ?? {
+    icon:       Layers,
+    color:      'text-muted-foreground',
+    bgGradient: 'from-muted/20 via-muted/5 to-transparent',
+  }),
+}))
+
+const UNAVAILABLE_APPS: App[] = [
   {
     id: 'transformation-framework',
     name: 'Transformotion Framework',
@@ -187,16 +195,22 @@ function AppTile({
 
 function AppGrid({
   apps,
+  accessibleAppIds,
+  isSiteAdmin,
   userCanAccessFramework,
   onLaunchApp,
   onLaunchBudgetTracker,
 }: {
   apps: App[]
+  accessibleAppIds: string[]
+  isSiteAdmin: boolean
   userCanAccessFramework: boolean
   onLaunchApp?: () => void
   onLaunchBudgetTracker?: () => void
 }) {
+  const access = new Set(accessibleAppIds)
   const visibleApps = apps.filter((app) => {
+    if (app.available && !isSiteAdmin && !access.has(app.id)) return false
     if (app.id === 'transformation-framework' && !userCanAccessFramework) return false
     return true
   })
@@ -355,7 +369,9 @@ export function Launchpad({
         <div className="max-w-5xl mx-auto px-4 md:px-6">
           <Greeting name={user.name} />
           <AppGrid
-            apps={APPS}
+            apps={[...CONFIGURED_APPS, ...UNAVAILABLE_APPS]}
+            accessibleAppIds={getAppsClaim(authUser)}
+            isSiteAdmin={isSiteAdmin}
             userCanAccessFramework={false}
             onLaunchApp={onLaunchApp}
             onLaunchBudgetTracker={onLaunchBudgetTracker}
@@ -380,4 +396,11 @@ export function Launchpad({
       <Footer />
     </div>
   )
+}
+
+function getAppsClaim(user: User | null): string[] {
+  const apps = user?.metadata?.apps
+  return Array.isArray(apps)
+    ? apps.filter((app): app is string => typeof app === 'string')
+    : []
 }

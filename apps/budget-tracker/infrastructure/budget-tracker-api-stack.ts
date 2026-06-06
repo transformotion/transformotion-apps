@@ -16,6 +16,8 @@ export interface BudgetTrackerApiStackProps extends cdk.StackProps {
   budgetDataTableName: string;
   /** AI jobs table name from BudgetTrackerTablesStack. */
   aiJobsTableName: string;
+  /** AI review cache table name from BudgetTrackerTablesStack. */
+  aiCacheTableName: string;
   /** Budget Tracker WebSocket connections table name from BudgetTrackerWsStack. */
   wsConnectionsTableName: string;
   /** Budget Tracker WebSocket API ID from BudgetTrackerWsStack. */
@@ -50,7 +52,7 @@ export class BudgetTrackerApiStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: BudgetTrackerApiStackProps) {
     super(scope, id, props);
 
-    const { stage, userPoolId, budgetDataTableName, aiJobsTableName, wsConnectionsTableName, wsApiId } = props;
+    const { stage, userPoolId, budgetDataTableName, aiJobsTableName, aiCacheTableName, wsConnectionsTableName, wsApiId } = props;
 
     const userPool = cognito.UserPool.fromUserPoolId(this, 'UserPool', userPoolId);
 
@@ -84,6 +86,7 @@ export class BudgetTrackerApiStack extends cdk.Stack {
     const settingsTable     = dynamodb.Table.fromTableName(this, 'SettingsTable',     `budget-tracker.settings-${stage}`);
     const budgetDataTable   = dynamodb.Table.fromTableName(this, 'BudgetDataTable',   budgetDataTableName);
     const aiJobsTable       = dynamodb.Table.fromTableName(this, 'AiJobsTable',       aiJobsTableName);
+    const aiCacheTable      = dynamodb.Table.fromTableName(this, 'AiCacheTable',      aiCacheTableName);
     const wsConnectionsTable = dynamodb.Table.fromTableName(this, 'WsConnectionsTable', wsConnectionsTableName);
 
     const bundling: lambdaNodejs.BundlingOptions = {
@@ -179,6 +182,7 @@ export class BudgetTrackerApiStack extends cdk.Stack {
       environment:  {
         CLAUDE_PROXY_FUNCTION_NAME: aiProxyFnName,
         AI_JOBS_TABLE:              aiJobsTableName,
+        AI_CACHE_TABLE:             aiCacheTableName,
         WS_CONNECTIONS_TABLE:       wsConnectionsTableName,
         WS_API_ID:                  wsApiId,
         WS_STAGE:                   stage,
@@ -198,6 +202,7 @@ export class BudgetTrackerApiStack extends cdk.Stack {
       resources: [`arn:aws:execute-api:${this.region}:${this.account}:${wsApiId}/${stage}/*`],
     }));
     aiJobsTable.grantReadWriteData(aiFn);
+    aiCacheTable.grantReadWriteData(aiFn);
     wsConnectionsTable.grantReadData(aiFn);
     // grantReadData on a Table imported via fromTableName covers the base table ARN but not GSI ARNs,
     // because CDK has no schema knowledge of imported tables. Explicit grant for the userId-index GSI

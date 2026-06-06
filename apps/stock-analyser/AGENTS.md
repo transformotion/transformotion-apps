@@ -89,24 +89,41 @@ Key service methods defined in [contracts/DATA_CONTRACTS.md](./contracts/DATA_CO
 - `watchlistService.getItems()` / `saveItems()`
 - `useClaude()` hook — POST to `/api/claude` + async polling pattern
 
-### Claude AI pattern
+### AI service pattern
 
-The `useClaude<T>()` hook handles the full async request cycle via Stock Analyser-owned runtime:
+Stock Analyser AI uses a thin React hook over a service-owned execution layer:
+
+```text
+React UI
+  -> useClaude<T>() / callClaudeAPI<T>()
+    -> getAIService().call<T>()
+      -> ClaudeAIService or MockAIService
+      -> cache, WSS transport, response parsing, fixtures
+```
+
+`useClaude<T>()` in `lib/hooks/use-claude.ts` owns React state only: loading,
+error, abort orchestration, and the existing UI-facing API. AI execution lives
+under `lib/services/ai/`.
+
+`ClaudeAIService` handles the live async request cycle via Stock Analyser-owned runtime:
 1. Open SA WSS (`NEXT_PUBLIC_SA_WSS_URL`) with Cognito ID token and `?app=stock-analyser`
 2. Send `{ action: 'init' }` → receive `{ type: 'connected', connectionId }`
 3. POST to `/api/claude` with prompt + `connectionId` → returns `jobId`
 4. Receive `{ type: 'job_complete' }` push on the WebSocket when the job finishes
-5. Read result from `/analysis-cache/job-{jobId}` and return typed result
+5. Read result from `/analysis-cache/job-{jobId}`, strip optional JSON code fences, parse JSON, and return the typed result
 
-See `apps/stock-analyser/docs/claude-ai-pattern.md` for usage examples and configuration.
+Cache reads/writes are service-layer behavior via `lib/services/ai/cache.ts`,
+not hook behavior. See `apps/stock-analyser/docs/claude-ai-pattern.md` for usage
+examples and configuration.
 
 ### Adding a new AI feature
 
-Stock Analyser AI goes through `useClaude<T>()` or `callClaudeAPI<T>()` in `lib/hooks/use-claude.ts`.
+Stock Analyser AI goes through `useClaude<T>()` for React components or
+`callClaudeAPI<T>()` from `lib/services/ai` for non-React service callers.
 
 1. Add mock fixture data to `lib/services/ai/fixtures/index.ts` (keyword-keyed, returned by `getMockResponse()`)
-2. The `MockAIService` at `lib/services/ai/mock-ai.ts` uses `getMockResponse()` — no change needed unless the interface changes
-3. `ClaudeAIService` at `lib/services/ai/claude-ai.ts` delegates to `callClaudeAPI` — no change needed for new prompts
+2. The `MockAIService` at `lib/services/ai/mock-ai.ts` uses `getMockResponse()`; no change needed unless the interface changes
+3. `ClaudeAIService` at `lib/services/ai/claude-ai.ts` owns live WSS/API execution; no hook import is allowed from the service layer
 4. Mock flag is `config.ai.provider === 'mock'` (set via `NEXT_PUBLIC_AI_OVERRIDE` / `NEXT_PUBLIC_RUNTIME_PROFILE`). Do not check `config.features.useMockData` for AI branching.
 
 ### Cache key conventions

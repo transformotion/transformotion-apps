@@ -1,6 +1,7 @@
 import type { AuthClaims } from '@transformotion/lambda-middleware';
 import type { Category, WsMessageBatchResult, WsMessageComplete, WsMessageError } from '@transformotion/budget-domain';
 import { invokeProxy } from './proxy';
+import { putCachedReview } from './review-cache';
 import { pushToConnection, processWithConcurrency, buildLabelLookup, formatCategoryList, formatTxList } from './shared';
 
 export interface ReviewWorkerPayload {
@@ -15,6 +16,7 @@ export interface ReviewWorkerPayload {
   parallelLimit: number;
   confidenceThreshold: 'low' | 'medium' | 'high';
   forceFullSearch: boolean;
+  transactionsHash: string;
   auth:          AuthClaims;
 }
 
@@ -79,7 +81,7 @@ async function runBatch(
 }
 
 export async function runReviewWorker(payload: ReviewWorkerPayload): Promise<void> {
-  const { jobId, connectionId, transactions, categories, batchSize, parallelLimit, auth, accountId, forceFullSearch } = payload;
+  const { jobId, connectionId, transactions, categories, batchSize, parallelLimit, auth, accountId, forceFullSearch, transactionsHash } = payload;
   // forceFullSearch overrides the user's stored threshold for this run only
   const confidenceThreshold: 'low' | 'medium' | 'high' = forceFullSearch ? 'high' : payload.confidenceThreshold;
 
@@ -87,6 +89,7 @@ export async function runReviewWorker(payload: ReviewWorkerPayload): Promise<voi
   const labelLookup  = buildLabelLookup(categories);
 
   const pass1Results = new Map<number, BatchResult>();
+  const emittedBatches: WsMessageBatchResult[] = [];
   const totalCount   = transactions.length;
   let completedCount = 0;
 
@@ -111,6 +114,7 @@ export async function runReviewWorker(payload: ReviewWorkerPayload): Promise<voi
         completedCount,
         totalCount,
       };
+      emittedBatches.push(msg);
       await pushToConnection(connectionId, msg);
     });
 
@@ -141,9 +145,12 @@ export async function runReviewWorker(payload: ReviewWorkerPayload): Promise<voi
           completedCount: pass2Completed,
           totalCount:     needsPass2.length,
         };
+        emittedBatches.push(msg);
         await pushToConnection(connectionId, msg);
       });
     }
+
+    await putCachedReview(process.env.AI_CACHE_TABLE, accountId, transactionsHash, emittedBatches);
 
     const complete: WsMessageComplete = { type: 'complete', jobId };
     await pushToConnection(connectionId, complete);

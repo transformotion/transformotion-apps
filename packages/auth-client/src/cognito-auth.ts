@@ -44,11 +44,12 @@ export class CognitoAuthService implements AuthService {
       const givenName  = claims['given_name'] as string | undefined
       const familyName = claims['family_name'] as string | undefined
       const groups     = Array.isArray(claims['cognito:groups']) ? claims['cognito:groups'] as string[] : []
+      const apps       = parseStringArrayClaim(claims['apps'])
       const siteAdmin  = claims['site_admin'] === 'true' || groups.includes('site-admin')
       const name       = (givenName && familyName)
         ? `${givenName} ${familyName}`
         : (givenName ?? email)
-      return { id: cognitoUser.userId, email, name, metadata: { siteAdmin } }
+      return { id: cognitoUser.userId, email, name, metadata: { apps, siteAdmin } }
     } catch {
       return null
     }
@@ -229,6 +230,24 @@ export class CognitoAuthService implements AuthService {
       expiresAt:    exp * 1000,
     }
   }
+}
+
+function parseStringArrayClaim(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.filter((item): item is string => typeof item === 'string')
+  }
+  if (typeof value !== 'string' || !value.trim()) return []
+
+  try {
+    const parsed = JSON.parse(value) as unknown
+    if (Array.isArray(parsed)) {
+      return parsed.filter((item): item is string => typeof item === 'string')
+    }
+  } catch {
+    return value.split(/[,\s]+/).filter(Boolean)
+  }
+
+  return []
 }
 
 function clearCognitoStorage(): void {
