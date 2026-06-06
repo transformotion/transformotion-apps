@@ -133,10 +133,10 @@ exports.
 | Workflow | Owner | Trigger paths |
 |---|---|---|
 | `deploy-platform.yml` | Platform | `platform/infrastructure/**`, `infrastructure/bin/platform.ts` |
-| `deploy-launchpad.yml` | Launchpad | `apps/launchpad/**`, `infrastructure/bin/launchpad.ts`, Launchpad dependency paths |
-| `deploy-stock-analyser.yml` | Stock Analyser | `apps/stock-analyser/**`, `infrastructure/bin/stock-analyser.ts`, Stock Analyser dependency paths |
-| `deploy-budget-tracker.yml` | Budget Tracker | `apps/budget-tracker/**`, `infrastructure/bin/budget-tracker.ts`, Budget Tracker dependency paths |
-| `deploy-migration-utilities.yml` | Migration Utilities | `migration-utilities/**`, `infrastructure/bin/migration-utilities.ts` |
+| `deploy-launchpad.yml` | Launchpad | `apps/launchpad/**` except documentation-only app files, `infrastructure/bin/launchpad.ts`, Launchpad dependency paths |
+| `deploy-stock-analyser.yml` | Stock Analyser | `apps/stock-analyser/**` except documentation-only app files, `infrastructure/bin/stock-analyser.ts`, Stock Analyser dependency paths |
+| `deploy-budget-tracker.yml` | Budget Tracker | `apps/budget-tracker/**` except documentation-only app files, `infrastructure/bin/budget-tracker.ts`, Budget Tracker dependency paths |
+| `deploy-migration-utilities.yml` | Migration Utilities | `migration-utilities/**` except documentation-only utility files, `infrastructure/bin/migration-utilities.ts` |
 
 The manual `cd.yml` workflow remains the explicit full redeploy path.
 
