@@ -100,20 +100,24 @@ The manual `cd.yml` workflow remains the explicit full redeploy escape hatch.
 
 | Changed path | Workflow |
 |---|---|
-| `apps/launchpad/**` | `deploy-launchpad.yml` |
+| `apps/launchpad/**` except documentation-only app files | `deploy-launchpad.yml` |
 | `infrastructure/bin/launchpad.ts` | `deploy-launchpad.yml` |
 | `.github/workflows/deploy-launchpad.yml` | `deploy-launchpad.yml` |
-| `apps/stock-analyser/**` | `deploy-stock-analyser.yml` |
+| `apps/stock-analyser/**` except documentation-only app files | `deploy-stock-analyser.yml` |
 | `infrastructure/bin/stock-analyser.ts` | `deploy-stock-analyser.yml` |
-| `apps/budget-tracker/**` | `deploy-budget-tracker.yml` |
+| `.github/workflows/deploy-stock-analyser.yml` | `deploy-stock-analyser.yml` |
+| `apps/budget-tracker/**` except documentation-only app files | `deploy-budget-tracker.yml` |
 | `infrastructure/bin/budget-tracker.ts` | `deploy-budget-tracker.yml` |
+| `.github/workflows/deploy-budget-tracker.yml` | `deploy-budget-tracker.yml` |
 | `platform/infrastructure/**` | `deploy-platform.yml` |
 | `infrastructure/bin/platform.ts` | `deploy-platform.yml` |
-| `migration-utilities/**` | `deploy-migration-utilities.yml` |
+| `migration-utilities/**` except documentation-only utility files | `deploy-migration-utilities.yml` |
 | `infrastructure/bin/migration-utilities.ts` | `deploy-migration-utilities.yml` |
+| `.github/workflows/deploy-migration-utilities.yml` | `deploy-migration-utilities.yml` |
 
 Shared package changes trigger the app/migration workflows whose path filters
-include the touched package.
+include the touched package, except package documentation-only files such as
+`README.md`, `AGENTS.md`, `CLAUDE.md`, and `docs/**`.
 
 ## Adding Code
 

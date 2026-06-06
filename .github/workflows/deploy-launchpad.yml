@@ -6,12 +6,20 @@ on:
     paths:
       - '.github/workflows/deploy-launchpad.yml'
       - 'apps/launchpad/**'
+      - '!apps/launchpad/AGENTS.md'
+      - '!apps/launchpad/CLAUDE.md'
+      - '!apps/launchpad/README.md'
+      - '!apps/launchpad/docs/**'
       - 'infrastructure/lib/**'
       - 'infrastructure/bin/launchpad.ts'
       - 'platform/config/app-registry.json'
       - 'packages/auth-client/**'
       - 'packages/lambda-middleware/**'
       - 'packages/runtime-config/**'
+      - '!packages/**/AGENTS.md'
+      - '!packages/**/CLAUDE.md'
+      - '!packages/**/README.md'
+      - '!packages/**/docs/**'
   workflow_call:
     inputs:
       target:

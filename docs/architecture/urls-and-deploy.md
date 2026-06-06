@@ -85,10 +85,14 @@ APIs, or AI runtime.
 
 | Workflow | Push paths |
 |---|---|
-| `deploy-launchpad.yml` | `.github/workflows/deploy-launchpad.yml`, `apps/launchpad/**`, `infrastructure/bin/launchpad.ts`, `infrastructure/lib/**`, `platform/config/app-registry.json`, `packages/auth-client/**`, `packages/lambda-middleware/**`, `packages/runtime-config/**` |
-| `deploy-stock-analyser.yml` | `apps/stock-analyser/**`, `infrastructure/bin/stock-analyser.ts`, `packages/api-client/**`, `packages/cache/**`, `packages/data-access/**`, `packages/logger/**`, `packages/ui/**`, `packages/auth-client/**`, `packages/runtime-config/**`, `packages/lambda-middleware/**` |
-| `deploy-budget-tracker.yml` | `apps/budget-tracker/**`, `infrastructure/bin/budget-tracker.ts`, `packages/api-client/**`, `packages/cache/**`, `packages/data-access/**`, `packages/logger/**`, `packages/ui/**`, `packages/auth-client/**`, `packages/runtime-config/**`, `packages/lambda-middleware/**`, `packages/budget-domain/**` |
-| `deploy-migration-utilities.yml` | `migration-utilities/**`, `infrastructure/bin/migration-utilities.ts`, `packages/**` |
+| `deploy-launchpad.yml` | `.github/workflows/deploy-launchpad.yml`, `apps/launchpad/**` except documentation-only app files, `infrastructure/bin/launchpad.ts`, `infrastructure/lib/**`, `platform/config/app-registry.json`, `packages/auth-client/**`, `packages/lambda-middleware/**`, `packages/runtime-config/**` except package documentation-only files |
+| `deploy-stock-analyser.yml` | `.github/workflows/deploy-stock-analyser.yml`, `apps/stock-analyser/**` except documentation-only app files, `infrastructure/bin/stock-analyser.ts`, `packages/api-client/**`, `packages/cache/**`, `packages/data-access/**`, `packages/logger/**`, `packages/ui/**`, `packages/auth-client/**`, `packages/runtime-config/**`, `packages/lambda-middleware/**`, `packages/fn-claude-proxy-core/**` except package documentation-only files |
+| `deploy-budget-tracker.yml` | `.github/workflows/deploy-budget-tracker.yml`, `apps/budget-tracker/**` except documentation-only app files, `infrastructure/bin/budget-tracker.ts`, `packages/api-client/**`, `packages/cache/**`, `packages/data-access/**`, `packages/logger/**`, `packages/ui/**`, `packages/auth-client/**`, `packages/runtime-config/**`, `packages/lambda-middleware/**`, `packages/fn-claude-proxy-core/**`, `packages/budget-domain/**` except package documentation-only files |
+| `deploy-migration-utilities.yml` | `.github/workflows/deploy-migration-utilities.yml`, `migration-utilities/**` except documentation-only utility files, `infrastructure/bin/migration-utilities.ts`, `packages/**` except package documentation-only files |
+
+Documentation-only exclusions cover `AGENTS.md`, `CLAUDE.md`, `README.md`,
+and `docs/**`. Contract/source files remain deploy-eligible when they are
+under an included app, utility, or package path.
 
 Each CDK deploy step passes an explicit `--app` flag pointing to the owner
 entrypoint:

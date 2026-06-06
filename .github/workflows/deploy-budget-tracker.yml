@@ -4,7 +4,12 @@ on:
   push:
     branches: [develop, main]
     paths:
+      - '.github/workflows/deploy-budget-tracker.yml'
       - 'apps/budget-tracker/**'
+      - '!apps/budget-tracker/AGENTS.md'
+      - '!apps/budget-tracker/CLAUDE.md'
+      - '!apps/budget-tracker/README.md'
+      - '!apps/budget-tracker/docs/**'
       - 'infrastructure/bin/budget-tracker.ts'
       - 'infrastructure/lib/auth-domain-exports.ts'
       - 'packages/api-client/**'
@@ -17,6 +22,10 @@ on:
       - 'packages/lambda-middleware/**'
       - 'packages/fn-claude-proxy-core/**'
       - 'packages/budget-domain/**'
+      - '!packages/**/AGENTS.md'
+      - '!packages/**/CLAUDE.md'
+      - '!packages/**/README.md'
+      - '!packages/**/docs/**'
   workflow_call:
     inputs:
       target:

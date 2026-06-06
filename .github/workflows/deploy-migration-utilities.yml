@@ -4,9 +4,18 @@ on:
   push:
     branches: [develop, main]
     paths:
+      - '.github/workflows/deploy-migration-utilities.yml'
       - 'migration-utilities/**'
+      - '!migration-utilities/**/AGENTS.md'
+      - '!migration-utilities/**/CLAUDE.md'
+      - '!migration-utilities/**/README.md'
+      - '!migration-utilities/**/docs/**'
       - 'infrastructure/bin/migration-utilities.ts'
       - 'packages/**'
+      - '!packages/**/AGENTS.md'
+      - '!packages/**/CLAUDE.md'
+      - '!packages/**/README.md'
+      - '!packages/**/docs/**'
   workflow_call:
     inputs:
       target:
