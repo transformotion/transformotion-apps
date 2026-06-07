@@ -120,7 +120,7 @@ function Greeting({ name }: { name: string }) {
       <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-1">
         {greeting}, {firstName}
       </h1>
-      <p className="text-muted-foreground">Welcome to your Transformotion dashboard</p>
+      <p className="text-muted-foreground">Welcome to your Transformotion workspace</p>
     </div>
   )
 }
