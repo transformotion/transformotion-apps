@@ -39,7 +39,7 @@ const APPS: App[] = [
   {
     id: 'stock-analyser',
     name: 'Stock Signal Analyser',
-    description: 'Cycle position analysis across ASX, NASDAQ, Dow Jones, FTSE',
+    description: 'Cycle signals across ASX, NASDAQ, Dow Jones and FTSE',
     icon: TrendingUp,
     available: true,
     color: 'text-primary',
