@@ -1,7 +1,12 @@
-import { createClaudeProxyHandler } from '@transformotion/fn-claude-proxy-core';
+import { createAiProxyHandler } from '@transformotion/fn-ai-proxy-core';
 
-export const handler = createClaudeProxyHandler({
+export const handler = createAiProxyHandler({
+  appSlug: 'stock-analyser',
   anthropicSecretName: process.env.ANTHROPIC_SECRET_NAME!,
+  openaiSecretName: process.env.OPENAI_SECRET_NAME,
+  aiConfigTableName: process.env.AI_CONFIG_TABLE,
+  fallbackProvider: process.env.AI_FALLBACK_PROVIDER,
+  fallbackModel: process.env.AI_FALLBACK_MODEL,
   permittedApps: ['stock-analyser'],
   jobResultsTable: process.env.JOB_RESULTS_TABLE,
   wsApiEndpoint: process.env.WS_API_ENDPOINT,

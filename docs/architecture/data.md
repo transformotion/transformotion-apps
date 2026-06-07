@@ -9,6 +9,9 @@ Ownership follows runtime ownership:
   authentication, token claims, account onboarding, user profile/preferences,
   account administration, member administration, invitations, and auth
   rate-limiting.
+- **Launchpad control-plane tables** are owned by `LaunchpadControlPlaneStack`
+  and back site-admin configuration such as runtime AI provider/model
+  selection.
 - **Per-app tables** are owned by the app that reads/writes them.
 - **Platform tables are not part of the active architecture.** The old
   Platform auth/job/WSS tables were removed from Platform CDK ownership during
@@ -117,6 +120,29 @@ Rate-limit state for Launchpad auth/control-plane endpoints.
 | `key` (PK) | String | Rate-limit key |
 | `expiresAt` | Number | Epoch seconds, TTL |
 | `count` | Number | Window counter |
+
+## Launchpad control-plane tables
+
+Managed by `TransformotionDev-LaunchpadControlPlane` /
+`TransformotionProd-LaunchpadControlPlane`.
+
+### `launchpad-ai-runtime-config-{stage}`
+
+Site-admin-managed AI provider/model selection. This table stores only
+provider/model configuration; API keys and provider secrets remain in
+Secrets Manager/env/CDK and are not stored here.
+
+| Attribute | Type | Notes |
+|---|---|---|
+| `pk` (PK) | String | Always `AI_CONFIG` |
+| `sk` (SK) | String | `PLATFORM#default`, `APP#stock-analyser`, or `APP#budget-tracker` |
+| `provider` | String | `claude` or `openai` |
+| `model` | String | Provider/model allowlist: `claude-sonnet-4-6`, `claude-opus-4-8`, `claude-haiku-4-5-20251001`, `gpt-5.4-mini`, `gpt-5.4`, `gpt-5.5`, `gpt-5.4-nano` |
+| `updatedAt` | String | ISO 8601 |
+
+Runtime resolution order is app override, then platform default, then
+environment fallback. Missing, invalid, or unreadable config falls back to
+the app Lambda's env fallback.
 
 ## Stock Analyser tables
 

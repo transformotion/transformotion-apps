@@ -45,11 +45,13 @@ Deployed by `deploy-launchpad.yml`. Source: `apps/launchpad/infrastructure/`.
 | Stack name | Class | Contents |
 |---|---|---|
 | `Transformotion{Stage}-LaunchpadAuth` | `LaunchpadAuthStack` | Cognito User Pool, Hosted UI domain, app clients, groups, Hosted UI customisation, social credential secret placeholders, Launchpad-owned auth-domain tables, and `launchpad-pre-token-generation-{stage}` |
-| `Transformotion{Stage}-LaunchpadControlPlane` | `LaunchpadControlPlaneStack` | Launchpad-owned REST API, Cognito authoriser, and control-plane Lambdas |
+| `Transformotion{Stage}-LaunchpadControlPlane` | `LaunchpadControlPlaneStack` | Launchpad-owned REST API, Cognito authoriser, AI runtime config table, and control-plane Lambdas |
 
 Launchpad owns authentication, token claims, account onboarding, user
 profile/preferences, account administration, member administration, and
-invitations.
+invitations. Launchpad also owns AI provider/model configuration as
+control-plane state; app-owned AI proxy Lambdas read that configuration
+read-only and keep provider execution in their app runtimes.
 
 ### Launchpad Lambdas
 
@@ -60,6 +62,7 @@ invitations.
 | `launchpad-user-{stage}` | `apps/launchpad/functions/user` | `GET /api/user/profile`, `PUT /api/user/preferences` |
 | `launchpad-accounts-{stage}` | `apps/launchpad/functions/accounts` | `POST /accounts`, `GET/PUT/DELETE /accounts/{id}`, `GET /accounts/{id}/members`, `DELETE /accounts/{id}/members/{userId}` |
 | `launchpad-invitations-{stage}` | `apps/launchpad/functions/invitations` | `POST /accounts/{id}/invitations` |
+| `launchpad-ai-runtime-config-{stage}` | `apps/launchpad/functions/ai-runtime-config` | `GET /api/admin/ai-runtime-config`, `PUT /api/admin/ai-runtime-config/platform-default`, `PUT/DELETE /api/admin/ai-runtime-config/apps/{appSlug}/override` |
 | `launchpad-pre-token-generation-{stage}` | `apps/launchpad/functions/pre-token-generation` | Cognito pre-token generation trigger |
 
 ## Stock Analyser stacks
@@ -115,6 +118,7 @@ Constructs are not passed across entrypoint boundaries.
 | `Transformotion-{stage}-LaunchpadAuth-InvitationsTableName` | `LaunchpadAuthStack` | Launchpad control-plane stack |
 | `Transformotion-{stage}-LaunchpadAuth-RateLimitsTableName` | `LaunchpadAuthStack` | Launchpad control-plane stack |
 | `Transformotion-{stage}-LaunchpadControlPlaneApiUrl` | `LaunchpadControlPlaneStack` | Launchpad frontend env injection |
+| `Transformotion-{stage}-LaunchpadAiRuntimeConfigTableName` | `LaunchpadControlPlaneStack` | Operational reference for Launchpad-owned AI runtime config table |
 | `StockAnalyserApi-{stage}-Url` | `StockAnalyserApiStack` | Stock Analyser frontend env injection |
 | `StockAnalyserWs-{stage}-Url` | `StockAnalyserWsStack` | Stock Analyser frontend env injection |
 | `BudgetTrackerApi-{stage}-Url` | `BudgetTrackerApiStack` | Budget Tracker frontend env injection |
@@ -156,9 +160,14 @@ Launchpad control-plane and auth-domain variables:
 | `USER_POOL_ID` | Launchpad control-plane/auth Lambdas | LaunchpadAuth User Pool ID |
 | `APP_CLIENT_STOCK_ANALYSER` / `APP_CLIENT_BUDGET_TRACKER` | `launchpad-account-provisioning-{stage}` | LaunchpadAuth app client IDs |
 | `APP_REGISTRY` | `launchpad-pre-token-generation-{stage}` | App registry JSON from `platform/config/app-registry.json` |
+| `AI_CONFIG_TABLE` | `launchpad-ai-runtime-config-{stage}` | `launchpad-ai-runtime-config-{stage}` |
 
 App-owned REST/WSS/AI environment variables are documented in each app's
-`AGENTS.md`/`CLAUDE.md` and stack source.
+`AGENTS.md`/`CLAUDE.md` and stack source. SA/BT AI proxy Lambdas receive
+`AI_CONFIG_TABLE`, `AI_FALLBACK_PROVIDER`, and `AI_FALLBACK_MODEL` for the
+runtime provider/model resolver. They also receive app-owned
+`ANTHROPIC_SECRET_NAME` and `OPENAI_SECRET_NAME`; Launchpad stores provider/model
+selection only and never provider API keys.
 
 ## Removal policies
 
