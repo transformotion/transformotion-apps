@@ -9,7 +9,7 @@
     "lint": "echo \"lint: stock-analyser-ai-proxy\""
   },
   "dependencies": {
-    "@transformotion/fn-claude-proxy-core": "workspace:*"
+    "@transformotion/fn-ai-proxy-core": "workspace:*"
   },
   "devDependencies": {
     "@types/aws-lambda": "^8",

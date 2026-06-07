@@ -3,8 +3,6 @@ import type { Category, WsMessageBatchResult, WsMessageComplete, WsMessageError 
 import { invokeProxy } from './proxy';
 import { pushToConnection, processWithConcurrency, buildLabelLookup, formatCategoryList, formatTxList } from './shared';
 
-const AI_MODEL = 'claude-sonnet-4-20250514';
-
 export interface ReviewWorkerPayload {
   __asyncJob:    'review-worker';
   jobId:         string;
@@ -43,7 +41,6 @@ async function runBatch(
   webSearch: boolean,
 ): Promise<BatchResult[]> {
   const proxyResponse = await invokeProxy(auth, accountId, {
-    model:     AI_MODEL,
     maxTokens: 4096,
     webSearch,
     system:    `You are a personal finance assistant helping to categorise Australian bank transactions.\n\nYou will be given:\n- A list of budget categories, each with allowed subcategories\n- A list of transactions (index, description, amount)\n\n${webSearch ? 'You have access to a web_search tool. If a merchant or description is unfamiliar, you MAY search to identify the business type. Use web_search sparingly.' : ''}\n\nWhen a merchant could plausibly belong to multiple categories, use the transaction amount as a disambiguating signal. Smaller amounts at hospitality venues (pubs, bars, cafes) typically indicate drinks or snacks; larger amounts typically indicate meals. Smaller amounts at petrol stations may indicate convenience-store items; larger amounts indicate fuel. Smaller amounts at supermarkets may indicate a quick convenience purchase; larger amounts indicate a full grocery shop. Use your judgement based on typical Australian prices.\n\nYou must:\n- Return ONLY a JSON array, one object per transaction\n- Each object has exactly: {"index": <int>, "category": <string>, "subcategory": <string>, "reason": <string>, "confidence": "high"|"medium"|"low"}\n- The category must be one of the provided categories exactly\n- The subcategory must be one of the subcategories listed under that category exactly\n- "confidence" reflects how certain you are: "high" = clear match, "medium" = reasonable inference, "low" = best guess\n- The reason must be a single sentence explaining your choice in plain English, and should mention the amount where it influenced the decision\n- If a transaction is genuinely uncategorisable, return it with category: "", subcategory: "", confidence: "low", and reason explaining why\n- Do not include any text outside the JSON array\n- Do not wrap the JSON in markdown code fences`,

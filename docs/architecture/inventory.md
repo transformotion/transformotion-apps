@@ -16,6 +16,10 @@ It is factual inventory, not a target-state plan.
 Platform does not own live auth resources, app APIs, app WSS APIs, or shared AI
 runtime.
 
+AI runtime observability uses structured CloudWatch logs from the app-owned AI
+proxy Lambdas. See `docs/architecture/observability.md` for the field contract
+and Logs Insights examples.
+
 ## CDK Entrypoints
 
 | Entrypoint | Owner | Current stacks |
@@ -77,6 +81,16 @@ API and Lambdas:
 | `GET /accounts/{accountId}/members` | `launchpad-accounts-{stage}` |
 | `DELETE /accounts/{accountId}/members/{userId}` | `launchpad-accounts-{stage}` |
 | `POST /accounts/{accountId}/invitations` | `launchpad-invitations-{stage}` |
+| `GET /api/admin/ai-runtime-config` | `launchpad-ai-runtime-config-{stage}` |
+| `PUT /api/admin/ai-runtime-config/platform-default` | `launchpad-ai-runtime-config-{stage}` |
+| `PUT /api/admin/ai-runtime-config/apps/{appSlug}/override` | `launchpad-ai-runtime-config-{stage}` |
+| `DELETE /api/admin/ai-runtime-config/apps/{appSlug}/override` | `launchpad-ai-runtime-config-{stage}` |
+
+It also owns the `launchpad-ai-runtime-config-{stage}` DynamoDB table for AI
+provider/model control-plane configuration. App-owned AI proxy Lambdas receive
+read-only access plus env fallback values; provider secrets and execution remain
+app-owned. The Launchpad Settings UI exposes this provider/model configuration
+to site-admin users only.
 
 ## Stock Analyser
 
@@ -88,6 +102,8 @@ Stock Analyser owns:
 - WSS connection table: `stock-analyser.ws-connections-{stage}`
 - AI job results table: `stock-analyser.job-results-{stage}`
 - AI runtime Lambda: `stock-analyser-ai-proxy-{stage}`
+- AI runtime selection: app override -> platform default -> env fallback, using
+  app-owned Anthropic/OpenAI secrets
 
 The runtime flow is:
 
@@ -110,6 +126,8 @@ Budget Tracker owns:
 - WSS connection table: `budget-tracker.ws-connections-{stage}`
 - AI jobs table: `budget-tracker.ai-jobs-{stage}`
 - AI runtime Lambda: `budget-tracker-ai-proxy-{stage}`
+- AI runtime selection: app override -> platform default -> env fallback, using
+  app-owned Anthropic/OpenAI secrets
 
 The runtime flow is:
 
@@ -133,10 +151,10 @@ exports.
 | Workflow | Owner | Trigger paths |
 |---|---|---|
 | `deploy-platform.yml` | Platform | `platform/infrastructure/**`, `infrastructure/bin/platform.ts` |
-| `deploy-launchpad.yml` | Launchpad | `apps/launchpad/**` except documentation-only app files, `infrastructure/bin/launchpad.ts`, Launchpad dependency paths |
-| `deploy-stock-analyser.yml` | Stock Analyser | `apps/stock-analyser/**` except documentation-only app files, `infrastructure/bin/stock-analyser.ts`, Stock Analyser dependency paths |
-| `deploy-budget-tracker.yml` | Budget Tracker | `apps/budget-tracker/**` except documentation-only app files, `infrastructure/bin/budget-tracker.ts`, Budget Tracker dependency paths |
-| `deploy-migration-utilities.yml` | Migration Utilities | `migration-utilities/**` except documentation-only utility files, `infrastructure/bin/migration-utilities.ts` |
+| `deploy-launchpad.yml` | Launchpad | `apps/launchpad/**`, `infrastructure/bin/launchpad.ts`, Launchpad dependency paths |
+| `deploy-stock-analyser.yml` | Stock Analyser | `apps/stock-analyser/**`, `infrastructure/bin/stock-analyser.ts`, Stock Analyser dependency paths |
+| `deploy-budget-tracker.yml` | Budget Tracker | `apps/budget-tracker/**`, `infrastructure/bin/budget-tracker.ts`, Budget Tracker dependency paths |
+| `deploy-migration-utilities.yml` | Migration Utilities | `migration-utilities/**`, `infrastructure/bin/migration-utilities.ts` |
 
 The manual `cd.yml` workflow remains the explicit full redeploy path.
 
