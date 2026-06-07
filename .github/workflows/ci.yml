@@ -27,17 +27,15 @@ jobs:
             exit 1
           fi
 
-      - name: Checkout v0 repo
-        uses: actions/checkout@v4
-        with:
-          repository: transformotion/transformotion-apps-b8
-          token: ${{ secrets.V0_REPO_READ_TOKEN }}
-          path: transformotion-apps-b8
+      - name: Clone v0 repo
+        env:
+          V0_REPO_READ_TOKEN: ${{ secrets.V0_REPO_READ_TOKEN }}
+        run: git clone --depth 1 "https://x-access-token:${V0_REPO_READ_TOKEN}@github.com/transformotion/transformotion-apps-b8.git" "$RUNNER_TEMP/transformotion-apps-b8"
 
       - name: Verify v0 contracts byte identity
         working-directory: transformotion-apps
         env:
-          V0_REPO_PATH: ${{ github.workspace }}/transformotion-apps-b8
+          V0_REPO_PATH: ${{ runner.temp }}/transformotion-apps-b8
         run: bash scripts/ci/check-v0-contracts-synced.sh
 
   typecheck-and-lint:
@@ -45,6 +43,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Clone v0 repo
+        env:
+          V0_REPO_READ_TOKEN: ${{ secrets.V0_REPO_READ_TOKEN }}
+        run: git clone --depth 1 "https://x-access-token:${V0_REPO_READ_TOKEN}@github.com/transformotion/transformotion-apps-b8.git" "$RUNNER_TEMP/transformotion-apps-b8"
 
       - uses: actions/setup-node@v4
         with:
@@ -57,8 +60,15 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Sync v0 contracts
+        env:
+          V0_REPO_PATH: ${{ runner.temp }}/transformotion-apps-b8
+        run: pnpm sync:v0
+
       - name: Typecheck (all workspaces)
-        run: pnpm turbo typecheck
+        env:
+          V0_REPO_PATH: ${{ runner.temp }}/transformotion-apps-b8
+        run: pnpm typecheck
 
       - name: Lint baseline check (no new violations)
         run: bash scripts/ci/check-lint-baseline.sh
@@ -100,6 +110,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Clone v0 repo
+        env:
+          V0_REPO_READ_TOKEN: ${{ secrets.V0_REPO_READ_TOKEN }}
+        run: git clone --depth 1 "https://x-access-token:${V0_REPO_READ_TOKEN}@github.com/transformotion/transformotion-apps-b8.git" "$RUNNER_TEMP/transformotion-apps-b8"
+
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -110,6 +125,11 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Sync v0 contracts
+        env:
+          V0_REPO_PATH: ${{ runner.temp }}/transformotion-apps-b8
+        run: pnpm sync:v0
 
       - name: Build ${{ matrix.app.name }}
         working-directory: ${{ matrix.app.dir }}
@@ -132,6 +152,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Clone v0 repo
+        env:
+          V0_REPO_READ_TOKEN: ${{ secrets.V0_REPO_READ_TOKEN }}
+        run: git clone --depth 1 "https://x-access-token:${V0_REPO_READ_TOKEN}@github.com/transformotion/transformotion-apps-b8.git" "$RUNNER_TEMP/transformotion-apps-b8"
+
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -142,6 +167,11 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Sync v0 contracts
+        env:
+          V0_REPO_PATH: ${{ runner.temp }}/transformotion-apps-b8
+        run: pnpm sync:v0
 
       - name: CDK Synth — dev
         working-directory: infrastructure

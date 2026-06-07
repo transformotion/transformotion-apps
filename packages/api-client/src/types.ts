@@ -1,176 +1,74 @@
-// ── Portfolio ─────────────────────────────────────────────────────────────────
+export type {
+  PortfolioHolding,
+  WatchlistItem,
+  CycleDataResponse,
+  CycleSignal,
+  CycleStage,
+  RsiDivergence,
+  MacdMomentum,
+  VolumeTrend,
+  PriceRange as OhlcvRange,
+  PriceInterval as OhlcvInterval,
+  WriteAnalysisCacheRequest as PutCacheRequest,
+} from '@transformotion/contracts/stock-analyser/types';
 
-/** A single portfolio holding. */
-export interface PortfolioHolding {
-  ticker:   string;
-  shares:   number;
-  /** Average purchase cost per share. 0 for gifted holdings. */
-  avgCost:  number;
-  /** True when the holding was received as a gift (avgCost is 0 and P&L is not meaningful). */
-  isGifted: boolean;
-  /** Unix ms timestamp when the holding was added. */
-  addedAt:  number;
+export type { PriceOhlcvResponse as OhlcvDataResponse } from '@transformotion/contracts/stock-analyser/types';
+export type { AnalysisCacheEntry as CacheEntry } from '@transformotion/contracts/stock-analyser/types';
+
+export type {
+  CreateAccountRequest,
+  CreateInvitationRequest,
+  CreateInvitationResponse,
+  GetAccountResponse,
+  ListMembersResponse,
+} from '@transformotion/contracts/launchpad/api';
+
+export type { AccountMember, AccountSummary as Account } from '@transformotion/contracts/launchpad/types';
+export type { UserPreferences, UserProfile as GetUserProfileResponse } from '@transformotion/contracts/_shared/auth';
+export type { AiPromptRequest as ClaudeProxyRequest, AiTextResponse as ClaudeProxyResponse } from '@transformotion/contracts/_shared/ai-runtime';
+
+export interface GetPortfolioResponse {
+  holdings: import('@transformotion/contracts/stock-analyser/types').PortfolioHolding[];
 }
 
-export interface GetPortfolioResponse  { holdings: PortfolioHolding[] }
-export interface PutPortfolioRequest   { holdings: PortfolioHolding[] }
-export interface PutPortfolioResponse  { ok: true }
-
-// ── Watchlist ─────────────────────────────────────────────────────────────────
-
-/** A single watchlist entry — matches the existing localStorage shape. */
-export interface WatchlistItem {
-  ticker:  string;
-  name:    string;
-  /** Unix ms timestamp when the item was added. */
-  addedAt: number;
-  /** Numeric price at the time of first enrichment — used to compute P&L since added. */
-  addedPrice?: number;
+export interface PutPortfolioRequest {
+  holdings: import('@transformotion/contracts/stock-analyser/types').PortfolioHolding[];
 }
 
-export interface GetWatchlistResponse  { items: WatchlistItem[] }
-export interface PutWatchlistRequest   { items: WatchlistItem[] }
-export interface PutWatchlistResponse  { ok: true }
-
-// ── Analysis cache ────────────────────────────────────────────────────────────
-
-export interface CacheEntry {
-  /** JSON-stringified cached value as stored by the analysis-cache Lambda. */
-  data:       string;
-  /** Unix epoch seconds when the entry was stored (normalised from both old ISO and new epoch formats). */
-  cachedAt:   number;
-  /** Unix epoch seconds — DynamoDB TTL attribute. */
-  expiresAt:  number;
-  /** Cache type, e.g. 'markets', 'recommendations', 'analyser'. */
-  dataType?:  string;
-  /** 'fast' or 'live'. */
-  mode?:      string;
+export interface PutPortfolioResponse {
+  ok: true;
 }
 
-export interface PutCacheRequest {
-  data:       unknown;
-  ttlSeconds: number;
-  /** 'fast' or 'live' — stored as top-level attribute. Default 'live'. */
-  mode?:      string;
-  /** Cache type e.g. 'markets', 'analyser'. Stored as top-level dataType attribute. */
-  type?:      string;
-  /** When true, write under accountId='SHARED' so all users share this entry. Default true. */
-  shared?:    boolean;
-}
-export interface PutCacheResponse { ok: true }
-
-// ── Accounts ──────────────────────────────────────────────────────────────────
-
-export interface Account {
-  accountId: string;
-  name:      string;
-  ownerId:   string;
-  createdAt: string;
+export interface GetWatchlistResponse {
+  items: import('@transformotion/contracts/stock-analyser/types').WatchlistItem[];
 }
 
-export interface AccountMember {
-  userId:   string;
-  email?:   string;   // stored on write; absent for records created before S2.11
-  role:     'owner' | 'member';
-  joinedAt: string;
+export interface PutWatchlistRequest {
+  items: import('@transformotion/contracts/stock-analyser/types').WatchlistItem[];
 }
 
-export interface CreateAccountRequest  { name: string }
-export interface CreateAccountResponse { account: Account }
-export interface GetAccountResponse    { account: Account; members: AccountMember[] }
-export interface UpdateAccountRequest  { name?: string }
-export interface UpdateAccountResponse { account: Account }
-export interface ListMembersResponse   { members: AccountMember[] }
-
-export interface CreateInvitationRequest  { email: string }
-export interface CreateInvitationResponse { invitationId: string }
-
-// ── User preferences ──────────────────────────────────────────────────────────
-
-export interface UserPreferences {
-  defaultMode:            'fast' | 'live';
-  notificationsEnabled:   boolean;
-  cycleAlertThreshold:    number;
-  lastAnalysedTicker?:    string;
+export interface PutWatchlistResponse {
+  ok: true;
 }
 
-export interface GetUserProfileResponse {
-  userId:      string;
-  email:       string;
-  preferences: UserPreferences;
+export interface PutCacheResponse {
+  ok: true;
 }
 
-/** Body is the partial preferences object directly (not wrapped). */
-export interface PutUserPreferencesRequest  extends Partial<UserPreferences> {}
-export interface PutUserPreferencesResponse { preferences: UserPreferences }
-
-// ── Cycle data ────────────────────────────────────────────────────────────────
-
-export interface CycleSignal {
-  type: 'ok' | 'warn' | 'danger';
-  text: string;
+export interface CreateAccountResponse {
+  account: import('@transformotion/contracts/launchpad/types').AccountSummary;
 }
 
-export type CycleStage       = 'early' | 'mid' | 'late' | 'peak';
-export type RsiDivergence    = 'none' | 'bullish' | 'bearish';
-export type MacdMomentum     = 'strengthening' | 'weakening' | 'flat';
-export type VolumeTrend      = 'confirming' | 'diverging' | 'neutral';
-
-export interface CycleDataResponse {
-  cyclePosition:  number;
-  cycleStage:     CycleStage;
-  rsiDivergence:  RsiDivergence;
-  macdMomentum:   MacdMomentum;
-  volumeTrend:    VolumeTrend;
-  weekHigh52Pct:  number;
-  signals:        CycleSignal[];
-  cycleSummary:   string;
-  computedAt:     string;
-  source:         'live' | 'cache';
+export interface UpdateAccountRequest {
+  name?: string;
 }
 
-// ── Market data OHLCV ─────────────────────────────────────────────────────────
-
-export type OhlcvRange    = '1mo' | '3mo' | '6mo' | '1y' | '5y' | 'max';
-export type OhlcvInterval = '1d' | '1wk' | '1mo';
-
-export interface OhlcvDataResponse {
-  ticker:    string;
-  range:     OhlcvRange;
-  interval:  OhlcvInterval;
-  dates:     string[];
-  opens:     number[];
-  highs:     number[];
-  lows:      number[];
-  closes:    number[];
-  volumes:   number[];
-  fetchedAt: string;
-  source:    'live' | 'cache';
+export interface UpdateAccountResponse {
+  account: import('@transformotion/contracts/launchpad/types').AccountSummary;
 }
 
-// ── Claude proxy ──────────────────────────────────────────────────────────────
+export interface PutUserPreferencesRequest extends Partial<import('@transformotion/contracts/_shared/auth').UserPreferences> {}
 
-export interface ClaudeProxyRequest {
-  prompt:     string;
-  system?:    string;
-  model?:     string;
-  maxTokens?: number;
-  /** When true, enables the web_search tool so Claude can use live data. */
-  webSearch?: boolean;
-  /**
-   * When true, the Lambda starts the job asynchronously and returns {jobId}
-   * immediately — bypassing API Gateway's 29-second integration timeout.
-   * The frontend polls /analysis-cache/job:{jobId} for the result.
-   */
-  asyncMode?: boolean;
+export interface PutUserPreferencesResponse {
+  preferences: import('@transformotion/contracts/_shared/auth').UserPreferences;
 }
-
-export interface ClaudeProxyResponse {
-  content: string;
-  model:   string;
-  usage: {
-    inputTokens:  number;
-    outputTokens: number;
-  };
-}
-

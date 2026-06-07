@@ -1,27 +1,27 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
-import type { AiProviderId } from './types';
+import {
+  AI_CONFIG_PK,
+  AI_MODEL_ALLOWLIST,
+  PLATFORM_DEFAULT_SK,
+  SUPPORTED_AI_CONFIG_APP_SLUGS,
+  type AiConfigAppSlug,
+  type AiProviderId,
+  type AiRuntimeConfigRecord,
+  type ResolvedAiRuntimeConfig,
+} from '@transformotion/contracts/_shared/ai-runtime';
 
-export const AI_CONFIG_PK = 'AI_CONFIG';
-export const PLATFORM_DEFAULT_SK = 'PLATFORM#default';
-export const SUPPORTED_APP_SLUGS = ['stock-analyser', 'budget-tracker'] as const;
+export {
+  AI_CONFIG_PK,
+  AI_MODEL_ALLOWLIST,
+  PLATFORM_DEFAULT_SK,
+  type AiConfigAppSlug,
+  type AiConfigSource,
+  type AiRuntimeConfigRecord,
+  type ResolvedAiRuntimeConfig,
+} from '@transformotion/contracts/_shared/ai-runtime';
 
-export type AiConfigSource = 'app_override' | 'platform_default' | 'environment_fallback';
-export type AiConfigAppSlug = typeof SUPPORTED_APP_SLUGS[number];
-
-export interface AiRuntimeConfigRecord {
-  pk: typeof AI_CONFIG_PK;
-  sk: typeof PLATFORM_DEFAULT_SK | `APP#${AiConfigAppSlug}`;
-  provider: AiProviderId;
-  model: string;
-  updatedAt: string;
-}
-
-export interface ResolvedAiRuntimeConfig {
-  provider: AiProviderId;
-  model: string;
-  source: AiConfigSource;
-}
+export const SUPPORTED_APP_SLUGS = SUPPORTED_AI_CONFIG_APP_SLUGS;
 
 export interface AiRuntimeConfigResolverOptions {
   appSlug: AiConfigAppSlug;
@@ -31,26 +31,12 @@ export interface AiRuntimeConfigResolverOptions {
   client?: DynamoDBDocumentClient;
 }
 
-export const AI_MODEL_ALLOWLIST: Record<AiProviderId, readonly string[]> = {
-  claude: [
-    'claude-sonnet-4-6',
-    'claude-opus-4-8',
-    'claude-haiku-4-5-20251001',
-  ],
-  openai: [
-    'gpt-5.4-mini',
-    'gpt-5.4',
-    'gpt-5.5',
-    'gpt-5.4-nano',
-  ],
-};
-
 export function isSupportedAiProvider(value: unknown): value is AiProviderId {
   return value === 'claude' || value === 'openai';
 }
 
 export function isSupportedAiModel(provider: AiProviderId, model: unknown): model is string {
-  return typeof model === 'string' && AI_MODEL_ALLOWLIST[provider].includes(model);
+  return typeof model === 'string' && (AI_MODEL_ALLOWLIST[provider] as readonly string[]).includes(model);
 }
 
 export function assertValidAiConfig(provider: unknown, model: unknown): asserts provider is AiProviderId {

@@ -9,6 +9,9 @@
     "lint": "eslint .",
     "test": "vitest run"
   },
+  "dependencies": {
+    "@transformotion/contracts": "workspace:*"
+  },
   "devDependencies": {
     "@types/aws-lambda": "^8",
     "@types/node": "^22",

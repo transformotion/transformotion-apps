@@ -28,6 +28,10 @@ const DEFAULT_TTL = 8 * 3600
 // Cache types whose data is shared across all accounts
 const SHARED_TYPES = new Set(['MARKET', 'ETFS', 'RECS', 'METALS', 'ANALYSIS', 'CYCLE'])
 
+function parseCachedValue<T>(data: unknown): T {
+  return typeof data === 'string' ? JSON.parse(data) as T : data as T
+}
+
 function getTTL(cacheKey: string): number {
   const type = cacheKey.split('#')[0]
   return TTL_SECONDS[type] ?? DEFAULT_TTL
@@ -39,7 +43,7 @@ export class DynamoTTLCacheService implements CacheService {
   async get<T>(key: string): Promise<T | null> {
     try {
       const item = await getStockAnalyserClient().getCache(key)
-      return JSON.parse(item.data) as T
+      return parseCachedValue<T>(item.data)
     } catch {
       // 404 = cache miss; any other error falls back to null
       return null

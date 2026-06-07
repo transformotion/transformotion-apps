@@ -10,6 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@transformotion/contracts": "workspace:*",
     "@transformotion/lambda-middleware": "workspace:*"
   },
   "devDependencies": {

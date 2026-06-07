@@ -5,8 +5,9 @@ import type { SecretsManagerClient } from '@aws-sdk/client-secrets-manager';
 import { HttpError } from '@transformotion/lambda-middleware';
 import type { AuthClaims, AccountContext } from '@transformotion/lambda-middleware';
 import type { AiConfigAppSlug, AiConfigSource } from './config';
+import type { AiProviderId } from '@transformotion/contracts/_shared/ai-runtime';
 
-export type AiProviderId = 'claude' | 'openai';
+export type { AiProviderId } from '@transformotion/contracts/_shared/ai-runtime';
 
 export type AiErrorClass =
   | 'configuration'

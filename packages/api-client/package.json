@@ -9,6 +9,9 @@
     "lint": "eslint .",
     "test": "vitest run"
   },
+  "dependencies": {
+    "@transformotion/contracts": "workspace:*"
+  },
   "devDependencies": {
     "typescript": "*",
     "vitest": "^1"

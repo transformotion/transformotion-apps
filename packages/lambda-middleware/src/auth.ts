@@ -1,5 +1,6 @@
 import type { APIGatewayProxyEvent } from './types';
 import type { AuthClaims, AccountContext, AppName, AccountRole } from './types';
+import type { AccountMembership, EntitledAppSlug } from '@transformotion/contracts/_shared/auth';
 import { unauthorised, badRequest, forbidden, HttpError } from './errors';
 
 /**
@@ -29,16 +30,16 @@ export function extractAuthClaims(event: APIGatewayProxyEvent): AuthClaims {
   const groups = groupsRaw ? groupsRaw.split(' ').filter(Boolean) : [];
 
   // New claims injected by pre-token Lambda — parse with fallbacks for transition period
-  let apps: string[] = [];
+  let apps: EntitledAppSlug[] = [];
   try {
     const raw = claims['apps'];
-    if (raw) apps = JSON.parse(raw) as string[];
+    if (raw) apps = JSON.parse(raw) as EntitledAppSlug[];
   } catch { /* absent or malformed — fall back to groups */ }
 
-  let accounts: Record<string, Array<{ accountId: string; role: string }>> = {};
+  let accounts: Partial<Record<EntitledAppSlug, AccountMembership[]>> = {};
   try {
     const raw = claims['accounts'];
-    if (raw) accounts = JSON.parse(raw) as Record<string, Array<{ accountId: string; role: string }>>;
+    if (raw) accounts = JSON.parse(raw) as Partial<Record<EntitledAppSlug, AccountMembership[]>>;
   } catch { /* absent or malformed — fall back to groups */ }
 
   const siteAdmin = claims['site_admin'] === 'true';
@@ -122,7 +123,7 @@ export function requireAppAccess(auth: AuthClaims, app: AppName): void {
  */
 export function requireAnyAppAccess(auth: AuthClaims, apps: string[]): void {
   if (isSuperUser(auth)) return;
-  if (apps.some(app => auth.apps.includes(app))) return;
+  if (apps.some(app => auth.apps.includes(app as EntitledAppSlug))) return;
   throw forbidden(`Access to one of [${apps.join(', ')}] required`);
 }
 

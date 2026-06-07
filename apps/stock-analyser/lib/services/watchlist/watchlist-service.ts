@@ -1,12 +1,8 @@
 import { getStockAnalyserClient } from '@/lib/api'
 import { getConfig } from '@/lib/config'
+import type { WatchlistItem } from '@transformotion/contracts/stock-analyser/types'
 
-export interface WatchlistItem {
-  ticker:      string
-  name:        string
-  addedAt:     number   // unix ms
-  addedPrice?: number
-}
+export type { WatchlistItem } from '@transformotion/contracts/stock-analyser/types'
 
 // ── Mock data ─────────────────────────────────────────────────────────────────
 
