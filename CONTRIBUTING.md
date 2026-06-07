@@ -987,37 +987,62 @@ guardrails (gitignore, sync target README warning against direct edits, sync
 script refusing to run if it detects local modifications) reduce the chance of
 mistakes reaching CI.
 
-#### Bucket structure
+#### Scope-first executable structure
 
-Contracts within each scope are organised into two buckets: `frontend/` and `backend/`. The structure in v0 repo:
+Contracts within each scope are organised as executable TypeScript-first bundles. The structure in v0 repo:
 
 ```
 transformotion-apps-b8/contracts/
-  budget-tracker/
-    frontend/        (HTTP API shapes, data models, frontend conventions)
-    backend/         (per-domain Lambda contracts, IAM, DynamoDB schemas)
-  stock-analyser/
-    frontend/
+  _shared/
+    api.ts
+    auth.ts
+    runtime-config.ts
+    ai-runtime.ts
+    contract-version.ts
+  launchpad/
+    types.ts
+    api.ts
+    mocks.ts
+    navigation.md
+    behaviour.md
     backend/
+      auth-domain.md
+      control-plane.md
+  budget-tracker/
+    types.ts
+    api.ts
+    wss.ts
+    mocks.ts
+    navigation.md
+    behaviour.md
+    backend/
+      runtime.md
+      ai-runtime.md
+      data.md
+  stock-analyser/
+    types.ts
+    api.ts
+    wss.ts
+    mocks.ts
+    navigation.md
+    behaviour.md
+    backend/
+      runtime.md
+      ai-runtime.md
+      data.md
   platform/
-    frontend/        (cross-app domain interfaces — AuthService, etc.)
-    backend/         (Lambda-to-Lambda contracts, platform-shared schemas)
+    substrate.md
 ```
 
-**Frontend bucket** holds:
-- HTTP API contracts (request/response shapes, status codes, authentication requirements)
-- Data model contracts (entity shapes consumed by frontend code)
-- Domain interface contracts (AuthService and similar — v0 implements mock versions)
-- Frontend-internal conventions (UI patterns, AI prompts, design tokens)
+TypeScript files are authoritative for shape. Markdown files describe behaviour,
+validation, edge cases, navigation, examples, auth rules, IAM/external
+dependencies, and mock guidance. Shared shapes live in `_shared/` and must not
+be duplicated between frontend and backend concerns.
 
-**Backend bucket** holds:
-- Per-domain backend contracts (one document per functional domain — see *Granularity* below)
-- Lambda-to-Lambda contracts (synthetic event shapes, Pattern B trust)
-- Lambda-to-AWS contracts (DynamoDB schema definitions, IAM scope per Lambda, SES grants)
-- Internal helper interfaces
-
-**Platform-shared contracts** live in `contracts/platform/` — sibling to per-app scopes. Platform-shared types like `Account`, `User`, `AccountMember` live here.
-
+Backend folders hold backend-specific behaviour and implementation constraints:
+IAM, DynamoDB schemas, Lambda behaviour, WSS behaviour, AI runtime/provider
+behaviour, auth/authorization requirements, and external dependency/mockability
+notes.
 #### Granularity (backend contracts)
 
 Backend service interface contracts are organised by **functional domain**, not per-Lambda. Each domain document covers the related operations within that domain plus their cross-Lambda interactions.
@@ -1067,17 +1092,14 @@ Per-domain backend contracts follow a standard structure:
 - **IAM scope** — least-privilege required
 - **Error responses** — what status codes, when
 - **Rate limiting/throttling** — if any
-- **Cross-references** — to paired frontend contracts, to other domain contracts, to platform contracts
+- **Cross-references** - to related API, WSS, type, mock, backend behaviour, shared, and platform contracts
 
-#### Pairing and cross-references
+#### Cross-references
 
-Where a frontend contract has a corresponding backend contract (e.g., an HTTP API has both a UI-facing shape and a Lambda implementation):
-
-- **Naming convention (default).** Paired files share a base name. `accounts.md` in `frontend/` and `accounts.md` in `backend/` are implicitly paired.
-- **Explicit cross-reference (always).** Each contract that has a pair contains an explicit cross-reference to its counterpart.
-
-Not every contract has a pair. Frontend-internal conventions (UI patterns) typically don't have backend counterparts. Backend-only contracts (Lambda-to-Lambda interfaces, internal helpers) don't have frontend counterparts.
-
+Where a shape file has related behaviour, backend, WSS, mock, or shared
+contracts, cross-reference the related file explicitly. There is no implicit
+frontend/backend pairing convention in the M15 structure; related files are
+connected by scope, type names, route names, and explicit links.
 #### Mockability flagging
 
 Backend contracts include an explicit "External dependencies" section listing AWS services the domain interacts with — Cognito, SES, DynamoDB, etc. This serves both v0 (knows what to stub when generating mocks) and Claude (understands what's the platform's vs what's AWS's).
