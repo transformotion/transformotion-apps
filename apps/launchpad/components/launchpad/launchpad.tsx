@@ -48,7 +48,7 @@ const APPS: App[] = [
   {
     id: 'budget-tracker',
     name: 'Budget Tracker',
-    description: 'Track income, expenses and savings across accounts',
+    description: 'Track spending, savings and cashflow across accounts',
     icon: Wallet,
     available: true,
     color: 'text-signal-green',
