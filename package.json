@@ -9,6 +9,7 @@
     "test": "pnpm sync:v0 && turbo test",
     "sync:v0": "bash scripts/sync-v0.sh",
     "check:v0-contracts": "bash scripts/ci/check-v0-contracts-synced.sh",
+    "check:v0-freshness": "node scripts/ci/check-v0-freshness.mjs",
     "clean": "turbo clean && rm -rf node_modules",
     "prepare": "husky"
   },

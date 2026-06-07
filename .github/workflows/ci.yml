@@ -9,6 +9,27 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  v0-freshness:
+    name: v0 Freshness Gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout runtime repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed files
+        run: |
+          git fetch origin "${{ github.base_ref }}" --depth=1
+          git diff --name-only "origin/${{ github.base_ref }}"...HEAD > "$RUNNER_TEMP/changed-files.txt"
+          cat "$RUNNER_TEMP/changed-files.txt"
+
+      - name: Verify v0 freshness declaration
+        env:
+          CHANGED_FILES_FILE: ${{ runner.temp }}/changed-files.txt
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: node scripts/ci/check-v0-freshness.mjs
+
   v0-contracts-sync:
     name: v0 Contracts Sync
     runs-on: ubuntu-latest
