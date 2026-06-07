@@ -1,45 +1,26 @@
 import { getConfig } from '@/lib/config'
+import {
+  AI_MODEL_ALLOWLIST,
+  type AiConfigAppSlug,
+  type AiProviderId,
+  type AiRuntimeConfigRecord,
+  type AiRuntimeConfigResponse,
+  type AiRuntimeConfigUpdate,
+} from '@transformotion/contracts/_shared/ai-runtime'
 
-export type AiProviderId = 'claude' | 'openai'
-export type AiConfigSource = 'app_override' | 'platform_default' | 'environment_fallback'
-export type AiConfigAppSlug = 'stock-analyser' | 'budget-tracker'
-
-export interface AiRuntimeConfigRecord {
-  provider: AiProviderId
-  model: string
-  updatedAt: string
-}
-
-export interface ResolvedAiRuntimeConfig {
-  provider: AiProviderId
-  model: string
-  source: AiConfigSource
-}
-
-export interface AiRuntimeConfigResponse {
-  platformDefault: AiRuntimeConfigRecord | null
-  appOverrides: Record<AiConfigAppSlug, AiRuntimeConfigRecord | null>
-  effective: Record<AiConfigAppSlug, ResolvedAiRuntimeConfig>
-  supportedModels?: Record<AiProviderId, readonly string[]>
-}
-
-export interface AiRuntimeConfigUpdate {
-  provider: AiProviderId
-  model: string
-}
+export type {
+  AiConfigAppSlug,
+  AiConfigSource,
+  AiProviderId,
+  AiRuntimeConfigRecord,
+  AiRuntimeConfigResponse,
+  AiRuntimeConfigUpdate,
+  ResolvedAiRuntimeConfig,
+} from '@transformotion/contracts/_shared/ai-runtime'
 
 export const FALLBACK_SUPPORTED_MODELS: Record<AiProviderId, readonly string[]> = {
-  claude: [
-    'claude-sonnet-4-6',
-    'claude-opus-4-8',
-    'claude-haiku-4-5-20251001',
-  ],
-  openai: [
-    'gpt-5.4-mini',
-    'gpt-5.4',
-    'gpt-5.5',
-    'gpt-5.4-nano',
-  ],
+  claude: AI_MODEL_ALLOWLIST.claude,
+  openai: AI_MODEL_ALLOWLIST.openai,
 }
 
 function resolveControlPlaneBaseUrl(): string {

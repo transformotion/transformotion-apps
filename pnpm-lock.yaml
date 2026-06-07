@@ -524,6 +524,9 @@ importers:
       '@transformotion/auth-client':
         specifier: workspace:*
         version: link:../../packages/auth-client
+      '@transformotion/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       '@transformotion/runtime-config':
         specifier: workspace:*
         version: link:../../packages/runtime-config
@@ -839,6 +842,9 @@ importers:
       '@transformotion/cache':
         specifier: workspace:*
         version: link:../../packages/cache
+      '@transformotion/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       '@transformotion/data-access':
         specifier: workspace:*
         version: link:../../packages/data-access
@@ -1052,6 +1058,9 @@ importers:
 
   apps/stock-analyser/functions/portfolio:
     dependencies:
+      '@transformotion/contracts':
+        specifier: workspace:*
+        version: link:../../../../packages/contracts
       '@transformotion/lambda-middleware':
         specifier: workspace:*
         version: link:../../../../packages/lambda-middleware
@@ -1071,6 +1080,9 @@ importers:
 
   apps/stock-analyser/functions/watchlist:
     dependencies:
+      '@transformotion/contracts':
+        specifier: workspace:*
+        version: link:../../../../packages/contracts
       '@transformotion/lambda-middleware':
         specifier: workspace:*
         version: link:../../../../packages/lambda-middleware
@@ -1256,6 +1268,10 @@ importers:
         version: 5.7.3
 
   packages/api-client:
+    dependencies:
+      '@transformotion/contracts':
+        specifier: workspace:*
+        version: link:../contracts
     devDependencies:
       typescript:
         specifier: '*'
@@ -1281,6 +1297,10 @@ importers:
         version: 1.6.1(@types/node@22.19.17)(jsdom@29.1.1)(lightningcss@1.32.0)
 
   packages/budget-domain:
+    dependencies:
+      '@transformotion/contracts':
+        specifier: workspace:*
+        version: link:../contracts
     devDependencies:
       typescript:
         specifier: '*'
@@ -1298,6 +1318,12 @@ importers:
         specifier: '*'
         version: 5.7.3
 
+  packages/contracts:
+    devDependencies:
+      typescript:
+        specifier: '*'
+        version: 5.7.3
+
   packages/data-access:
     devDependencies:
       '@types/node':
@@ -1309,6 +1335,9 @@ importers:
 
   packages/fn-ai-proxy-core:
     dependencies:
+      '@transformotion/contracts':
+        specifier: workspace:*
+        version: link:../contracts
       '@transformotion/lambda-middleware':
         specifier: workspace:*
         version: link:../lambda-middleware
@@ -1342,6 +1371,10 @@ importers:
         version: 1.6.1(@types/node@22.19.17)(jsdom@29.1.1)(lightningcss@1.32.0)
 
   packages/lambda-middleware:
+    dependencies:
+      '@transformotion/contracts':
+        specifier: workspace:*
+        version: link:../contracts
     devDependencies:
       '@types/aws-lambda':
         specifier: ^8

@@ -14,6 +14,7 @@ on:
       - 'infrastructure/lib/auth-domain-exports.ts'
       - 'packages/api-client/**'
       - 'packages/cache/**'
+      - 'packages/contracts/**'
       - 'packages/data-access/**'
       - 'packages/logger/**'
       - 'packages/ui/**'
@@ -79,6 +80,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Clone v0 repo
+        env:
+          V0_REPO_READ_TOKEN: ${{ secrets.V0_REPO_READ_TOKEN }}
+        run: git clone --depth 1 "https://x-access-token:${V0_REPO_READ_TOKEN}@github.com/transformotion/transformotion-apps-b8.git" "$RUNNER_TEMP/transformotion-apps-b8"
+
       - name: Check required env vars are set
         run: bash scripts/ci/check-required-env-vars.sh apps/budget-tracker/.env.example dev
 
@@ -92,6 +98,11 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Sync v0 contracts
+        env:
+          V0_REPO_PATH: ${{ runner.temp }}/transformotion-apps-b8
+        run: pnpm sync:v0
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
@@ -187,6 +198,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Clone v0 repo
+        env:
+          V0_REPO_READ_TOKEN: ${{ secrets.V0_REPO_READ_TOKEN }}
+        run: git clone --depth 1 "https://x-access-token:${V0_REPO_READ_TOKEN}@github.com/transformotion/transformotion-apps-b8.git" "$RUNNER_TEMP/transformotion-apps-b8"
+
       - name: Check required env vars are set
         run: bash scripts/ci/check-required-env-vars.sh apps/budget-tracker/.env.example prod
 
@@ -200,6 +216,11 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Sync v0 contracts
+        env:
+          V0_REPO_PATH: ${{ runner.temp }}/transformotion-apps-b8
+        run: pnpm sync:v0
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4

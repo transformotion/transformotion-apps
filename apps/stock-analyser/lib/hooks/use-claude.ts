@@ -43,6 +43,10 @@ export interface ClaudeResponse<T = unknown> {
   }
 }
 
+function parseCachedJson<T>(data: unknown): T {
+  return typeof data === 'string' ? JSON.parse(data) as T : data as T
+}
+
 export interface ClaudeJobStatus<T = unknown> {
   status: 'pending' | 'processing' | 'complete' | 'error'
   content?: T
@@ -197,7 +201,7 @@ async function subscribeViaWss<T>(
 
   // Phase 2: start the job, then wait for job_complete notification
   const { jobId } = await stockAnalyserClient.claudeAsyncStart(
-    { prompt: request.prompt, system: request.systemPrompt, webSearch: request.webSearch, maxTokens: request.maxTokens },
+    { prompt: request.prompt, systemPrompt: request.systemPrompt, webSearch: request.webSearch, maxTokens: request.maxTokens },
     connectionId,
     signal,
   )
@@ -225,7 +229,7 @@ async function subscribeViaWss<T>(
 
   // Phase 3: read the completed job result from DynamoDB cache
   const item = await getStockAnalyserClient().getCache(`job-${jobId}`)
-  const jobStatus = JSON.parse(item.data) as { status: string; content?: string; message?: string }
+  const jobStatus = parseCachedJson<{ status: string; content?: string; message?: string }>(item.data)
   if (jobStatus.status === 'complete' && jobStatus.content) {
     try {
       return JSON.parse(stripCodeFences(jobStatus.content)) as T

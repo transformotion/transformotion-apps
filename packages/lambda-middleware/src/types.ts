@@ -1,4 +1,5 @@
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import type { AccountMembership, AccountRole as ContractAccountRole, EntitledAppSlug } from '@transformotion/contracts/_shared/auth';
 
 /**
  * Claims extracted from the Cognito JWT that API Gateway validates.
@@ -13,22 +14,22 @@ export interface AuthClaims {
   /** Legacy Cognito groups (space-separated, still present for fallback). */
   groups: string[];
   /** Apps the user has been granted access to, e.g. ['budget-tracker', 'stock-analyser']. */
-  apps: string[];
+  apps: EntitledAppSlug[];
   /**
    * Account memberships keyed by appSlug, value is an array of membership records.
    * e.g. { 'budget-tracker': [{ accountId: 'acc-uuid', role: 'member' }] }.
    * Empty until pre-token Lambda is live.
    */
-  accounts: Record<string, Array<{ accountId: string; role: string }>>;
+  accounts: Partial<Record<EntitledAppSlug, AccountMembership[]>>;
   /** True when the user has the platform-wide site_admin claim. */
   siteAdmin: boolean;
 }
 
 /** App identifiers used across all auth helpers. */
-export type AppName = 'budget-tracker' | 'stock-analyser';
+export type AppName = EntitledAppSlug;
 
 /** Account role levels (ordered ascending by capability). */
-export type AccountRole = 'viewer' | 'member' | 'manager' | 'owner';
+export type AccountRole = ContractAccountRole;
 
 /**
  * Resolved account context for the request.

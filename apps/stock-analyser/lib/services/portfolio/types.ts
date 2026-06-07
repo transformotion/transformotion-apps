@@ -1,12 +1,5 @@
-/** Raw holding as stored in DynamoDB via the portfolio Lambda. */
-export interface PortfolioHolding {
-  ticker:   string
-  shares:   number
-  /** Average purchase cost per share. 0 for gifted holdings. */
-  avgCost:  number
-  isGifted: boolean
-  addedAt:  number
-}
+export type { PortfolioHolding } from '@transformotion/contracts/stock-analyser/types'
+import type { PortfolioHolding } from '@transformotion/contracts/stock-analyser/types'
 
 /** Shape returned by the Claude stock analysis prompt (shared with Analyser tab). */
 export interface StockAnalysisResult {
