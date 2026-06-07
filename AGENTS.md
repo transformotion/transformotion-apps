@@ -148,6 +148,17 @@ repo access is unavailable.
 Use TypeScript contract files for shapes and markdown for behaviour when
 creating new contracts in the v0 repo, following `CONTRIBUTING.md`.
 
+M15 #391 established the reconciled v0 UI/contract baseline at v0 repo `main`
+commit `9515fc521d2eaa7431612e17b57e3fff517d131d`. From #124 onward, any
+runtime PR that changes UI-affecting or contract-affecting paths must link the
+matching `transformotion-apps-b8` PR/commit in the PR body's `v0 freshness`
+section, or explicitly declare `No v0 impact` with a reason. UI-affecting paths
+include app `app/`, `components/`, UI-used `lib/`, `stores/`, `hooks/`,
+`services/`, `data/`, app frontend config, shared UI packages, frontend
+service/adaptor packages, and `packages/contracts/`. v0 sandboxes may be stale:
+refresh from `transformotion-apps-b8/main` before using them as freshness
+evidence.
+
 ### `docs/`
 
 Architecture, planning, audit, and archive material. `docs/architecture/` and
@@ -400,6 +411,9 @@ Other working practices:
 - Prefer incremental migrations over large rewrites.
 - Preserve backwards compatibility during migrations unless the task explicitly
   authorizes a breaking cutover.
+- Complete the PR body's `v0 freshness` section for any UI-affecting or
+  contract-affecting runtime change. Link the matching v0 PR/commit, or select
+  `No v0 impact` and explain why.
 - Before changing AWS resources, IAM, workflows, or architecture topology,
   inspect sibling state, not only the one named attribute.
 - Before implementation work completes recon, identify which normative

@@ -102,6 +102,11 @@ jobs:
           V0_REPO_PATH: ${{ runner.temp }}/transformotion-apps-b8
         run: pnpm sync:v0
 
+      - name: Verify v0 contracts byte identity
+        env:
+          V0_REPO_PATH: ${{ runner.temp }}/transformotion-apps-b8
+        run: pnpm check:v0-contracts
+
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -230,6 +235,11 @@ jobs:
         env:
           V0_REPO_PATH: ${{ runner.temp }}/transformotion-apps-b8
         run: pnpm sync:v0
+
+      - name: Verify v0 contracts byte identity
+        env:
+          V0_REPO_PATH: ${{ runner.temp }}/transformotion-apps-b8
+        run: pnpm check:v0-contracts
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4

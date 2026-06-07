@@ -31,10 +31,7 @@ React + TypeScript + Tailwind CSS + shadcn/ui.
 | DynamoDB table schemas | [/docs/architecture/data.md](/docs/architecture/data.md) |
 | CDK stacks, Lambda names | [/docs/architecture/cdk.md](/docs/architecture/cdk.md) |
 | URL routing, CloudFront, deploy triggers | [/docs/architecture/urls-and-deploy.md](/docs/architecture/urls-and-deploy.md) |
-| Data models and types | [/v0-reference/contracts/budget-tracker/data-models.md](/v0-reference/contracts/budget-tracker/data-models.md) |
-| API contracts | [/v0-reference/contracts/budget-tracker/api-endpoints.md](/v0-reference/contracts/budget-tracker/api-endpoints.md) |
-| State management and adaptor pattern | [/v0-reference/contracts/budget-tracker/state-management.md](/v0-reference/contracts/budget-tracker/state-management.md) |
-| AWS infrastructure reference | [/v0-reference/contracts/budget-tracker/aws-infrastructure.md](/v0-reference/contracts/budget-tracker/aws-infrastructure.md) |
+| Canonical Budget Tracker contracts | [/v0-reference/contracts/budget-tracker/](/v0-reference/contracts/budget-tracker/) |
 
 ## CDK stacks owned
 
@@ -100,7 +97,7 @@ Budget Tracker UI uses the adaptor pattern. **Components never call APIs, Dynamo
 ```
 Component
   → Zustand store action
-  → Repository interface method   ← defined in contracts/state-management.md
+  → Repository interface method   ← defined in v0 contracts
   → stub adaptor (dev/v0) OR aws-adaptor (production)
 ```
 
@@ -109,13 +106,13 @@ The three Zustand stores:
 - `useAiStore` — AI review queue and CSV analysis
 - `useAuthStore` — current user and sign-in/out
 
-Repository interfaces are defined in the generated read-only `v0-reference/contracts/budget-tracker/state-management.md`. **Do not add methods to a repository without updating the contract file in the v0 repo first, committing and pushing that v0 change, then running `pnpm sync:v0`.**
+Repository interfaces are defined in the generated read-only `v0-reference/contracts/budget-tracker/` scope. **Do not add methods to a repository without updating the canonical contract in the v0 repo first, committing and pushing that v0 change, then running `pnpm sync:v0`.**
 
 ### Forbidden patterns
 
 - `fetch()` in components or store actions
 - `localStorage` reads/writes outside `lib/repositories/`
-- Types not in `v0-reference/contracts/budget-tracker/data-models.md`
+- UI/backend boundary types not sourced from `v0-reference/contracts/budget-tracker/`
 - `window.confirm` — use inline confirmation UI instead
 - IIFEs inside JSX — compute values above the return statement
 - `URL.createObjectURL` for CSV export — use data URI instead
@@ -124,7 +121,7 @@ Repository interfaces are defined in the generated read-only `v0-reference/contr
 
 ## Data types
 
-All types that cross the UI/backend boundary are defined in [v0-reference/contracts/budget-tracker/data-models.md](/v0-reference/contracts/budget-tracker/data-models.md). Key types:
+Types that cross the UI/backend boundary are defined in the generated read-only [v0-reference/contracts/budget-tracker/](/v0-reference/contracts/budget-tracker/) scope. Key types:
 - `Transaction` — atomic unit; `_manual` flag prevents rules from overwriting; `categoryId`/`subcategoryId` are UUID FKs; deprecated `category`/`subcategory` string fields remain for migration fallback display
 - `MatchingRule` — user-managed keyword/regex rule referencing `categoryId`/`subcategoryId` UUIDs; sorted by `priority` (lower = higher priority); replaces the old `CustomRule` + `BuiltinRule` split (there are no built-in rules)
 - `BudgetData` — `{ categories: Category[], budgetAmounts: Record<subcategoryId, number>, budgetFrequencies: Record<subcategoryId, BudgetFrequency> }`; stored as a single `budgetData` key in the settings table
@@ -184,7 +181,7 @@ Provider is selected via `config.ai.provider` (`'mock'` or `'claude'`), resolved
 
 **Adding a new AI feature:**
 1. Add the method to the `AIService` interface in `lib/services/ai/index.ts`
-2. Update the contract in the v0 repo (`transformotion-apps-b8/contracts/budget-tracker/state-management.md`), commit and push that v0 change, then run `pnpm sync:v0`
+2. Update the contract in the v0 repo (`transformotion-apps-b8/contracts/budget-tracker/`), commit and push that v0 change, then run `pnpm sync:v0`
 3. Add a matching Lambda route to `apps/budget-tracker/functions/budget-ai/src/index.ts` with `requireAppAccess` + `requireAccountAccess`
 4. Implement the method in `MockAIService` (mock-ai.ts) and `ClaudeAIService` (claude-ai.ts)
 5. Add prompt text in the Lambda (server-side only — never in client code)

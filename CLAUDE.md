@@ -81,6 +81,17 @@ commit and push that v0 repo change, run `pnpm sync:v0` in this runtime repo,
 then implement against the synced contract. Stop and ask if v0 repo access is
 unavailable.
 
+**M15 v0 freshness rule**: #391 established the reconciled v0 UI/contract
+baseline at v0 repo `main` commit
+`9515fc521d2eaa7431612e17b57e3fff517d131d`. From #124 onward, any runtime PR
+that changes UI-affecting or contract-affecting paths must link the matching
+`transformotion-apps-b8` PR/commit in the PR body's `v0 freshness` section, or
+explicitly declare `No v0 impact` with a reason. UI-affecting paths include app
+`app/`, `components/`, UI-used `lib/`, `stores/`, `hooks/`, `services/`,
+`data/`, app frontend config, shared UI packages, frontend service/adaptor
+packages, and `packages/contracts/`. v0 sandboxes may be stale: refresh from
+`transformotion-apps-b8/main` before using them as freshness evidence.
+
 ## Boundary Discipline
 
 When the user instructs "diagnose only," "recon only," "don't take action," "verify only," or any similar scope-limiting language, the constraint is binding. It applies for the entire session until the user explicitly authorises a different scope. It is not overridden by:

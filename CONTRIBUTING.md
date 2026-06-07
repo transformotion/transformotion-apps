@@ -329,6 +329,47 @@ The contracts policy document (location ratified in Stage 0b) governs what
 goes in each contract file, the normative-vs-descriptive classification,
 and the relationship between contracts and TypeScript domain packages.
 
+### 3.5.1 v0 freshness enforcement
+
+M15 #391 established the reconciled v0 baseline for Launchpad, Stock Analyser,
+and Budget Tracker. The baseline starts from v0 repo `main` commit
+`9515fc521d2eaa7431612e17b57e3fff517d131d`. From #124 onward, v0 must not fall
+behind runtime UI or contract behaviour.
+
+Any runtime PR that changes UI-affecting or contract-affecting paths must do
+one of two things before CI can pass:
+
+1. Link the matching `transformotion-apps-b8` v0 PR or commit in the PR body's
+   `v0 freshness` section.
+2. Declare `No v0 impact` in that section and give a clear reason.
+
+UI-affecting or contract-affecting paths include:
+
+- `apps/*/app/**`
+- `apps/*/components/**`
+- `apps/*/lib/**` when it is used by UI, services, adapters, hooks, or state
+- `apps/*/stores/**`, `apps/*/hooks/**`, `apps/*/services/**`, and
+  `apps/*/data/**`
+- app frontend config such as `next.config.*`, app `package.json`,
+  `.env.example`, and `tsconfig.json`
+- shared UI/design-system packages such as `packages/ui/**`
+- frontend service/adaptor packages such as `packages/api-client/**`,
+  `packages/auth-client/**`, and `packages/runtime-config/**`
+- the v0 contract wrapper package, `packages/contracts/**`
+- canonical contract paths, when present in the runtime repo, and v0 mock or
+  adapter changes
+
+Usually non-UI examples include backend-only Lambda internals with no UI or
+contract shape change, infrastructure-only deploy role changes,
+documentation-only changes, and CI-only changes. If in doubt, treat the change
+as v0-impacting and link the v0 work.
+
+v0 working sandboxes and branches may be stale. Before v0 work is used to
+satisfy this gate, refresh from `transformotion-apps-b8/main`, land the v0
+change there, then run `pnpm sync:v0` and `pnpm check:v0-contracts` in this
+runtime repo. CI uses `V0_REPO_READ_TOKEN` for read-only verification only; it
+must never write to or auto-fix the v0 repo from runtime state.
+
 ### 3.6 The decision rule — where new code lives
 
 When a new piece of code is written, the question is: does it go in
@@ -416,6 +457,11 @@ branch names.
 Every PR references at least one issue. The PR body includes "Closes
 #N" or "Fixes #N" for the issue it closes, or "Refs #N" for issues it
 relates to but does not close.
+
+Every PR must also complete the `v0 freshness` section when it changes
+UI-affecting or contract-affecting paths. Link the matching v0 PR/commit, or
+select `No v0 impact` and explain why no v0 change is required. CI enforces
+this declaration for the path classes in Section 3.5.1.
 
 PRs without a corresponding issue are acceptable only for trivial work
 (typo fixes, comment-only changes, single-line style adjustments). When in
