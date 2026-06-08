@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from "react"
 import { useBudgetStore } from "@/stores/budget-tracker/use-budget-store"
+import { selectUser, useAuthStore } from "@/stores/auth/use-auth-store"
 import { PageHeader, Card, PrimaryButton, SecondaryButton } from "@transformotion/ui-primitives"
-import { Settings, RotateCcw, Save, Cpu, AlertCircle, Check } from "lucide-react"
+import { Settings, RotateCcw, Save, Cpu, AlertCircle, Check, Lock } from "lucide-react"
 import type { BudgetSettings } from "@transformotion/budget-domain"
 import {
   getBudgetAiConfig,
@@ -34,6 +35,8 @@ const SOURCE_LABELS: Record<AppAiRuntimeConfigResponse["effective"]["source"], s
 }
 
 function AiEngineCard() {
+  const user = useAuthStore(selectUser)
+  const siteAdmin = user?.metadata?.siteAdmin === true
   const [config, setConfig] = useState<AppAiRuntimeConfigResponse | null>(null)
   const [provider, setProvider] = useState<AiProviderId>("claude")
   const [model, setModel] = useState("claude-sonnet-4-6")
@@ -142,55 +145,64 @@ function AiEngineCard() {
         </div>
       </div>
 
-      <div className="space-y-5">
-        <div>
-          <label className="text-xs font-medium text-foreground block mb-1">Provider</label>
-          <select
-            value={provider}
-            disabled={loading || saving}
-            onChange={(e) => {
-              const nextProvider = e.target.value as AiProviderId
-              setSaved(false)
-              setProvider(nextProvider)
-              setModel(SUPPORTED_AI_MODELS[nextProvider]?.[0] ?? "")
-            }}
-            className="w-full h-9 px-3 rounded-lg bg-surface2 border border-border text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-          >
-            {PROVIDER_OPTIONS.map((option) => (
-              <option key={option} value={option}>{PROVIDER_LABELS[option]}</option>
-            ))}
-          </select>
-        </div>
+      {siteAdmin ? (
+        <>
+          <div className="space-y-5">
+            <div>
+              <label className="text-xs font-medium text-foreground block mb-1">Provider</label>
+              <select
+                value={provider}
+                disabled={loading || saving}
+                onChange={(e) => {
+                  const nextProvider = e.target.value as AiProviderId
+                  setSaved(false)
+                  setProvider(nextProvider)
+                  setModel(SUPPORTED_AI_MODELS[nextProvider]?.[0] ?? "")
+                }}
+                className="w-full h-9 px-3 rounded-lg bg-surface2 border border-border text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              >
+                {PROVIDER_OPTIONS.map((option) => (
+                  <option key={option} value={option}>{PROVIDER_LABELS[option]}</option>
+                ))}
+              </select>
+            </div>
 
-        <div>
-          <label className="text-xs font-medium text-foreground block mb-1">Model</label>
-          <select
-            value={model}
-            disabled={loading || saving}
-            onChange={(e) => { setSaved(false); setModel(e.target.value) }}
-            className="w-full h-9 px-3 rounded-lg bg-surface2 border border-border text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-          >
-            {models.map((m) => <option key={m} value={m}>{m}</option>)}
-          </select>
-        </div>
-      </div>
+            <div>
+              <label className="text-xs font-medium text-foreground block mb-1">Model</label>
+              <select
+                value={model}
+                disabled={loading || saving}
+                onChange={(e) => { setSaved(false); setModel(e.target.value) }}
+                className="w-full h-9 px-3 rounded-lg bg-surface2 border border-border text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              >
+                {models.map((m) => <option key={m} value={m}>{m}</option>)}
+              </select>
+            </div>
+          </div>
 
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center mt-5 pt-4 border-t border-border">
-        {saved && (
-          <span className="flex items-center gap-1.5 text-xs text-signal-green sm:mr-auto" role="status">
-            <Check className="size-4" />
-            Override saved
-          </span>
-        )}
-        <SecondaryButton onClick={handleResetOverride} disabled={!override || loading || saving}>
-          <RotateCcw className="size-4 mr-2" />
-          Reset to platform default
-        </SecondaryButton>
-        <PrimaryButton onClick={handleSaveOverride} disabled={!isDirty || loading || saving}>
-          <Save className="size-4 mr-2" />
-          {saving ? "Saving..." : "Save override"}
-        </PrimaryButton>
-      </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center mt-5 pt-4 border-t border-border">
+            {saved && (
+              <span className="flex items-center gap-1.5 text-xs text-signal-green sm:mr-auto" role="status">
+                <Check className="size-4" />
+                Override saved
+              </span>
+            )}
+            <SecondaryButton onClick={handleResetOverride} disabled={!override || loading || saving}>
+              <RotateCcw className="size-4 mr-2" />
+              Reset to platform default
+            </SecondaryButton>
+            <PrimaryButton onClick={handleSaveOverride} disabled={!isDirty || loading || saving}>
+              <Save className="size-4 mr-2" />
+              {saving ? "Saving..." : "Save override"}
+            </PrimaryButton>
+          </div>
+        </>
+      ) : (
+        <div className="flex items-start gap-2 rounded-lg border border-border bg-surface2/60 px-3 py-2 text-xs text-muted-foreground">
+          <Lock className="mt-0.5 size-4 shrink-0" />
+          <span>AI provider/model overrides are managed by site administrators.</span>
+        </div>
+      )}
     </Card>
   )
 }
