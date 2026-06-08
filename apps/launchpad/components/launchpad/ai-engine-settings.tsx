@@ -222,7 +222,7 @@ export function AiEngineSettings({
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4 py-3">
           <div>
             <h2 className="text-lg font-semibold text-foreground">AI Engine Settings</h2>
-            <p className="text-sm text-muted-foreground">Provider and model selection</p>
+            <p className="text-sm text-muted-foreground">Provider and model controls</p>
           </div>
           <button
             type="button"
