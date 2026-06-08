@@ -159,6 +159,59 @@ service/adaptor packages, and `packages/contracts/`. v0 sandboxes may be stale:
 refresh from `transformotion-apps-b8/main` before using them as freshness
 evidence.
 
+Before implementing runtime work, classify it as one of:
+
+1. `Contract-changing`
+2. `Non-contract UI polish`
+3. `Runtime-only / no v0 impact`
+4. `Emergency hotfix`
+
+Contract-changing runtime work is prohibited by default unless the canonical v0
+contract update exists first. A change is contract-changing if it adds, removes,
+renames, or changes frontend/backend data fields, API request/response payloads,
+WSS message shapes, cache/job/result shapes, auth/session/claim shapes, runtime
+configuration shapes, mock data assumptions, UI state that depends on a new or
+changed shape, persistence/storage shape that v0 mocks must represent, or app
+settings/configuration shape.
+
+The normal contract-changing workflow is:
+
+1. Update canonical contracts in `transformotion-apps-b8/contracts` first.
+2. Update typed mocks and v0 UI/adapters.
+3. Merge the v0 PR.
+4. In this runtime repo, run `pnpm sync:v0` and `pnpm check:v0-contracts`.
+5. Implement runtime backend/frontend against the synced contracts.
+6. Reference the v0 PR/commit in the runtime PR freshness section.
+
+Non-contract UI polish is allowed when it only affects styling,
+spacing/layout, copy text, icons, responsive behaviour, accessibility
+attributes, modal/scrollbar polish, or component arrangement that does not
+change data/API/WSS/cache/mock/settings/runtime semantics. If polish affects
+both v0 and runtime, prefer v0-first or paired v0/runtime PRs. Runtime PRs still
+need either a v0 PR/commit reference or a clear no-v0-impact reason.
+
+Runtime-first contract-changing work is allowed only as an emergency hotfix:
+the issue must be urgent, the owner must explicitly approve runtime-first work
+before implementation, and the PR must include an `Emergency v0 Reconciliation`
+section. Urgent means app unusable, auth broken, data loss/corruption risk,
+security issue, deployment blocked, provider/model execution broken, or a
+severe user-facing regression. The runtime fix must be the smallest safe change,
+affected contract and UI/mock surfaces must be listed, and a v0 reconciliation
+PR or issue must be created immediately. v0 contracts, mocks, and UI are then
+brought back into sync as soon as possible, followed by `pnpm sync:v0` and
+`pnpm check:v0-contracts`.
+
+The `Emergency v0 Reconciliation` section must include why runtime-first was
+necessary, the explicit owner approval reference, affected contract
+files/surfaces, affected UI/mock surfaces, the v0 reconciliation PR or issue
+link, the expected reconciliation deadline, and the validation plan.
+
+The freshness gate is a CI backstop, not permission to start runtime-first
+contract-changing work. If a runtime task is contract-changing and no v0
+contract update exists, stop and report that v0 must be updated first. If it is
+urgent and contract-changing, ask for explicit owner approval before
+runtime-first implementation.
+
 ### `docs/`
 
 Architecture, planning, audit, and archive material. `docs/architecture/` and
