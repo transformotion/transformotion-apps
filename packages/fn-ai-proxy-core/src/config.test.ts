@@ -10,10 +10,12 @@ import {
 
 function configClient(records: Record<string, Record<string, unknown>>, fail = false) {
   return {
-    send: async (command: { input?: { Key?: { sk?: string } } }) => {
+    send: async (command: { input?: { Key?: Record<string, string> } }) => {
       if (fail) throw new Error('DynamoDB unavailable');
-      const sk = command.input?.Key?.sk;
-      return { Item: sk ? records[sk] : undefined };
+      const key = command.input?.Key;
+      if (!key) return { Item: undefined };
+      const compositeKey = Object.entries(key).map(([k, v]) => `${k}=${v}`).join('|');
+      return { Item: records[compositeKey] ?? (key.sk ? records[key.sk] : undefined) };
     },
   } as never;
 }
@@ -84,6 +86,49 @@ describe('resolveAiRuntimeConfig', () => {
     })).resolves.toEqual({
       provider: 'openai',
       model: 'gpt-5.4',
+      source: 'app_override',
+    });
+  });
+
+  it('prefers an app-owned override table over the platform config table app override', async () => {
+    await expect(resolveAiRuntimeConfig({
+      appSlug: 'budget-tracker',
+      tableName: 'launchpad-ai-runtime-config-dev',
+      appOverrideTableName: 'budget-tracker.settings-dev',
+      appOverrideKey: { accountId: 'acct-123', settingKey: 'AI_CONFIG#APP#budget-tracker' },
+      fallbackProvider: 'claude',
+      fallbackModel: 'claude-sonnet-4-6',
+      client: configClient({
+        'accountId=acct-123|settingKey=AI_CONFIG#APP#budget-tracker': record(appOverrideSk('budget-tracker'), 'openai', 'gpt-5.4'),
+        [appOverrideSk('budget-tracker')]: record(appOverrideSk('budget-tracker'), 'claude', 'claude-haiku-4-5-20251001'),
+        [PLATFORM_DEFAULT_SK]: record(PLATFORM_DEFAULT_SK, 'claude', 'claude-sonnet-4-6'),
+      }),
+    })).resolves.toEqual({
+      provider: 'openai',
+      model: 'gpt-5.4',
+      source: 'app_override',
+    });
+  });
+
+  it('supports nested canonical config records in app-owned settings rows', async () => {
+    await expect(resolveAiRuntimeConfig({
+      appSlug: 'stock-analyser',
+      tableName: 'launchpad-ai-runtime-config-dev',
+      appOverrideTableName: 'stock-analyser.settings-dev',
+      appOverrideKey: { pk: 'ACCOUNT#acct-123', sk: 'APP#AI_RUNTIME' },
+      fallbackProvider: 'claude',
+      fallbackModel: 'claude-sonnet-4-6',
+      client: configClient({
+        'pk=ACCOUNT#acct-123|sk=APP#AI_RUNTIME': {
+          pk: 'ACCOUNT#acct-123',
+          sk: 'APP#AI_RUNTIME',
+          config: record(appOverrideSk('stock-analyser'), 'openai', 'gpt-5.4-mini'),
+        },
+        [PLATFORM_DEFAULT_SK]: record(PLATFORM_DEFAULT_SK, 'claude', 'claude-sonnet-4-6'),
+      }),
+    })).resolves.toEqual({
+      provider: 'openai',
+      model: 'gpt-5.4-mini',
       source: 'app_override',
     });
   });

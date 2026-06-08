@@ -25,7 +25,12 @@ export const SUPPORTED_APP_SLUGS = SUPPORTED_AI_CONFIG_APP_SLUGS;
 
 export interface AiRuntimeConfigResolverOptions {
   appSlug: AiConfigAppSlug;
+  /** Launchpad-owned platform default table. */
   tableName?: string;
+  /** App-owned override table. If omitted, the legacy Launchpad app override slot is read for transition. */
+  appOverrideTableName?: string;
+  /** Key for the app-owned override record. */
+  appOverrideKey?: Record<string, string>;
   fallbackProvider?: string;
   fallbackModel?: string;
   client?: DynamoDBDocumentClient;
@@ -63,20 +68,23 @@ export function resolveEnvFallbackConfig(options: Pick<AiRuntimeConfigResolverOp
 
 function parseRecord(item: Record<string, unknown> | undefined): AiRuntimeConfigRecord | undefined {
   if (!item) return undefined;
-  const provider = item['provider'];
-  const model = item['model'];
+  const source = (typeof item['config'] === 'object' && item['config'] !== null)
+    ? item['config'] as Record<string, unknown>
+    : item;
+  const provider = source['provider'];
+  const model = source['model'];
   if (!isSupportedAiProvider(provider) || !isSupportedAiModel(provider, model)) {
     return undefined;
   }
-  if (typeof item['updatedAt'] !== 'string') {
+  if (typeof source['updatedAt'] !== 'string') {
     return undefined;
   }
   return {
     pk: AI_CONFIG_PK,
-    sk: item['sk'] as AiRuntimeConfigRecord['sk'],
+    sk: source['sk'] as AiRuntimeConfigRecord['sk'],
     provider,
     model,
-    updatedAt: item['updatedAt'],
+    updatedAt: source['updatedAt'],
   };
 }
 
@@ -92,16 +100,32 @@ async function readConfigRecord(
   return parseRecord(res.Item);
 }
 
+async function readConfigRecordByKey(
+  client: DynamoDBDocumentClient,
+  tableName: string,
+  key: Record<string, string>,
+): Promise<AiRuntimeConfigRecord | undefined> {
+  const res = await client.send(new GetCommand({
+    TableName: tableName,
+    Key: key,
+  }));
+  return parseRecord(res.Item);
+}
+
 export async function resolveAiRuntimeConfig(options: AiRuntimeConfigResolverOptions): Promise<ResolvedAiRuntimeConfig> {
   const fallback = resolveEnvFallbackConfig(options);
-  if (!options.tableName) {
+  if (!options.tableName && !options.appOverrideTableName) {
     return fallback;
   }
 
   const client = options.client ?? DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
   try {
-    const appOverride = await readConfigRecord(client, options.tableName, appOverrideSk(options.appSlug));
+    const appOverride = options.appOverrideTableName && options.appOverrideKey
+      ? await readConfigRecordByKey(client, options.appOverrideTableName, options.appOverrideKey)
+      : options.tableName
+        ? await readConfigRecord(client, options.tableName, appOverrideSk(options.appSlug))
+        : undefined;
     if (appOverride) {
       return {
         provider: appOverride.provider,
@@ -110,13 +134,15 @@ export async function resolveAiRuntimeConfig(options: AiRuntimeConfigResolverOpt
       };
     }
 
-    const platformDefault = await readConfigRecord(client, options.tableName, PLATFORM_DEFAULT_SK);
-    if (platformDefault) {
-      return {
-        provider: platformDefault.provider,
-        model: platformDefault.model,
-        source: 'platform_default',
-      };
+    if (options.tableName) {
+      const platformDefault = await readConfigRecord(client, options.tableName, PLATFORM_DEFAULT_SK);
+      if (platformDefault) {
+        return {
+          provider: platformDefault.provider,
+          model: platformDefault.model,
+          source: 'platform_default',
+        };
+      }
     }
   } catch (err) {
     console.warn('[fn-ai-proxy-core] AI runtime config read failed; using env fallback:', err);

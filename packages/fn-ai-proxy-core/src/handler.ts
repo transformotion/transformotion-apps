@@ -43,6 +43,7 @@ function fallbackRuntimeConfig(
 async function resolveRuntimeConfig(
   model: string | undefined,
   options: AiProxyOptions,
+  accountId: string,
 ): Promise<ResolvedAiRuntimeConfig> {
   if (!options.appSlug) {
     return fallbackRuntimeConfig(model, options);
@@ -51,6 +52,8 @@ async function resolveRuntimeConfig(
   return resolveAiRuntimeConfig({
     appSlug: options.appSlug,
     tableName: options.aiConfigTableName,
+    appOverrideTableName: options.appOverrideTableName,
+    appOverrideKey: options.appOverrideKey?.(accountId),
     fallbackProvider: options.fallbackProvider,
     fallbackModel: options.fallbackModel ?? model ?? options.model ?? options.anthropicModel,
     client: options.aiConfigClient ?? options.dynamoClient,
@@ -86,7 +89,7 @@ export function createAiProxyHandler(options: AiProxyOptions) {
       throw forbidden(`App is not permitted to use this Claude proxy: ${appName}`);
     }
 
-    const runtimeConfig = await resolveRuntimeConfig(requestedModel, options);
+    const runtimeConfig = await resolveRuntimeConfig(requestedModel, options, account.accountId);
 
     if (asyncMode) {
       if (!options.jobResultsTable || !options.lambdaFunctionName) {

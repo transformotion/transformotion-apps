@@ -68,6 +68,7 @@ const SOURCE_LABELS: Record<TabId, string> = {
   analyser: "Analyser",
   portfolio: "Portfolio",
   watchlist: "Watchlist",
+  settings: "Settings",
 }
 
 export function AnalyserTab({ 

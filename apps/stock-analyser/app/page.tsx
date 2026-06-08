@@ -10,6 +10,7 @@ import { MetalsTab } from "@/components/stock-analyser/tabs/metals-tab"
 import { AnalyserTab } from "@/components/stock-analyser/tabs/analyser-tab"
 import { PortfolioTab } from "@/components/stock-analyser/tabs/portfolio-tab"
 import { WatchlistTab } from "@/components/stock-analyser/tabs/watchlist-tab"
+import { SettingsTab } from "@/components/stock-analyser/tabs/settings-tab"
 import { AuthGuard } from "@/components/providers/auth-guard"
 import { useAuthStore } from "@/stores/auth/use-auth-store"
 import { TabErrorBoundary } from "@transformotion/ui-error-boundaries"
@@ -39,6 +40,9 @@ function TabRouter() {
       break
     case "watchlist":
       tab = <WatchlistTab />
+      break
+    case "settings":
+      tab = <SettingsTab />
       break
     default:
       tab = <MarketAnalysisTab />
