@@ -43,6 +43,8 @@ export interface AiProxyOptions {
   model?: string;
   anthropicModel?: string;
   appSlug?: AiConfigAppSlug;
+  appOverrideTableName?: string;
+  appOverrideKey?: (accountId: string) => Record<string, string>;
   aiConfigTableName?: string;
   fallbackProvider?: string;
   fallbackModel?: string;

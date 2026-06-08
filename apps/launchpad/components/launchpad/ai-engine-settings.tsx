@@ -1,13 +1,11 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { AlertCircle, RefreshCw, RotateCcw, Save, X } from 'lucide-react'
+import { AlertCircle, RefreshCw, Save, X } from 'lucide-react'
 import { authService } from '@/lib/services/auth'
 import {
   FALLBACK_SUPPORTED_MODELS,
   getAiRuntimeConfig,
-  resetAppOverride,
-  updateAppOverride,
   updatePlatformDefault,
   type AiConfigAppSlug,
   type AiConfigSource,
@@ -129,10 +127,6 @@ export function AiEngineSettings({
   const [idToken, setIdToken] = useState<string | null>(null)
   const [config, setConfig] = useState<AiRuntimeConfigResponse | null>(null)
   const [platformDraft, setPlatformDraft] = useState<DraftConfig>(DEFAULT_DRAFT)
-  const [appDrafts, setAppDrafts] = useState<Record<AiConfigAppSlug, DraftConfig>>({
-    'stock-analyser': DEFAULT_DRAFT,
-    'budget-tracker': DEFAULT_DRAFT,
-  })
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -153,16 +147,6 @@ export function AiEngineSettings({
       setConfig(nextConfig)
       const platformDefault = nextConfig.platformDefault ?? DEFAULT_DRAFT
       setPlatformDraft({ provider: platformDefault.provider, model: platformDefault.model })
-      setAppDrafts({
-        'stock-analyser': {
-          provider: nextConfig.appOverrides['stock-analyser']?.provider ?? nextConfig.effective['stock-analyser'].provider,
-          model: nextConfig.appOverrides['stock-analyser']?.model ?? nextConfig.effective['stock-analyser'].model,
-        },
-        'budget-tracker': {
-          provider: nextConfig.appOverrides['budget-tracker']?.provider ?? nextConfig.effective['budget-tracker'].provider,
-          model: nextConfig.appOverrides['budget-tracker']?.model ?? nextConfig.effective['budget-tracker'].model,
-        },
-      })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load AI runtime configuration')
     } finally {
@@ -198,16 +182,6 @@ export function AiEngineSettings({
   const savePlatformDefault = () => runMutation(
     'platform',
     (token) => updatePlatformDefault(token, platformDraft satisfies AiRuntimeConfigUpdate),
-  )
-
-  const saveAppOverride = (appSlug: AiConfigAppSlug) => runMutation(
-    appSlug,
-    (token) => updateAppOverride(token, appSlug, appDrafts[appSlug] satisfies AiRuntimeConfigUpdate),
-  )
-
-  const resetOverride = (appSlug: AiConfigAppSlug) => runMutation(
-    `${appSlug}:reset`,
-    (token) => resetAppOverride(token, appSlug),
   )
 
   return (
@@ -255,7 +229,7 @@ export function AiEngineSettings({
           <section className="grid gap-3 border-b border-border pb-5">
             <div>
               <h3 className="font-semibold text-foreground">Platform Default</h3>
-              <p className="text-sm text-muted-foreground">Used when an app override is not set.</p>
+              <p className="text-sm text-muted-foreground">Used when an app-owned override is not set.</p>
             </div>
             <SummaryRow
               label="current"
@@ -290,7 +264,7 @@ export function AiEngineSettings({
                 <div>
                   <h3 className="font-semibold text-foreground">{APP_LABELS[appSlug]}</h3>
                   <p className="text-sm text-muted-foreground">
-                    {override ? 'This app has an override.' : 'This app inherits from default or fallback.'}
+                    App-specific provider/model overrides are managed inside this app's Settings.
                   </p>
                 </div>
                 <SummaryRow
@@ -304,32 +278,6 @@ export function AiEngineSettings({
                   provider={override?.provider}
                   model={override?.model}
                 />
-                <ConfigSelects
-                  value={appDrafts[appSlug]}
-                  supportedModels={supportedModels}
-                  disabled={loading || saving !== null}
-                  onChange={(value) => setAppDrafts((drafts) => ({ ...drafts, [appSlug]: value }))}
-                />
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => saveAppOverride(appSlug)}
-                    disabled={loading || saving !== null}
-                    className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    <Save className="size-4" />
-                    Save app override
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => resetOverride(appSlug)}
-                    disabled={!override || loading || saving !== null}
-                    className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm text-foreground hover:bg-surface2 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    <RotateCcw className="size-4" />
-                    Reset override
-                  </button>
-                </div>
               </section>
             )
           })}

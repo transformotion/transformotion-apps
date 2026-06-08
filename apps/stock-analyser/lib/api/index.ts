@@ -1,5 +1,7 @@
 import { ApiClient, HttpClient } from '@transformotion/api-client'
 import type { PutCacheRequest, ClaudeProxyRequest } from '@transformotion/api-client'
+import type { AiRuntimeConfigUpdate, AppAiRuntimeConfigResponse } from '@transformotion/contracts/_shared/ai-runtime'
+import type { StockAnalyserSettings } from '@transformotion/contracts/stock-analyser/types'
 import { authService } from '../services/auth'
 import { getConfig } from '../config'
 
@@ -35,6 +37,21 @@ function http(): HttpClient {
 
 // ── Stock-analyser local client ────────────────────────────────────────────────
 export const stockAnalyserClient = {
+  getSettings(): Promise<{ settings: StockAnalyserSettings }> {
+    return http().get('settings')
+  },
+  patchSettings(body: Partial<Pick<StockAnalyserSettings, 'explanatoryTextEnabled'>>): Promise<{ settings: StockAnalyserSettings }> {
+    return http().patch('settings', body)
+  },
+  getAiConfig(): Promise<AppAiRuntimeConfigResponse> {
+    return http().get('ai-config')
+  },
+  updateAiOverride(body: AiRuntimeConfigUpdate): Promise<AppAiRuntimeConfigResponse> {
+    return http().put('ai-config/override', body)
+  },
+  resetAiOverride(): Promise<void> {
+    return http().delete('ai-config/override')
+  },
   putCacheEntry(key: string, body: PutCacheRequest): Promise<void> {
     return http().put(`analysis-cache/${encodeURIComponent(key)}`, body)
   },

@@ -2,14 +2,197 @@
 
 import { useState, useEffect } from "react"
 import { useBudgetStore } from "@/stores/budget-tracker/use-budget-store"
-import { PageHeader, Card, PrimaryButton } from "@transformotion/ui-primitives"
-import { Settings, RotateCcw, Save } from "lucide-react"
+import { PageHeader, Card, PrimaryButton, SecondaryButton } from "@transformotion/ui-primitives"
+import { Settings, RotateCcw, Save, Cpu, AlertCircle, Check } from "lucide-react"
 import type { BudgetSettings } from "@transformotion/budget-domain"
+import {
+  getBudgetAiConfig,
+  resetBudgetAiOverride,
+  SUPPORTED_AI_MODELS,
+  updateBudgetAiOverride,
+  type AiProviderId,
+  type AppAiRuntimeConfigResponse,
+} from "@/lib/services/ai-runtime-config"
 
 const DEFAULT_AI_SETTINGS = {
   aiReviewBatchSize: 5,
   aiReviewParallelLimit: 4,
   aiReviewConfidenceThreshold: 'low' as const,
+}
+
+const PROVIDER_OPTIONS = Object.keys(SUPPORTED_AI_MODELS) as AiProviderId[]
+
+const PROVIDER_LABELS: Record<AiProviderId, string> = {
+  claude: "Claude (Anthropic)",
+  openai: "OpenAI",
+}
+
+const SOURCE_LABELS: Record<AppAiRuntimeConfigResponse["effective"]["source"], string> = {
+  app_override: "APP OVERRIDE",
+  platform_default: "PLATFORM DEFAULT",
+  environment_fallback: "ENVIRONMENT FALLBACK",
+}
+
+function AiEngineCard() {
+  const [config, setConfig] = useState<AppAiRuntimeConfigResponse | null>(null)
+  const [provider, setProvider] = useState<AiProviderId>("claude")
+  const [model, setModel] = useState("claude-sonnet-4-6")
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const effective = config?.effective
+  const override = config?.appOverride
+  const models = SUPPORTED_AI_MODELS[provider] ?? []
+  const isDirty = !override || provider !== override.provider || model !== override.model
+
+  async function load() {
+    setLoading(true)
+    setError(null)
+    try {
+      const next = await getBudgetAiConfig()
+      setConfig(next)
+      setProvider(next.effective.provider)
+      setModel(next.effective.model)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load AI Engine settings")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void load()
+  }, [])
+
+  async function handleSaveOverride() {
+    setSaving(true)
+    setError(null)
+    try {
+      const next = await updateBudgetAiOverride({ provider, model })
+      setConfig(next)
+      setProvider(next.effective.provider)
+      setModel(next.effective.model)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save AI Engine override")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleResetOverride() {
+    setSaving(true)
+    setError(null)
+    try {
+      const next = await resetBudgetAiOverride()
+      setConfig(next)
+      setProvider(next.effective.provider)
+      setModel(next.effective.model)
+      setSaved(false)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to reset AI Engine override")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Card>
+      <div className="flex items-center gap-2 mb-4">
+        <div className="size-8 rounded-lg bg-primary/15 flex items-center justify-center">
+          <Cpu className="size-4 text-primary" />
+        </div>
+        <div>
+          <h3 className="text-sm font-semibold text-foreground">AI Engine</h3>
+          <p className="text-xs text-muted-foreground">
+            Choose the provider and model Budget Tracker uses for AI features.
+          </p>
+        </div>
+      </div>
+
+      {error && (
+        <div className="mb-4 flex items-start gap-2 rounded-lg border border-signal-red/30 bg-signal-red/10 px-3 py-2 text-xs text-signal-red">
+          <AlertCircle className="mt-0.5 size-4 shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      <div className="rounded-lg border border-border bg-surface2/60 p-3 space-y-2 mb-5">
+        <div className="flex items-center justify-between gap-3 text-sm">
+          <span className="text-muted-foreground">Platform default</span>
+          <span className="text-foreground text-right">
+            {config?.platformDefault
+              ? `${config.platformDefault.provider} / ${config.platformDefault.model}`
+              : loading ? "loading" : "environment fallback"}
+          </span>
+        </div>
+        <div className="flex items-center justify-between gap-3 text-sm">
+          <span className="text-muted-foreground">Effective now</span>
+          <span className="text-foreground text-right">
+            {effective ? `${effective.provider} / ${effective.model}` : "loading"}
+            {effective && (
+              <span className="ml-2 text-[10px] uppercase tracking-wider text-muted-foreground">
+                {SOURCE_LABELS[effective.source]}
+              </span>
+            )}
+          </span>
+        </div>
+      </div>
+
+      <div className="space-y-5">
+        <div>
+          <label className="text-xs font-medium text-foreground block mb-1">Provider</label>
+          <select
+            value={provider}
+            disabled={loading || saving}
+            onChange={(e) => {
+              const nextProvider = e.target.value as AiProviderId
+              setSaved(false)
+              setProvider(nextProvider)
+              setModel(SUPPORTED_AI_MODELS[nextProvider]?.[0] ?? "")
+            }}
+            className="w-full h-9 px-3 rounded-lg bg-surface2 border border-border text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+          >
+            {PROVIDER_OPTIONS.map((option) => (
+              <option key={option} value={option}>{PROVIDER_LABELS[option]}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="text-xs font-medium text-foreground block mb-1">Model</label>
+          <select
+            value={model}
+            disabled={loading || saving}
+            onChange={(e) => { setSaved(false); setModel(e.target.value) }}
+            className="w-full h-9 px-3 rounded-lg bg-surface2 border border-border text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+          >
+            {models.map((m) => <option key={m} value={m}>{m}</option>)}
+          </select>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center mt-5 pt-4 border-t border-border">
+        {saved && (
+          <span className="flex items-center gap-1.5 text-xs text-signal-green sm:mr-auto" role="status">
+            <Check className="size-4" />
+            Override saved
+          </span>
+        )}
+        <SecondaryButton onClick={handleResetOverride} disabled={!override || loading || saving}>
+          <RotateCcw className="size-4 mr-2" />
+          Reset to platform default
+        </SecondaryButton>
+        <PrimaryButton onClick={handleSaveOverride} disabled={!isDirty || loading || saving}>
+          <Save className="size-4 mr-2" />
+          {saving ? "Saving..." : "Save override"}
+        </PrimaryButton>
+      </div>
+    </Card>
+  )
 }
 
 export function SettingsTab() {
@@ -187,6 +370,8 @@ export function SettingsTab() {
           </button>
         </div>
       </Card>
+
+      <AiEngineCard />
     </div>
   )
 }

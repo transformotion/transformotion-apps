@@ -86,6 +86,10 @@ export function updatePlatformDefault(
   })
 }
 
+/**
+ * @deprecated M15.1 keeps this route for transition compatibility only. App-owned
+ * AI overrides are edited in the owning application's Settings surface.
+ */
 export function updateAppOverride(
   idToken: string,
   appSlug: AiConfigAppSlug,
@@ -97,6 +101,10 @@ export function updateAppOverride(
   })
 }
 
+/**
+ * @deprecated M15.1 keeps this route for transition compatibility only. App-owned
+ * AI overrides are reset in the owning application's Settings surface.
+ */
 export function resetAppOverride(
   idToken: string,
   appSlug: AiConfigAppSlug,

@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from "react"
 import { watchlistService, type WatchlistItem } from "@/lib/services/watchlist/watchlist-service"
+import { stockAnalyserSettingsService } from "@/lib/services/settings/settings-service"
 import { cn } from "@/lib/utils"
 import { Wordmark, BrandMark } from "@/components/brand/wordmark"
 import {
@@ -27,7 +28,7 @@ import { ConfirmationModal } from "@transformotion/ui-primitives"
 // TYPES
 // ============================================================================
 
-export type TabId = "market" | "recs" | "etfs" | "metals" | "analyser" | "portfolio" | "watchlist"
+export type TabId = "market" | "recs" | "etfs" | "metals" | "analyser" | "portfolio" | "watchlist" | "settings"
 
 export interface Account {
   id: string
@@ -117,6 +118,7 @@ export const NAV_ITEMS: { id: TabId; icon: typeof BarChart3; label: string }[] =
   { id: "analyser", icon: Search, label: "Analyser" },
   { id: "portfolio", icon: Briefcase, label: "Portfolio" },
   { id: "watchlist", icon: Eye, label: "Watchlist" },
+  { id: "settings", icon: Settings, label: "Settings" },
 ]
 
 // ============================================================================
@@ -221,6 +223,16 @@ export function NavigationProvider({
       .catch(err => console.warn('[watchlist] load failed', err))
   }, [])
 
+  useEffect(() => {
+    stockAnalyserSettingsService.getSettings()
+      .then(settings => setState(prev => ({
+        ...prev,
+        showExplanatoryText: settings.explanatoryTextEnabled,
+        tabTextOverrides: {},
+      })))
+      .catch(err => console.warn('[stock-analyser-settings] load failed', err))
+  }, [])
+
   const isOnWatchlist = useCallback((ticker: string) => {
     return state.watchlist.some(e => e.ticker === ticker)
   }, [state.watchlist])
@@ -250,6 +262,8 @@ export function NavigationProvider({
       showExplanatoryText: show,
       tabTextOverrides: {}, // Clear all overrides when global setting changes
     }))
+    stockAnalyserSettingsService.patchSettings({ explanatoryTextEnabled: show })
+      .catch(err => console.warn('[stock-analyser-settings] save failed', err))
   }, [])
 
   const setTabTextOverride = useCallback((tab: TabId, show: boolean) => {
@@ -337,7 +351,7 @@ export function MobileNav() {
 // ============================================================================
 
 export function UserHeader() {
-  const { user, switchAccount, signOut, goToLaunchpad, showExplanatoryText, setShowExplanatoryText } = useNavigation()
+  const { user, switchAccount, signOut, goToLaunchpad, navigateTo, showExplanatoryText, setShowExplanatoryText } = useNavigation()
   const [accountMenuOpen, setAccountMenuOpen] = useState(false)
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
   const [signOutConfirm, setSignOutConfirm] = useState(false)
@@ -409,7 +423,10 @@ export function UserHeader() {
                 <Home className="size-4 text-muted-foreground" />
                 Back to Launchpad
               </button>
-              <button className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-foreground hover:bg-surface2 transition-colors">
+              <button
+                onClick={() => { setProfileMenuOpen(false); navigateTo("settings") }}
+                className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-foreground hover:bg-surface2 transition-colors"
+              >
                 <Settings className="size-4 text-muted-foreground" />
                 Settings
               </button>

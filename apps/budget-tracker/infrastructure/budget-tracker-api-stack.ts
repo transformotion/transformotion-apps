@@ -119,6 +119,7 @@ export class BudgetTrackerApiStack extends cdk.Stack {
         ANTHROPIC_SECRET_NAME: anthropicSecret.secretName,
         OPENAI_SECRET_NAME:    openaiSecret.secretName,
         AI_CONFIG_TABLE:       aiRuntimeConfigTable.tableName,
+        APP_AI_CONFIG_TABLE:   settingsTable.tableName,
         AI_FALLBACK_PROVIDER:  'claude',
         AI_FALLBACK_MODEL:     'claude-sonnet-4-6',
       },
@@ -127,6 +128,7 @@ export class BudgetTrackerApiStack extends cdk.Stack {
     anthropicSecret.grantRead(aiProxyFn);
     openaiSecret.grantRead(aiProxyFn);
     aiRuntimeConfigTable.grantReadData(aiProxyFn);
+    settingsTable.grantReadData(aiProxyFn);
 
     // ── budget-transactions-handler ──────────────────────────────────────────
     const txFn = new lambdaNodejs.NodejsFunction(this, 'TransactionsFn', {
@@ -166,6 +168,23 @@ export class BudgetTrackerApiStack extends cdk.Stack {
       bundling,
     });
     settingsTable.grantReadWriteData(settingsFn);
+
+    // ── budget-ai-config-handler ─────────────────────────────────────────────
+    const aiConfigFn = new lambdaNodejs.NodejsFunction(this, 'AiConfigFn', {
+      functionName: `budget-ai-config-handler-${stage}`,
+      entry:        path.join(fnDir, 'budget-ai-config/src/index.ts'),
+      handler:      'handler',
+      runtime:      lambda.Runtime.NODEJS_20_X,
+      timeout:      cdk.Duration.seconds(15),
+      memorySize:   256,
+      environment:  {
+        SETTINGS_TABLE:          settingsTable.tableName,
+        PLATFORM_CONFIG_TABLE:   aiRuntimeConfigTable.tableName,
+      },
+      bundling,
+    });
+    settingsTable.grantReadWriteData(aiConfigFn);
+    aiRuntimeConfigTable.grantReadData(aiConfigFn);
 
     // ── budget-ai-handler (review-start + review-worker + csv-analysis) ───────────────
     const aiFnName = `budget-ai-handler-${stage}`;
@@ -264,6 +283,14 @@ export class BudgetTrackerApiStack extends cdk.Stack {
     const aiInt = new apigateway.LambdaIntegration(aiFn, { proxy: true });
     aiRes.addResource('review').addMethod('POST',        aiInt, auth);
     aiRes.addResource('csv-analysis').addMethod('POST',  aiInt, auth);
+
+    // /ai-config
+    const aiConfigRes = apiResource.addResource('ai-config');
+    const aiConfigOverrideRes = aiConfigRes.addResource('override');
+    const aiConfigInt = new apigateway.LambdaIntegration(aiConfigFn, { proxy: true });
+    aiConfigRes.addMethod('GET', aiConfigInt, auth);
+    aiConfigOverrideRes.addMethod('PUT', aiConfigInt, auth);
+    aiConfigOverrideRes.addMethod('DELETE', aiConfigInt, auth);
 
     // /budget-data
     const budgetDataRes = apiResource.addResource('budget-data');

@@ -52,6 +52,8 @@ export type {
   ResolvedAiRuntimeConfig,
 } from './config';
 
+export type { AppAiRuntimeConfigResponse } from '@transformotion/contracts/_shared/ai-runtime';
+
 export type { ApiKeyOptions } from './secrets';
 export type { WriteJobResultOptions } from './job-results';
 export type { PushJobCompleteOptions } from './wss';

@@ -157,6 +157,8 @@ async function updatePlatformDefault(deps: Dependencies, event: APIGatewayProxyE
   return ok(record);
 }
 
+// Deprecated M15.1 transition route: app-owned override writes now belong to
+// each app's Settings API. Keep this route temporarily for rollback/old clients.
 async function updateAppOverride(deps: Dependencies, event: APIGatewayProxyEvent) {
   const appSlug = getPathParam(event, 'appSlug');
   if (!isAppSlug(appSlug)) {
@@ -167,6 +169,8 @@ async function updateAppOverride(deps: Dependencies, event: APIGatewayProxyEvent
   return ok({ appSlug, ...record });
 }
 
+// Deprecated M15.1 transition route: app-owned override resets now belong to
+// each app's Settings API. Keep this route temporarily for rollback/old clients.
 async function resetAppOverride(deps: Dependencies, event: APIGatewayProxyEvent) {
   const appSlug = getPathParam(event, 'appSlug');
   if (!isAppSlug(appSlug)) {

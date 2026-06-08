@@ -16,6 +16,7 @@ export interface StockAnalyserApiStackProps extends cdk.StackProps {
   watchlistTable: dynamodb.ITable;
   analysisCacheTable: dynamodb.ITable;
   jobResultsTable: dynamodb.ITable;
+  settingsTable: dynamodb.ITable;
   wsApiEndpoint: string;
   wsApiId: string;
 }
@@ -48,6 +49,7 @@ export class StockAnalyserApiStack extends cdk.Stack {
       watchlistTable,
       analysisCacheTable,
       jobResultsTable,
+      settingsTable,
       wsApiEndpoint,
       wsApiId,
     } = props;
@@ -190,6 +192,7 @@ export class StockAnalyserApiStack extends cdk.Stack {
         ANTHROPIC_SECRET_NAME: anthropicSecret.secretName,
         OPENAI_SECRET_NAME: openaiSecret.secretName,
         AI_CONFIG_TABLE: aiRuntimeConfigTable.tableName,
+        APP_AI_CONFIG_TABLE: settingsTable.tableName,
         AI_FALLBACK_PROVIDER: 'claude',
         AI_FALLBACK_MODEL: 'claude-sonnet-4-6',
         JOB_RESULTS_TABLE: jobResultsTable.tableName,
@@ -200,6 +203,7 @@ export class StockAnalyserApiStack extends cdk.Stack {
     anthropicSecret.grantRead(aiProxyFn);
     openaiSecret.grantRead(aiProxyFn);
     aiRuntimeConfigTable.grantReadData(aiProxyFn);
+    settingsTable.grantReadData(aiProxyFn);
     jobResultsTable.grantReadWriteData(aiProxyFn);
     aiProxyFn.addToRolePolicy(new iam.PolicyStatement({
       actions: ['lambda:InvokeFunction'],
@@ -216,6 +220,33 @@ export class StockAnalyserApiStack extends cdk.Stack {
     apiResource
       .addResource('claude')
       .addMethod('POST', new apigateway.LambdaIntegration(aiProxyFn, { proxy: true }), auth);
+
+    const settingsFn = new lambdaNodejs.NodejsFunction(this, 'SettingsFn', {
+      functionName: `stock-analyser-settings-${stage}`,
+      entry: path.join(__dirname, '../functions/settings/src/index.ts'),
+      handler: 'handler',
+      runtime: lambda.Runtime.NODEJS_20_X,
+      timeout: cdk.Duration.seconds(15),
+      memorySize: 256,
+      environment: {
+        SETTINGS_TABLE: settingsTable.tableName,
+        PLATFORM_CONFIG_TABLE: aiRuntimeConfigTable.tableName,
+      },
+      bundling,
+    });
+    settingsTable.grantReadWriteData(settingsFn);
+    aiRuntimeConfigTable.grantReadData(settingsFn);
+
+    const settingsIntegration = new apigateway.LambdaIntegration(settingsFn, { proxy: true });
+    const settings = this.api.root.addResource('settings');
+    settings.addMethod('GET', settingsIntegration, auth);
+    settings.addMethod('PATCH', settingsIntegration, auth);
+
+    const aiConfig = this.api.root.addResource('ai-config');
+    const aiConfigOverride = aiConfig.addResource('override');
+    aiConfig.addMethod('GET', settingsIntegration, auth);
+    aiConfigOverride.addMethod('PUT', settingsIntegration, auth);
+    aiConfigOverride.addMethod('DELETE', settingsIntegration, auth);
 
     new cdk.CfnOutput(this, 'ApiUrl', {
       value: this.api.url,
