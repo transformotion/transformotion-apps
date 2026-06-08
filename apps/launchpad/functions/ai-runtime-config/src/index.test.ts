@@ -9,11 +9,18 @@ function makeClient(seed: Record<string, StoredItem> = {}) {
   return {
     items,
     client: {
-      send: async (command: { constructor: { name: string }; input?: { Key?: { sk?: string }; Item?: StoredItem } }) => {
+      send: async (command: { constructor: { name: string }; input?: { TableName?: string; Key?: Record<string, string>; Item?: StoredItem } }) => {
         const name = command.constructor.name;
         if (name === 'GetCommand') {
-          const sk = command.input?.Key?.sk;
-          return { Item: sk ? items.get(sk) : undefined };
+          const tableName = command.input?.TableName;
+          const key = command.input?.Key;
+          if (!key) return { Item: undefined };
+          const compositeKey = Object.entries(key).map(([k, v]) => `${k}=${v}`).join('|');
+          return {
+            Item: (tableName ? items.get(`${tableName}|${compositeKey}`) : undefined)
+              ?? items.get(compositeKey)
+              ?? (key.sk ? items.get(key.sk) : undefined),
+          };
         }
         if (name === 'PutCommand') {
           const item = command.input?.Item;
@@ -38,6 +45,7 @@ function event(
   body?: unknown,
   siteAdmin = true,
   appSlug?: string,
+  accounts: Record<string, Array<{ accountId: string; role: string }>> = {},
 ) {
   return {
     resource,
@@ -51,7 +59,7 @@ function event(
           email: 'admin@example.com',
           'cognito:groups': '',
           apps: JSON.stringify([]),
-          accounts: JSON.stringify({}),
+          accounts: JSON.stringify(accounts),
           site_admin: String(siteAdmin),
         },
       },
@@ -117,6 +125,64 @@ describe('ai-runtime-config handler', () => {
       supportedModels: {
         claude: ['claude-sonnet-4-6', 'claude-opus-4-8', 'claude-haiku-4-5-20251001'],
         openai: ['gpt-5.4-mini', 'gpt-5.4', 'gpt-5.5', 'gpt-5.4-nano'],
+      },
+    });
+  });
+
+  it('reads app-owned override summaries for the first account membership per app', async () => {
+    const { client } = makeClient({
+      [PLATFORM_DEFAULT_SK]: record(PLATFORM_DEFAULT_SK, 'claude', 'claude-sonnet-4-6'),
+      [appOverrideSk('stock-analyser')]: record(appOverrideSk('stock-analyser'), 'claude', 'claude-haiku-4-5-20251001'),
+      'budget-tracker.settings-dev|accountId=bt-account|settingKey=AI_CONFIG#APP#budget-tracker': record(appOverrideSk('budget-tracker'), 'openai', 'gpt-5.4-mini'),
+      'stock-analyser.settings-dev|pk=ACCOUNT#sa-account|sk=APP#AI_RUNTIME': {
+        pk: 'ACCOUNT#sa-account',
+        sk: 'APP#AI_RUNTIME',
+        config: record(appOverrideSk('stock-analyser'), 'openai', 'gpt-5.5'),
+      },
+    });
+    const handler = createHandler({
+      client,
+      tableName: 'launchpad-ai-runtime-config-dev',
+      budgetTrackerSettingsTable: 'budget-tracker.settings-dev',
+      stockAnalyserSettingsTable: 'stock-analyser.settings-dev',
+      now: () => new Date('2026-06-04T01:00:00.000Z'),
+    });
+
+    const response = await handler(event(
+      '/api/admin/ai-runtime-config',
+      'GET',
+      undefined,
+      true,
+      undefined,
+      {
+        'budget-tracker': [{ accountId: 'bt-account', role: 'owner' }],
+        'stock-analyser': [{ accountId: 'sa-account', role: 'owner' }],
+      },
+    )) as { statusCode: number; body: string };
+
+    expect(response.statusCode).toBe(200);
+    expect(responseBody(response)).toMatchObject({
+      appOverrides: {
+        'budget-tracker': {
+          provider: 'openai',
+          model: 'gpt-5.4-mini',
+        },
+        'stock-analyser': {
+          provider: 'openai',
+          model: 'gpt-5.5',
+        },
+      },
+      effective: {
+        'budget-tracker': {
+          provider: 'openai',
+          model: 'gpt-5.4-mini',
+          source: 'app_override',
+        },
+        'stock-analyser': {
+          provider: 'openai',
+          model: 'gpt-5.5',
+          source: 'app_override',
+        },
       },
     });
   });

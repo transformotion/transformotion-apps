@@ -14,6 +14,7 @@ import {
   requireSiteAdmin,
   withAuthOnly,
   type APIGatewayProxyEvent,
+  type AuthClaims,
 } from '@transformotion/lambda-middleware';
 import {
   AI_CONFIG_PK,
@@ -31,16 +32,24 @@ import {
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const CONFIG_TABLE = process.env.AI_CONFIG_TABLE!;
+const BUDGET_TRACKER_SETTINGS_TABLE = process.env.BUDGET_TRACKER_SETTINGS_TABLE;
+const STOCK_ANALYSER_SETTINGS_TABLE = process.env.STOCK_ANALYSER_SETTINGS_TABLE;
+const BUDGET_TRACKER_SETTING_KEY = 'AI_CONFIG#APP#budget-tracker';
+const STOCK_ANALYSER_AI_RUNTIME_SK = 'APP#AI_RUNTIME';
 
 interface Dependencies {
   client: DynamoDBDocumentClient;
   tableName: string;
+  budgetTrackerSettingsTable?: string;
+  stockAnalyserSettingsTable?: string;
   now: () => Date;
 }
 
 const defaultDependencies: Dependencies = {
   client: ddb,
   tableName: CONFIG_TABLE,
+  budgetTrackerSettingsTable: BUDGET_TRACKER_SETTINGS_TABLE,
+  stockAnalyserSettingsTable: STOCK_ANALYSER_SETTINGS_TABLE,
   now: () => new Date(),
 };
 
@@ -95,6 +104,72 @@ async function readRecord(deps: Dependencies, sk: string): Promise<AiRuntimeConf
   return toRecord(sk as AiRuntimeConfigRecord['sk'], provider, model, updatedAt);
 }
 
+function parseRecord(
+  item: Record<string, unknown> | undefined,
+  sk: AiRuntimeConfigRecord['sk'],
+): AiRuntimeConfigRecord | null {
+  if (!item) return null;
+  const source = typeof item['config'] === 'object' && item['config'] !== null
+    ? item['config'] as Record<string, unknown>
+    : item;
+  const provider = source['provider'];
+  const model = source['model'];
+  const updatedAt = source['updatedAt'];
+  if (!isSupportedAiProvider(provider) || !isSupportedAiModel(provider, model) || typeof updatedAt !== 'string') {
+    return null;
+  }
+  return toRecord(sk, provider, model, updatedAt);
+}
+
+function firstAccountId(auth: AuthClaims, appSlug: AiConfigAppSlug): string | null {
+  const memberships = auth.accounts[appSlug] ?? [];
+  return memberships[0]?.accountId ?? null;
+}
+
+async function readBudgetTrackerAppOverride(
+  deps: Dependencies,
+  auth: AuthClaims,
+): Promise<AiRuntimeConfigRecord | null> {
+  const accountId = firstAccountId(auth, 'budget-tracker');
+  if (!deps.budgetTrackerSettingsTable || !accountId) return null;
+  const res = await deps.client.send(new GetCommand({
+    TableName: deps.budgetTrackerSettingsTable,
+    Key: { accountId, settingKey: BUDGET_TRACKER_SETTING_KEY },
+  }));
+  return parseRecord(res.Item, appOverrideSk('budget-tracker'));
+}
+
+async function readStockAnalyserAppOverride(
+  deps: Dependencies,
+  auth: AuthClaims,
+): Promise<AiRuntimeConfigRecord | null> {
+  const accountId = firstAccountId(auth, 'stock-analyser');
+  if (!deps.stockAnalyserSettingsTable || !accountId) return null;
+  const res = await deps.client.send(new GetCommand({
+    TableName: deps.stockAnalyserSettingsTable,
+    Key: { pk: `ACCOUNT#${accountId}`, sk: STOCK_ANALYSER_AI_RUNTIME_SK },
+  }));
+  return parseRecord(res.Item, appOverrideSk('stock-analyser'));
+}
+
+async function readAppOwnedOverride(
+  deps: Dependencies,
+  auth: AuthClaims,
+  appSlug: AiConfigAppSlug,
+): Promise<AiRuntimeConfigRecord | null> {
+  try {
+    if (appSlug === 'budget-tracker') {
+      return await readBudgetTrackerAppOverride(deps, auth);
+    }
+    if (appSlug === 'stock-analyser') {
+      return await readStockAnalyserAppOverride(deps, auth);
+    }
+  } catch (err) {
+    console.warn(`[launchpad-ai-runtime-config] App-owned AI override read failed for ${appSlug}:`, err);
+  }
+  return null;
+}
+
 async function putRecord(
   deps: Dependencies,
   sk: AiRuntimeConfigRecord['sk'],
@@ -134,10 +209,13 @@ function effectiveConfig(
   };
 }
 
-async function readConfig(deps: Dependencies) {
+async function readConfig(deps: Dependencies, auth: AuthClaims) {
   const platformDefault = await readRecord(deps, PLATFORM_DEFAULT_SK);
   const overrides = await Promise.all(
-    SUPPORTED_APP_SLUGS.map(async appSlug => [appSlug, await readRecord(deps, appOverrideSk(appSlug))] as const),
+    SUPPORTED_APP_SLUGS.map(async appSlug => [
+      appSlug,
+      await readAppOwnedOverride(deps, auth, appSlug) ?? await readRecord(deps, appOverrideSk(appSlug)),
+    ] as const),
   );
 
   const appOverrides = Object.fromEntries(overrides) as Record<AiConfigAppSlug, AiRuntimeConfigRecord | null>;
@@ -189,7 +267,7 @@ export function createHandler(deps: Dependencies = defaultDependencies) {
     const resource = event.resource ?? '';
 
     if (resource === '/api/admin/ai-runtime-config' && event.httpMethod === 'GET') {
-      return readConfig(deps);
+      return readConfig(deps, auth);
     }
     if (resource === '/api/admin/ai-runtime-config/platform-default' && event.httpMethod === 'PUT') {
       return updatePlatformDefault(deps, event);
