@@ -103,6 +103,16 @@ export class LaunchpadControlPlaneStack extends cdk.Stack {
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       removalPolicy: stage === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
     });
+    const budgetTrackerSettingsTable = dynamodb.Table.fromTableName(
+      this,
+      'BudgetTrackerSettingsTable',
+      `budget-tracker.settings-${stage}`,
+    );
+    const stockAnalyserSettingsTable = dynamodb.Table.fromTableName(
+      this,
+      'StockAnalyserSettingsTable',
+      `stock-analyser.settings-${stage}`,
+    );
 
     const forgotProviderFn = new lambdaNodejs.NodejsFunction(this, 'ForgotProviderFn', {
       functionName: `launchpad-forgot-provider-${stage}`,
@@ -295,6 +305,8 @@ export class LaunchpadControlPlaneStack extends cdk.Stack {
       memorySize: 256,
       environment: {
         AI_CONFIG_TABLE: aiRuntimeConfigTable.tableName,
+        BUDGET_TRACKER_SETTINGS_TABLE: budgetTrackerSettingsTable.tableName,
+        STOCK_ANALYSER_SETTINGS_TABLE: stockAnalyserSettingsTable.tableName,
       },
       bundling: {
         externalModules: ['@aws-sdk/*'],
@@ -304,6 +316,13 @@ export class LaunchpadControlPlaneStack extends cdk.Stack {
     });
 
     aiRuntimeConfigTable.grantReadWriteData(aiRuntimeConfigFn);
+    aiRuntimeConfigFn.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['dynamodb:GetItem', 'dynamodb:DescribeTable'],
+      resources: [
+        budgetTrackerSettingsTable.tableArn,
+        stockAnalyserSettingsTable.tableArn,
+      ],
+    }));
 
     const adminResource = apiResource.addResource('admin');
     const aiRuntimeConfigResource = adminResource.addResource('ai-runtime-config');
