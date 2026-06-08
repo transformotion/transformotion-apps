@@ -217,9 +217,9 @@ export function AiEngineSettings({
         role="dialog"
         aria-modal="true"
         aria-label="AI Engine Settings"
-        className="fixed inset-x-4 top-6 z-50 mx-auto max-h-[calc(100vh-3rem)] max-w-3xl overflow-y-auto rounded-lg border border-border bg-card shadow-2xl"
+        className="fixed inset-x-4 top-6 z-50 mx-auto flex max-h-[calc(100dvh-3rem)] max-w-3xl flex-col overflow-hidden rounded-lg border border-border bg-card shadow-2xl"
       >
-        <div className="sticky top-0 flex items-center justify-between gap-3 border-b border-border bg-card px-4 py-3">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4 py-3">
           <div>
             <h2 className="text-lg font-semibold text-foreground">AI Engine Settings</h2>
             <p className="text-sm text-muted-foreground">Provider and model selection</p>
@@ -234,7 +234,7 @@ export function AiEngineSettings({
           </button>
         </div>
 
-        <div className="grid gap-5 p-4">
+        <div className="scrollbar-subtle grid min-h-0 flex-1 gap-5 overflow-y-auto overscroll-contain p-4">
           {error ? <ErrorBanner message={error} /> : null}
 
           <div className="flex items-center justify-between gap-3">
