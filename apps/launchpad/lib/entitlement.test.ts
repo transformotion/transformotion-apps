@@ -6,6 +6,7 @@ import {
   hasVisibleApps,
   resolveDisplayName,
   firstNameOf,
+  fallbackWarnings,
 } from './entitlement';
 
 const visibleSlugs = (entitled: string[]) =>
@@ -64,27 +65,71 @@ describe('deriveAppTiles — three-state model (D11)', () => {
   });
 });
 
-describe('resolveDisplayName — canonical fallback chain (D6)', () => {
-  it('uses displayName when present', () => {
-    expect(resolveDisplayName({ displayName: 'Ada Lovelace', email: 'ada@example.com' })).toBe(
-      'Ada Lovelace',
+describe('resolveDisplayName — canonical chain: displayName → Cognito name → email local part (#423)', () => {
+  it('uses profile displayName when present', () => {
+    expect(
+      resolveDisplayName({ displayName: 'Ada Lovelace', cognitoName: 'Ignored', email: 'ada@example.com' }),
+    ).toBe('Ada Lovelace');
+  });
+
+  it('uses a real Cognito name when there is no profile displayName', () => {
+    expect(resolveDisplayName({ cognitoName: 'Steve Moodie', email: 'steve.moodie@example.com' })).toBe(
+      'Steve Moodie',
     );
   });
 
-  it('trims whitespace-only displayName and falls back to email local part', () => {
-    expect(resolveDisplayName({ displayName: '   ', email: 'carol@example.com' })).toBe('carol');
+  it('SKIPS the Cognito name when it equals the email, falling back to the local part (the bug)', () => {
+    // auth client sets User.name = email when there is no given/family name
+    expect(
+      resolveDisplayName({ cognitoName: 'steve.moodie@example.com', email: 'steve.moodie@example.com' }),
+    ).toBe('steve.moodie');
   });
 
-  it('falls back to email local part when displayName is missing (legacy user)', () => {
+  it('falls back to email local part when nothing else is set (legacy user)', () => {
     expect(resolveDisplayName({ email: 'dave@example.com' })).toBe('dave');
   });
 
-  it('handles null displayName', () => {
-    expect(resolveDisplayName({ displayName: null, email: 'eve@example.com' })).toBe('eve');
+  it('trims whitespace-only displayName and null cognitoName', () => {
+    expect(resolveDisplayName({ displayName: '   ', cognitoName: null, email: 'carol@example.com' })).toBe(
+      'carol',
+    );
   });
 
-  it('falls back to full email when there is no local part', () => {
+  it('never returns the full email when a local part exists', () => {
+    const out = resolveDisplayName({ cognitoName: 'eve@example.com', email: 'eve@example.com' });
+    expect(out).toBe('eve');
+    expect(out).not.toContain('@');
+  });
+
+  it('falls back to full email only when there is no local part', () => {
     expect(resolveDisplayName({ email: '@example.com' })).toBe('@example.com');
+  });
+});
+
+describe('fallbackWarnings — loud degradation (#423)', () => {
+  it('is silent when both tiles and profile come from the API', () => {
+    expect(
+      fallbackWarnings({ apiConfigured: true, tilesFromApi: true, profileFromApi: true }),
+    ).toEqual([]);
+  });
+
+  it('warns once (expected) when the control-plane API URL is not configured', () => {
+    const msgs = fallbackWarnings({ apiConfigured: false, tilesFromApi: false, profileFromApi: false });
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0]).toMatch(/not configured/i);
+  });
+
+  it('warns per failed read when the API is configured but reads fail', () => {
+    const msgs = fallbackWarnings({ apiConfigured: true, tilesFromApi: false, profileFromApi: false });
+    expect(msgs).toHaveLength(2);
+    expect(msgs.join(' ')).toMatch(/active-accounts read failed/);
+    expect(msgs.join(' ')).toMatch(/profile read failed/);
+  });
+
+  it('warns only about profile when tiles came from the API', () => {
+    const msgs = fallbackWarnings({ apiConfigured: true, tilesFromApi: true, profileFromApi: false });
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0]).toMatch(/profile read failed/);
   });
 });
 

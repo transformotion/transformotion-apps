@@ -113,14 +113,24 @@ export function hasVisibleApps(tiles: readonly AppTile[]): boolean {
 }
 
 /**
- * Canonical display-name fallback chain (M16 D6): displayName → email local
- * part → full email. The backend already resolves displayName this way; this
- * mirror keeps greetings correct when the profile fetch is unavailable and for
- * legacy users with no displayName.
+ * Canonical display-name fallback chain (M16 D6):
+ *   profile displayName → Cognito name → email local part → full email.
+ *
+ * The Cognito-provided name is only honoured when it is a real name: the auth
+ * client falls back to the raw email when the user has no given/family name, so
+ * a `cognitoName` equal to the email is skipped (otherwise the greeting shows
+ * the full address instead of the local part — issue #423). The full email is a
+ * last resort only when there is no usable local part.
  */
-export function resolveDisplayName(input: { displayName?: string | null; email: string }): string {
+export function resolveDisplayName(input: {
+  displayName?: string | null;
+  cognitoName?: string | null;
+  email: string;
+}): string {
   const dn = input.displayName?.trim();
   if (dn) return dn;
+  const cognito = input.cognitoName?.trim();
+  if (cognito && cognito !== input.email) return cognito;
   const localPart = input.email.split('@')[0];
   return localPart || input.email;
 }
@@ -128,4 +138,35 @@ export function resolveDisplayName(input: { displayName?: string | null; email: 
 /** First name for greetings, from a resolved display name. */
 export function firstNameOf(displayName: string): string {
   return displayName.split(' ')[0] || displayName;
+}
+
+/**
+ * Build console warnings when the home view renders from the claims/token
+ * fallback rather than the live read APIs, so silent degradation becomes
+ * visible (issue #423). Pure — the hook emits these via console.warn.
+ */
+export function fallbackWarnings(opts: {
+  apiConfigured: boolean;
+  tilesFromApi: boolean;
+  profileFromApi: boolean;
+}): string[] {
+  const out: string[] = [];
+  if (opts.tilesFromApi && opts.profileFromApi) return out;
+  if (!opts.apiConfigured) {
+    out.push(
+      '[launchpad] control-plane API URL not configured — tiles/profile rendered from token-claims fallback (expected in mock/dev).',
+    );
+    return out;
+  }
+  if (!opts.tilesFromApi) {
+    out.push(
+      '[launchpad] active-accounts read failed — app tiles derived from token claims, not the API.',
+    );
+  }
+  if (!opts.profileFromApi) {
+    out.push(
+      '[launchpad] profile read failed — display name from token fallback, not the API.',
+    );
+  }
+  return out;
 }

@@ -321,8 +321,12 @@ export function Launchpad({
   const data = useLaunchpadData(authUser)
 
   const email = authUser?.email ?? ''
+  // Canonical chain (#423): profile displayName → Cognito name → email local part.
+  // authUser.name can be the raw email (no given/family name) — passed as cognitoName
+  // so resolveDisplayName skips it rather than rendering the full address.
   const displayName = resolveDisplayName({
-    displayName: data.profile?.displayName ?? authUser?.name,
+    displayName: data.profile?.displayName,
+    cognitoName: authUser?.name,
     email,
   })
 

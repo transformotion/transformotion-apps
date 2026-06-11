@@ -6,7 +6,7 @@ import { authService } from '@/lib/services/auth'
 import { getConfig } from '@/lib/config'
 import { getUserProfile, type UserProfile } from '@/lib/services/user-profile'
 import { getActiveAccounts, type ActiveAccountSelection } from '@/lib/services/active-accounts'
-import { LAUNCHPAD_APPS, entitledSlugsFromSelections } from '@/lib/entitlement'
+import { LAUNCHPAD_APPS, entitledSlugsFromSelections, fallbackWarnings } from '@/lib/entitlement'
 
 export interface LaunchpadData {
   loading: boolean
@@ -57,30 +57,42 @@ export function useLaunchpadData(user: User | null): LaunchpadData {
           getActiveAccounts(idToken),
         ])
         const profile = profileRes.status === 'fulfilled' ? profileRes.value : null
+        const tilesFromApi = activeRes.status === 'fulfilled'
+        const profileFromApi = profileRes.status === 'fulfilled'
 
-        if (activeRes.status === 'fulfilled') {
-          const selections = activeRes.value.selections ?? []
-          if (!cancelled) {
-            setState({
-              loading: false,
-              profile,
-              entitledSlugs: entitledSlugsFromSelections(selections),
-              selections,
-              degraded: false,
-            })
-          }
-          return
+        // Surface the discarded fetch errors so a failed read is not invisible (#423).
+        if (profileRes.status === 'rejected') {
+          console.warn('[launchpad] profile read error:', profileRes.reason)
+        }
+        if (activeRes.status === 'rejected') {
+          console.warn('[launchpad] active-accounts read error:', activeRes.reason)
+        }
+        for (const msg of fallbackWarnings({ apiConfigured: true, tilesFromApi, profileFromApi })) {
+          console.warn(msg)
         }
 
-        // active-accounts unavailable → fall back to claims for entitlement.
-        const entitledSlugs = await deriveEntitlementFromClaims()
+        // Entitlement from the API when available, else the claims fallback.
+        const selections = tilesFromApi ? activeRes.value.selections ?? [] : []
+        const entitledSlugs = tilesFromApi
+          ? entitledSlugsFromSelections(selections)
+          : await deriveEntitlementFromClaims()
+
         if (!cancelled) {
-          setState({ loading: false, profile, entitledSlugs, selections: [], degraded: true })
+          setState({
+            loading: false,
+            profile,
+            entitledSlugs,
+            selections,
+            degraded: !tilesFromApi || !profileFromApi,
+          })
         }
         return
       }
 
       // Mock / unconfigured control plane → claims-based entitlement.
+      for (const msg of fallbackWarnings({ apiConfigured: false, tilesFromApi: false, profileFromApi: false })) {
+        console.warn(msg)
+      }
       const entitledSlugs = await deriveEntitlementFromClaims()
       if (!cancelled) {
         setState({ loading: false, profile: null, entitledSlugs, selections: [], degraded: true })
