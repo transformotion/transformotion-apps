@@ -4,66 +4,30 @@ import { useState, useEffect } from 'react'
 import { cn } from '@/lib/utils'
 import { Wordmark } from '@/components/brand/wordmark'
 import { AiEngineSettings } from '@/components/launchpad/ai-engine-settings'
-import { TrendingUp, Wallet, Layers, LogOut, Settings, User as UserIcon, Check } from 'lucide-react'
+import { TrendingUp, Wallet, Layers, LogOut, Settings, User as UserIcon, Inbox } from 'lucide-react'
 import type { User } from '@transformotion/auth-client'
+import {
+  LAUNCHPAD_APPS,
+  deriveAppTiles,
+  hasVisibleApps,
+  resolveDisplayName,
+  firstNameOf,
+  type AppTile as AppTileModel,
+} from '@/lib/entitlement'
+import { useLaunchpadData } from '@/hooks/use-launchpad-data'
 
-interface App {
-  id: string
-  name: string
-  description: string
-  icon: React.ComponentType<{ className?: string }>
-  available: boolean
-  color: string
-  bgGradient: string
+const APP_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+  'stock-analyser': TrendingUp,
+  'budget-tracker': Wallet,
+  'transformation-framework': Layers,
 }
 
-interface Account {
-  id: string
-  name: string
-  type: 'Personal' | 'Household' | 'Business'
+/** One account row in the profile menu (read-only in Phase 3; switching is Phase 4). */
+interface AccountRow {
+  appSlug: string
+  accountId: string
+  label: string
 }
-
-interface UserProfile {
-  name: string
-  email: string
-  avatar?: string
-  accounts: Account[]
-  activeAccount: string
-}
-
-const PLACEHOLDER_ACCOUNTS: Account[] = [
-  { id: '1', name: 'Personal', type: 'Personal' },
-]
-
-const APPS: App[] = [
-  {
-    id: 'stock-analyser',
-    name: 'Stock Signal Analyser',
-    description: 'Cycle signals across ASX, NASDAQ, Dow Jones and FTSE',
-    icon: TrendingUp,
-    available: true,
-    color: 'text-primary',
-    bgGradient: 'from-primary/20 via-primary/5 to-transparent',
-  },
-  {
-    id: 'budget-tracker',
-    name: 'Budget Tracker',
-    description: 'Track spending, savings and cashflow across accounts',
-    icon: Wallet,
-    available: true,
-    color: 'text-signal-green',
-    bgGradient: 'from-signal-green/20 via-signal-green/5 to-transparent',
-  },
-  {
-    id: 'transformation-framework',
-    name: 'Transformotion Framework',
-    description: 'Business transformation tools and methodologies',
-    icon: Layers,
-    available: false,
-    color: 'text-signal-gold',
-    bgGradient: 'from-signal-gold/20 via-signal-gold/5 to-transparent',
-  },
-]
 
 const getGreeting = () => {
   const hour = new Date().getHours()
@@ -72,11 +36,21 @@ const getGreeting = () => {
   return 'Good evening'
 }
 
+function initials(name: string): string {
+  return (
+    name
+      .split(' ')
+      .map((n) => n[0])
+      .join('')
+      .slice(0, 2) || '?'
+  )
+}
+
 function Header({
-  user,
+  displayName,
   onOpenProfile,
 }: {
-  user: UserProfile
+  displayName: string
   onOpenProfile: () => void
 }) {
   return (
@@ -95,10 +69,7 @@ function Header({
             onClick={onOpenProfile}
             className="size-10 rounded-full bg-primary/15 flex items-center justify-center text-primary font-semibold text-sm hover:bg-primary/25 transition-colors"
           >
-            {user?.name
-              ?.split(' ')
-              .map((n) => n[0])
-              .join('') || '?'}
+            {initials(displayName)}
           </button>
         </div>
       </div>
@@ -109,7 +80,6 @@ function Header({
 function Greeting({ name }: { name: string }) {
   const [mounted, setMounted] = useState(false)
   const greeting = mounted ? getGreeting() : 'Welcome'
-  const firstName = name.split(' ')[0]
 
   useEffect(() => {
     setMounted(true)
@@ -118,7 +88,7 @@ function Greeting({ name }: { name: string }) {
   return (
     <div className="mb-8">
       <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-1">
-        {greeting}, {firstName}
+        {greeting}, {name}
       </h1>
       <p className="text-muted-foreground">Welcome to your Transformotion workspace</p>
     </div>
@@ -130,20 +100,20 @@ function AppTile({
   index,
   onLaunch,
 }: {
-  app: App
+  app: AppTileModel
   index: number
   onLaunch?: () => void
 }) {
-  const Icon = app.icon
+  const Icon = APP_ICONS[app.slug] ?? Layers
 
   return (
     <button
-      disabled={!app.available}
+      disabled={!app.launchable}
       onClick={onLaunch}
       className={cn(
         'relative overflow-hidden p-6 rounded-2xl border transition-all text-left',
         'animate-in fade-in slide-in-from-bottom-4',
-        app.available
+        app.launchable
           ? 'bg-card border-border hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5 active:scale-[0.98]'
           : 'bg-card/50 border-border/50 cursor-not-allowed opacity-60',
       )}
@@ -154,15 +124,15 @@ function AppTile({
         <div
           className={cn(
             'size-14 rounded-xl flex items-center justify-center mb-4',
-            app.available ? 'bg-surface2' : 'bg-surface2/50',
+            app.launchable ? 'bg-surface2' : 'bg-surface2/50',
           )}
         >
-          <Icon className={cn('size-7', app.available ? app.color : 'text-muted-foreground')} />
+          <Icon className={cn('size-7', app.launchable ? app.color : 'text-muted-foreground')} />
         </div>
         <h3
           className={cn(
             'text-lg font-semibold mb-1',
-            app.available ? 'text-foreground' : 'text-muted-foreground',
+            app.launchable ? 'text-foreground' : 'text-muted-foreground',
           )}
         >
           {app.name}
@@ -170,12 +140,12 @@ function AppTile({
         <p
           className={cn(
             'text-sm leading-relaxed',
-            app.available ? 'text-muted-foreground' : 'text-muted-foreground/70',
+            app.launchable ? 'text-muted-foreground' : 'text-muted-foreground/70',
           )}
         >
           {app.description}
         </p>
-        {!app.available && (
+        {!app.launchable && (
           <div className="mt-4 inline-flex items-center px-3 py-1 bg-surface2 rounded-full text-xs font-medium text-muted-foreground">
             Coming Soon
           </div>
@@ -185,50 +155,66 @@ function AppTile({
   )
 }
 
-function AppGrid({
-  apps,
-  userCanAccessFramework,
-  onLaunchApp,
-  onLaunchBudgetTracker,
-}: {
-  apps: App[]
-  userCanAccessFramework: boolean
-  onLaunchApp?: () => void
-  onLaunchBudgetTracker?: () => void
-}) {
-  const visibleApps = apps.filter((app) => {
-    if (app.id === 'transformation-framework' && !userCanAccessFramework) return false
-    return true
-  })
+/** Shown when the user holds no app memberships — a real first-login state by design. */
+function EmptyApps() {
+  return (
+    <div className="rounded-2xl border border-border bg-card/50 p-10 text-center">
+      <div className="size-14 rounded-xl bg-surface2 flex items-center justify-center mx-auto mb-4">
+        <Inbox className="size-7 text-muted-foreground" />
+      </div>
+      <h3 className="text-lg font-semibold text-foreground mb-1">No apps yet</h3>
+      <p className="text-sm text-muted-foreground max-w-md mx-auto">
+        You don&apos;t have access to any apps yet. Access arrives by invitation — once
+        you&apos;re added to an account, the app will appear here.
+      </p>
+    </div>
+  )
+}
 
-  const getLaunchHandler = (appId: string) => {
-    if (appId === 'stock-analyser') return onLaunchApp
-    if (appId === 'budget-tracker') return onLaunchBudgetTracker
-    return undefined
-  }
+function AppGridSkeleton() {
+  return (
+    <div className="grid gap-4 md:gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      {[0, 1].map((i) => (
+        <div key={i} className="h-44 rounded-2xl border border-border bg-card/50 animate-pulse" />
+      ))}
+    </div>
+  )
+}
+
+function AppGrid({
+  tiles,
+  getLaunchHandler,
+}: {
+  tiles: AppTileModel[]
+  getLaunchHandler: (slug: string) => (() => void) | undefined
+}) {
+  const visible = tiles.filter((t) => t.visible)
+  if (visible.length === 0) return <EmptyApps />
 
   return (
     <div className="grid gap-4 md:gap-6 sm:grid-cols-2 lg:grid-cols-3">
-      {visibleApps.map((app, index) => (
-        <AppTile key={app.id} app={app} index={index} onLaunch={getLaunchHandler(app.id)} />
+      {visible.map((app, index) => (
+        <AppTile key={app.slug} app={app} index={index} onLaunch={getLaunchHandler(app.slug)} />
       ))}
     </div>
   )
 }
 
 function ProfileMenu({
-  user,
+  displayName,
+  email,
+  accounts,
   isOpen,
   onClose,
   onLogout,
-  onAccountChange,
   onOpenSettings,
 }: {
-  user: UserProfile
+  displayName: string
+  email: string
+  accounts: AccountRow[]
   isOpen: boolean
   onClose: () => void
   onLogout: () => void
-  onAccountChange: (accountId: string) => void
   onOpenSettings?: () => void
 }) {
   if (!isOpen) return null
@@ -240,40 +226,31 @@ function ProfileMenu({
         <div className="p-4 border-b border-border">
           <div className="flex items-center gap-3">
             <div className="size-12 rounded-full bg-primary/15 flex items-center justify-center text-primary font-semibold">
-              {user.name
-                .split(' ')
-                .map((n) => n[0])
-                .join('')}
+              {initials(displayName)}
             </div>
-            <div>
-              <p className="font-semibold text-foreground">{user.name}</p>
-              <p className="text-sm text-muted-foreground">{user.email}</p>
+            <div className="min-w-0">
+              <p className="font-semibold text-foreground truncate">{displayName}</p>
+              <p className="text-sm text-muted-foreground truncate">{email}</p>
             </div>
           </div>
         </div>
 
-        <div className="border-b border-border py-2">
-          <p className="px-4 py-1 text-xs text-muted-foreground">Account</p>
-          {user.accounts.map((account) => (
-            <button
-              key={account.id}
-              onClick={() => {
-                onAccountChange(account.id)
-                onClose()
-              }}
-              className={cn(
-                'w-full flex items-center justify-between px-4 py-2.5 text-sm transition-colors hover:bg-surface2',
-                account.id === user.activeAccount && 'bg-primary/5',
-              )}
-            >
-              <div className="text-left">
-                <p className="font-medium text-foreground">{account.name}</p>
-                <p className="text-xs text-muted-foreground">{account.type}</p>
+        {accounts.length > 0 && (
+          <div className="border-b border-border py-2">
+            <p className="px-4 py-1 text-xs text-muted-foreground">Your accounts</p>
+            {accounts.map((account) => (
+              <div
+                key={`${account.appSlug}:${account.accountId}`}
+                className="w-full flex items-center justify-between px-4 py-2.5 text-sm"
+              >
+                <div className="text-left min-w-0">
+                  <p className="font-medium text-foreground truncate">{account.label}</p>
+                  <p className="text-xs text-muted-foreground truncate">{account.accountId}</p>
+                </div>
               </div>
-              {account.id === user.activeAccount && <Check className="size-4 text-primary" />}
-            </button>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
 
         <div className="py-2">
           <button className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-surface2 transition-colors">
@@ -320,6 +297,10 @@ function Footer() {
   )
 }
 
+function appLabel(slug: string): string {
+  return LAUNCHPAD_APPS.find((a) => a.slug === slug)?.name ?? slug
+}
+
 export function Launchpad({
   user: authUser,
   onLaunchApp,
@@ -333,49 +314,61 @@ export function Launchpad({
 }) {
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [activeAccount, setActiveAccount] = useState(PLACEHOLDER_ACCOUNTS[0].id)
+
+  // Admin/control-plane surfaces gate on the site_admin claim, NOT app membership (D11).
   const isSiteAdmin = authUser?.metadata?.siteAdmin === true
 
-  const user: UserProfile = {
-    name:          authUser?.name  ?? 'User',
-    email:         authUser?.email ?? '',
-    accounts:      PLACEHOLDER_ACCOUNTS,
-    activeAccount,
-  }
+  const data = useLaunchpadData(authUser)
 
-  const handleAccountChange = (accountId: string) => {
-    setActiveAccount(accountId)
+  const email = authUser?.email ?? ''
+  const displayName = resolveDisplayName({
+    displayName: data.profile?.displayName ?? authUser?.name,
+    email,
+  })
+
+  // Tiles derive from entitlement (memberships per app), not a hard-coded list.
+  const tiles = deriveAppTiles(LAUNCHPAD_APPS, data.entitledSlugs)
+
+  const accounts: AccountRow[] = data.selections.map((s) => ({
+    appSlug: s.appSlug,
+    accountId: s.accountId,
+    label: appLabel(s.appSlug),
+  }))
+
+  const getLaunchHandler = (slug: string): (() => void) | undefined => {
+    if (slug === 'stock-analyser') return onLaunchApp
+    if (slug === 'budget-tracker') return onLaunchBudgetTracker
+    return undefined
   }
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <Header user={user} onOpenProfile={() => setProfileMenuOpen(true)} />
+      <Header displayName={displayName} onOpenProfile={() => setProfileMenuOpen(true)} />
 
       <main className="flex-1 py-8 md:py-12">
         <div className="max-w-5xl mx-auto px-4 md:px-6">
-          <Greeting name={user.name} />
-          <AppGrid
-            apps={APPS}
-            userCanAccessFramework={false}
-            onLaunchApp={onLaunchApp}
-            onLaunchBudgetTracker={onLaunchBudgetTracker}
-          />
+          <Greeting name={firstNameOf(displayName)} />
+          {data.loading ? (
+            <AppGridSkeleton />
+          ) : hasVisibleApps(tiles) ? (
+            <AppGrid tiles={tiles} getLaunchHandler={getLaunchHandler} />
+          ) : (
+            <EmptyApps />
+          )}
         </div>
       </main>
 
       <ProfileMenu
-        user={user}
+        displayName={displayName}
+        email={email}
+        accounts={accounts}
         isOpen={profileMenuOpen}
         onClose={() => setProfileMenuOpen(false)}
         onLogout={onSignOut || (() => {})}
-        onAccountChange={handleAccountChange}
         onOpenSettings={isSiteAdmin ? () => setSettingsOpen(true) : undefined}
       />
 
-      <AiEngineSettings
-        isOpen={settingsOpen && isSiteAdmin}
-        onClose={() => setSettingsOpen(false)}
-      />
+      <AiEngineSettings isOpen={settingsOpen && isSiteAdmin} onClose={() => setSettingsOpen(false)} />
 
       <Footer />
     </div>

@@ -1,14 +1,9 @@
 import { getConfig } from '@/lib/config';
+import type { UserProfile, UserPreferences } from '@transformotion/contracts/_shared/auth';
 
-export interface UserPreferences {
-  notificationsEnabled: boolean;
-}
-
-export interface UserProfile {
-  userId: string;
-  email: string;
-  preferences: UserPreferences;
-}
+// Canonical shapes (contract m16.1.0). UserProfile carries the M16 fields:
+// userId, email, displayName, status, preferences, profileComplete, updatedAt.
+export type { UserProfile, UserPreferences };
 
 function resolveControlPlaneBaseUrl(): string {
   return getConfig().controlPlane.apiUrl;

@@ -283,7 +283,7 @@ app_admin:  string[]                                           — app slugs whe
 
 Plus the standard Cognito claims (`sub`, `email`, `cognito:groups`, token lifetime fields). `custom:accounts` is inert (see Custom attributes above).
 
-**Launchpad renders tiles by inspecting the `apps` claim.**
+**Launchpad renders tiles from the user's per-app membership** (the access projection, read at runtime via `GET /api/user/active-accounts`), not by inspecting the `apps` claim directly — see [Three-state tile model](#three-state-tile-model) (M16 Phase 3, D11).
 **API handlers enforce per-account authorization by inspecting `accounts`.**
 
 ---
@@ -337,15 +337,19 @@ The Hosted UI session cookie is what enables SSO across the three app clients �
 
 ## Three-state tile model
 
-The launchpad renders app tiles based on two conditions:
+> **M16 Phase 3 (D11) — revised.** Tiles now derive from the user's **account membership** (the access projection), read at runtime via the active-account read API (`GET /api/user/active-accounts`): the set of apps in which the user holds at least one account is the entitlement set. The previous rule — *"tiles from the `apps` claim plus a hardcoded deployed list"* — is **Stale-by-decision**. The `apps` claim survives as a coarse projection, but Launchpad reads entitlement from membership, and **admin/control-plane surfaces gate on the `site_admin` / app-admin claims, never on app membership.**
 
-| User has app in `apps` claim | App is deployed | Tile state |
+The launchpad resolves each app tile from two conditions — entitlement (membership) and deployment:
+
+| User holds a membership in the app | App is deployed | Tile state |
 |---|---|---|
-| Yes | Yes | Active — clickable link to app |
+| Yes | Yes | Active — clickable, launches the app |
 | Yes | No | Visible, greyed out, "Coming Soon" label |
 | No | Any | Not rendered |
 
-App deployment state is statically known to the launchpad (hardcoded list of deployed app slugs). The `apps` claim controls visibility; deployment state controls interactivity.
+A user with **zero** memberships sees an explicit empty state ("No apps yet — access arrives by invitation") — by design a real first-login state, never a blank page or an error. Backfill tolerance: missing or legacy entitlement data resolves to "not entitled" (no tile), never a crash.
+
+App deployment state is statically known to the launchpad (a catalogue of app slugs each carrying a `deployed` flag). Membership controls **visibility**; deployment controls **interactivity**. Not-deployed catalogue entries (coming-soon/marketing) stay hidden by default, preserving the pre-M16 deployed/coming-soon handling. Admin surfaces (e.g. AI runtime settings, and a future Users & Access view) are shown from the `site_admin` / app-admin claims independently of any app tile.
 
 ---
 
