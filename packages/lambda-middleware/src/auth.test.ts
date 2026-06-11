@@ -5,10 +5,12 @@ import {
   requireAnyAppAccess,
   requireAccountAccess,
   requireAccountOwner,
+  requireAccountWrite,
   requireGroup,
   extractAuthClaims,
   resolveAccountContext,
 } from './auth';
+import type { AccountMembershipRow } from './auth';
 import type { AuthClaims } from './types';
 import { HttpError } from './errors';
 import type { APIGatewayProxyEvent } from 'aws-lambda';
@@ -307,5 +309,79 @@ describe('requireGroup', () => {
 
   it('throws 403 when user is in none of the required groups', () => {
     expect(() => requireGroup(makeClaims({ groups: ['other'] }), 'admin', 'site-admin')).toThrow(HttpError);
+  });
+});
+
+// ── requireAccountWrite (D8 write-path: claims + live row) ────────────────────
+
+describe('requireAccountWrite', () => {
+  const memberClaims = (role = 'member') =>
+    makeClaims({ accounts: { 'budget-tracker': [{ accountId: 'acc-1', role: role as never }] } });
+
+  /** Loader that returns a fixed row (or undefined to simulate a removed member). */
+  const loader = (row: AccountMembershipRow | undefined) => {
+    const calls: Array<{ accountId: string; userId: string }> = [];
+    const fn = async (accountId: string, userId: string) => {
+      calls.push({ accountId, userId });
+      return row;
+    };
+    return Object.assign(fn, { calls });
+  };
+
+  it('passes for an active member', async () => {
+    await expect(
+      requireAccountWrite(memberClaims('member'), 'budget-tracker', 'acc-1', loader({ role: 'member' })),
+    ).resolves.toBeUndefined();
+  });
+
+  it('passes for manager and owner', async () => {
+    await expect(
+      requireAccountWrite(memberClaims('manager'), 'budget-tracker', 'acc-1', loader({ role: 'manager' })),
+    ).resolves.toBeUndefined();
+    await expect(
+      requireAccountWrite(memberClaims('owner'), 'budget-tracker', 'acc-1', loader({ role: 'owner' })),
+    ).resolves.toBeUndefined();
+  });
+
+  it('passes when row status is explicitly active', async () => {
+    await expect(
+      requireAccountWrite(memberClaims('member'), 'budget-tracker', 'acc-1', loader({ role: 'member', status: 'active' })),
+    ).resolves.toBeUndefined();
+  });
+
+  it('REJECTS a viewer (read-only) with 403', async () => {
+    await expect(
+      requireAccountWrite(memberClaims('viewer'), 'budget-tracker', 'acc-1', loader({ role: 'viewer' })),
+    ).rejects.toMatchObject({ statusCode: 403 });
+  });
+
+  it('REJECTS a disabled member (status not active) with 403', async () => {
+    await expect(
+      requireAccountWrite(memberClaims('member'), 'budget-tracker', 'acc-1', loader({ role: 'member', status: 'disabled' })),
+    ).rejects.toMatchObject({ statusCode: 403 });
+  });
+
+  it('FAILS CLOSED with 403 when the live row is missing (removed since token issuance)', async () => {
+    const l = loader(undefined);
+    await expect(
+      requireAccountWrite(memberClaims('member'), 'budget-tracker', 'acc-1', l),
+    ).rejects.toMatchObject({ statusCode: 403 });
+    expect(l.calls).toHaveLength(1); // claim passed, so the row WAS read
+  });
+
+  it('REJECTS a non-member (no claim) with 403 WITHOUT reading the row', async () => {
+    const l = loader({ role: 'owner' });
+    await expect(
+      requireAccountWrite(makeClaims(), 'budget-tracker', 'acc-1', l),
+    ).rejects.toMatchObject({ statusCode: 403 });
+    expect(l.calls).toHaveLength(0); // cheap claim reject, no table read
+  });
+
+  it('REJECTS a site-admin with no membership (no data-authority bypass, D9)', async () => {
+    const l = loader({ role: 'owner' });
+    await expect(
+      requireAccountWrite(makeClaims({ siteAdmin: true }), 'budget-tracker', 'acc-1', l),
+    ).rejects.toMatchObject({ statusCode: 403 });
+    expect(l.calls).toHaveLength(0);
   });
 });

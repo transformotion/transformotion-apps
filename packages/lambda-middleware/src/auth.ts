@@ -147,6 +147,67 @@ export function requireAccountAccess(
   throw forbidden(`Account access required (accountId: ${accountId}, minRole: ${minRole})`);
 }
 
+/** A live membership row, loaded from the account-members table by the caller. */
+export interface AccountMembershipRow {
+  role: AccountRole;
+  /** 'active' | 'disabled' | undefined. Absent means active (backwards compat). */
+  status?: string;
+}
+
+/**
+ * Loads the caller's live membership row for an account, or undefined when no
+ * row exists. Injected by the handler so this package stays AWS-SDK-free and
+ * unit-testable; each app provides a GetItem against its account-members table.
+ */
+export type MembershipLoader = (
+  accountId: string,
+  userId: string,
+) => Promise<AccountMembershipRow | undefined>;
+
+/**
+ * D8 WRITE-path authorization for app-data mutations (SA/BT). Claims gate PLUS
+ * a live membership-row read — the row is the authority, because claims can be
+ * stale (a user demoted to `viewer` or removed after token issuance still
+ * carries the old claim for up to the token lifetime).
+ *
+ * Rejects (403) when:
+ *  - the caller shows no membership claim for the account (cheap reject; the
+ *    same surface reads gate on — a caller who cannot read cannot write), or
+ *  - the live row is missing — removed since token issuance → **fail closed**, or
+ *  - the live row's status is not `active` (disabled), or
+ *  - the live row's role is `viewer` (read-only).
+ *
+ * No site-admin bypass: membership is the only grant of data authority (D9); a
+ * site-admin without a row is rejected like anyone else. Reads stay claims-only
+ * — do NOT call this on read paths (D8: no table reads on the hot path).
+ *
+ * Phase 4 layering: this composes on top of the existing claims helpers; it will
+ * be folded into the Phase 5 `requireAccountData`/`requireAccountAdmin` split.
+ */
+export async function requireAccountWrite(
+  auth: AuthClaims,
+  app: AppName,
+  accountId: string,
+  loadMembership: MembershipLoader,
+): Promise<void> {
+  const appAccounts = auth.accounts[app] ?? [];
+  const hasClaim = appAccounts.some(m => m.accountId === accountId);
+  if (!hasClaim) {
+    throw forbidden(`Account membership required (accountId: ${accountId})`);
+  }
+
+  const row = await loadMembership(accountId, auth.userId);
+  if (!row) {
+    throw forbidden(`Account membership required (accountId: ${accountId})`);
+  }
+  if (row.status && row.status !== 'active') {
+    throw forbidden('Account membership is not active');
+  }
+  if (row.role === 'viewer') {
+    throw forbidden('Viewer role is read-only');
+  }
+}
+
 /**
  * Throws HttpError(403) unless the user is the owner of `accountId` within `app`.
  *

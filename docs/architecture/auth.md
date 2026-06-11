@@ -210,6 +210,8 @@ Account membership is stored in `launchpad-account-members-{stage}` (PK: `accoun
 **Role hierarchy** (for `requireAccountAccess` minRole checks):
 `owner > manager > member > viewer`. A check for `minRole: 'manager'` succeeds for `owner` and `manager`; fails for `member` and `viewer`.
 
+**Write-path row check (D8, M16).** App-data **writes** (Stock Analyser / Budget Tracker mutations) go through `requireAccountWrite` (`packages/lambda-middleware`): the claims membership check **plus** a live read of the caller's `launchpad-account-members` row. The live row is the authority because claims can be stale — a user demoted to `viewer`, disabled, or removed after token issuance still carries the old claim for up to the access-token lifetime. The write is rejected (403) when the row is missing (**fail closed**), the row's `status` is not `active`, or the role is `viewer` (read-only). There is **no site-admin bypass** on this path: membership is the only grant of data authority (D9). Reads stay claims-only — no table read on the hot path. (Layered on the existing claims helpers; folds into the Phase 5 `requireAccountData`/`requireAccountAdmin` split.)
+
 ### Conflict resolution between dimensions
 
 Dimensions A and B describe different axes and can express potentially conflicting states (e.g., user has app-access but is `viewer` on all accounts; user lacks app-access but somehow has a `member` row).
@@ -731,6 +733,10 @@ Frontend code follows the same layered architecture pattern as data access (see 
 A domain interface (`AuthService`) lives in contracts. Implementations are named for what they wrap: `CognitoAuthService` (production; reads JWT claims from a Cognito session) and `MockAuthService` (v0; returns mocked auth state without any real auth backend). Selection is build-time per the layered architecture pattern.
 
 Components, services, and hooks access claim-derived data only via the `AuthService` interface — never by reading JWT claims directly. The interface is the canonical access path for any claim-derived value (active account ID, app access flags, user identity, etc.).
+
+**Account role vocabulary (D10, M16).** The client `Account` type in `packages/auth-client` uses `owner | manager | member | viewer`, matching the contract `AccountRole`; the legacy `owner | admin | member` is removed. No membership rows used `admin` (verified on dev: 0 rows), so this is a type-level correction with no data backfill.
+
+**Stable identity vs reactive account state (#210).** `AuthService.getCurrentUser()` is the read-once stable-identity accessor (name, email, userId from cached token claims). The reactive, mutable **per-app active account** is control-plane-owned (D7) and lives in each app's account store — never in the stable-identity path. `getAccountIdForApp` (first membership from the token's `accounts` claim) is a legacy convenience superseded by the control-plane active-account read in the app layer (Phase 4 SA/BT wiring).
 
 The current state has the interface duplicated across `packages/auth-client/`, `apps/stock-analyser/`, and `apps/budget-tracker/`, with the production implementation only existing for stock-analyser. Migration to the canonical pattern (interface in contracts, both implementations in `packages/auth-client/`, build-time selection) happens alongside the production bug fix for the missing `accounts` JWT claim.
 
