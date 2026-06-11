@@ -54,14 +54,23 @@ async function queryMemberships(userId: string): Promise<MembershipRow[]> {
 }
 
 async function queryAppAdminGrants(userId: string): Promise<AppAdminGrantRow[]> {
-  const res = await ddb.send(new QueryCommand({
-    TableName: APP_ADMIN_GRANTS_TABLE,
-    IndexName: 'userId-index',
-    KeyConditionExpression: 'userId = :uid',
-    ExpressionAttributeValues: { ':uid': userId },
-    ProjectionExpression: 'appSlug, userId',
-  }));
-  return (res.Items ?? []) as AppAdminGrantRow[];
+  // M16: the app-admin-grants table is the newest read in this trigger. Isolate
+  // its failure so it degrades to an empty app_admin claim rather than rejecting
+  // the Promise.all below — which the outer handler would otherwise catch by
+  // dropping ALL claims. Core apps/accounts/site_admin claims still get emitted.
+  try {
+    const res = await ddb.send(new QueryCommand({
+      TableName: APP_ADMIN_GRANTS_TABLE,
+      IndexName: 'userId-index',
+      KeyConditionExpression: 'userId = :uid',
+      ExpressionAttributeValues: { ':uid': userId },
+      ProjectionExpression: 'appSlug, userId',
+    }));
+    return (res.Items ?? []) as AppAdminGrantRow[];
+  } catch (err) {
+    console.error('[launchpad-pre-token] queryAppAdminGrants failed; app_admin will be empty:', err);
+    return [];
+  }
 }
 
 async function fetchAccountAppSlugs(accountIds: string[]): Promise<Map<string, string>> {
