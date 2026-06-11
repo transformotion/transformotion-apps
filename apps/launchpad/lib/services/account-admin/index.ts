@@ -1,4 +1,4 @@
-import { getConfig } from '@/lib/config';
+import { controlPlaneUrl } from '@/lib/services/control-plane';
 
 export interface AccountSummary {
   accountId: string;
@@ -15,10 +15,6 @@ export interface AccountMember {
   joinedAt: string;
 }
 
-function resolveControlPlaneBaseUrl(): string {
-  return getConfig().controlPlane.apiUrl;
-}
-
 function authHeaders(idToken: string, accountId: string): HeadersInit {
   return {
     Authorization: `Bearer ${idToken}`,
@@ -33,12 +29,7 @@ async function request<T>(
   path: string,
   init: RequestInit = {},
 ): Promise<T> {
-  const baseUrl = resolveControlPlaneBaseUrl();
-  if (!baseUrl) {
-    throw new Error('Launchpad control-plane API URL is not configured');
-  }
-
-  const response = await fetch(new URL(path, baseUrl).toString(), {
+  const response = await fetch(controlPlaneUrl(path), {
     ...init,
     headers: {
       ...authHeaders(idToken, activeAccountId),

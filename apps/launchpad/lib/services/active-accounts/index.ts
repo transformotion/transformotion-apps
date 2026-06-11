@@ -1,14 +1,10 @@
-import { getConfig } from '@/lib/config';
 import type {
   GetActiveAccountsResponse,
   ActiveAccountSelection,
 } from '@transformotion/contracts/launchpad/invitations';
+import { controlPlaneUrl } from '@/lib/services/control-plane';
 
 export type { GetActiveAccountsResponse, ActiveAccountSelection };
-
-function resolveControlPlaneBaseUrl(): string {
-  return getConfig().controlPlane.apiUrl;
-}
 
 /**
  * Read the caller's active account per app (M16 D7, Phase 2 read API).
@@ -17,12 +13,7 @@ function resolveControlPlaneBaseUrl(): string {
  * for every app they hold a membership in).
  */
 export async function getActiveAccounts(idToken: string): Promise<GetActiveAccountsResponse> {
-  const baseUrl = resolveControlPlaneBaseUrl();
-  if (!baseUrl) {
-    throw new Error('Launchpad control-plane API URL is not configured');
-  }
-
-  const response = await fetch(new URL('/api/user/active-accounts', baseUrl).toString(), {
+  const response = await fetch(controlPlaneUrl('/api/user/active-accounts'), {
     headers: {
       Authorization: `Bearer ${idToken}`,
     },

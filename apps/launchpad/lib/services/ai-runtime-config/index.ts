@@ -1,4 +1,4 @@
-import { getConfig } from '@/lib/config'
+import { controlPlaneUrl } from '@/lib/services/control-plane'
 import {
   AI_MODEL_ALLOWLIST,
   type AiConfigAppSlug,
@@ -23,21 +23,6 @@ export const FALLBACK_SUPPORTED_MODELS: Record<AiProviderId, readonly string[]> 
   openai: AI_MODEL_ALLOWLIST.openai,
 }
 
-function resolveControlPlaneBaseUrl(): string {
-  return getConfig().controlPlane.apiUrl
-}
-
-function buildControlPlaneUrl(path: string): string {
-  const baseUrl = resolveControlPlaneBaseUrl()
-  if (!baseUrl) {
-    throw new Error('Launchpad control-plane API URL is not configured')
-  }
-
-  const normalizedBase = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`
-  const normalizedPath = path.replace(/^\/+/, '')
-  return new URL(normalizedPath, normalizedBase).toString()
-}
-
 async function readError(response: Response, fallback: string): Promise<string> {
   try {
     const body = await response.json() as { message?: string; error?: string }
@@ -52,7 +37,7 @@ async function request<T>(
   path: string,
   init: RequestInit = {},
 ): Promise<T> {
-  const response = await fetch(buildControlPlaneUrl(path), {
+  const response = await fetch(controlPlaneUrl(path), {
     ...init,
     headers: {
       Authorization: `Bearer ${idToken}`,
