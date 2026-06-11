@@ -1375,7 +1375,21 @@ Can run in parallel with M7 once M2.1 lands. Migration depends on infrastructure
 
 ---
 
-## 20. Beyond M14
+## 20. M16 — Account lifecycle and invitation
+
+**Design baseline** (read before any implementation work):
+
+- [`docs/transformotion-user-account-permissions-model.md`](./docs/transformotion-user-account-permissions-model.md) — canonical product/permission model (entities, roles, policy matrix, invitation/redemption lifecycle).
+- [`docs/adr-m16-runtime-architecture.md`](./docs/adr-m16-runtime-architecture.md) — M16 runtime architecture decision document (D1–D11, all confirmed 2026-06-11). Milestone-scoped per CONTRIBUTING §10; decisions ratified into `docs/architecture/auth.md` and `docs/architecture/data.md` as implementing PRs land.
+- [`docs/auth-md-revision-map.md`](./docs/auth-md-revision-map.md) — per-phase normative-document update obligations for `docs/architecture/auth.md`.
+
+**v0 contract baseline:** `m16.0.0` (v0 PR #38, commit `71219385`).
+
+**Runtime status:** contracted in v0 / synced into runtime / implementation not started.
+
+---
+
+## 21. Beyond M14
 
 The following items are scoped but not yet sequenced into milestones.
 They live in the "Backlog" GitHub milestone (a holding area, not a
@@ -1434,7 +1448,7 @@ out of the Backlog milestone.
 
 ---
 
-## 21. Discipline and update rules
+## 22. Discipline and update rules
 
 ### 20.1 Updating this document
 
@@ -1474,7 +1488,7 @@ document in the same PR.
 
 ---
 
-## 22. Reference — milestone summary table
+## 23. Reference — milestone summary table
 
 For quick visual reference. The full text above is the canonical source.
 
@@ -1496,6 +1510,8 @@ For quick visual reference. The full text above is the canonical source.
 | M12 | Forgot-provider fix | 4 | (none hard) |
 | M13 | Observability | 3, 1 | M12 |
 | M14 | Deployment verification | 2, 1, 3 | M13 |
+| M15 | v0-canonical transition | 2, 4 | M6 |
+| M16 | Account lifecycle and invitation | 3, 4 | M11, M15 |
 
 M8, M9, M10 can run in parallel. M11 follows M10. M7 can run in parallel
 with M6 once M2 and M3 complete. M13 and M14 are sequenced strictly
