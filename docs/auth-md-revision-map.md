@@ -1,0 +1,49 @@
+# auth.md Revision Map — M16
+
+**Purpose:** Per the discipline rule (CONTRIBUTING §2.1), every phase PR that changes documented behavior updates `docs/architecture/auth.md` in the same PR. This map pre-plans those updates so each Claude Code phase brief carries its documentation obligation explicitly. It also records, using the CONTRIBUTING §8 status-tag system, which current auth.md statements are being deliberately superseded (**Stale-by-decision**) versus suspected of never having been implemented (**Status uncertain — verify** / **Aspirational-never-built**).
+
+Companion to the M16 runtime architecture decision document (ADR). Decision references (D1–D11, §9) point there.
+
+**Verification rider:** the Phase 5 route-classification pass (D9) doubles as the verification sweep for every row tagged *Status uncertain — verify*. Rows resolve to **Confirmed** or **Aspirational-never-built** at that point, and the affected sections are corrected accordingly.
+
+---
+
+## Section-by-section
+
+| auth.md section | Current statement | M16 change | Owning phase PR | Status tag (now) |
+|---|---|---|---|---|
+| Overview | "authorization operates in two independent dimensions… app access via Cognito groups… Dimension A is the ceiling" | Reframed: app access *derives from* account membership (groups become a projection/cache maintained by pre-token reconciliation); membership is the root authority. Two-axis (administrative vs data authority) language added per D9. | Phase 5 (framing), touched by Phase 2 | Stale-by-decision |
+| Ownership | Launchpad owns auth domain | Unchanged; extended to name new M16 surfaces (bundles, app-admin grants, active account) | Phase 2, 8 | Confirmed |
+| Custom attributes — `custom:accounts` | "Maintained by the Lambdas that modify account membership; read by the pre-token Lambda" | Retired as inert (D11): pre-token reads the members table directly; all writers stop (Phases 6, 9); attribute remains declared but documented inert. Note: the "read by the pre-token Lambda" claim already contradicts the pre-token section in the same document — verify which is true. | Phase 6 (stop writes), final wording Phase 10 | Status uncertain — verify (internal inconsistency) |
+| Custom attributes — `custom:active_account` | Transitional write by `/auth/setup` | Write removed when Phase 2 supersedes `/auth/setup` provisioning behavior (D7, D11) | Phase 2 | Stale-by-decision (already documented as transitional) |
+| "Active account is not a Cognito attribute" (browser-local localStorage state) | Active account is client-side UI state; `X-Account-Id` validated against token claims | Active account becomes **control-plane-owned** per user per app (`activeAccounts` map, D7); `X-Account-Id` header transport and claims validation on reads survive unchanged; set is table-verified and fails closed | Phase 2 (storage), Phase 4 (app consumption) | Stale-by-decision |
+| Token lifetime | 1h access / 30d refresh | Unchanged — explicitly reaffirmed as the accepted revocation bound (D8); add the verbatim staleness sentence: "Staleness gives lingering read visibility, never lingering write capability." | Phase 5 | Confirmed |
+| Pre-token Lambda — reconciliation | "site-admin keeps all access regardless of account memberships" | Override removed (D11): invariant applies uniformly; site-admin claim drives supervisory surfaces only | Phase 5 | Stale-by-decision |
+| Pre-token Lambda — claims | `apps`, `accounts`, `site_admin` | `accounts` becomes lean triples `(appSlug, accountId, role)` with M16 vocabulary; app-admin claim added from D5 table; document token-size rationale | Phase 2 | Stale-by-decision |
+| Claim shape / token flow | Step 9 hourly refresh | Add `refreshRequired` protocol: forced refresh after redemption and actor-affecting role changes (D8) | Phase 9 | Confirmed (extended) |
+| Three-state tile model | Tiles from `apps` claim + hardcoded deployed list | Tiles derive from access summaries (read API), admin surfaces from `site_admin`/app-admin claims (D11); deployment list handling unchanged unless Phase 3 decides otherwise | Phase 3 | Stale-by-decision |
+| Permission model — Dimension A/B | Groups as ceiling; role table with **single-owner invariant**, "owner: exactly one", ownership transfer, "Site-admin can override to reassign ownership" | Multi-owner with **last-owner guard** (contract-settled; see ADR D9 owner-model supersession); transfer-or-reject semantics replaced; site-admin reassignment removed pending §9 item 3 resolution | Phase 5 (model), Phase 6 (member rules) | Stale-by-decision |
+| "site-admin bypasses both dimensions" | Site-admin can perform any operation on any data | **Reversed** (D9): membership is the only grant of data authority; site-admin gets supervisory matrix only. This is the single largest normative change in M16. | Phase 5 | Stale-by-decision |
+| Auth middleware — wrappers | `withAuth` / `withAuthOnly` / `resolveAccountContext` | Survive; documented as the claims tier (D8). Section gains the tier table: claims for app-data reads, claims+row for app-data writes, table-based policy for control-plane | Phase 5 | Confirmed (extended) |
+| Authorization helpers | `requireAccountAccess`, `requireAccountOwner` etc., "all helpers check site-admin first as an override" | `requireAccountAccess` **deleted**, replaced by `requireAccountData` / `requireAccountAdmin` (D9); site-admin override removed from data-path helpers; new table-based policy helper layer documented; viewer write-rejection documented (D8) | Phase 5 (helpers), Phase 4 (viewer rule) | Stale-by-decision |
+| Handler authorization patterns | Standard pattern with `requireAppAccess` + `requireAccountAccess` | Rewritten around the two-middleware split; route-classification table referenced as the migration record | Phase 5 | Stale-by-decision |
+| Per-Lambda permission models | Table of 5 Lambdas with inline checks | Extended with M16 Lambdas (access summary, active account, members, discovery, bundles, redemption); inline checks replaced by named policy helpers | Phases 2, 6, 7, 8, 9 (incremental rows) | Confirmed (extended) |
+| Invitations — entire section | Single-invitation model: `perApp` map, all-or-nothing transactional grant, `POST /admin/invitations`, `POST /apps/{appSlug}/invitations`, reconcile endpoint, scheduled expiry Lambda | Marked **legacy/transitional** per contract; new sections for bundles/grants, per-grant authorization, **partial acceptance** (deliberate change from all-or-nothing), discovery scopes, redemption idempotency, bundle-visibility rule (D1, D2, D9). Legacy table frozen (D1). Note: audit found only create-only invitations implemented — much of this section may never have been built. | Phase 8 (bundles), Phase 9 (redemption) | Status uncertain — verify; then Stale-by-decision |
+| Invitations — security properties | Email match, single-use, rate limiting | Carried forward into the bundle model; email-match and rate-limit properties restated for redeem-bundle | Phase 9 | Confirmed (carried forward) |
+| Revocation flows — Scenario A | Manager-removal rules, owner cannot be removed (transfer first), `AdminUserGlobalSignOut` | Rules updated to M16 matrix + last-owner guard; **`AdminUserGlobalSignOut` explicitly preserved** (D8) | Phase 6 | Partially Stale-by-decision; GlobalSignOut Confirmed-keep |
+| Revocation flows — Scenarios B/C | Site-admin disable/delete; delete blocked while target owns accounts (409) | Disable unchanged (matches matrix). Delete: **resolved** — site-admin may delete/archive the orphaned account (ADR §9 item 3, confirmed); a destructive supervisory action with no data visibility and no ownership reassignment; Scenario C rewritten accordingly. Verify endpoints exist (audit did not surface them). | Phase 6 | Status uncertain — verify (endpoints); decision Confirmed |
+| Client-side auth | AuthService interface; duplicated across packages; stale role types | Consolidation per existing migration note; role vocabulary corrected to M16 (D10 — verify `admin` rows first) | Phase 4 | Stale-by-decision (already flagged in doc) |
+| Out of scope — "Multi-owner accounts" | Listed as future | Removed — multi-owner is in scope as of `m16.0.0` | Phase 5 | Stale-by-decision |
+
+## Other documents
+
+| Document | Change | Owning phase PR |
+|---|---|---|
+| `docs/architecture/data.md` | New tables (D1 bundles, D5 app-admin grants), GSIs (D3 `appSlug-index`, D4 `email-index`), TTL-as-GC convention (D2), no-displayName-denormalization rule (D6), `activeAccounts` map (D7), backfill record (D10) | Phase 2 (extensions), Phase 8 (bundle table), Phase 10 (backfill) |
+| `CONTRIBUTING.md` §1.1 Goal 4 | "app access via Cognito groups" → "app access derives from account membership; groups maintained as a projection". **Escalation satisfied — owner sign-off recorded 2026-06-11 (ADR §9 item 4).** Lands as its own standalone PR referencing the ADR, before or alongside Phase 5. | Standalone, before or alongside Phase 5 |
+| `docs/architecture/inventory.md` | Living-document rows for retired vestiges (D11), deleted `requireAccountAccess`, frozen legacy invitations table — tagged **Resolved by M16 / PR #N** as each lands | Each phase |
+| `PLAN.md` | M16 phase sequencing already reflected; reference this ADR + revision map | Phase 1 |
+
+## Standing instruction for phase briefs
+
+Every Claude Code phase brief for M16 includes: *"This PR changes behavior documented in auth.md sections [from the map above]. Update those sections in this PR per CONTRIBUTING §2.1. If implementation reveals the documented current state was never true, pause, tag the finding per CONTRIBUTING §8, and report before proceeding."*
