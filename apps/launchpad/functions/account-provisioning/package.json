@@ -6,9 +6,11 @@
   "scripts": {
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
-    "lint": "echo \"lint: launchpad account-provisioning\""
+    "lint": "echo \"lint: launchpad account-provisioning\"",
+    "test": "vitest run"
   },
   "dependencies": {
+    "@transformotion/contracts": "workspace:*",
     "@transformotion/lambda-middleware": "workspace:*"
   },
   "devDependencies": {
@@ -17,6 +19,7 @@
     "@aws-sdk/lib-dynamodb": "^3",
     "@types/aws-lambda": "^8",
     "@types/node": "^22",
-    "typescript": "*"
+    "typescript": "*",
+    "vitest": "^1"
   }
 }

@@ -701,7 +701,7 @@ Launchpad owns the live onboarding, user profile/preference, account administrat
 
 | Route | Live Lambda | Notes |
 |---|---|---|
-| `POST /auth/setup` | `launchpad-account-provisioning-{stage}` | First-login account bootstrap against LaunchpadAuth app-client IDs and auth-domain tables. |
+| `POST /auth/setup` | `launchpad-account-provisioning-{stage}` | First-login **profile** bootstrap (D11, contract m16.1.0): ensures the user item exists in `launchpad-users-{stage}`; never auto-creates an account. Returns `AccountSetupResponse { accountId?, userCreated, profileComplete }` — `accountId` omitted unless the user already holds one. |
 | `GET /api/user/profile` | `launchpad-user-{stage}` | Reads the caller's profile/preferences from `launchpad-users-{stage}`. |
 | `PUT /api/user/preferences` | `launchpad-user-{stage}` | Merges caller-owned preferences into `launchpad-users-{stage}`. |
 | `POST /accounts` | `launchpad-accounts-{stage}` | Creates a new account and owner membership in Launchpad-owned auth-domain tables. |
