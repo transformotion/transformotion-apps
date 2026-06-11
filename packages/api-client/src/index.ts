@@ -17,8 +17,10 @@
 
 export { ApiClient }                      from './client';
 export { HttpClient }                     from './http';
+export { ControlPlaneClient }             from './control-plane';
 export { ApiError }                       from './errors';
 export type { ApiClientOptions }          from './http';
+export type { ControlPlaneClientOptions } from './control-plane';
 
 export type {
   // Portfolio
