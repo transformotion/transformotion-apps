@@ -361,6 +361,15 @@ describe('requireAccountWrite', () => {
     ).rejects.toMatchObject({ statusCode: 403 });
   });
 
+  it('FAILS CLOSED with 503 when the loader throws (infra error — never skip-and-proceed)', async () => {
+    const throwingLoader = async () => {
+      throw new Error('DynamoDB ProvisionedThroughputExceededException');
+    };
+    await expect(
+      requireAccountWrite(memberClaims('member'), 'budget-tracker', 'acc-1', throwingLoader),
+    ).rejects.toMatchObject({ statusCode: 503 });
+  });
+
   it('FAILS CLOSED with 403 when the live row is missing (removed since token issuance)', async () => {
     const l = loader(undefined);
     await expect(
