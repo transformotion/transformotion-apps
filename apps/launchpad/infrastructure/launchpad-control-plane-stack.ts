@@ -20,6 +20,7 @@ export interface LaunchpadControlPlaneStackProps extends cdk.StackProps {
   accountMembersTableName: string;
   invitationsTableName: string;
   rateLimitsTableName: string;
+  appAdminGrantsTableName: string;
   fromEmail: string;
   appUrl: string;
 }
@@ -47,6 +48,7 @@ export class LaunchpadControlPlaneStack extends cdk.Stack {
       accountMembersTableName,
       invitationsTableName,
       rateLimitsTableName,
+      appAdminGrantsTableName,
       fromEmail,
       appUrl,
     } = props;
@@ -156,10 +158,28 @@ export class LaunchpadControlPlaneStack extends cdk.Stack {
       'AccountsTable',
       accountsTableName,
     );
-    const accountMembersTable = dynamodb.Table.fromTableName(
+    const accountMembersTable = dynamodb.Table.fromTableAttributes(
       this,
       'AccountMembersTable',
-      accountMembersTableName,
+      {
+        tableName: accountMembersTableName,
+        globalIndexes: ['userId-index', 'appSlug-index'],
+      },
+    );
+
+    const appAdminGrantsTable = dynamodb.Table.fromTableAttributes(
+      this,
+      'AppAdminGrantsTable',
+      {
+        tableName: appAdminGrantsTableName,
+        globalIndexes: ['userId-index'],
+      },
+    );
+
+    const usersTable = dynamodb.Table.fromTableName(
+      this,
+      'UsersTable',
+      usersTableName,
     );
 
     const accountProvisioningFn = new lambdaNodejs.NodejsFunction(this, 'AccountProvisioningFn', {
@@ -170,12 +190,9 @@ export class LaunchpadControlPlaneStack extends cdk.Stack {
       timeout: cdk.Duration.seconds(15),
       memorySize: 256,
       environment: {
-        ACCOUNTS_TABLE: accountsTable.tableName,
+        USERS_TABLE: usersTable.tableName,
         ACCOUNT_MEMBERS_TABLE: accountMembersTable.tableName,
         USER_POOL_ID: userPoolId,
-        APP_CLIENT_STOCK_ANALYSER: stockAnalyserAppClientId,
-        APP_CLIENT_BUDGET_TRACKER: budgetTrackerAppClientId,
-        APP_SLUGS: appSlugs.join(','),
       },
       bundling: {
         externalModules: ['@aws-sdk/*'],
@@ -184,22 +201,17 @@ export class LaunchpadControlPlaneStack extends cdk.Stack {
       },
     });
 
-    accountsTable.grantReadWriteData(accountProvisioningFn);
-    accountMembersTable.grantReadWriteData(accountProvisioningFn);
+    usersTable.grantReadWriteData(accountProvisioningFn);
+    accountMembersTable.grantReadData(accountProvisioningFn);
+    // M16 D11: AdminGetUser to resolve displayName from Cognito given/family name on first login.
     accountProvisioningFn.addToRolePolicy(new iam.PolicyStatement({
-      actions: ['cognito-idp:AdminUpdateUserAttributes'],
+      actions: ['cognito-idp:AdminGetUser'],
       resources: [userPoolArn],
     }));
 
     authResource
       .addResource('setup')
       .addMethod('POST', new apigateway.LambdaIntegration(accountProvisioningFn, { proxy: true }), authOptions);
-
-    const usersTable = dynamodb.Table.fromTableName(
-      this,
-      'UsersTable',
-      usersTableName,
-    );
 
     const userFn = new lambdaNodejs.NodejsFunction(this, 'UserFn', {
       functionName: `launchpad-user-${stage}`,
@@ -210,6 +222,8 @@ export class LaunchpadControlPlaneStack extends cdk.Stack {
       memorySize: 256,
       environment: {
         USERS_TABLE: usersTable.tableName,
+        ACCOUNTS_TABLE: accountsTable.tableName,
+        ACCOUNT_MEMBERS_TABLE: accountMembersTable.tableName,
       },
       bundling: {
         externalModules: ['@aws-sdk/*'],
@@ -219,6 +233,8 @@ export class LaunchpadControlPlaneStack extends cdk.Stack {
     });
 
     usersTable.grantReadWriteData(userFn);
+    accountsTable.grantReadData(userFn);
+    accountMembersTable.grantReadData(userFn);
 
     const apiResource = this.api.root.addResource('api');
     const userResource = apiResource.addResource('user');
@@ -227,6 +243,12 @@ export class LaunchpadControlPlaneStack extends cdk.Stack {
       .addMethod('GET', new apigateway.LambdaIntegration(userFn, { proxy: true }), authOptions);
     userResource
       .addResource('preferences')
+      .addMethod('PUT', new apigateway.LambdaIntegration(userFn, { proxy: true }), authOptions);
+
+    const activeAccountsResource = userResource.addResource('active-accounts');
+    activeAccountsResource.addMethod('GET', new apigateway.LambdaIntegration(userFn, { proxy: true }), authOptions);
+    activeAccountsResource
+      .addResource('{appSlug}')
       .addMethod('PUT', new apigateway.LambdaIntegration(userFn, { proxy: true }), authOptions);
 
     const accountsFn = new lambdaNodejs.NodejsFunction(this, 'AccountsFn', {
@@ -239,6 +261,9 @@ export class LaunchpadControlPlaneStack extends cdk.Stack {
       environment: {
         ACCOUNTS_TABLE: accountsTable.tableName,
         ACCOUNT_MEMBERS_TABLE: accountMembersTable.tableName,
+        APP_CLIENT_STOCK_ANALYSER: stockAnalyserAppClientId,
+        APP_CLIENT_BUDGET_TRACKER: budgetTrackerAppClientId,
+        APP_SLUGS: appSlugs.join(','),
       },
       bundling: {
         externalModules: ['@aws-sdk/*'],
@@ -249,6 +274,38 @@ export class LaunchpadControlPlaneStack extends cdk.Stack {
 
     accountsTable.grantReadWriteData(accountsFn);
     accountMembersTable.grantReadWriteData(accountsFn);
+
+    // M16 Phase 2 — access summary (site-admin directory of all users with app/account access)
+    const accessSummaryFn = new lambdaNodejs.NodejsFunction(this, 'AccessSummaryFn', {
+      functionName: `launchpad-access-summary-${stage}`,
+      entry: path.join(__dirname, '../functions/access-summary/src/index.ts'),
+      handler: 'handler',
+      runtime: lambda.Runtime.NODEJS_20_X,
+      timeout: cdk.Duration.seconds(30),
+      memorySize: 512,
+      environment: {
+        USERS_TABLE: usersTable.tableName,
+        ACCOUNTS_TABLE: accountsTable.tableName,
+        ACCOUNT_MEMBERS_TABLE: accountMembersTable.tableName,
+        APP_ADMIN_GRANTS_TABLE: appAdminGrantsTable.tableName,
+        USER_POOL_ID: userPoolId,
+      },
+      bundling: {
+        externalModules: ['@aws-sdk/*'],
+        minify: true,
+        sourceMap: false,
+      },
+    });
+
+    usersTable.grantReadData(accessSummaryFn);
+    accountsTable.grantReadData(accessSummaryFn);
+    accountMembersTable.grantReadData(accessSummaryFn);
+    appAdminGrantsTable.grantReadData(accessSummaryFn);
+
+    accessSummaryFn.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['cognito-idp:ListUsersInGroup'],
+      resources: [userPoolArn],
+    }));
 
     const invitationsTable = dynamodb.Table.fromTableName(
       this,
@@ -324,7 +381,13 @@ export class LaunchpadControlPlaneStack extends cdk.Stack {
       ],
     }));
 
+    // M16 Phase 2 — admin user access directory
     const adminResource = apiResource.addResource('admin');
+    adminResource
+      .addResource('users')
+      .addResource('access')
+      .addMethod('GET', new apigateway.LambdaIntegration(accessSummaryFn, { proxy: true }), authOptions);
+
     const aiRuntimeConfigResource = adminResource.addResource('ai-runtime-config');
     const aiRuntimeConfigIntegration = new apigateway.LambdaIntegration(aiRuntimeConfigFn, { proxy: true });
     aiRuntimeConfigResource.addMethod('GET', aiRuntimeConfigIntegration, authOptions);

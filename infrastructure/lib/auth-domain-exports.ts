@@ -13,6 +13,7 @@ export interface AuthDomainConfig {
   accountMembersTableName: string;
   invitationsTableName: string;
   rateLimitsTableName: string;
+  appAdminGrantsTableName: string;
 }
 
 export function authDomainConfig(stage: Stage): AuthDomainConfig {
@@ -27,5 +28,6 @@ export function authDomainConfig(stage: Stage): AuthDomainConfig {
     accountMembersTableName: cdk.Fn.importValue(`Transformotion-${stage}-LaunchpadAuth-AccountMembersTableName`),
     invitationsTableName: cdk.Fn.importValue(`Transformotion-${stage}-LaunchpadAuth-InvitationsTableName`),
     rateLimitsTableName: cdk.Fn.importValue(`Transformotion-${stage}-LaunchpadAuth-RateLimitsTableName`),
+    appAdminGrantsTableName: cdk.Fn.importValue(`Transformotion-${stage}-LaunchpadAuth-AppAdminGrantsTableName`),
   };
 }
