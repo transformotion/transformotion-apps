@@ -13,7 +13,13 @@ export interface Account {
   id: string
   name: string
   type: 'personal' | 'business' | 'family'
-  role: 'owner' | 'admin' | 'member'
+  /**
+   * M16 account role vocabulary (D10): owner | manager | member | viewer.
+   * Replaces the legacy `owner | admin | member`. Matches AccountRole in
+   * @transformotion/contracts/_shared/auth (kept inline to avoid a contracts
+   * dependency in this low-level package).
+   */
+  role: 'owner' | 'manager' | 'member' | 'viewer'
 }
 
 export interface AuthTokens {
@@ -41,6 +47,14 @@ export interface SignUpCredentials {
 }
 
 export interface AuthService {
+  /**
+   * Stable session identity from the cached ID-token claims — the read-once
+   * side of the #210 split (stable identity vs reactive account state). The
+   * reactive, mutable per-app ACTIVE account is control-plane-owned (D7) and
+   * lives in each app's account store, never here. `getAccountIdForApp` reads
+   * the token's `accounts` claim (first membership) and is a legacy convenience
+   * superseded by the control-plane active-account read in the app layer.
+   */
   getCurrentUser():  Promise<User | null>
   getSession():      Promise<AuthSession | null>
   signIn(credentials: SignInCredentials):  Promise<AuthSession>
