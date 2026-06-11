@@ -592,6 +592,37 @@ importers:
         specifier: 5.7.3
         version: 5.7.3
 
+  apps/launchpad/functions/access-summary:
+    dependencies:
+      '@transformotion/lambda-middleware':
+        specifier: workspace:*
+        version: link:../../../../packages/lambda-middleware
+    devDependencies:
+      '@aws-sdk/client-cognito-identity-provider':
+        specifier: ^3
+        version: 3.1032.0
+      '@aws-sdk/client-dynamodb':
+        specifier: ^3
+        version: 3.1032.0
+      '@aws-sdk/lib-dynamodb':
+        specifier: ^3
+        version: 3.1032.0(@aws-sdk/client-dynamodb@3.1032.0)
+      '@transformotion/contracts':
+        specifier: workspace:*
+        version: link:../../../../packages/contracts
+      '@types/aws-lambda':
+        specifier: ^8
+        version: 8.10.161
+      '@types/node':
+        specifier: ^22
+        version: 22.19.17
+      typescript:
+        specifier: '*'
+        version: 5.7.3
+      vitest:
+        specifier: ^1
+        version: 1.6.1(@types/node@22.19.17)(jsdom@29.1.1)(lightningcss@1.32.0)
+
   apps/launchpad/functions/account-provisioning:
     dependencies:
       '@transformotion/lambda-middleware':
@@ -740,6 +771,9 @@ importers:
       '@aws-sdk/lib-dynamodb':
         specifier: ^3
         version: 3.1032.0(@aws-sdk/client-dynamodb@3.1032.0)
+      '@transformotion/contracts':
+        specifier: workspace:*
+        version: link:../../../../packages/contracts
       '@types/aws-lambda':
         specifier: ^8
         version: 8.10.161
@@ -749,6 +783,9 @@ importers:
       typescript:
         specifier: '*'
         version: 5.7.3
+      vitest:
+        specifier: ^1
+        version: 1.6.1(@types/node@22.19.17)(jsdom@29.1.1)(lightningcss@1.32.0)
 
   apps/stock-analyser:
     dependencies:
