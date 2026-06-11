@@ -14,7 +14,8 @@ See [cdk.md](./cdk.md) for CDK stack names. See [data.md](./data.md) for account
 
 Launchpad owns the auth domain: auth lookup, onboarding,
 profile/preferences, account administration, member administration,
-invitations, Cognito, app clients, pre-token claims, and auth-domain tables.
+invitations, invitation bundles, app-admin grants, active account selection,
+Cognito, app clients, pre-token claims, and auth-domain tables.
 Platform owns neutral substrate only and does not own auth-domain resources.
 
 ---
@@ -44,10 +45,12 @@ The Cognito user pool declares these custom attributes:
 
 | Attribute | Type | Status | Purpose |
 |---|---|---|---|
-| `custom:accounts` | String (max 2048) | Active | Comma-separated account IDs the user belongs to (all apps combined). Maintained by the Lambdas that modify account membership; read by the pre-token Lambda. Not consulted directly by frontend or API handlers. |
-| `custom:active_account` | String (max 36) | Transitional write only | Still written by Launchpad-owned `account-provisioning` on `/auth/setup` for first-account bootstrap. Account switching has been superseded by client-side switching (`X-Account-Id` header). The attribute itself remains declared in the user pool schema permanently because Cognito does not permit removal of existing user pool schema attributes. Account switching as a working feature is provided by the client-side header-based design described in *Auth middleware* below. |
+| `custom:accounts` | String (max 2048) | Inert (M16) | Previously maintained by membership-modifying Lambdas. Pre-token Lambda reads the members table directly — this attribute has no reader. New M16 code paths do not write it. The schema attribute remains declared (Cognito forbids removal); documented as inert. (*Status uncertain — verify: the pre-token section previously described it as read by the trigger; the current implementation queries DynamoDB directly. Confirmed inert by Phase 2 inspection.*) |
+| `custom:active_account` | String (max 36) | Inert (M16, **Stale-by-decision**) | Previously written by `/auth/setup` for first-account bootstrap. Superseded by D7 (`activeAccounts` map on the user item, owned by the control plane). Write removed in Phase 2. The schema attribute remains declared permanently (Cognito forbids removal); documented as inert. |
 
-**Active account is not a Cognito attribute.** Which account a user is currently viewing in an app is browser-local UI state, persisted in localStorage per-app. API requests include the `accountId` as a request parameter. The auth middleware validates the parameter against the token's `accounts` claim and rejects requests where the caller is not a member of the stated account.
+**Active account is control-plane-owned (M16 D7).** Active account selection per user per app is stored as the `activeAccounts` map on the `launchpad-users-{stage}` item (`{ [appSlug]: accountId }`). It is read and set via the control-plane API (`GET/PUT /api/user/active-accounts/{appSlug}`). The `X-Account-Id` request header remains the transport for *which account is active right now* on each request; the header value is validated server-side against the caller's membership claims on app-data reads.
+
+> **Stale-by-decision (M16 Phase 2):** Previous statement was "Active account is not a Cognito attribute — it is browser-local UI state." This is superseded. Active account is now control-plane-owned, not browser-local. The `X-Account-Id` header and claims validation survive unchanged.
 
 ### Token lifetime
 
@@ -250,27 +253,35 @@ In practice: Dimension A governs *whether the user can use the app at all*. Dime
 
 ## Claim shape
 
-The pre-token generation Lambda injects three custom claims on every token issuance:
+> **M16 Phase 2 update (Stale-by-decision):** Claims are updated to lean triples and an `app_admin` claim is added. The previous shape (three claims, `custom:accounts` reference) is superseded by the shape below.
+
+The pre-token generation Lambda injects four custom claims on every token issuance:
 
 ```json
 {
   "apps": "[\"stock-analyser\",\"budget-tracker\"]",
   "site_admin": "false",
-  "accounts": "{\"stock-analyser\":[{\"accountId\":\"uuid-1\",\"role\":\"owner\"}],\"budget-tracker\":[{\"accountId\":\"uuid-2\",\"role\":\"manager\"}]}"
+  "accounts": "{\"stock-analyser\":[{\"accountId\":\"uuid-1\",\"role\":\"owner\"}],\"budget-tracker\":[{\"accountId\":\"uuid-2\",\"role\":\"manager\"}]}",
+  "app_admin": "[\"stock-analyser\"]"
 }
 ```
 
 The values are JSON-stringified strings (Cognito requires claim values to be primitive strings). Frontend and auth middleware parse the stringified JSON back into objects on receipt.
 
-Logical shape after parsing:
+Logical shape after parsing (M16 D8 lean triples):
 
 ```
-apps:       string[]                                     — app slugs the user can access
-site_admin: boolean
-accounts:   Record<appSlug, Array<{accountId, role}>>   — per-app membership list
+apps:       string[]                                           — app slugs the user can access (derived from memberships + reconciled groups)
+site_admin: boolean                                            — platform-wide supervisory role
+accounts:   Record<appSlug, Array<{accountId, role}>>          — per-app lean membership triples; M16 role vocabulary (owner|manager|member|viewer)
+app_admin:  string[]                                           — app slugs where user holds app-admin authority (sourced from launchpad-app-admin-grants-{stage})
 ```
 
-Plus the standard Cognito claims (`sub`, `email`, `cognito:groups`, token lifetime fields) and the custom attribute `custom:accounts`.
+**Staleness is bounded and accepted (D8).** Access-token lifetime is 1 hour; a removed user's stale token retains read visibility for up to an hour. **Staleness gives lingering read visibility, never lingering write capability.** The moment a removed or demoted user attempts any app-data write, the table check fails closed.
+
+**No display names, statuses, or pending state in tokens.** These are what the access-summary API is for. Memberships per user may grow under M16; lean triples keep token size bounded.
+
+Plus the standard Cognito claims (`sub`, `email`, `cognito:groups`, token lifetime fields). `custom:accounts` is inert (see Custom attributes above).
 
 **Launchpad renders tiles by inspecting the `apps` claim.**
 **API handlers enforce per-account authorization by inspecting `accounts`.**
@@ -459,8 +470,9 @@ The auth/control-plane Lambdas have explicit permission models. Each is document
 | Lambda | Wrapper | Authorization | IAM scope |
 |---|---|---|---|
 | `apps/launchpad/functions/accounts` | `withAuth` | Inline per-route membership/owner checks against account tables | `launchpad-accounts` RW + `launchpad-account-members` RW |
-| `apps/launchpad/functions/user` | `withAuthOnly` | None - user owns their own data | `launchpad-users` RW |
-| `apps/launchpad/functions/account-provisioning` | `withAuthOnly` | None - first-login flow; user has JWT but may not have app group memberships yet | `launchpad-accounts` RW + `launchpad-account-members` RW + `AdminUpdateUserAttributes` on user pool ARN |
+| `apps/launchpad/functions/user` | `withAuthOnly` | User owns their own profile/preferences/active-account. Active-account SET verifies membership via table check (D8 control-plane) | `launchpad-users` RW + `launchpad-accounts` R + `launchpad-account-members` R |
+| `apps/launchpad/functions/account-provisioning` | `withAuthOnly` | None — profile-bootstrap; user has JWT but no account yet (M16 D11: no longer creates accounts) | `launchpad-users` RW + `launchpad-account-members` R + `AdminGetUser` on user pool ARN |
+| `apps/launchpad/functions/access-summary` | `withAuthOnly` | `requireSiteAdmin` — site-admin directory only | `launchpad-users` R + `launchpad-accounts` R + `launchpad-account-members` R + `launchpad-app-admin-grants` R + `ListUsersInGroup` on user pool ARN |
 | `apps/launchpad/functions/invitations` | `withAuth` | Inline owner check against `launchpad-accounts` | `launchpad-accounts` R + `launchpad-invitations` RW |
 | `apps/launchpad/functions/forgot-provider` | None (raw handler - pre-authentication) | None | `launchpad-rate-limits` RW + `AdminGetUser` on user pool ARN + SES `SendEmail` |
 
