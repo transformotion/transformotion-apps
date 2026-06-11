@@ -61,10 +61,24 @@ User profile and preferences keyed by Cognito `sub`.
 | Attribute | Type | Notes |
 |---|---|---|
 | `userId` (PK) | String | Cognito `sub` |
-| `email` | String | User email |
-| `name` | String | Display name |
-| `preferences` | Map | Launchpad/app UI preferences |
+| `email` | String | User email (original case) |
+| `emailLower` | String | Lowercase email — used by `email-index` GSI for redemption lookup (M16 D4) |
+| `displayName` | String | Human-friendly name. Source of truth; never denormalized onto membership rows (D6). |
+| `profileComplete` | Boolean | False until user completes first-time profile setup |
+| `status` | String | `active \| disabled`. Absent means `active` (backwards compatibility). |
+| `preferences` | Map | `{ notificationsEnabled: boolean }` |
+| `activeAccounts` | Map | `{ [appSlug]: accountId }` — active account selection per app, owned by control plane (M16 D7) |
 | `createdAt` / `updatedAt` | String | ISO 8601 |
+
+**GSI:** `email-index` (PK: `emailLower`) — exact-email lookup for redemption identity matching and duplicate detection (M16 D4).
+
+**Display name fallback chain (M16, applies at read time — never write-time):**
+1. `displayName` (if set and non-empty)
+2. Email local part (`email.split('@')[0]`)
+3. Full email
+This fallback is computed at read time. Do not write a derived display name back to the row.
+
+**No display name denormalization (M16 D6 standing rule).** `displayName` lives only on the user item. Member lists, grant rows, access summaries, and discovery results are enriched at read time via `BatchGetItem` on the users table. Do not copy display names onto membership or grant items.
 
 ### `launchpad-accounts-{stage}`
 
@@ -89,12 +103,14 @@ Membership records: which users belong to which accounts, and in what role.
 |---|---|---|
 | `accountId` (PK) | String | |
 | `userId` (SK) | String | Cognito `sub` |
-| `role` | String | `owner \| manager \| member \| viewer` |
-| `email` | String | Denormalised for display |
+| `role` | String | `owner \| manager \| member \| viewer` (M16 vocabulary) |
+| `appSlug` | String | Denormalized from the account (M16 D3). Safe write-once: an account's app never changes. Legacy rows may be missing this field; new writes always set it. Fail-closed on missing `appSlug` — deny rather than guess. |
+| `email` | String | Denormalized for display (legacy; prefer user-table read for displayName) |
 | `joinedAt` | String | ISO 8601 |
 
-**GSI:** `userId-index` (PK: `userId`) - required by the pre-token trigger to
-find all account memberships for a user.
+**GSI:** `userId-index` (PK: `userId`) — required by the pre-token trigger to find all account memberships for a user.
+
+**GSI:** `appSlug-index` (PK: `appSlug`, SK: `userId`) — app-scoped member discovery: "all users with membership in any account of app X" (M16 D3). Used by invitee discovery (Phase 7) and app-admin summaries.
 
 ### `launchpad-invitations-{stage}`
 
@@ -110,6 +126,23 @@ Pending, redeemed, and expired invitations.
 | `perApp` | Map | Per-app access configuration |
 
 **GSI:** `email-index` (PK: `email`) - invitation lookup.
+
+### `launchpad-app-admin-grants-{stage}` (M16 D5)
+
+App-admin grants: policy primitive for app-scoped administrative authority. Kept separate from the membership table so `isAppAdmin(userId, appSlug)` is unambiguous and cannot be confused with account membership.
+
+Managed by `TransformotionDev-LaunchpadAuth` / `TransformotionProd-LaunchpadAuth`.
+
+| Attribute | Type | Notes |
+|---|---|---|
+| `appSlug` (PK) | String | The entitled app slug |
+| `userId` (SK) | String | Cognito `sub` |
+| `role` | String | Always `app-admin` (M16 vocabulary) |
+| `grantedAt` | String | ISO 8601 |
+
+**GSI:** `userId-index` (PK: `userId`) — reverse lookup: "what apps does this user admin?" Used by access summaries and pre-token `app_admin` claim.
+
+**Policy boundary (standing rule, M16 D5):** App-admin does NOT imply account membership. An app-admin row in this table must never be interpreted as or conflated with a membership row. The tables are separate precisely to prevent policy drift.
 
 ### `launchpad-rate-limits-{stage}`
 

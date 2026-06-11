@@ -12,6 +12,7 @@ const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
 const ACCOUNT_MEMBERS_TABLE = process.env.ACCOUNT_MEMBERS_TABLE!;
 const ACCOUNTS_TABLE = process.env.ACCOUNTS_TABLE!;
+const APP_ADMIN_GRANTS_TABLE = process.env.APP_ADMIN_GRANTS_TABLE!;
 
 interface AppEntry {
   slug: string;
@@ -26,11 +27,17 @@ interface MembershipRow {
   accountId: string;
   userId: string;
   role: string;
+  appSlug?: string;
 }
 
 interface AccountRow {
   accountId: string;
   appSlug: string;
+}
+
+interface AppAdminGrantRow {
+  appSlug: string;
+  userId: string;
 }
 
 async function queryMemberships(userId: string): Promise<MembershipRow[]> {
@@ -39,11 +46,31 @@ async function queryMemberships(userId: string): Promise<MembershipRow[]> {
     IndexName: 'userId-index',
     KeyConditionExpression: 'userId = :uid',
     ExpressionAttributeValues: { ':uid': userId },
-    ProjectionExpression: 'accountId, userId, #r',
+    ProjectionExpression: 'accountId, userId, #r, appSlug',
     ExpressionAttributeNames: { '#r': 'role' },
   }));
 
   return (res.Items ?? []) as MembershipRow[];
+}
+
+async function queryAppAdminGrants(userId: string): Promise<AppAdminGrantRow[]> {
+  // M16: the app-admin-grants table is the newest read in this trigger. Isolate
+  // its failure so it degrades to an empty app_admin claim rather than rejecting
+  // the Promise.all below — which the outer handler would otherwise catch by
+  // dropping ALL claims. Core apps/accounts/site_admin claims still get emitted.
+  try {
+    const res = await ddb.send(new QueryCommand({
+      TableName: APP_ADMIN_GRANTS_TABLE,
+      IndexName: 'userId-index',
+      KeyConditionExpression: 'userId = :uid',
+      ExpressionAttributeValues: { ':uid': userId },
+      ProjectionExpression: 'appSlug, userId',
+    }));
+    return (res.Items ?? []) as AppAdminGrantRow[];
+  } catch (err) {
+    console.error('[launchpad-pre-token] queryAppAdminGrants failed; app_admin will be empty:', err);
+    return [];
+  }
 }
 
 async function fetchAccountAppSlugs(accountIds: string[]): Promise<Map<string, string>> {
@@ -71,6 +98,8 @@ async function fetchAccountAppSlugs(accountIds: string[]): Promise<Map<string, s
   return appSlugByAccount;
 }
 
+// M16 D8: accounts claim is lean triples: { [appSlug]: [{ accountId, role }] }
+// appSlug is denormalized on new membership rows; legacy rows fall back to accounts table lookup.
 function groupByApp(
   memberships: MembershipRow[],
   appSlugByAccount: Map<string, string>,
@@ -78,8 +107,8 @@ function groupByApp(
   const result: Record<string, Array<{ accountId: string; role: string }>> = {};
 
   for (const membership of memberships) {
-    const slug = appSlugByAccount.get(membership.accountId);
-    if (!slug) continue;
+    const slug = membership.appSlug ?? appSlugByAccount.get(membership.accountId);
+    if (!slug) continue; // deny by default — no appSlug resolvable (D9 fail-closed)
 
     result[slug] ??= [];
     result[slug].push({ accountId: membership.accountId, role: membership.role });
@@ -102,6 +131,8 @@ async function reconcileInvariant(
     const hasAccounts = (accountsByApp[slug]?.length ?? 0) > 0;
     const inGroup = groups.includes(accessGroup);
 
+    // D11 item 1 NOTE: site-admin override removal (isSiteAdmin bypass on the
+    // !hasAccounts branch) is Phase 5 work. It is intentionally NOT removed here.
     if (hasAccounts && !inGroup) {
       console.log(`[launchpad-pre-token] reconcile: adding ${userId} to ${accessGroup}`);
       try {
@@ -149,9 +180,17 @@ export const handler = async (
 
     console.log('[launchpad-pre-token] userId:', userId, 'groups:', currentGroups.join(','));
 
-    const memberships = await queryMemberships(userId);
-    const accountIds = memberships.map(membership => membership.accountId);
-    const appSlugByAccount = await fetchAccountAppSlugs(accountIds);
+    const [memberships, appAdminGrants] = await Promise.all([
+      queryMemberships(userId),
+      queryAppAdminGrants(userId),
+    ]);
+
+    // Resolve appSlug for legacy membership rows that predate D3 denormalization
+    const missingAppSlugIds = memberships
+      .filter(m => !m.appSlug)
+      .map(m => m.accountId);
+    const appSlugByAccount = await fetchAccountAppSlugs(missingAppSlugIds);
+
     const accountsByApp = groupByApp(memberships, appSlugByAccount);
 
     const reconciledGroups = await reconcileInvariant(
@@ -162,13 +201,19 @@ export const handler = async (
       isSiteAdmin,
     );
 
-    const claims = {
+    // M16 D8: app_admin claim — array of appSlugs where user is app-admin
+    const appAdminSlugs = appAdminGrants
+      .map(g => g.appSlug)
+      .filter(slug => APP_SLUGS.includes(slug));
+
+    const claims: Record<string, string> = {
       apps: JSON.stringify(buildAppsList(reconciledGroups, isSiteAdmin)),
       accounts: JSON.stringify(accountsByApp),
       site_admin: String(isSiteAdmin),
+      app_admin: JSON.stringify(appAdminSlugs),
     };
 
-    console.log('[launchpad-pre-token] claims apps:', claims.apps, 'site_admin:', claims.site_admin);
+    console.log('[launchpad-pre-token] claims apps:', claims['apps'], 'site_admin:', claims['site_admin'], 'app_admin:', claims['app_admin']);
 
     event.response = {
       claimsOverrideDetails: {

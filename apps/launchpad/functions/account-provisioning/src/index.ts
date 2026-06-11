@@ -1,135 +1,127 @@
-import { randomUUID } from 'crypto';
 import {
   CognitoIdentityProviderClient,
-  AdminUpdateUserAttributesCommand,
+  AdminGetUserCommand,
 } from '@aws-sdk/client-cognito-identity-provider';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
   DynamoDBDocumentClient,
-  TransactWriteCommand,
+  GetCommand,
+  PutCommand,
+  QueryCommand,
 } from '@aws-sdk/lib-dynamodb';
 import {
   withAuthOnly,
   ok,
   badRequest,
-  conflict,
   type APIGatewayProxyEvent,
 } from '@transformotion/lambda-middleware';
+import type { AccountSetupResponse } from '@transformotion/contracts/launchpad/types';
 
-const cognito = new CognitoIdentityProviderClient({});
-const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+// M16 D11 (contract m16.1.0): /auth/setup is profile-bootstrap only.
+// - Ensures the user item exists (displayName, emailLower, status, preferences).
+// - Never auto-creates an account; access is acquired via invitation redemption.
+// - Never writes custom:active_account / custom:accounts (D11 vestiges).
+// Response is AccountSetupResponse { accountId?, userCreated, profileComplete }:
+//   userCreated      — true when THIS call created the user's profile record.
+//   profileComplete  — false until first-time profile setup completes.
+//   accountId        — omitted unless the user already holds an account.
 
-const ACCOUNTS_TABLE = process.env.ACCOUNTS_TABLE!;
-const ACCOUNT_MEMBERS_TABLE = process.env.ACCOUNT_MEMBERS_TABLE!;
-const USER_POOL_ID = process.env.USER_POOL_ID!;
+interface HandlerDeps {
+  ddb: DynamoDBDocumentClient;
+  cognito: CognitoIdentityProviderClient;
+  usersTable: string;
+  accountMembersTable: string;
+  userPoolId: string;
+}
 
-const APP_CLIENT_TO_SLUG: Record<string, string> = Object.fromEntries(
-  (process.env.APP_SLUGS ?? '').split(',').filter(Boolean).map(slug => [
-    process.env[`APP_CLIENT_${slug.toUpperCase().replace(/-/g, '_')}`]!,
-    slug,
-  ]),
-);
+export function createHandler(deps: HandlerDeps) {
+  const { ddb, cognito, usersTable, accountMembersTable, userPoolId } = deps;
 
-export const handler = withAuthOnly(async ({ auth, event }) => {
-  const resource = (event as APIGatewayProxyEvent).resource ?? '';
-
-  if (resource === '/auth/setup') {
-    return handleSetup(auth, event as APIGatewayProxyEvent);
+  async function resolveDisplayNameFromCognito(userId: string, email: string): Promise<string> {
+    try {
+      const res = await cognito.send(new AdminGetUserCommand({
+        UserPoolId: userPoolId,
+        Username: userId,
+      }));
+      const given = res.UserAttributes?.find(a => a.Name === 'given_name')?.Value?.trim();
+      const family = res.UserAttributes?.find(a => a.Name === 'family_name')?.Value?.trim();
+      if (given || family) return [given, family].filter(Boolean).join(' ');
+    } catch {
+      // Fall through to email fallback
+    }
+    // Fallback: email local part
+    return email.split('@')[0] ?? email;
   }
 
-  throw badRequest(`Unrecognised auth route: ${resource}`);
-});
+  async function handleSetup(auth: { userId: string; email: string }) {
+    const { userId, email } = auth;
+    const now = new Date().toISOString();
 
-async function handleSetup(
-  auth: { userId: string; email: string },
-  event: APIGatewayProxyEvent,
-) {
-  const { userId, email } = auth;
+    // Ensure user item exists with M16 profile fields
+    const existing = await ddb.send(new GetCommand({ TableName: usersTable, Key: { userId } }));
 
-  const claims = event.requestContext?.authorizer?.claims as Record<string, string> | undefined;
-  const existingAccountId = claims?.['custom:active_account']?.trim() ?? firstAccountIdFromClaims(claims);
-  if (existingAccountId) {
-    return ok({ accountId: existingAccountId, created: false });
-  }
+    if (!existing.Item) {
+      // Fetch display name from Cognito given_name/family_name attributes
+      const displayName = await resolveDisplayNameFromCognito(userId, email);
+      const emailLower = email.toLowerCase();
 
-  const aud = claims?.aud;
-  if (!aud) {
-    throw badRequest('Missing aud claim - token must be issued by a known App Client');
-  }
-
-  const appSlug = APP_CLIENT_TO_SLUG[aud];
-  if (!appSlug) {
-    throw new Error(`Unknown App Client ID in aud claim: ${aud}`);
-  }
-
-  const accountId = randomUUID();
-  const now = new Date().toISOString();
-
-  try {
-    await ddb.send(new TransactWriteCommand({
-      TransactItems: [
-        {
-          Put: {
-            TableName: ACCOUNTS_TABLE,
-            Item: {
-              accountId,
-              appSlug,
-              name: `${email}'s account`,
-              ownerId: userId,
-              plan: 'free',
-              createdAt: now,
-              updatedAt: now,
-            },
-            ConditionExpression: 'attribute_not_exists(accountId)',
-          },
+      await ddb.send(new PutCommand({
+        TableName: usersTable,
+        Item: {
+          userId,
+          email,
+          emailLower,
+          displayName,
+          status: 'active',
+          preferences: { notificationsEnabled: false },
+          profileComplete: false,
+          activeAccounts: {},
+          createdAt: now,
+          updatedAt: now,
         },
-        {
-          Put: {
-            TableName: ACCOUNT_MEMBERS_TABLE,
-            Item: {
-              accountId,
-              userId,
-              email,
-              role: 'owner',
-              joinedAt: now,
-            },
-            ConditionExpression: 'attribute_not_exists(accountId)',
-          },
-        },
-      ],
+        ConditionExpression: 'attribute_not_exists(userId)',
+      }));
+
+      // Fresh profile bootstrap: no account exists, so accountId is omitted.
+      const response: AccountSetupResponse = { userCreated: true, profileComplete: false };
+      return ok(response);
+    }
+
+    // Existing user — surface a convenience account id only if one exists.
+    const membershipsRes = await ddb.send(new QueryCommand({
+      TableName: accountMembersTable,
+      IndexName: 'userId-index',
+      KeyConditionExpression: 'userId = :uid',
+      ExpressionAttributeValues: { ':uid': userId },
+      ProjectionExpression: 'accountId',
+      Limit: 1,
     }));
-  } catch (err: unknown) {
-    if (err instanceof Error && err.name === 'TransactionCanceledException') {
-      throw conflict('Account creation conflict - retry to retrieve existing account');
-    }
-    throw err;
+
+    const firstAccountId = membershipsRes.Items?.[0]?.['accountId'] as string | undefined;
+    const profileComplete = (existing.Item['profileComplete'] as boolean | undefined) ?? false;
+
+    const response: AccountSetupResponse = {
+      userCreated: false,
+      profileComplete,
+      // Omit (rather than send '') when the user has no account — see m16.1.0.
+      ...(firstAccountId ? { accountId: firstAccountId } : {}),
+    };
+    return ok(response);
   }
 
-  await cognito.send(new AdminUpdateUserAttributesCommand({
-    UserPoolId: USER_POOL_ID,
-    Username: userId,
-    UserAttributes: [
-      { Name: 'custom:active_account', Value: accountId },
-      { Name: 'custom:accounts', Value: accountId },
-    ],
-  }));
-
-  return ok({ accountId, created: true });
-}
-
-function firstAccountIdFromClaims(claims: Record<string, string> | undefined): string | undefined {
-  const raw = claims?.accounts;
-  if (!raw) return undefined;
-
-  try {
-    const accounts = JSON.parse(raw) as Record<string, Array<{ accountId?: string }>>;
-    for (const memberships of Object.values(accounts)) {
-      const accountId = memberships.find(m => m.accountId?.trim())?.accountId?.trim();
-      if (accountId) return accountId;
+  return withAuthOnly(async ({ auth, event }) => {
+    const resource = (event as APIGatewayProxyEvent).resource ?? '';
+    if (resource !== '/auth/setup') {
+      throw badRequest(`Unrecognised auth route: ${resource}`);
     }
-  } catch {
-    return undefined;
-  }
-
-  return undefined;
+    return handleSetup(auth);
+  });
 }
+
+export const handler = createHandler({
+  ddb: DynamoDBDocumentClient.from(new DynamoDBClient({})),
+  cognito: new CognitoIdentityProviderClient({}),
+  usersTable: process.env.USERS_TABLE!,
+  accountMembersTable: process.env.ACCOUNT_MEMBERS_TABLE!,
+  userPoolId: process.env.USER_POOL_ID!,
+});

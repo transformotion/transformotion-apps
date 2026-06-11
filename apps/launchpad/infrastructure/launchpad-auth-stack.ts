@@ -30,6 +30,8 @@ export class LaunchpadAuthStack extends cdk.Stack {
   public readonly accountMembersTable: dynamodb.Table;
   public readonly invitationsTable: dynamodb.Table;
   public readonly rateLimitsTable: dynamodb.Table;
+  /** M16 D5 — app-admin grants (PK appSlug, SK userId, GSI userId-index). */
+  public readonly appAdminGrantsTable: dynamodb.Table;
 
   private readonly stage: 'dev' | 'prod';
 
@@ -211,6 +213,13 @@ export class LaunchpadAuthStack extends cdk.Stack {
       removalPolicy: removal,
     });
 
+    // M16 D4 — exact-email lookup for redemption identity matching and duplicate detection.
+    this.usersTable.addGlobalSecondaryIndex({
+      indexName: 'email-index',
+      partitionKey: { name: 'emailLower', type: dynamodb.AttributeType.STRING },
+      projectionType: dynamodb.ProjectionType.ALL,
+    });
+
     this.accountsTable = new dynamodb.Table(this, 'AccountsTable', {
       tableName: `launchpad-accounts-${stage}`,
       partitionKey: { name: 'accountId', type: dynamodb.AttributeType.STRING },
@@ -229,6 +238,14 @@ export class LaunchpadAuthStack extends cdk.Stack {
     this.accountMembersTable.addGlobalSecondaryIndex({
       indexName: 'userId-index',
       partitionKey: { name: 'userId', type: dynamodb.AttributeType.STRING },
+      projectionType: dynamodb.ProjectionType.ALL,
+    });
+
+    // M16 D3 — app-scoped member discovery ("users with membership in any account of app X").
+    this.accountMembersTable.addGlobalSecondaryIndex({
+      indexName: 'appSlug-index',
+      partitionKey: { name: 'appSlug', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'userId', type: dynamodb.AttributeType.STRING },
       projectionType: dynamodb.ProjectionType.ALL,
     });
 
@@ -254,6 +271,23 @@ export class LaunchpadAuthStack extends cdk.Stack {
       removalPolicy: removal,
     });
 
+    // M16 D5 — app-admin grants: policy primitive for app-scoped administrative authority.
+    // Kept separate from membership table so isAppAdmin(userId, appSlug) is unambiguous and
+    // cannot be confused with account membership.
+    this.appAdminGrantsTable = new dynamodb.Table(this, 'AppAdminGrantsTable', {
+      tableName: `launchpad-app-admin-grants-${stage}`,
+      partitionKey: { name: 'appSlug', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'userId', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      removalPolicy: removal,
+    });
+
+    this.appAdminGrantsTable.addGlobalSecondaryIndex({
+      indexName: 'userId-index',
+      partitionKey: { name: 'userId', type: dynamodb.AttributeType.STRING },
+      projectionType: dynamodb.ProjectionType.ALL,
+    });
+
     const preTokenFn = new lambdaNodejs.NodejsFunction(this, 'PreTokenGenerationFn', {
       functionName: `launchpad-pre-token-generation-${stage}`,
       entry: path.join(__dirname, '../functions/pre-token-generation/src/index.ts'),
@@ -264,6 +298,7 @@ export class LaunchpadAuthStack extends cdk.Stack {
       environment: {
         ACCOUNT_MEMBERS_TABLE: this.accountMembersTable.tableName,
         ACCOUNTS_TABLE: this.accountsTable.tableName,
+        APP_ADMIN_GRANTS_TABLE: this.appAdminGrantsTable.tableName,
         APP_REGISTRY: appRegistryJson,
       },
       bundling: {
@@ -276,6 +311,7 @@ export class LaunchpadAuthStack extends cdk.Stack {
 
     this.accountMembersTable.grantReadData(preTokenFn);
     this.accountsTable.grantReadData(preTokenFn);
+    this.appAdminGrantsTable.grantReadData(preTokenFn);
 
     this.userPool.addTrigger(cognito.UserPoolOperation.PRE_TOKEN_GENERATION, preTokenFn);
 
@@ -332,6 +368,7 @@ export class LaunchpadAuthStack extends cdk.Stack {
     this.outputTable('AccountMembersTableName', this.accountMembersTable, 'Launchpad auth account-members table name');
     this.outputTable('InvitationsTableName', this.invitationsTable, 'Launchpad auth invitations table name');
     this.outputTable('RateLimitsTableName', this.rateLimitsTable, 'Launchpad auth rate-limits table name');
+    this.outputTable('AppAdminGrantsTableName', this.appAdminGrantsTable, 'Launchpad auth app-admin grants table name');
 
     for (const { id, secret } of socialSecrets) {
       new cdk.CfnOutput(this, id, {

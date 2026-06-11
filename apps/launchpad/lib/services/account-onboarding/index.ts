@@ -1,9 +1,11 @@
 import { getConfig } from '@/lib/config';
+import type { AccountSetupResponse } from '@transformotion/contracts/launchpad/types';
 
-export interface AccountSetupResponse {
-  accountId: string;
-  created: boolean;
-}
+// Canonical shape lives in the contracts package (m16.1.0). /auth/setup is
+// profile-bootstrap only (D11): `accountId` is omitted for a fresh user,
+// `userCreated` reflects profile-record creation, `profileComplete` drives
+// first-time setup. Re-exported so existing import sites keep resolving.
+export type { AccountSetupResponse };
 
 function resolveControlPlaneBaseUrl(): string {
   return getConfig().controlPlane.apiUrl;
