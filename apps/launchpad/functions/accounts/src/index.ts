@@ -26,46 +26,65 @@ const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const ACCOUNTS_TABLE = process.env.ACCOUNTS_TABLE!;
 const ACCOUNT_MEMBERS_TABLE = process.env.ACCOUNT_MEMBERS_TABLE!;
 
+// M16 D3 / Refs #162: appSlug is derived from the Cognito app-client used to obtain the token.
+const APP_CLIENT_TO_SLUG: Record<string, string> = Object.fromEntries(
+  (process.env.APP_SLUGS ?? '').split(',').filter(Boolean).map(slug => [
+    process.env[`APP_CLIENT_${slug.toUpperCase().replace(/-/g, '_')}`]!,
+    slug,
+  ]),
+);
+
 async function createAccount(event: APIGatewayProxyEvent, userId: string, email: string) {
   const { name } = parseBody<{ name: string }>(event);
   if (!name?.trim()) throw badRequest('name is required');
 
+  // M16 D3 / Refs #162: resolve appSlug from the Cognito app-client (aud claim).
+  const claims = event.requestContext?.authorizer?.claims as Record<string, string> | undefined;
+  const aud = claims?.aud;
+  const appSlug = aud ? (APP_CLIENT_TO_SLUG[aud] ?? null) : null;
+
   const accountId = randomUUID();
   const now = new Date().toISOString();
+
+  const accountItem: Record<string, unknown> = {
+    accountId,
+    name: name.trim(),
+    ownerId: userId,
+    plan: 'free',
+    createdAt: now,
+    updatedAt: now,
+  };
+  if (appSlug) accountItem['appSlug'] = appSlug;
+
+  const memberItem: Record<string, unknown> = {
+    accountId,
+    userId,
+    email,
+    role: 'owner',
+    joinedAt: now,
+  };
+  if (appSlug) memberItem['appSlug'] = appSlug;
 
   await ddb.send(new TransactWriteCommand({
     TransactItems: [
       {
         Put: {
           TableName: ACCOUNTS_TABLE,
-          Item: {
-            accountId,
-            name: name.trim(),
-            ownerId: userId,
-            plan: 'free',
-            createdAt: now,
-            updatedAt: now,
-          },
+          Item: accountItem,
           ConditionExpression: 'attribute_not_exists(accountId)',
         },
       },
       {
         Put: {
           TableName: ACCOUNT_MEMBERS_TABLE,
-          Item: {
-            accountId,
-            userId,
-            email,
-            role: 'owner',
-            joinedAt: now,
-          },
+          Item: memberItem,
         },
       },
     ],
   }));
 
   return created({
-    account: { accountId, name: name.trim(), ownerId: userId, createdAt: now },
+    account: { accountId, appSlug: appSlug ?? undefined, name: name.trim(), ownerId: userId, createdAt: now },
   });
 }
 
