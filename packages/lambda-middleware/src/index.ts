@@ -33,6 +33,7 @@
 //   requireAnyAppAccess(auth, apps)                     — throws 403 unless user has access to any of the apps
 //   requireAccountAccess(auth, app, accountId, minRole) — throws 403 unless user has account access
 //   requireAccountOwner(auth, app, accountId)           — throws 403 unless user owns account
+//   requireAccountWrite(auth, app, accountId, loader)   — D8 write-path: claims + live row (viewer/disabled/missing → 403)
 
 export { withAuth, withAuthOnly, withPublic }            from './middleware';
 export { ok, created, noContent, errorResponse }        from './response';
@@ -46,6 +47,7 @@ export {
   requireAnyAppAccess,
   requireAccountAccess,
   requireAccountOwner,
+  requireAccountWrite,
 }                                                       from './auth';
 export type {
   AuthClaims,
@@ -60,3 +62,4 @@ export type {
   AppName,
   AccountRole,
 } from './types';
+export type { AccountMembershipRow, MembershipLoader } from './auth';
