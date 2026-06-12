@@ -1,6 +1,7 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
   DynamoDBDocumentClient,
+  GetCommand,
   QueryCommand,
   PutCommand,
   DeleteCommand,
@@ -12,18 +13,39 @@ import {
   badRequest,
   requireAppAccess,
   requireAccountAccess,
+  requireAccountWrite,
+  type AccountMembershipRow,
 } from '@transformotion/lambda-middleware';
 import type { WatchlistItem } from './types';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const TABLE = process.env.WATCHLIST_TABLE!;
+const ACCOUNT_MEMBERS_TABLE = process.env.ACCOUNT_MEMBERS_TABLE!;
+
+/** D8 write-path membership loader (scoped GetItem; errors → fail closed). */
+const membershipLoader = async (
+  accountId: string,
+  userId: string,
+): Promise<AccountMembershipRow | undefined> => {
+  const res = await ddb.send(new GetCommand({
+    TableName: ACCOUNT_MEMBERS_TABLE,
+    Key: { accountId, userId },
+    ProjectionExpression: '#r, #s',
+    ExpressionAttributeNames: { '#r': 'role', '#s': 'status' },
+  }));
+  if (!res.Item) return undefined;
+  return {
+    role: res.Item['role'] as AccountMembershipRow['role'],
+    status: res.Item['status'] as string | undefined,
+  };
+};
 
 export const handler = withAuth(async ({ auth, account, event }) => {
   requireAppAccess(auth, 'stock-analyser');
   requireAccountAccess(auth, 'stock-analyser', account.accountId);
   const { accountId } = account;
 
-  // ── GET /watchlist ────────────────────────────────────────────────────────
+  // ── GET /watchlist ──────────────────────────────────────────────────────── (read: claims-only)
   if (event.httpMethod === 'GET') {
     const res = await ddb.send(new QueryCommand({
       TableName: TABLE,
@@ -35,7 +57,9 @@ export const handler = withAuth(async ({ auth, account, event }) => {
     return ok({ items });
   }
 
-  // ── PUT /watchlist ────────────────────────────────────────────────────────
+  // ── PUT /watchlist ──────────────────────────────────────────────────────── (write: live row check)
+  await requireAccountWrite(auth, 'stock-analyser', accountId, membershipLoader);
+
   const { items } = parseBody<{ items: WatchlistItem[] }>(event);
 
   if (!Array.isArray(items)) {
