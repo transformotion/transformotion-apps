@@ -16,14 +16,18 @@ import {
   notFound,
   requireAppAccess,
   requireAccountAccess,
+  requireAccountWrite,
   type APIGatewayProxyEvent,
 } from '@transformotion/lambda-middleware';
+import { dynamoMembershipLoader } from '@transformotion/fn-account-membership';
 import { randomUUID } from 'crypto';
 import type { Transaction } from '@transformotion/budget-domain';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const TABLE = process.env.TRANSACTIONS_TABLE!;
 const GSI   = 'accountId-dateIso-index';
+// D8 write-path membership loader (scoped GetItem on launchpad-account-members).
+const membershipLoader = dynamoMembershipLoader(ddb, process.env.ACCOUNT_MEMBERS_TABLE!);
 
 function toIso(ddmmyyyy: string): string {
   const p = ddmmyyyy.split('/');
@@ -182,6 +186,11 @@ export const handler = withAuth(async ({ auth, account, event }) => {
   const resource = event.resource ?? '';
 
   if (resource === '/api/budget/v1/transactions'      && method === 'GET')  return listTransactions(event, accountId);
+
+  // Everything below mutates account data → D8 live membership-row check
+  // (viewer/disabled/removed → 403; fail closed on missing row or loader error).
+  await requireAccountWrite(auth, 'budget-tracker', accountId, membershipLoader);
+
   if (resource === '/api/budget/v1/transactions/bulk' && method === 'POST') return bulkUpsert(event, accountId);
 
   const transactionId = getPathParam(event, 'id');
