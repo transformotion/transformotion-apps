@@ -22,6 +22,7 @@ on:
       - 'packages/runtime-config/**'
       - 'packages/lambda-middleware/**'
       - 'packages/fn-ai-proxy-core/**'
+      - 'packages/fn-account-membership/**'
       - '!packages/**/AGENTS.md'
       - '!packages/**/CLAUDE.md'
       - '!packages/**/README.md'

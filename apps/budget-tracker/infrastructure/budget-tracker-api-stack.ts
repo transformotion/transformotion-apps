@@ -86,6 +86,20 @@ export class BudgetTrackerApiStack extends cdk.Stack {
     const aiJobsTable       = dynamodb.Table.fromTableName(this, 'AiJobsTable',       aiJobsTableName);
     const wsConnectionsTable = dynamodb.Table.fromTableName(this, 'WsConnectionsTable', wsConnectionsTableName);
 
+    // D8 write-path: account-data mutation Lambdas read the caller's membership
+    // row from the launchpad-owned members table. Grant is dynamodb:GetItem ONLY
+    // (no Query/index/writes) on this one table — minimal, auditable cross-domain read.
+    const accountMembersTable = dynamodb.Table.fromTableName(
+      this, 'AccountMembersTable', `launchpad-account-members-${stage}`,
+    );
+    const grantMembershipRead = (fn: lambdaNodejs.NodejsFunction) => {
+      fn.addEnvironment('ACCOUNT_MEMBERS_TABLE', accountMembersTable.tableName);
+      fn.addToRolePolicy(new iam.PolicyStatement({
+        actions: ['dynamodb:GetItem'],
+        resources: [accountMembersTable.tableArn],
+      }));
+    };
+
     const bundling: lambdaNodejs.BundlingOptions = {
       externalModules: ['@aws-sdk/*'],
       minify: true,
@@ -142,6 +156,7 @@ export class BudgetTrackerApiStack extends cdk.Stack {
       bundling,
     });
     txTable.grantReadWriteData(txFn);
+    grantMembershipRead(txFn);
 
     // ── budget-rules-handler ─────────────────────────────────────────────────
     const rulesFn = new lambdaNodejs.NodejsFunction(this, 'RulesFn', {
@@ -155,6 +170,7 @@ export class BudgetTrackerApiStack extends cdk.Stack {
       bundling,
     });
     rulesTable.grantReadWriteData(rulesFn);
+    grantMembershipRead(rulesFn);
 
     // ── budget-settings-handler ──────────────────────────────────────────────
     const settingsFn = new lambdaNodejs.NodejsFunction(this, 'SettingsFn', {
@@ -168,6 +184,7 @@ export class BudgetTrackerApiStack extends cdk.Stack {
       bundling,
     });
     settingsTable.grantReadWriteData(settingsFn);
+    grantMembershipRead(settingsFn);
 
     // ── budget-ai-config-handler ─────────────────────────────────────────────
     const aiConfigFn = new lambdaNodejs.NodejsFunction(this, 'AiConfigFn', {
@@ -238,6 +255,7 @@ export class BudgetTrackerApiStack extends cdk.Stack {
       bundling,
     });
     budgetDataTable.grantReadWriteData(budgetDataFn);
+    grantMembershipRead(budgetDataFn);
 
     // ── budget-export-handler ─────────────────────────────────────────────────
     const exportFn = new lambdaNodejs.NodejsFunction(this, 'ExportFn', {

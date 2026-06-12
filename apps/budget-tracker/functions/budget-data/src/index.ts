@@ -1,10 +1,13 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
-import { withAuth, parseBody, ok, requireAppAccess, requireAccountAccess } from '@transformotion/lambda-middleware';
+import { withAuth, parseBody, ok, requireAppAccess, requireAccountAccess, requireAccountWrite } from '@transformotion/lambda-middleware';
+import { dynamoMembershipLoader } from '@transformotion/fn-account-membership';
 import type { BudgetData, Category } from '@transformotion/budget-domain';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const TABLE = process.env.BUDGET_DATA_TABLE!;
+// D8 write-path membership loader (scoped GetItem on launchpad-account-members).
+const membershipLoader = dynamoMembershipLoader(ddb, process.env.ACCOUNT_MEMBERS_TABLE!);
 
 const CONCEPTS = ['categories', 'budgetAmounts', 'budgetFrequencies'] as const;
 type Concept = typeof CONCEPTS[number];
@@ -110,6 +113,10 @@ export const handler = withAuth(async ({ auth, account, event }) => {
   const { accountId } = account;
 
   if (event.httpMethod === 'GET')   return getBudgetData(accountId);
-  if (event.httpMethod === 'PATCH') return patchBudgetData(event, accountId);
+  if (event.httpMethod === 'PATCH') {
+    // Account-shared budget config (PK=accountId, SK=concept) → D8 write check.
+    await requireAccountWrite(auth, 'budget-tracker', accountId, membershipLoader);
+    return patchBudgetData(event, accountId);
+  }
   throw { statusCode: 400, message: `Unrecognised route: ${event.httpMethod}` };
 });

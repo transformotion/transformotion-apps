@@ -14,13 +14,17 @@ import {
   notFound,
   requireAppAccess,
   requireAccountAccess,
+  requireAccountWrite,
   type APIGatewayProxyEvent,
 } from '@transformotion/lambda-middleware';
+import { dynamoMembershipLoader } from '@transformotion/fn-account-membership';
 import { randomUUID } from 'crypto';
 import type { MatchingRule } from '@transformotion/budget-domain';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const TABLE = process.env.RULES_TABLE!;
+// D8 write-path membership loader (scoped GetItem on launchpad-account-members).
+const membershipLoader = dynamoMembershipLoader(ddb, process.env.ACCOUNT_MEMBERS_TABLE!);
 
 // ── GET /api/budget/v1/rules ──────────────────────────────────────────────────
 async function listRules(accountId: string) {
@@ -132,6 +136,10 @@ export const handler = withAuth(async ({ auth, account, event }) => {
   const resource = event.resource ?? '';
 
   if (resource === '/api/budget/v1/rules' && method === 'GET')  return listRules(accountId);
+
+  // Writes below — D8 live membership-row check (viewer/disabled/removed → 403).
+  await requireAccountWrite(auth, 'budget-tracker', accountId, membershipLoader);
+
   if (resource === '/api/budget/v1/rules' && method === 'POST') return createRule(event, accountId);
 
   const ruleId = getPathParam(event, 'id');

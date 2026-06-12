@@ -12,6 +12,7 @@ import { SettingsTab } from "./tabs/settings-tab"
 import { useBudgetStore } from "@/stores/budget-tracker/use-budget-store"
 import { useAuthStore } from "@/stores/auth/use-auth-store"
 import { authService } from "@/lib/services/auth"
+import { AccountGate } from "@/components/providers/account-gate"
 import { TabErrorBoundary } from "@transformotion/ui-error-boundaries"
 
 // ============================================================================
@@ -45,43 +46,34 @@ function BudgetTabContent() {
 // BUDGET TRACKER APP
 // ============================================================================
 
-export function BudgetTrackerApp({
+function Spinner() {
+  return (
+    <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="flex items-center gap-3 text-muted-foreground">
+        <div className="size-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+        <span className="text-sm">Loading...</span>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Renders only once AccountGate has confirmed app-account access (D7/D9), so the
+ * budget store's data-fetching `initialize()` never runs — and no app-data
+ * request fires — before the active account is known.
+ */
+function BudgetTrackerInner({
   onSignOut,
   onGoToLaunchpad,
 }: {
   onSignOut?: () => void
   onGoToLaunchpad?: () => void
 }) {
-  const authIsInitialized = useAuthStore((s) => s.isInitialized)
-  const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
-  const initAuth = useAuthStore((s) => s.initialize)
-
   const initialize = useBudgetStore((s) => s.initialize)
   const isInitialized = useBudgetStore((s) => s.isInitialized)
   const error = useBudgetStore((s) => s.error)
 
-  useEffect(() => { initAuth() }, [initAuth])
-
-  useEffect(() => {
-    if (authIsInitialized && !isAuthenticated) {
-      authService.signInWithRedirect()
-    }
-  }, [isAuthenticated, authIsInitialized])
-
-  useEffect(() => {
-    if (isAuthenticated) initialize()
-  }, [isAuthenticated, initialize])
-
-  if (!authIsInitialized || !isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="flex items-center gap-3 text-muted-foreground">
-          <div className="size-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-          <span className="text-sm">Loading...</span>
-        </div>
-      </div>
-    )
-  }
+  useEffect(() => { initialize() }, [initialize])
 
   if (error) {
     return (
@@ -99,16 +91,7 @@ export function BudgetTrackerApp({
     )
   }
 
-  if (!isInitialized) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="flex items-center gap-3 text-muted-foreground">
-          <div className="size-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-          <span className="text-sm">Loading...</span>
-        </div>
-      </div>
-    )
-  }
+  if (!isInitialized) return <Spinner />
 
   return (
     <BudgetAppShell onGoToLaunchpad={onGoToLaunchpad} onSignOut={onSignOut}>
@@ -116,5 +99,34 @@ export function BudgetTrackerApp({
         <BudgetTabContent />
       </TabErrorBoundary>
     </BudgetAppShell>
+  )
+}
+
+export function BudgetTrackerApp({
+  onSignOut,
+  onGoToLaunchpad,
+}: {
+  onSignOut?: () => void
+  onGoToLaunchpad?: () => void
+}) {
+  const authIsInitialized = useAuthStore((s) => s.isInitialized)
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
+  const initAuth = useAuthStore((s) => s.initialize)
+
+  useEffect(() => { initAuth() }, [initAuth])
+
+  useEffect(() => {
+    if (authIsInitialized && !isAuthenticated) {
+      authService.signInWithRedirect()
+    }
+  }, [isAuthenticated, authIsInitialized])
+
+  if (!authIsInitialized || !isAuthenticated) return <Spinner />
+
+  // Gate private surfaces on app-account membership before any data init.
+  return (
+    <AccountGate>
+      <BudgetTrackerInner onSignOut={onSignOut} onGoToLaunchpad={onGoToLaunchpad} />
+    </AccountGate>
   )
 }
