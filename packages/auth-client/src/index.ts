@@ -70,6 +70,12 @@ export interface AuthService {
   onAuthStateChange(callback: (session: AuthSession | null) => void): () => void
   /** Returns the first accountId for the given appSlug from the `accounts` JWT claim. */
   getAccountIdForApp(appSlug: string):     Promise<string | null>
+  /**
+   * Returns ALL account memberships for the given appSlug from the `accounts`
+   * JWT claim (lean triples — accountId + role). Used to populate per-app
+   * account selectors; the ACTIVE selection still comes from the control plane.
+   */
+  getAccountsForApp(appSlug: string):      Promise<Array<{ accountId: string; role: string }>>
 }
 
 export { MockAuthService, createMockAuthService } from './mock-auth'

@@ -4,7 +4,7 @@ import { createContext, useContext, useState, useCallback, useEffect, type React
 import { watchlistService, type WatchlistItem } from "@/lib/services/watchlist/watchlist-service"
 import { stockAnalyserSettingsService } from "@/lib/services/settings/settings-service"
 import { cn } from "@/lib/utils"
-import { Wordmark, BrandMark } from "@/components/brand/wordmark"
+import { Wordmark } from "@/components/brand/wordmark"
 import {
   BarChart3,
   Star,
@@ -23,6 +23,7 @@ import {
   FileText,
 } from "lucide-react"
 import { ConfirmationModal } from "@transformotion/ui-primitives"
+import { useActiveAccountStore } from "@/stores/active-account/use-active-account-store"
 
 // ============================================================================
 // TYPES
@@ -160,6 +161,12 @@ export function NavigationProvider({
     tabCache: {},
   })
 
+  // Reactive per-app active account (control-plane owned, D7). The account list
+  // and active selection come from the store, not hard-coded placeholders.
+  const storeAccounts = useActiveAccountStore(s => s.accounts)
+  const storeActiveId = useActiveAccountStore(s => s.activeAccountId)
+  const storeSwitchTo = useActiveAccountStore(s => s.switchTo)
+
   const navigateTo = useCallback((tab: TabId) => {
     setState(prev => ({ ...prev, activeTab: tab }))
   }, [])
@@ -241,12 +248,18 @@ export function NavigationProvider({
     return state.portfolio.includes(ticker)
   }, [state.portfolio])
 
-  const switchAccount = useCallback((accountId: string) => {
-    setState(prev => ({
-      ...prev,
-      user: { ...prev.user, activeAccountId: accountId }
-    }))
-  }, [])
+  // Active account is control-plane-owned (D7). Switching PUTs the selection;
+  // a successful switch reloads so every account-scoped surface re-fetches with
+  // the new X-Account-Id. On failure the store reverts and we stay put.
+  const switchAccount = useCallback(async (accountId: string) => {
+    if (accountId === storeActiveId) return
+    try {
+      await storeSwitchTo(accountId)
+      if (typeof window !== 'undefined') window.location.reload()
+    } catch {
+      /* store reverted + logged; remain on the current account */
+    }
+  }, [storeSwitchTo, storeActiveId])
 
   const signOut = useCallback(() => {
     onSignOut?.()
@@ -289,8 +302,17 @@ export function NavigationProvider({
     return state.tabCache[tab] ?? null
   }, [state.tabCache])
 
+  // Override the placeholder user accounts with the live control-plane set.
+  // (Display name/email enrichment is a follow-up; the selector shows account ids.)
+  const user: User = {
+    ...state.user,
+    accounts: storeAccounts.map(a => ({ id: a.accountId, name: a.accountId, type: 'Personal' as const })),
+    activeAccountId: storeActiveId ?? '',
+  }
+
   const value: NavigationContextValue = {
     ...state,
+    user,
     navigateTo,
     navigateToRecsWithSector,
     navigateToAnalyser,

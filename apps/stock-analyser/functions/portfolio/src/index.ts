@@ -1,6 +1,7 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
   DynamoDBDocumentClient,
+  GetCommand,
   QueryCommand,
   PutCommand,
   DeleteCommand,
@@ -12,18 +13,42 @@ import {
   badRequest,
   requireAppAccess,
   requireAccountAccess,
+  requireAccountWrite,
+  type AccountMembershipRow,
 } from '@transformotion/lambda-middleware';
 import type { PortfolioHolding } from './types';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const TABLE = process.env.PORTFOLIO_TABLE!;
+const ACCOUNT_MEMBERS_TABLE = process.env.ACCOUNT_MEMBERS_TABLE!;
+
+/**
+ * D8 write-path membership loader: a scoped GetItem on the launchpad-owned
+ * account-members table. Errors propagate so requireAccountWrite fails closed.
+ */
+const membershipLoader = async (
+  accountId: string,
+  userId: string,
+): Promise<AccountMembershipRow | undefined> => {
+  const res = await ddb.send(new GetCommand({
+    TableName: ACCOUNT_MEMBERS_TABLE,
+    Key: { accountId, userId },
+    ProjectionExpression: '#r, #s',
+    ExpressionAttributeNames: { '#r': 'role', '#s': 'status' },
+  }));
+  if (!res.Item) return undefined;
+  return {
+    role: res.Item['role'] as AccountMembershipRow['role'],
+    status: res.Item['status'] as string | undefined,
+  };
+};
 
 export const handler = withAuth(async ({ auth, account, event }) => {
   requireAppAccess(auth, 'stock-analyser');
   requireAccountAccess(auth, 'stock-analyser', account.accountId);
   const { accountId } = account;
 
-  // ── GET /portfolio ────────────────────────────────────────────────────────
+  // ── GET /portfolio ──────────────────────────────────────────────────────── (read: claims-only)
   if (event.httpMethod === 'GET') {
     const res = await ddb.send(new QueryCommand({
       TableName: TABLE,
@@ -35,7 +60,11 @@ export const handler = withAuth(async ({ auth, account, event }) => {
     return ok({ holdings });
   }
 
-  // ── PUT /portfolio ────────────────────────────────────────────────────────
+  // ── PUT /portfolio ──────────────────────────────────────────────────────── (write: live row check)
+  // D8: claims + live membership-row read. Rejects viewer/disabled/removed and
+  // fails closed on a loader error. Reads above stay claims-only.
+  await requireAccountWrite(auth, 'stock-analyser', accountId, membershipLoader);
+
   const { holdings } = parseBody<{ holdings: PortfolioHolding[] }>(event);
 
   if (!Array.isArray(holdings)) {

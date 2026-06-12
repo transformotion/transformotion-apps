@@ -26,6 +26,11 @@ export interface AIConfig {
   saWssUrl: string
 }
 
+export interface ControlPlaneConfig {
+  /** Launchpad control-plane API base URL (includes the API Gateway stage). */
+  apiUrl: string
+}
+
 export interface AppConfig {
   api: APIConfig
   auth: AuthConfig
@@ -35,6 +40,7 @@ export interface AppConfig {
   claude: ClaudeConfig
   features: FeaturesConfig
   apps: AppsConfig
+  controlPlane: ControlPlaneConfig
 }
 
 export type {
@@ -99,6 +105,9 @@ function loadConfig(): AppConfig {
       peers: {
         'budget-tracker': normaliseCrossAppUrl(process.env.NEXT_PUBLIC_BUDGET_URL, '/budget-tracker/'),
       },
+    },
+    controlPlane: {
+      apiUrl: process.env.NEXT_PUBLIC_LAUNCHPAD_CONTROL_PLANE_API_URL ?? '',
     },
   }
 }

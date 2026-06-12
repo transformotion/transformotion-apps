@@ -166,6 +166,10 @@ export class MockAuthService implements AuthService {
   async getAccountIdForApp(_appSlug: string): Promise<string | null> {
     return this.session?.currentAccount?.id ?? null
   }
+
+  async getAccountsForApp(_appSlug: string): Promise<Array<{ accountId: string; role: string }>> {
+    return MOCK_ACCOUNTS.map(a => ({ accountId: a.id, role: a.role }))
+  }
 }
 
 let _instance: MockAuthService | null = null

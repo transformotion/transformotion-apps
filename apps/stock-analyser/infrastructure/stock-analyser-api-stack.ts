@@ -70,6 +70,21 @@ export class StockAnalyserApiStack extends cdk.Stack {
     });
     const auth = authMethodOptions(authoriser);
 
+    // D8 write-path: account-data mutation Lambdas read the caller's membership
+    // row from the launchpad-owned members table. The grant is dynamodb:GetItem
+    // ONLY (no Query/index/writes) on this one table — a minimal, auditable
+    // cross-domain read; any scope creep shows up as an IAM diff.
+    const accountMembersTable = dynamodb.Table.fromTableName(
+      this, 'AccountMembersTable', `launchpad-account-members-${stage}`,
+    );
+    const grantMembershipRead = (fn: lambdaNodejs.NodejsFunction) => {
+      fn.addEnvironment('ACCOUNT_MEMBERS_TABLE', accountMembersTable.tableName);
+      fn.addToRolePolicy(new iam.PolicyStatement({
+        actions: ['dynamodb:GetItem'],
+        resources: [accountMembersTable.tableArn],
+      }));
+    };
+
     const bundling: lambdaNodejs.BundlingOptions = {
       externalModules: ['@aws-sdk/*'],
       minify: true,
@@ -88,6 +103,7 @@ export class StockAnalyserApiStack extends cdk.Stack {
       bundling,
     });
     portfolioTable.grantReadWriteData(portfolioFn);
+    grantMembershipRead(portfolioFn);
 
     const portfolioIntegration = new apigateway.LambdaIntegration(portfolioFn, { proxy: true });
     const portfolio = this.api.root.addResource('portfolio');
@@ -105,6 +121,7 @@ export class StockAnalyserApiStack extends cdk.Stack {
       bundling,
     });
     watchlistTable.grantReadWriteData(watchlistFn);
+    grantMembershipRead(watchlistFn);
 
     const watchlistIntegration = new apigateway.LambdaIntegration(watchlistFn, { proxy: true });
     const watchlist = this.api.root.addResource('watchlist');

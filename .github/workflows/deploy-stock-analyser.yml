@@ -155,6 +155,21 @@ jobs:
           echo "NEXT_PUBLIC_SA_WSS_URL=$SA_WSS_URL" >> $GITHUB_ENV
           echo "Extracted SA WSS URL: $SA_WSS_URL"
 
+      - name: Extract Launchpad control-plane URL from CDK output
+        run: |
+          CP_URL=$(aws cloudformation describe-stacks \
+            --stack-name TransformotionDev-LaunchpadControlPlane \
+            --query "Stacks[0].Outputs[?OutputKey=='ControlPlaneApiUrl'].OutputValue" \
+            --output text)
+          if [ -z "$CP_URL" ] || [ "$CP_URL" = "None" ]; then
+            echo "ERROR: ControlPlaneApiUrl missing/empty on TransformotionDev-LaunchpadControlPlane."
+            echo "Refusing to build with an empty NEXT_PUBLIC_LAUNCHPAD_CONTROL_PLANE_API_URL —"
+            echo "active-account and no-access logic would silently fall back to claims/error."
+            exit 1
+          fi
+          echo "NEXT_PUBLIC_LAUNCHPAD_CONTROL_PLANE_API_URL=$CP_URL" >> $GITHUB_ENV
+          echo "Extracted Launchpad control-plane URL: $CP_URL"
+
       - name: Build Next.js (static export)
         working-directory: apps/stock-analyser
         run: pnpm build
@@ -288,6 +303,21 @@ jobs:
           fi
           echo "NEXT_PUBLIC_SA_WSS_URL=$SA_WSS_URL" >> $GITHUB_ENV
           echo "Extracted SA WSS URL: $SA_WSS_URL"
+
+      - name: Extract Launchpad control-plane URL from CDK output
+        run: |
+          CP_URL=$(aws cloudformation describe-stacks \
+            --stack-name TransformotionProd-LaunchpadControlPlane \
+            --query "Stacks[0].Outputs[?OutputKey=='ControlPlaneApiUrl'].OutputValue" \
+            --output text)
+          if [ -z "$CP_URL" ] || [ "$CP_URL" = "None" ]; then
+            echo "ERROR: ControlPlaneApiUrl missing/empty on TransformotionProd-LaunchpadControlPlane."
+            echo "Refusing to build with an empty NEXT_PUBLIC_LAUNCHPAD_CONTROL_PLANE_API_URL —"
+            echo "active-account and no-access logic would silently fall back to claims/error."
+            exit 1
+          fi
+          echo "NEXT_PUBLIC_LAUNCHPAD_CONTROL_PLANE_API_URL=$CP_URL" >> $GITHUB_ENV
+          echo "Extracted Launchpad control-plane URL: $CP_URL"
 
       - name: Build Next.js (static export)
         working-directory: apps/stock-analyser

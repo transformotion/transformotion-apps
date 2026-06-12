@@ -196,7 +196,17 @@ export async function requireAccountWrite(
     throw forbidden(`Account membership required (accountId: ${accountId})`);
   }
 
-  const row = await loadMembership(accountId, auth.userId);
+  let row: AccountMembershipRow | undefined;
+  try {
+    row = await loadMembership(accountId, auth.userId);
+  } catch (err) {
+    // D8 deny-by-default: an infrastructure error while verifying membership
+    // (throttle, IAM misconfig, table issue) must REJECT the write — never skip
+    // the check and proceed. "DynamoDB hiccuped so we allowed the write" is the
+    // exact quiet failure this rule exists to kill.
+    console.error('[lambda-middleware] membership verification failed:', err);
+    throw new HttpError(503, 'Could not verify account membership');
+  }
   if (!row) {
     throw forbidden(`Account membership required (accountId: ${accountId})`);
   }
