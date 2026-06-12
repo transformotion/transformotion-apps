@@ -26,7 +26,10 @@ const APP_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
 interface AccountRow {
   appSlug: string
   accountId: string
-  label: string
+  /** The app's display name (e.g. "Budget Tracker"). */
+  appLabel: string
+  /** The account's real name when known (e.g. "Steve's Budget"); undefined while/if unresolved. */
+  accountName?: string
 }
 
 const getGreeting = () => {
@@ -244,8 +247,10 @@ function ProfileMenu({
                 className="w-full flex items-center justify-between px-4 py-2.5 text-sm"
               >
                 <div className="text-left min-w-0">
-                  <p className="font-medium text-foreground truncate">{account.label}</p>
-                  <p className="text-xs text-muted-foreground truncate">{account.accountId}</p>
+                  <p className="font-medium text-foreground truncate">{account.accountName ?? account.appLabel}</p>
+                  {account.accountName ? (
+                    <p className="text-xs text-muted-foreground truncate">{account.appLabel}</p>
+                  ) : null}
                 </div>
               </div>
             ))}
@@ -336,7 +341,8 @@ export function Launchpad({
   const accounts: AccountRow[] = data.selections.map((s) => ({
     appSlug: s.appSlug,
     accountId: s.accountId,
-    label: appLabel(s.appSlug),
+    appLabel: appLabel(s.appSlug),
+    accountName: data.accountNames[s.accountId],
   }))
 
   const getLaunchHandler = (slug: string): (() => void) | undefined => {
