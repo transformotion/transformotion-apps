@@ -1,23 +1,21 @@
 {
-  "name": "@transformotion/fn-watchlist",
+  "name": "@transformotion/fn-account-membership",
   "version": "0.0.0",
   "private": true,
   "main": "./src/index.ts",
   "scripts": {
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
-    "lint": "echo \"lint: watchlist\"",
+    "lint": "eslint .",
     "test": "vitest run"
   },
   "dependencies": {
-    "@transformotion/contracts": "workspace:*",
-    "@transformotion/fn-account-membership": "workspace:*",
     "@transformotion/lambda-middleware": "workspace:*"
   },
   "devDependencies": {
-    "@aws-sdk/client-dynamodb": "^3",
     "@aws-sdk/lib-dynamodb": "^3",
-    "@types/aws-lambda": "^8",
-    "typescript": "*"
+    "@types/node": "^22",
+    "typescript": "*",
+    "vitest": "^1"
   }
 }

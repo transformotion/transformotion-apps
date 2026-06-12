@@ -1,7 +1,6 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
   DynamoDBDocumentClient,
-  GetCommand,
   QueryCommand,
   PutCommand,
   DeleteCommand,
@@ -14,31 +13,14 @@ import {
   requireAppAccess,
   requireAccountAccess,
   requireAccountWrite,
-  type AccountMembershipRow,
 } from '@transformotion/lambda-middleware';
+import { dynamoMembershipLoader } from '@transformotion/fn-account-membership';
 import type { WatchlistItem } from './types';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const TABLE = process.env.WATCHLIST_TABLE!;
-const ACCOUNT_MEMBERS_TABLE = process.env.ACCOUNT_MEMBERS_TABLE!;
-
-/** D8 write-path membership loader (scoped GetItem; errors → fail closed). */
-const membershipLoader = async (
-  accountId: string,
-  userId: string,
-): Promise<AccountMembershipRow | undefined> => {
-  const res = await ddb.send(new GetCommand({
-    TableName: ACCOUNT_MEMBERS_TABLE,
-    Key: { accountId, userId },
-    ProjectionExpression: '#r, #s',
-    ExpressionAttributeNames: { '#r': 'role', '#s': 'status' },
-  }));
-  if (!res.Item) return undefined;
-  return {
-    role: res.Item['role'] as AccountMembershipRow['role'],
-    status: res.Item['status'] as string | undefined,
-  };
-};
+// D8 write-path membership loader (scoped GetItem on launchpad-account-members).
+const membershipLoader = dynamoMembershipLoader(ddb, process.env.ACCOUNT_MEMBERS_TABLE!);
 
 export const handler = withAuth(async ({ auth, account, event }) => {
   requireAppAccess(auth, 'stock-analyser');
