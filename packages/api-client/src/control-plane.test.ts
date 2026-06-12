@@ -55,4 +55,18 @@ describe('ControlPlaneClient — preserves the API Gateway stage (#423-safe)', (
     const [url] = (f as unknown as { mock: { calls: [string][] } }).mock.calls[0];
     expect(url).toBe(`${BASE}api/user/active-accounts`);
   });
+
+  it('getAccount targets /accounts/{id}, keeps stage, sends X-Account-Id', async () => {
+    const f = mockFetch({ account: { accountId: 'acc-1', name: "Steve's Portfolio" } });
+    globalThis.fetch = f;
+    const client = new ControlPlaneClient({ baseUrl: BASE, getToken: async () => 'tok' });
+
+    const res = await client.getAccount('acc-1');
+
+    const [url, init] = (f as unknown as { mock: { calls: [string, RequestInit][] } }).mock.calls[0];
+    expect(url).toBe(`${BASE}accounts/acc-1`);
+    expect(init.method).toBe('GET');
+    expect((init.headers as Record<string, string>)['X-Account-Id']).toBe('acc-1');
+    expect(res.account.name).toBe("Steve's Portfolio");
+  });
 });

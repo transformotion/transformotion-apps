@@ -34,8 +34,8 @@ export class HttpClient {
     this.getAccountId = opts.getAccountId;
   }
 
-  async get<T>(path: string, signal?: AbortSignal): Promise<T> {
-    return this.request<T>('GET', path, undefined, signal);
+  async get<T>(path: string, signal?: AbortSignal, extraHeaders?: Record<string, string>): Promise<T> {
+    return this.request<T>('GET', path, undefined, signal, extraHeaders);
   }
 
   async put<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
@@ -54,7 +54,13 @@ export class HttpClient {
     await this.request<void>('DELETE', path, undefined, signal);
   }
 
-  private async request<T>(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
+  private async request<T>(
+    method: string,
+    path: string,
+    body?: unknown,
+    signal?: AbortSignal,
+    extraHeaders?: Record<string, string>,
+  ): Promise<T> {
     const token     = await this.getToken();
     const accountId = this.getAccountId ? await this.getAccountId() : undefined;
 
@@ -65,6 +71,10 @@ export class HttpClient {
 
     if (accountId) {
       headers['X-Account-Id'] = accountId;
+    }
+    // Per-call headers (e.g. a one-off X-Account-Id) override the defaults.
+    if (extraHeaders) {
+      Object.assign(headers, extraHeaders);
     }
 
     // Strip leading slash so baseUrl + path doesn't produce double slashes
