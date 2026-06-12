@@ -217,6 +217,18 @@ export class CognitoAuthService implements AuthService {
     }
   }
 
+  async getAccountsForApp(appSlug: string): Promise<Array<{ accountId: string; role: string }>> {
+    try {
+      const session = await fetchAuthSession()
+      const raw = session.tokens?.idToken?.payload?.['accounts'] as string | undefined
+      if (!raw) return []
+      const map = JSON.parse(raw) as Record<string, Array<{ accountId: string; role: string }>>
+      return map[appSlug] ?? []
+    } catch {
+      return []
+    }
+  }
+
   private buildTokens(
     amplifySession: Awaited<ReturnType<typeof fetchAuthSession>>,
   ): AuthTokens {
