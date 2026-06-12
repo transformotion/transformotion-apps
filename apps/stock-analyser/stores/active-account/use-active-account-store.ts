@@ -74,6 +74,21 @@ export const useActiveAccountStore = create<ActiveAccountState>((set, get) => ({
       accounts: next.status === 'no-access' ? [] : accounts,
       error: next.status === 'error' ? (errMsg ?? next.error) : null,
     })
+
+    // Best-effort: enrich account labels with real names (GET /accounts/{id}).
+    // Cosmetic only — never affects access status; falls back to the id on failure.
+    if (next.status !== 'no-access' && accounts.length > 0) {
+      void Promise.all(
+        accounts.map(async (a) => {
+          try {
+            const res = await cp.getAccount(a.accountId)
+            return { ...a, name: res.account?.name || a.accountId }
+          } catch {
+            return { ...a, name: a.accountId }
+          }
+        }),
+      ).then((named) => set({ accounts: named }))
+    }
   },
 
   switchTo: async (accountId: string) => {

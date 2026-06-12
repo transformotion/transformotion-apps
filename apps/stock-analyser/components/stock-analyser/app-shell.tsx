@@ -306,7 +306,7 @@ export function NavigationProvider({
   // (Display name/email enrichment is a follow-up; the selector shows account ids.)
   const user: User = {
     ...state.user,
-    accounts: storeAccounts.map(a => ({ id: a.accountId, name: a.accountId, type: 'Personal' as const })),
+    accounts: storeAccounts.map(a => ({ id: a.accountId, name: a.name ?? a.accountId, type: 'Personal' as const })),
     activeAccountId: storeActiveId ?? '',
   }
 

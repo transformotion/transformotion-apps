@@ -16,6 +16,8 @@ export type AccountAccessStatus = 'idle' | 'loading' | 'ready' | 'no-access' | '
 export interface AccountOption {
   accountId: string
   role: string
+  /** Display name from the control plane; absent until enriched (falls back to id). */
+  name?: string
 }
 
 /** Outcome of the control-plane active-accounts read. `ok: false` = fetch failed. */

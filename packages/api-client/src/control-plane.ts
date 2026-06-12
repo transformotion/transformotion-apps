@@ -49,4 +49,23 @@ export class ControlPlaneClient {
       signal,
     );
   }
+
+  /**
+   * GET /accounts/{accountId} — account metadata (incl. display name) for an
+   * account the caller is a member of. Used to label account selectors. The
+   * X-Account-Id header is required by the account-context middleware; the
+   * handler authorizes membership on the path id.
+   */
+  getAccount(accountId: string, signal?: AbortSignal): Promise<ControlPlaneAccount> {
+    return this.http.get(
+      `accounts/${encodeURIComponent(accountId)}`,
+      signal,
+      { 'X-Account-Id': accountId },
+    );
+  }
+}
+
+/** Minimal shape of GET /accounts/{accountId} needed for selector labels. */
+export interface ControlPlaneAccount {
+  account: { accountId: string; name?: string };
 }
