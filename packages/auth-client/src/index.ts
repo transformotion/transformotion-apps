@@ -6,6 +6,12 @@ export interface User {
   email: string
   name: string
   avatarUrl?: string
+  /**
+   * Admin status derived from token claims (M16 D11 — claims are the sole source):
+   *  - `siteAdmin: boolean` — from the `site_admin` claim only (no group fallback).
+   *  - `appAdmin: string[]` — app slugs from the `app_admin` claim.
+   * UI gates admin surfaces on these, never on `cognito:groups`.
+   */
   metadata?: Record<string, unknown>
 }
 

@@ -63,3 +63,41 @@ export type {
   AccountRole,
 } from './types';
 export type { AccountMembershipRow, MembershipLoader } from './auth';
+
+// M16 Phase 5 policy layer (ADR D9) — built additively in PR-A; routes migrate
+// onto requireAccountData / requireAccountAdmin in PR-B (requireAccountAccess deleted then).
+export {
+  // D9 middlewares
+  requireAccountData,
+  requireAccountAdmin,
+  // loader-resolved guards
+  accountRole,
+  requireAccountMember,
+  requireAccountOwnerOrManager,
+  requireAccountOwnerRole,
+  requireAppAdminForApp,
+  requireSupervisorySiteAdmin,
+  // combinators
+  anyOf,
+  allOf,
+  // pure decisions
+  isKnownRole,
+  roleAtLeast,
+  decideMember,
+  decideMinRole,
+  decideOwnerOrManager,
+  decideOwner,
+  decideRoleChange,
+  decideLastOwnerGuard,
+  discoveryScope,
+  UNIFORM_DENY,
+} from './policy';
+export type {
+  PolicyDecision,
+  PolicyGuard,
+  AppAdminLoader,
+  SiteAdminLoader,
+  AccountMembersLoader,
+  InviteeSearchScope,
+  DiscoveryAuthority,
+} from './policy';

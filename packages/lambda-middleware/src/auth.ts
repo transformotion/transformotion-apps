@@ -82,7 +82,8 @@ export function requireGroup(claims: AuthClaims, ...groups: string[]): void {
   }
 }
 
-const ROLE_HIERARCHY: AccountRole[] = ['viewer', 'member', 'manager', 'owner'];
+/** Account roles in ascending capability order. Shared with the policy layer. */
+export const ROLE_HIERARCHY: AccountRole[] = ['viewer', 'member', 'manager', 'owner'];
 
 function isSuperUser(auth: AuthClaims): boolean {
   return auth.siteAdmin;
