@@ -7,7 +7,10 @@ const MOCK_USER: User = {
   email: 'user@example.com',
   name: 'Demo User',
   avatarUrl: undefined,
-  metadata: { siteAdmin: true },
+  // Mirrors the Cognito provider's metadata shape (M16 D11): `siteAdmin` from the
+  // sole `site_admin` claim, `appAdmin` from the `app_admin` claim. The mock user
+  // is a site-admin, so `appAdmin` is empty (site-admin already gates admin UI).
+  metadata: { siteAdmin: true, appAdmin: [] as string[] },
 }
 
 const MOCK_ACCOUNTS: Account[] = [

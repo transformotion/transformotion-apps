@@ -11,6 +11,21 @@ import {
 } from 'aws-amplify/auth'
 import type { AuthService, AuthSession, AuthTokens, User, Account, SignInCredentials, SignUpCredentials } from './index'
 
+/**
+ * Parse a Cognito custom claim that the pre-token Lambda emits as a JSON string
+ * array of app slugs (e.g. `'["budget-tracker"]'`). Returns `[]` for an absent
+ * or malformed claim — fail safe, never throw during session hydration.
+ */
+function parseSlugArrayClaim(raw: unknown): string[] {
+  if (typeof raw !== 'string') return []
+  try {
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed.filter((s): s is string => typeof s === 'string') : []
+  } catch {
+    return []
+  }
+}
+
 export class CognitoAuthService implements AuthService {
   constructor(private readonly appSlug?: string) {
     Amplify.configure({
@@ -43,12 +58,19 @@ export class CognitoAuthService implements AuthService {
       const email      = claims['email'] as string
       const givenName  = claims['given_name'] as string | undefined
       const familyName = claims['family_name'] as string | undefined
-      const groups     = Array.isArray(claims['cognito:groups']) ? claims['cognito:groups'] as string[] : []
-      const siteAdmin  = claims['site_admin'] === 'true' || groups.includes('site-admin')
+      // M16 D11 addendum (Phase 5): the explicit `site_admin` claim is the SOLE
+      // admin-status source. The legacy `cognito:groups` fallback is removed —
+      // with no claim, admin status fails to `false`. The pre-token Lambda always
+      // stamps `site_admin` from the group, so this is not a behaviour change for
+      // real users; it removes a second, group-derived source of truth.
+      const siteAdmin  = claims['site_admin'] === 'true'
+      // Surface the `app_admin` claim (emitted by the pre-token Lambda; D5) so the
+      // client can gate app-admin surfaces by claim. JSON array of appSlugs.
+      const appAdmin   = parseSlugArrayClaim(claims['app_admin'])
       const name       = (givenName && familyName)
         ? `${givenName} ${familyName}`
         : (givenName ?? email)
-      return { id: cognitoUser.userId, email, name, metadata: { siteAdmin } }
+      return { id: cognitoUser.userId, email, name, metadata: { siteAdmin, appAdmin } }
     } catch {
       return null
     }
