@@ -1,6 +1,7 @@
 import * as cdk from 'aws-cdk-lib';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as lambdaNodejs from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
@@ -312,6 +313,25 @@ export class LaunchpadAuthStack extends cdk.Stack {
     this.accountMembersTable.grantReadData(preTokenFn);
     this.accountsTable.grantReadData(preTokenFn);
     this.appAdminGrantsTable.grantReadData(preTokenFn);
+
+    // The pre-token trigger reconciles app-access Cognito group membership from
+    // account memberships: it ADDs a user to an app's access group when they hold
+    // a membership for that app, and REMOVEs them when they no longer do. Without
+    // these grants the reconcile throws AccessDenied, the `apps` claim is never
+    // populated, and membership-only users are denied app access (#437).
+    //
+    // Scoped to the account/region userpool wildcard on purpose: referencing
+    // this.userPool.userPoolArn here would create a circular dependency
+    // (UserPool → trigger Lambda → role policy → UserPool). This Lambda only ever
+    // operates on its own pool — it is that pool's pre-token trigger.
+    const stack = cdk.Stack.of(this);
+    preTokenFn.addToRolePolicy(new iam.PolicyStatement({
+      actions: [
+        'cognito-idp:AdminAddUserToGroup',
+        'cognito-idp:AdminRemoveUserFromGroup',
+      ],
+      resources: [`arn:aws:cognito-idp:${stack.region}:${stack.account}:userpool/*`],
+    }));
 
     this.userPool.addTrigger(cognito.UserPoolOperation.PRE_TOKEN_GENERATION, preTokenFn);
 
