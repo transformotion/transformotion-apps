@@ -6,6 +6,7 @@ import { authService } from '@/lib/services/auth'
 import { getConfig } from '@/lib/config'
 import { getUserProfile, type UserProfile } from '@/lib/services/user-profile'
 import { getActiveAccounts, type ActiveAccountSelection } from '@/lib/services/active-accounts'
+import { getAccount } from '@/lib/services/account-admin'
 import { LAUNCHPAD_APPS, entitledSlugsFromSelections, fallbackWarnings } from '@/lib/entitlement'
 
 export interface LaunchpadData {
@@ -15,6 +16,12 @@ export interface LaunchpadData {
   entitledSlugs: Set<string>
   /** Active account per app (M16 D7); empty when unavailable. */
   selections: ActiveAccountSelection[]
+  /**
+   * Best-effort accountId → display name, used to label the profile chip with
+   * real account names instead of raw GUIDs (#433). Populated asynchronously
+   * after `selections`; an entry is absent when its name could not be read.
+   */
+  accountNames: Record<string, string>
   /** True when the live read failed and entitlement came from a claims fallback. */
   degraded: boolean
 }
@@ -24,6 +31,7 @@ const EMPTY: LaunchpadData = {
   profile: null,
   entitledSlugs: new Set(),
   selections: [],
+  accountNames: {},
   degraded: false,
 }
 
@@ -83,8 +91,32 @@ export function useLaunchpadData(user: User | null): LaunchpadData {
             profile,
             entitledSlugs,
             selections,
+            accountNames: {},
             degraded: !tilesFromApi || !profileFromApi,
           })
+        }
+
+        // Best-effort: enrich the profile chip with real account names so it
+        // shows "Steve's Portfolio" rather than a raw accountId GUID (#433).
+        // Cosmetic only — failures leave the name absent and never affect
+        // entitlement, the active selection, or access.
+        if (idToken && selections.length > 0) {
+          const named = await Promise.all(
+            selections.map(async (s) => {
+              try {
+                const res = await getAccount(idToken, s.accountId, s.accountId)
+                return [s.accountId, res.account?.name] as const
+              } catch (err) {
+                console.warn('[launchpad] account-name read failed:', s.accountId, err)
+                return [s.accountId, undefined] as const
+              }
+            }),
+          )
+          if (!cancelled) {
+            const accountNames: Record<string, string> = {}
+            for (const [id, name] of named) if (name) accountNames[id] = name
+            setState((prev) => ({ ...prev, accountNames }))
+          }
         }
         return
       }
@@ -95,7 +127,7 @@ export function useLaunchpadData(user: User | null): LaunchpadData {
       }
       const entitledSlugs = await deriveEntitlementFromClaims()
       if (!cancelled) {
-        setState({ loading: false, profile: null, entitledSlugs, selections: [], degraded: true })
+        setState({ loading: false, profile: null, entitledSlugs, selections: [], accountNames: {}, degraded: true })
       }
     }
 
