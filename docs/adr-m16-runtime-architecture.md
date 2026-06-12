@@ -1,7 +1,7 @@
 # M16 Account Lifecycle — Runtime Architecture Decision Document
 
-**Status:** Accepted — all flagged items confirmed by owner, 2026-06-11 (see §9)
-**Date:** 2026-06-11 (v1.2 — §9 items and Goal 4 amendment confirmed)
+**Status:** Accepted — all flagged items confirmed by owner, 2026-06-11 (see §9); v1.3 operational-config rulings confirmed by owner 2026-06-12 (see D9 "Operational config", D11 addendum, D12)
+**Date:** 2026-06-12 (v1.3 — operational-config authorization category, row-class authorization in mixed partitions, and site_admin-claim-as-sole-admin-source; all three owner-confirmed) · 2026-06-11 (v1.2 — §9 items and Goal 4 amendment confirmed)
 **Goals served:** 4 primarily; 3 (per CONTRIBUTING §1.1 convention)
 **Scope:** Physical persistence, authorization mechanics, token/claims strategy, and middleware structure for the M16 runtime implementation in `transformotion/transformotion-apps`.
 **Document type:** Milestone-scoped decision document (CONTRIBUTING §10). Not itself normative; its decisions are **ratified into the normative documents** as the implementing PRs land, per the discipline rule (CONTRIBUTING §2.1):
@@ -208,6 +208,19 @@ App-admin per the model: app-scoped directory/metadata/member-list visibility an
 2. **Uniform not-found semantics across all principals.** Nonexistent and forbidden targets must be indistinguishable to the caller — no 404-vs-403 difference that lets anyone probe which accountIds exist.
 3. **Deny is the default return path.** Unknown role, unrecognized operation, missing `appSlug` on a legacy row → deny. Un-backfilled rows hitting this path during transition is correct behavior, not a bug.
 
+### Operational config (administrative axis) — v1.3, owner-confirmed 2026-06-12
+
+A distinct **administrative-axis** category for service/runtime **configuration** that **never contains user content** (e.g. AI provider/model selection). It is not account data: **neither role gains any account-data access through it.** Authorizing an operational-config write does not, and must never be made to, imply data authority over the account whose partition the config currently happens to sit in.
+
+**Owner-decided hierarchy:**
+
+- **Site-admin** sets platform-wide AI/runtime-config **defaults**.
+- **App-admin** **overrides** per app (app-scoped administrative authority, D5/D9).
+
+**AI config is APP-LEVEL by product decision.** The existing **per-account `APP#AI_RUNTIME` row class** (Stock Analyser: `pk=ACCOUNT#{accountId}, sk=APP#AI_RUNTIME`; Budget Tracker's analogue: `pk=accountId, settingKey=AI_CONFIG#APP#budget-tracker`) is a **legacy shape to be RETIRED in Phase 5**: AI-config storage moves to **app-level config**, removing the per-account mixing entirely. The Phase 5 migration mechanics (whether any existing override values migrate to app-level config or are discarded) are informed by the dev-state findings — currently **two** per-account override rows exist on dev (one SA: `openai/gpt-5.4-mini`; one BT: `claude/claude-opus-4-8`, both site-admin-set 2026-06-08, on different accounts).
+
+**Matrix requirement:** every operational-config surface must be listed **explicitly** in the permission matrix (auth.md), classified as administrative-axis with its setter (site-admin default vs app-admin override) and an explicit "grants no account-data access" note. New operational-config surfaces are added to the matrix or they do not ship.
+
 ---
 
 ## D10. Migration/backfill and role mapping
@@ -234,6 +247,28 @@ The pre-token Lambda remains the claims source (D8), but three Cognito-side beha
 3. **`custom:active_account` stays retired** per D7 and the existing transitional note; `/auth/setup` stops writing it when superseded in Phase 2.
 
 The `apps` claim survives as a projection (lean derivation from memberships + reconciled groups), the `accounts` claim takes the lean-triple shape (D8), and `site_admin` is joined by an app-admin claim sourced from the D5 table.
+
+### Addendum (v1.3, owner-confirmed 2026-06-12): `site_admin` claim is the sole admin-status source
+
+The explicit **`site_admin` claim is the SOLE source of admin status** for **all** UI and backend checks. The `cognito:groups` fallback in `packages/auth-client` (which currently treats membership of the `site-admin` group as admin when the claim is absent) is **deleted in Phase 5** — with no claim, admin status **fails to `false`**. In the same Phase 5 client-auth consolidation, the **`app_admin` claim is surfaced in `auth-client`** (today it is emitted by the pre-token Lambda but not exposed by the client). The Phase 5 **route-classification sweep** additionally inventories and removes **any other group-based admin checks** across the codebase, replacing them with the explicit claims.
+
+**No change to admin GRANTING.** Site-admin bestowal remains **group membership managed only by existing site-admins**; the pre-token Lambda continues to derive the `site_admin` claim from that group. What v1.3 unifies is **claim derivation/consumption** (one claim, read everywhere), not how the underlying authority is granted.
+
+---
+
+## D12. Row-class authorization in mixed partitions (v1.3, owner-confirmed 2026-06-12)
+
+**Consumed by:** Phase 5 (authorization helpers + route classification). `data.md` ratification rides the Phase 5 PR.
+
+**Authorization classifies the resource CLASS, not the endpoint.** In a table whose partition mixes row classes, the SK (or settingKey) determines the authorization rule, evaluated against the *resolved* item, never the route name:
+
+- **User-scoped rows** (e.g. `SK=USER#{userId}#PREFERENCES`): authorize on **membership claims + an SK-owner match** — a `viewer` MAY write **their own** preference rows (it is their data, not the account's). The owner in the SK must equal the caller.
+- **Account-shared rows** (e.g. `SK=settingKey` with no user dimension): the **D8 write tier** (`requireAccountWrite` — claims + live membership row, viewer-reject), **or** **operational-config** per D9 "Operational config" when the row is administrative-axis service config that holds no user content.
+- **Deny-by-default for unrecognized SK classes** in a mixed table: an SK the classifier does not recognize is denied, not waved through.
+
+**No new mixed-authority partitions.** The existing per-app `settings` table is the only tolerated case, and only with **explicit per-SK classification**, until the `APP#AI_RUNTIME` retirement (D9 "Operational config") removes the mixing. New designs must keep distinct authorization classes in distinct tables/partitions.
+
+> Worked example (Phase 4 evidence): two routes with the same intent ("update settings") land on opposite sides of the viewer-write rule purely by SK shape — Stock Analyser `/settings` (`SK=USER#{userId}#PREFERENCES`, per-user) is **excluded** from the write gate; Budget Tracker `/settings` (`SK=settingKey`, account-shared) is **gated**. (Recorded on #416 for the Phase 5 route-classification table.)
 
 ---
 
