@@ -4,10 +4,14 @@ import type { AiRuntimeConfigUpdate, AppAiRuntimeConfigResponse } from '@transfo
 import type { StockAnalyserSettings } from '@transformotion/contracts/stock-analyser/types'
 import { authService } from '../services/auth'
 import { getConfig } from '../config'
+import { getActiveAccountId } from '@/stores/active-account/use-active-account-store'
 
 // ── Auth callbacks (shared across all clients) ─────────────────────────────────
 const getToken     = async () => (await authService.getIdToken()) ?? ''
-const getAccountId = () => authService.getAccountIdForApp('stock-analyser')
+// M16 D7: the active account is the control-plane selection (the active-account
+// store), NOT first-account-from-token. The AccountGate guarantees the store is
+// `ready` (account set) before any app surface that issues data requests renders.
+const getAccountId = () => getActiveAccountId()
 
 // ── Platform-typed client (package typed methods: getPortfolio, getCache, etc.) ─
 let _apiClient: ApiClient | null = null

@@ -12,6 +12,7 @@ import { PortfolioTab } from "@/components/stock-analyser/tabs/portfolio-tab"
 import { WatchlistTab } from "@/components/stock-analyser/tabs/watchlist-tab"
 import { SettingsTab } from "@/components/stock-analyser/tabs/settings-tab"
 import { AuthGuard } from "@/components/providers/auth-guard"
+import { AccountGate } from "@/components/providers/account-gate"
 import { useAuthStore } from "@/stores/auth/use-auth-store"
 import { TabErrorBoundary } from "@transformotion/ui-error-boundaries"
 
@@ -83,7 +84,9 @@ function StockAnalyserContent() {
 export default function StockAnalyserPage() {
   return (
     <AuthGuard>
-      <StockAnalyserContent />
+      <AccountGate>
+        <StockAnalyserContent />
+      </AccountGate>
     </AuthGuard>
   )
 }
