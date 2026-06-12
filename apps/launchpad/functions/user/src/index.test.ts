@@ -13,6 +13,8 @@ interface MockStore {
   accounts?: Record<string, Item>;
   members?: Record<string, Item>;      // key: `${accountId}|${userId}`
   memberQueryByUserId?: Record<string, Item[]>;  // key: userId
+  /** Captures every UpdateCommand input the handler issues, in order. */
+  updates?: Array<Record<string, unknown>>;
 }
 
 function makeDdb(store: MockStore = {}): DynamoDBDocumentClient {
@@ -54,6 +56,7 @@ function makeDdb(store: MockStore = {}): DynamoDBDocumentClient {
       }
 
       if (name === 'UpdateCommand') {
+        store.updates?.push(input);
         return {};
       }
 
@@ -300,6 +303,38 @@ describe('setActiveAccount fail-closed', () => {
     )) as { statusCode: number; body: string };
     expect(res.statusCode).toBe(200);
     expect(body(res).selections).toContainEqual({ appSlug: 'stock-analyser', accountId: 'acc-1' });
+  });
+
+  it('self-heals: inits the activeAccounts map before the nested set when absent (#435)', async () => {
+    const updates: Array<Record<string, unknown>> = [];
+    const handler = makeHandler({
+      // User record WITHOUT an activeAccounts map (provisioned before #435 init).
+      users: { 'user-1': { userId: 'user-1', email: 'user@example.com' } },
+      members: {
+        'acc-1|user-1': { accountId: 'acc-1', userId: 'user-1', appSlug: 'budget-tracker', role: 'owner' },
+      },
+      memberQueryByUserId: {
+        'user-1': [{ accountId: 'acc-1', userId: 'user-1', appSlug: 'budget-tracker', role: 'owner' }],
+      },
+      updates,
+    });
+    const res = await handler(event(
+      '/api/user/active-accounts/{appSlug}',
+      'PUT',
+      {
+        pathParameters: { appSlug: 'budget-tracker' },
+        body: { accountId: 'acc-1' },
+        userId: 'user-1',
+      },
+    )) as { statusCode: number; body: string };
+
+    expect(res.statusCode).toBe(200);
+    // Two writes, in order: idempotent map-init guard, then the nested per-app set.
+    // The init must come first — a bare nested set throws ValidationException when
+    // the parent map is absent.
+    expect(updates).toHaveLength(2);
+    expect(updates[0]!.UpdateExpression).toContain('if_not_exists(activeAccounts');
+    expect(updates[1]!.UpdateExpression).toContain('activeAccounts.#app');
   });
 });
 

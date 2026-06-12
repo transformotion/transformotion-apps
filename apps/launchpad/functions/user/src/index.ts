@@ -267,6 +267,19 @@ export function createHandler(deps: HandlerDeps) {
     }
 
     const now = new Date().toISOString();
+
+    // Ensure the `activeAccounts` map exists before the nested-path write below.
+    // A nested SET (`activeAccounts.#app`) throws ValidationException ("document
+    // path … invalid for update") when the parent map is absent — which it is
+    // for users provisioned before `activeAccounts` was initialized (#435).
+    // This idempotent step lets those users self-heal on their first switch.
+    await ddb.send(new UpdateCommand({
+      TableName: usersTable,
+      Key: { userId },
+      UpdateExpression: 'SET activeAccounts = if_not_exists(activeAccounts, :empty)',
+      ExpressionAttributeValues: { ':empty': {} },
+    }));
+
     await ddb.send(new UpdateCommand({
       TableName: usersTable,
       Key: { userId },
