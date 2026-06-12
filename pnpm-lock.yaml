@@ -264,6 +264,9 @@ importers:
       typescript:
         specifier: 5.7.3
         version: 5.7.3
+      vitest:
+        specifier: ^3
+        version: 3.2.4(@types/node@22.19.17)(jsdom@29.1.1)(lightningcss@1.32.0)
 
   apps/budget-tracker/functions/ai-proxy:
     dependencies:
@@ -317,6 +320,9 @@ importers:
       '@transformotion/budget-domain':
         specifier: workspace:*
         version: link:../../../../packages/budget-domain
+      '@transformotion/fn-account-membership':
+        specifier: workspace:*
+        version: link:../../../../packages/fn-account-membership
       '@transformotion/lambda-middleware':
         specifier: workspace:*
         version: link:../../../../packages/lambda-middleware
@@ -370,6 +376,9 @@ importers:
       '@transformotion/budget-domain':
         specifier: workspace:*
         version: link:../../../../packages/budget-domain
+      '@transformotion/fn-account-membership':
+        specifier: workspace:*
+        version: link:../../../../packages/fn-account-membership
       '@transformotion/lambda-middleware':
         specifier: workspace:*
         version: link:../../../../packages/lambda-middleware
@@ -398,6 +407,9 @@ importers:
       '@transformotion/budget-domain':
         specifier: workspace:*
         version: link:../../../../packages/budget-domain
+      '@transformotion/fn-account-membership':
+        specifier: workspace:*
+        version: link:../../../../packages/fn-account-membership
       '@transformotion/lambda-middleware':
         specifier: workspace:*
         version: link:../../../../packages/lambda-middleware
@@ -426,6 +438,9 @@ importers:
       '@transformotion/budget-domain':
         specifier: workspace:*
         version: link:../../../../packages/budget-domain
+      '@transformotion/fn-account-membership':
+        specifier: workspace:*
+        version: link:../../../../packages/fn-account-membership
       '@transformotion/lambda-middleware':
         specifier: workspace:*
         version: link:../../../../packages/lambda-middleware
@@ -1110,6 +1125,9 @@ importers:
       '@transformotion/contracts':
         specifier: workspace:*
         version: link:../../../../packages/contracts
+      '@transformotion/fn-account-membership':
+        specifier: workspace:*
+        version: link:../../../../packages/fn-account-membership
       '@transformotion/lambda-middleware':
         specifier: workspace:*
         version: link:../../../../packages/lambda-middleware
@@ -1132,6 +1150,9 @@ importers:
       '@transformotion/contracts':
         specifier: workspace:*
         version: link:../../../../packages/contracts
+      '@transformotion/fn-account-membership':
+        specifier: workspace:*
+        version: link:../../../../packages/fn-account-membership
       '@transformotion/lambda-middleware':
         specifier: workspace:*
         version: link:../../../../packages/lambda-middleware
@@ -1381,6 +1402,25 @@ importers:
       typescript:
         specifier: '*'
         version: 5.7.3
+
+  packages/fn-account-membership:
+    dependencies:
+      '@transformotion/lambda-middleware':
+        specifier: workspace:*
+        version: link:../lambda-middleware
+    devDependencies:
+      '@aws-sdk/lib-dynamodb':
+        specifier: ^3
+        version: 3.1032.0(@aws-sdk/client-dynamodb@3.1032.0)
+      '@types/node':
+        specifier: ^22
+        version: 22.19.17
+      typescript:
+        specifier: '*'
+        version: 5.7.3
+      vitest:
+        specifier: ^1
+        version: 1.6.1(@types/node@22.19.17)(jsdom@29.1.1)(lightningcss@1.32.0)
 
   packages/fn-ai-proxy-core:
     dependencies:

@@ -21,6 +21,29 @@ import {
 import { ConfirmationModal } from "@transformotion/ui-primitives"
 import { useBudgetStore, type BudgetTabId } from "@/stores/budget-tracker/use-budget-store"
 import { useAuthStore } from "@/stores/auth/use-auth-store"
+import { useActiveAccountStore } from "@/stores/active-account/use-active-account-store"
+
+// Account switcher backed by the control-plane active-account store (D7).
+// Switching PUTs the selection then reloads so every account-scoped surface
+// re-fetches with the new X-Account-Id.
+function useAccountSwitcher() {
+  const storeAccounts = useActiveAccountStore((s) => s.accounts)
+  const activeId = useActiveAccountStore((s) => s.activeAccountId)
+  const switchTo = useActiveAccountStore((s) => s.switchTo)
+
+  const accounts = storeAccounts.map((a) => ({ id: a.accountId, name: a.name ?? a.accountId }))
+  const currentAccount = accounts.find((a) => a.id === activeId) ?? null
+  const switchAccount = async (id: string) => {
+    if (id === activeId) return
+    try {
+      await switchTo(id)
+      if (typeof window !== "undefined") window.location.reload()
+    } catch {
+      /* store reverted + logged; stay on current account */
+    }
+  }
+  return { accounts, currentAccount, switchAccount }
+}
 
 // ============================================================================
 // NAV ITEMS CONFIG
@@ -83,9 +106,7 @@ export function BudgetUserHeader({
   onSignOut?: () => void
 }) {
   const user = useAuthStore((s) => s.user)
-  const accounts = useAuthStore((s) => s.accounts)
-  const currentAccount = useAuthStore((s) => s.currentAccount)
-  const switchAccount = useAuthStore((s) => s.switchAccount)
+  const { accounts, currentAccount, switchAccount } = useAccountSwitcher()
   const [accountMenuOpen, setAccountMenuOpen] = useState(false)
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
   const [signOutConfirm, setSignOutConfirm] = useState(false)
@@ -206,9 +227,7 @@ export function BudgetDesktopSidebar({
   const setActiveTab = useBudgetStore((s) => s.setActiveTab)
   const uncategorizedCount = useBudgetStore((s) => s.uncategorizedCount)
   const user = useAuthStore((s) => s.user)
-  const accounts = useAuthStore((s) => s.accounts)
-  const currentAccount = useAuthStore((s) => s.currentAccount)
-  const switchAccount = useAuthStore((s) => s.switchAccount)
+  const { accounts, currentAccount, switchAccount } = useAccountSwitcher()
   const [accountMenuOpen, setAccountMenuOpen] = useState(false)
   const [signOutConfirm, setSignOutConfirm] = useState(false)
 
