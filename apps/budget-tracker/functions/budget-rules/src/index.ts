@@ -12,9 +12,7 @@ import {
   getPathParam,
   ok,
   notFound,
-  requireAppAccess,
-  requireAccountAccess,
-  requireAccountWrite,
+  requireAccountData,
   type APIGatewayProxyEvent,
 } from '@transformotion/lambda-middleware';
 import { dynamoMembershipLoader } from '@transformotion/fn-account-membership';
@@ -128,17 +126,18 @@ async function deleteRule(accountId: string, ruleId: string) {
 }
 
 // ── Handler ───────────────────────────────────────────────────────────────────
+const btData = requireAccountData('budget-tracker');
+
 export const handler = withAuth(async ({ auth, account, event }) => {
-  requireAppAccess(auth, 'budget-tracker');
-  requireAccountAccess(auth, 'budget-tracker', account.accountId);
   const { accountId } = account;
+  btData.read(auth, accountId); // D9 read tier (claims membership; viewer allowed)
   const method   = event.httpMethod;
   const resource = event.resource ?? '';
 
   if (resource === '/api/budget/v1/rules' && method === 'GET')  return listRules(accountId);
 
-  // Writes below — D8 live membership-row check (viewer/disabled/removed → 403).
-  await requireAccountWrite(auth, 'budget-tracker', accountId, membershipLoader);
+  // Writes below — D9 write tier: live membership-row check (viewer/disabled/removed → 403).
+  await btData.write(auth, accountId, membershipLoader);
 
   if (resource === '/api/budget/v1/rules' && method === 'POST') return createRule(event, accountId);
 

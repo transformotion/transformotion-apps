@@ -1,7 +1,17 @@
-import { withAuth, requireAppAccess, requireAccountAccess } from '@transformotion/lambda-middleware';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
+import { withAuth, requireAccountData } from '@transformotion/lambda-middleware';
+import { dynamoMembershipLoader } from '@transformotion/fn-account-membership';
 import { reviewStart } from './review-start';
 import { runReviewWorker, type ReviewWorkerPayload } from './review-worker';
 import { csvAnalysis } from './csv-analysis';
+
+// D9 + ruling #1 (route-classification §5): the AI routes are member-tier ACTIONS
+// (run AI over the caller's transactions, write a job row, consume provider cost),
+// so they take the WRITE tier — claims + live membership row, viewer rejected.
+const btData = requireAccountData('budget-tracker');
+const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+const membershipLoader = dynamoMembershipLoader(ddb, process.env.ACCOUNT_MEMBERS_TABLE!);
 
 // ── Handler ───────────────────────────────────────────────────────────────────
 //
@@ -20,8 +30,7 @@ export const handler = async (event: unknown) => {
 
   // Normal HTTP path
   return withAuth(async ({ auth, account, event: apiEvent }) => {
-    requireAppAccess(auth, 'budget-tracker');
-    requireAccountAccess(auth, 'budget-tracker', account.accountId);
+    await btData.write(auth, account.accountId, membershipLoader);
     const resource = apiEvent.resource ?? '';
 
     if (resource === '/api/budget/v1/ai/review')       return reviewStart(auth, account.accountId, apiEvent);

@@ -14,9 +14,7 @@ import {
   getQueryParam,
   ok,
   notFound,
-  requireAppAccess,
-  requireAccountAccess,
-  requireAccountWrite,
+  requireAccountData,
   type APIGatewayProxyEvent,
 } from '@transformotion/lambda-middleware';
 import { dynamoMembershipLoader } from '@transformotion/fn-account-membership';
@@ -178,18 +176,19 @@ async function deleteTransaction(accountId: string, transactionId: string) {
 }
 
 // ── Handler ───────────────────────────────────────────────────────────────────
+const btData = requireAccountData('budget-tracker');
+
 export const handler = withAuth(async ({ auth, account, event }) => {
-  requireAppAccess(auth, 'budget-tracker');
-  requireAccountAccess(auth, 'budget-tracker', account.accountId);
   const { accountId } = account;
+  btData.read(auth, accountId); // D9 read tier (claims membership; viewer allowed)
   const method   = event.httpMethod;
   const resource = event.resource ?? '';
 
   if (resource === '/api/budget/v1/transactions'      && method === 'GET')  return listTransactions(event, accountId);
 
-  // Everything below mutates account data → D8 live membership-row check
-  // (viewer/disabled/removed → 403; fail closed on missing row or loader error).
-  await requireAccountWrite(auth, 'budget-tracker', accountId, membershipLoader);
+  // Everything below mutates account data → D9 write tier: live membership-row
+  // check (viewer/disabled/removed → 403; fail closed on missing row or loader error).
+  await btData.write(auth, accountId, membershipLoader);
 
   if (resource === '/api/budget/v1/transactions/bulk' && method === 'POST') return bulkUpsert(event, accountId);
 

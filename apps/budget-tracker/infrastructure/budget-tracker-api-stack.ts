@@ -235,6 +235,7 @@ export class BudgetTrackerApiStack extends cdk.Stack {
     }));
     aiJobsTable.grantReadWriteData(aiFn);
     wsConnectionsTable.grantReadData(aiFn);
+    grantMembershipRead(aiFn); // D9 member-tier (ruling #1) — live membership-row check
     // grantReadData on a Table imported via fromTableName covers the base table ARN but not GSI ARNs,
     // because CDK has no schema knowledge of imported tables. Explicit grant for the userId-index GSI
     // used by the connectionId lookup (budget-ai-handler queries by userId to find the caller's WSS connectionId).

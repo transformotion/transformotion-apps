@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@transformotion/budget-domain": "workspace:*",
+    "@transformotion/fn-account-membership": "workspace:*",
     "@transformotion/lambda-middleware": "workspace:*"
   },
   "devDependencies": {

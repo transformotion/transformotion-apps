@@ -10,25 +10,25 @@ import {
   parseBody,
   ok,
   badRequest,
-  requireAppAccess,
-  requireAccountAccess,
-  requireAccountWrite,
+  requireAccountData,
 } from '@transformotion/lambda-middleware';
 import { dynamoMembershipLoader } from '@transformotion/fn-account-membership';
 import type { PortfolioHolding } from './types';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const TABLE = process.env.PORTFOLIO_TABLE!;
+// D9 data-tier gate (no site-admin branch): .read = claims-only (viewer allowed);
+// .write = claims + live membership-row read (viewer/disabled/removed → 403).
+const saData = requireAccountData('stock-analyser');
 // D8 write-path membership loader (scoped GetItem on launchpad-account-members).
 const membershipLoader = dynamoMembershipLoader(ddb, process.env.ACCOUNT_MEMBERS_TABLE!);
 
 export const handler = withAuth(async ({ auth, account, event }) => {
-  requireAppAccess(auth, 'stock-analyser');
-  requireAccountAccess(auth, 'stock-analyser', account.accountId);
   const { accountId } = account;
 
   // ── GET /portfolio ──────────────────────────────────────────────────────── (read: claims-only)
   if (event.httpMethod === 'GET') {
+    saData.read(auth, accountId);
     const res = await ddb.send(new QueryCommand({
       TableName: TABLE,
       KeyConditionExpression: 'accountId = :aid',
@@ -40,9 +40,9 @@ export const handler = withAuth(async ({ auth, account, event }) => {
   }
 
   // ── PUT /portfolio ──────────────────────────────────────────────────────── (write: live row check)
-  // D8: claims + live membership-row read. Rejects viewer/disabled/removed and
-  // fails closed on a loader error. Reads above stay claims-only.
-  await requireAccountWrite(auth, 'stock-analyser', accountId, membershipLoader);
+  // D9 write tier: claims + live membership-row read. Rejects viewer/disabled/
+  // removed and fails closed on a loader error. Reads above stay claims-only.
+  await saData.write(auth, accountId, membershipLoader);
 
   const { holdings } = parseBody<{ holdings: PortfolioHolding[] }>(event);
 

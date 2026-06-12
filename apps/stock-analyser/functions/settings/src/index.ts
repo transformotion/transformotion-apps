@@ -5,8 +5,7 @@ import {
   noContent,
   ok,
   parseBody,
-  requireAccountAccess,
-  requireAppAccess,
+  requireAccountData,
   requireSiteAdmin,
   withAuth,
   type APIGatewayProxyEvent,
@@ -214,26 +213,35 @@ async function resetOverride(deps: Dependencies, accountId: string) {
   return noContent();
 }
 
-export function createHandler(deps: Dependencies = defaultDependencies) {
+  // D9 data-tier gate (no site-admin branch). Settings rows are D12 user-scoped
+  // (SK=USER#{userId}#PREFERENCES): a viewer MAY read AND write their OWN prefs,
+  // so both /settings GET and PATCH use .read (membership) — the handler keys by
+  // auth.userId, enforcing the SK-owner match by construction.
+  const saData = requireAccountData(APP_SLUG);
   return withAuth(async ({ auth, account, event }) => {
-    requireAppAccess(auth, APP_SLUG);
-    requireAccountAccess(auth, APP_SLUG, account.accountId);
-
     const resource = event.resource ?? '';
     if (resource === '/settings' && event.httpMethod === 'GET') {
+      saData.read(auth, account.accountId);
       return readSettings(deps, account.accountId, auth.userId);
     }
     if (resource === '/settings' && event.httpMethod === 'PATCH') {
+      saData.read(auth, account.accountId); // D12 user-scoped own-prefs write — viewer permitted
       return patchSettings(deps, event, account.accountId, auth.userId);
     }
     if (resource === '/ai-config' && event.httpMethod === 'GET') {
+      saData.read(auth, account.accountId);
       return readAiConfig(deps, account.accountId);
     }
+    // /ai-config/override is operational-config (D9) — site-admin write of an
+    // account-shared config row. Interim: preserve current behaviour (member +
+    // site-admin). PR-C rehomes this to app-level config gated by app-admin.
     if (resource === '/ai-config/override' && event.httpMethod === 'PUT') {
+      saData.read(auth, account.accountId);
       requireSiteAdmin(auth);
       return updateOverride(deps, event, account.accountId);
     }
     if (resource === '/ai-config/override' && event.httpMethod === 'DELETE') {
+      saData.read(auth, account.accountId);
       requireSiteAdmin(auth);
       return resetOverride(deps, account.accountId);
     }

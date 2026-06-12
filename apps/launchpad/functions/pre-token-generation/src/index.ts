@@ -122,7 +122,6 @@ async function reconcileInvariant(
   userPoolId: string,
   currentGroups: string[],
   accountsByApp: Record<string, Array<{ accountId: string; role: string }>>,
-  isSiteAdmin: boolean,
 ): Promise<string[]> {
   const groups = [...currentGroups];
 
@@ -131,8 +130,11 @@ async function reconcileInvariant(
     const hasAccounts = (accountsByApp[slug]?.length ?? 0) > 0;
     const inGroup = groups.includes(accessGroup);
 
-    // D11 item 1 NOTE: site-admin override removal (isSiteAdmin bypass on the
-    // !hasAccounts branch) is Phase 5 work. It is intentionally NOT removed here.
+    // D11 item 1 (Phase 5): the site-admin override is REMOVED — the invariant
+    // (group membership ⇔ ≥1 account for the app) applies uniformly. A site-admin
+    // with no accounts for an app is removed from its access group like anyone
+    // else; site-admin's supervisory power rides the site_admin claim, not
+    // app-access groups.
     if (hasAccounts && !inGroup) {
       console.log(`[launchpad-pre-token] reconcile: adding ${userId} to ${accessGroup}`);
       try {
@@ -145,7 +147,7 @@ async function reconcileInvariant(
       } catch (err) {
         console.error(`[launchpad-pre-token] reconcile: failed to add ${userId} to ${accessGroup}:`, err);
       }
-    } else if (!hasAccounts && inGroup && !isSiteAdmin) {
+    } else if (!hasAccounts && inGroup) {
       console.log(`[launchpad-pre-token] reconcile: removing ${userId} from ${accessGroup}`);
       try {
         await cognito.send(new AdminRemoveUserFromGroupCommand({
@@ -164,8 +166,11 @@ async function reconcileInvariant(
   return groups;
 }
 
-function buildAppsList(reconciledGroups: string[], isSiteAdmin: boolean): string[] {
-  if (isSiteAdmin) return [...APP_SLUGS];
+function buildAppsList(reconciledGroups: string[]): string[] {
+  // D11 item 1 (Phase 5): no site-admin all-apps shortcut — the apps claim
+  // reflects the reconciled (membership-derived) access groups uniformly. A
+  // site-admin without membership does not receive app-data access; supervisory
+  // surfaces are driven by the site_admin claim, not the apps claim.
   return APP_SLUGS.filter(slug => reconciledGroups.includes(ACCESS_GROUP[slug]));
 }
 
@@ -198,7 +203,6 @@ export const handler = async (
       userPoolId,
       currentGroups,
       accountsByApp,
-      isSiteAdmin,
     );
 
     // M16 D8: app_admin claim — array of appSlugs where user is app-admin
@@ -207,7 +211,7 @@ export const handler = async (
       .filter(slug => APP_SLUGS.includes(slug));
 
     const claims: Record<string, string> = {
-      apps: JSON.stringify(buildAppsList(reconciledGroups, isSiteAdmin)),
+      apps: JSON.stringify(buildAppsList(reconciledGroups)),
       accounts: JSON.stringify(accountsByApp),
       site_admin: String(isSiteAdmin),
       app_admin: JSON.stringify(appAdminSlugs),

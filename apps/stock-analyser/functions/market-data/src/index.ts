@@ -4,12 +4,14 @@ import {
   withAuth,
   ok,
   badRequest,
-  requireAppAccess,
-  requireAccountAccess,
+  requireAccountData,
   HttpError,
 } from '@transformotion/lambda-middleware';
 import { fetchOhlcv } from '../../_shared/market-data-fetcher';
 
+// D9 data-tier gate (no site-admin branch). market-data is a READ of shared
+// market data; a viewer member may read it.
+const saData = requireAccountData('stock-analyser');
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const TABLE    = process.env.ANALYSIS_CACHE_TABLE!;
 const SHARED   = 'SHARED';
@@ -19,8 +21,7 @@ const VALID_RANGES    = new Set(['1mo', '3mo', '6mo', '1y', '5y', 'max']);
 const VALID_INTERVALS = new Set(['1d', '1wk', '1mo']);
 
 export const handler = withAuth(async ({ auth, account, event }) => {
-  requireAppAccess(auth, 'stock-analyser');
-  requireAccountAccess(auth, 'stock-analyser', account.accountId);
+  saData.read(auth, account.accountId);
 
   const { ticker, range = '1y', interval = '1d' } = event.queryStringParameters ?? {};
   if (!ticker) throw badRequest('ticker is required');

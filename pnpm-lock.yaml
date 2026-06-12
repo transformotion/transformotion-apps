@@ -289,6 +289,9 @@ importers:
       '@transformotion/budget-domain':
         specifier: workspace:*
         version: link:../../../../packages/budget-domain
+      '@transformotion/fn-account-membership':
+        specifier: workspace:*
+        version: link:../../../../packages/fn-account-membership
       '@transformotion/lambda-middleware':
         specifier: workspace:*
         version: link:../../../../packages/lambda-middleware
@@ -1053,6 +1056,9 @@ importers:
 
   apps/stock-analyser/functions/analysis-cache:
     dependencies:
+      '@transformotion/fn-account-membership':
+        specifier: workspace:*
+        version: link:../../../../packages/fn-account-membership
       '@transformotion/lambda-middleware':
         specifier: workspace:*
         version: link:../../../../packages/lambda-middleware
@@ -1273,6 +1279,9 @@ importers:
       '@transformotion/budget-domain':
         specifier: workspace:*
         version: link:../../../packages/budget-domain
+      '@transformotion/fn-account-membership':
+        specifier: workspace:*
+        version: link:../../../packages/fn-account-membership
       '@transformotion/lambda-middleware':
         specifier: workspace:*
         version: link:../../../packages/lambda-middleware
@@ -1298,6 +1307,9 @@ importers:
       '@transformotion/budget-domain':
         specifier: workspace:*
         version: link:../../../packages/budget-domain
+      '@transformotion/fn-account-membership':
+        specifier: workspace:*
+        version: link:../../../packages/fn-account-membership
       '@transformotion/lambda-middleware':
         specifier: workspace:*
         version: link:../../../packages/lambda-middleware

@@ -69,9 +69,9 @@ This table is the **security-review artifact** for the site-admin-bypass removal
 | `GET /api/user/active-accounts` | user | withAuthOnly | `auth-only` (self) | own selections (D7) | Confirmed | PR-B (doc only) |
 | `PUT /api/user/active-accounts/{appSlug}` | user | withAuthOnly + table membership verify | `auth-only` (self) + membership verify (D7) | self-service; verifies own membership | Confirmed | PR-B (doc only) |
 | `POST /accounts` | accounts | withAuth | `auth-only` (creator-owns) | **withAuth requires X-Account-Id to CREATE an account — see ruling #4** | Status-uncertain | verify |
-| `GET /accounts/{accountId}` | accounts | withAuth + ad-hoc `members.some` | `requireAccountAdmin(account-member)` | account metadata; used by app selectors | **see ruling #3** | PR-B |
-| `GET /accounts/{accountId}/members` | accounts | withAuth + ad-hoc `members.some` | `requireAccountAdmin(account-member)` | member list | **see ruling #3** | PR-B |
-| `PUT /accounts/{accountId}` | accounts | withAuth + ad-hoc `ownerId===userId` | `requireAccountAdmin(owner-or-manager)` | account settings | **see ruling #2** (manager scope) | PR-B |
+| `GET /accounts/{accountId}` | accounts | withAuth + ad-hoc `members.some` | `requireAccountAdmin(account-member)` | account metadata; used by app selectors | **ruling #3: any member** | **Phase 6** † |
+| `GET /accounts/{accountId}/members` | accounts | withAuth + ad-hoc `members.some` | `requireAccountAdmin(account-member)` | member list | **ruling #3: any member** | **Phase 6** † |
+| `PUT /accounts/{accountId}` | accounts | withAuth + ad-hoc `ownerId===userId` | `requireAccountAdmin(account-owner-or-manager)` | account settings | **ruling #2: owner-or-manager** | **Phase 6** † |
 | `DELETE /accounts/{accountId}` | accounts | withAuth + ad-hoc owner | `requireAccountAdmin(owner)` + sole-owner deletion (D9 §9.3) | destructive | Status-uncertain-resolved | **Phase 6** (mutation) |
 | `DELETE /accounts/{accountId}/members/{userId}` | accounts | withAuth + ad-hoc | `requireAccountAdmin(anyOf(owner-or-manager + last-owner-guard, supervisory-site-admin))` | remove member | Aspirational (manager-removal rules never built) | **Phase 6** (mutation) |
 | `POST /accounts/{accountId}/invitations` | invitations | withAuth + ad-hoc `ownerId===userId` | `requireAccountAdmin(owner-or-manager / canCreateInvitationGrant)` | legacy single-invite | Aspirational (owner/manager in-app invite never built) | **Phase 8** (bundles) |
@@ -79,6 +79,8 @@ This table is the **security-review artifact** for the site-admin-bypass removal
 | `GET /api/admin/ai-runtime-config` | ai-runtime-config | requireSiteAdmin | `operational-config` (supervisory-site-admin read) | platform AI config | Confirmed | PR-B / PR-C |
 | `PUT …/ai-runtime-config/platform-default` | ai-runtime-config | requireSiteAdmin | `operational-config` (site-admin **default**, D9) | platform default | Confirmed | PR-B / PR-C |
 | `PUT/DELETE …/ai-runtime-config/apps/{appSlug}/override` | ai-runtime-config | requireSiteAdmin | `operational-config` → **app-admin override** (D9) | per-app override | Status-uncertain-resolved | **PR-C** |
+
+> **† PR-B scope boundary (launchpad `accounts` handler).** The `accounts` Lambda co-locates the read/settings routes above with the **member-management mutation** routes (`removeMember`, `deleteAccount`) that are explicitly **Phase 6**, plus `createAccount`. Migrating it onto `requireAccountAdmin` is done as **one coherent pass in Phase 6** rather than partially in PR-B, to avoid touching the Phase-6 mutation paths in this security PR. Its current ad-hoc checks (`ownerId===userId`, `members.some`) are **not** a site-admin bypass — they already gate on ownership/membership — so the D9 site-admin-bypass-removal goal is fully met by PR-B without them. The rulings above are recorded as the authority for that Phase-6 migration. `access-summary` (site-admin) and the `/api/user/*` self routes ARE correct as-is and need no migration.
 
 ## 4. Non-REST-route functions (no route classification; documented for completeness)
 
@@ -92,17 +94,17 @@ This table is the **security-review artifact** for the site-admin-bypass removal
 
 ---
 
-## 5. Needs owner ruling (HOLD — bulk migration proceeds on the rest)
+## 5. Owner rulings — RESOLVED (2026-06-12)
 
-> Per instruction: routes that resist clean classification are listed here for adjudication; everything else is classified and ready to migrate.
+> Adjudicated by owner before the bulk migration. Recorded here as the authority for PR-B.
 
-1. **BT AI routes — `POST /ai/review`, `POST /ai/csv-analysis` (budget-ai).** These are **actions** (run AI over the caller's transactions, stream suggestions, create a job row keyed by account) — neither a pure read nor an account-data mutation. They fit neither `.read` (a POST that creates a job) nor cleanly `.write` (they don't mutate stored account data, but gating as write **excludes viewers** from a read-like analysis). **Ruling needed:** is running AI review a **member-tier action** (viewer excluded → `requireAccountData.write` semantics: claims + live row, viewer-reject) or a **viewer-permitted read-like op** (`requireAccountData.read`)? *Recommendation: member-tier (`.write`) — it consumes provider cost and writes a job row; viewers stay read-only.* Marked HOLD pending your call.
+1. **BT AI routes — `POST /ai/review`, `POST /ai/csv-analysis` (budget-ai).** **RULING: member-tier (`requireAccountData.write` semantics)** — claims + live membership row, **viewer rejected**. Running AI consumes provider cost and writes a job row; viewers stay read-only. *Implementation note: budget-ai gains a membership loader + `dynamodb:GetItem` grant on `launchpad-account-members-{stage}` (it previously had claims only).*
 
-2. **`PUT /accounts/{accountId}` (updateAccount) — manager scope.** Code today is **owner-only** (ad-hoc `ownerId===userId`). Matrix §6.3 "Change account settings" = owner **Yes**, manager **"Yes, if allowed"** — the "if allowed" product rule is undefined. **Ruling needed:** may a **manager** edit account settings, or owner-only? *Recommendation: owner-or-manager (matrix default), but confirm.*
+2. **`PUT /accounts/{accountId}` (updateAccount).** **RULING: owner-or-manager** → `requireAccountAdmin(account-owner-or-manager)`. Managers may edit account settings (matrix default).
 
-3. **`GET /accounts/{accountId}` and `GET …/members` — visibility tier.** Code today allows **any member** to read account metadata + the member list. The matrix is silent on plain-member member-list visibility (only "view users known through managed accounts" = owner/manager). The bundle-visibility rule (D9) says a member list *may* be shown but doesn't say to whom. **Ruling needed:** is the member list visible to **any member** (current) or **owner/manager only**? *Recommendation: any active member can view their own account's members (account-member); confirm.*
+3. **`GET /accounts/{accountId}` and `GET …/members`.** **RULING: any active member** → `requireAccountAdmin(account-member)`. Any active member may view their account's metadata + member list.
 
-4. **`POST /accounts` under `withAuth` (createAccount).** `withAuth` resolves and requires an `X-Account-Id` header — but creating a *new* account has no existing account context. **Verify:** does this route actually require a (stale/arbitrary) `X-Account-Id` to create an account? If so it is a latent bug (should be `withAuthOnly`). Flagged for verification during migration; not blocking.
+4. **`POST /accounts` under `withAuth` (createAccount).** Verify during migration whether account creation wrongly requires an `X-Account-Id` (should be `withAuthOnly`). Not a policy ruling — a code-fact check; if confirmed a latent bug, fix in PR-B, else note.
 
 ---
 

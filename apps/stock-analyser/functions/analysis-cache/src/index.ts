@@ -8,13 +8,17 @@ import {
   noContent,
   notFound,
   badRequest,
-  requireAppAccess,
-  requireAccountAccess,
+  requireAccountData,
 } from '@transformotion/lambda-middleware';
+import { dynamoMembershipLoader } from '@transformotion/fn-account-membership';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const TABLE             = process.env.CACHE_TABLE!;
 const JOB_RESULTS_TABLE = process.env.JOB_RESULTS_TABLE!;
+// D9 data-tier gate (no site-admin branch): GET = .read (viewer allowed);
+// PUT/DELETE = .write (claims + live membership row, viewer/disabled/removed → 403).
+const saData = requireAccountData('stock-analyser');
+const membershipLoader = dynamoMembershipLoader(ddb, process.env.ACCOUNT_MEMBERS_TABLE!);
 
 // Special partition key used for data shared across all accounts.
 // Market analysis, recommendations, ETFs, metals, and stock analyses
@@ -79,14 +83,13 @@ function resolveWriteAccountId(cacheKey: string, fallbackAccountId: string, clie
 }
 
 export const handler = withAuth(async ({ auth, account, event }) => {
-  requireAppAccess(auth, 'stock-analyser');
-  requireAccountAccess(auth, 'stock-analyser', account.accountId);
   const { accountId } = account;
   // URL-decode the key so clients can send MARKET%23Global and the DDB key is MARKET#Global.
   const cacheKey = decodeURIComponent(getPathParam(event, 'key'));
 
   // ── GET /analysis-cache/{key} ─────────────────────────────────────────────
   if (event.httpMethod === 'GET') {
+    saData.read(auth, accountId);
     // job-* keys are app-owned async job records written by the SA AI proxy.
     // After #366 they live in stock-analyser.job-results-{stage}; platform
     // job-results may exist only as legacy/rollback until #372.
@@ -122,6 +125,7 @@ export const handler = withAuth(async ({ auth, account, event }) => {
 
   // ── DELETE /analysis-cache/{key} ──────────────────────────────────────────
   if (event.httpMethod === 'DELETE') {
+    await saData.write(auth, accountId, membershipLoader);
     // Delete from both partitions in case legacy items exist
     await Promise.allSettled([
       ddb.send(new DeleteCommand({ TableName: TABLE, Key: { accountId: SHARED, cacheKey } })),
@@ -132,6 +136,7 @@ export const handler = withAuth(async ({ auth, account, event }) => {
   }
 
   // ── PUT /analysis-cache/{key} ─────────────────────────────────────────────
+  await saData.write(auth, accountId, membershipLoader);
   const {
     data,
     ttlSeconds,

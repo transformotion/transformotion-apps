@@ -10,25 +10,24 @@ import {
   parseBody,
   ok,
   badRequest,
-  requireAppAccess,
-  requireAccountAccess,
-  requireAccountWrite,
+  requireAccountData,
 } from '@transformotion/lambda-middleware';
 import { dynamoMembershipLoader } from '@transformotion/fn-account-membership';
 import type { WatchlistItem } from './types';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const TABLE = process.env.WATCHLIST_TABLE!;
+// D9 data-tier gate (no site-admin branch): .read claims-only / .write claims + row.
+const saData = requireAccountData('stock-analyser');
 // D8 write-path membership loader (scoped GetItem on launchpad-account-members).
 const membershipLoader = dynamoMembershipLoader(ddb, process.env.ACCOUNT_MEMBERS_TABLE!);
 
 export const handler = withAuth(async ({ auth, account, event }) => {
-  requireAppAccess(auth, 'stock-analyser');
-  requireAccountAccess(auth, 'stock-analyser', account.accountId);
   const { accountId } = account;
 
   // ── GET /watchlist ──────────────────────────────────────────────────────── (read: claims-only)
   if (event.httpMethod === 'GET') {
+    saData.read(auth, accountId);
     const res = await ddb.send(new QueryCommand({
       TableName: TABLE,
       KeyConditionExpression: 'accountId = :aid',
@@ -40,7 +39,7 @@ export const handler = withAuth(async ({ auth, account, event }) => {
   }
 
   // ── PUT /watchlist ──────────────────────────────────────────────────────── (write: live row check)
-  await requireAccountWrite(auth, 'stock-analyser', accountId, membershipLoader);
+  await saData.write(auth, accountId, membershipLoader);
 
   const { items } = parseBody<{ items: WatchlistItem[] }>(event);
 

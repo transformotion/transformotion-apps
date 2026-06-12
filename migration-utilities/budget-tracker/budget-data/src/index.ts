@@ -25,13 +25,19 @@ import {
   UpdateCommand,
   GetCommand,
 } from '@aws-sdk/lib-dynamodb';
-import { withAuth, parseBody, ok, requireAppAccess, requireAccountAccess } from '@transformotion/lambda-middleware';
+import { withAuth, parseBody, ok, requireAccountData } from '@transformotion/lambda-middleware';
+import { dynamoMembershipLoader } from '@transformotion/fn-account-membership';
 import { randomUUID } from 'crypto';
 import type { Category, Subcategory } from '@transformotion/budget-domain';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const TRANSACTIONS_TABLE = process.env.TRANSACTIONS_TABLE!;
 const RULES_TABLE        = process.env.RULES_TABLE!;
+// D9: this import writes account data → write tier (live membership row; viewer/
+// disabled/removed → 403). No site-admin bypass — a migration is a data write
+// and requires account membership like any other write.
+const btData = requireAccountData('budget-tracker');
+const membershipLoader = dynamoMembershipLoader(ddb, process.env.ACCOUNT_MEMBERS_TABLE!);
 const SETTINGS_TABLE     = process.env.SETTINGS_TABLE!;
 const BUDGET_DATA_TABLE  = process.env.BUDGET_DATA_TABLE!;
 
@@ -309,8 +315,7 @@ function resolveSubcategoryId(
 // ── Handler ───────────────────────────────────────────────────────────────────
 
 export const handler = withAuth(async ({ auth, account, event }) => {
-  requireAppAccess(auth, 'budget-tracker');
-  requireAccountAccess(auth, 'budget-tracker', account.accountId);
+  await btData.write(auth, account.accountId, membershipLoader);
   const { accountId } = account;
 
   const body = parseBody<{ dryRun?: boolean }>(event);
