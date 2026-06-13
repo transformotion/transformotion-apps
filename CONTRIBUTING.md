@@ -47,9 +47,10 @@ make the trade-off visible.
   platform level, not just per-app.
 
 - **Goal 4 — Invite people in based on the permissions model.** The
-  multi-dimensional permission model (app access via Cognito groups;
-  account membership and role via DynamoDB) is the canonical way users
-  reach app data. Invitation flows, account switching, and role
+  multi-dimensional permission model (app access **derives from account
+  membership**, with Cognito groups maintained as a projection of that
+  membership; account membership and role via DynamoDB) is the canonical
+  way users reach app data. Invitation flows, account switching, and role
   enforcement are first-class platform capabilities, not app-specific
   features.
 
