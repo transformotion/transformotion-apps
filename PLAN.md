@@ -1380,7 +1380,7 @@ Can run in parallel with M7 once M2.1 lands. Migration depends on infrastructure
 **Design baseline** (read before any implementation work):
 
 - [`docs/transformotion-user-account-permissions-model.md`](./docs/transformotion-user-account-permissions-model.md) — canonical product/permission model (entities, roles, policy matrix, invitation/redemption lifecycle).
-- [`docs/adr-m16-runtime-architecture.md`](./docs/adr-m16-runtime-architecture.md) — M16 runtime architecture decision document (D1–D11, all confirmed 2026-06-11). Milestone-scoped per CONTRIBUTING §10; decisions ratified into `docs/architecture/auth.md` and `docs/architecture/data.md` as implementing PRs land.
+- [`docs/adr-m16-runtime-architecture.md`](./docs/adr-m16-runtime-architecture.md) — M16 runtime architecture decision document (D1–D11, all confirmed 2026-06-11). Milestone-scoped per CONTRIBUTING §11; decisions ratified into `docs/architecture/auth.md` and `docs/architecture/data.md` as implementing PRs land.
 - [`docs/auth-md-revision-map.md`](./docs/auth-md-revision-map.md) — per-phase normative-document update obligations for `docs/architecture/auth.md`.
 
 **v0 contract baseline:** `m16.0.0` (v0 PR #38, commit `71219385`).

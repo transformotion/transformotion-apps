@@ -1,6 +1,6 @@
 # auth.md Revision Map — M16
 
-**Purpose:** Per the discipline rule (CONTRIBUTING §2.1), every phase PR that changes documented behavior updates `docs/architecture/auth.md` in the same PR. This map pre-plans those updates so each Claude Code phase brief carries its documentation obligation explicitly. It also records, using the CONTRIBUTING §8 status-tag system, which current auth.md statements are being deliberately superseded (**Stale-by-decision**) versus suspected of never having been implemented (**Status uncertain — verify** / **Aspirational-never-built**).
+**Purpose:** Per the discipline rule (CONTRIBUTING §2.1), every phase PR that changes documented behavior updates `docs/architecture/auth.md` in the same PR. This map pre-plans those updates so each Claude Code phase brief carries its documentation obligation explicitly. It also records, using the CONTRIBUTING §9 status-tag system, which current auth.md statements are being deliberately superseded (**Stale-by-decision**) versus suspected of never having been implemented (**Status uncertain — verify** / **Aspirational-never-built**).
 
 Companion to the M16 runtime architecture decision document (ADR). Decision references (D1–D11, §9) point there.
 
@@ -46,4 +46,4 @@ Companion to the M16 runtime architecture decision document (ADR). Decision refe
 
 ## Standing instruction for phase briefs
 
-Every Claude Code phase brief for M16 includes: *"This PR changes behavior documented in auth.md sections [from the map above]. Update those sections in this PR per CONTRIBUTING §2.1. If implementation reveals the documented current state was never true, pause, tag the finding per CONTRIBUTING §8, and report before proceeding."*
+Every Claude Code phase brief for M16 includes: *"This PR changes behavior documented in auth.md sections [from the map above]. Update those sections in this PR per CONTRIBUTING §2.1. If implementation reveals the documented current state was never true, pause, tag the finding per CONTRIBUTING §9, and report before proceeding."*

@@ -4,11 +4,11 @@
 **Date:** 2026-06-12 (v1.3 — operational-config authorization category, row-class authorization in mixed partitions, and site_admin-claim-as-sole-admin-source; all three owner-confirmed) · 2026-06-11 (v1.2 — §9 items and Goal 4 amendment confirmed)
 **Goals served:** 4 primarily; 3 (per CONTRIBUTING §1.1 convention)
 **Scope:** Physical persistence, authorization mechanics, token/claims strategy, and middleware structure for the M16 runtime implementation in `transformotion/transformotion-apps`.
-**Document type:** Milestone-scoped decision document (CONTRIBUTING §10). Not itself normative; its decisions are **ratified into the normative documents** as the implementing PRs land, per the discipline rule (CONTRIBUTING §2.1):
+**Document type:** Milestone-scoped decision document (CONTRIBUTING §11). Not itself normative; its decisions are **ratified into the normative documents** as the implementing PRs land, per the discipline rule (CONTRIBUTING §2.1):
 
 - Authorization model, claims, middleware, supervisory semantics, invitations → `docs/architecture/auth.md` (per-phase section map in the companion auth.md revision map)
 - Table schemas, GSIs, denormalization rules (D1, D3–D6) → `docs/architecture/data.md`
-- Goal 4 wording in `CONTRIBUTING.md` §1.1 ("app access via Cognito groups") is amended by M16 ("app access derives from account membership"); Section 1 changes are escalated per CONTRIBUTING §10 and require explicit owner sign-off as a standalone, conscious edit.
+- Goal 4 wording in `CONTRIBUTING.md` §1.1 ("app access via Cognito groups") is amended by M16 ("app access derives from account membership"); Section 1 changes are escalated per CONTRIBUTING §11 and require explicit owner sign-off as a standalone, conscious edit.
 
 ## Relationship to canonical sources
 
@@ -198,7 +198,7 @@ App-admin per the model: app-scoped directory/metadata/member-list visibility an
 
 **Owner model supersession.** Current auth.md mandates a single-owner invariant with atomic ownership transfer and lists multi-owner as out of scope. The M16 contracts use a **last-owner guard** ("sole owner cannot be removed/demoted"), which presupposes multiple owners, and "managers cannot grant owner" implies owners can. The contracts win: multi-owner is in, the single-owner invariant, transfer-or-reject semantics, and "owner: exactly one" multiplicity are superseded. One consequence is unresolved — the sole-owner user-deletion path previously handled by site-admin ownership reassignment (a role-grant power D9 removes) — flagged in §9.
 
-**Route classification doubles as documentation verification.** auth.md describes capabilities the runtime audit did not find implemented (manager removal rules, ownership transfer, owner/manager in-app invitations, scheduled invitation expiry). While classifying every route onto the new middlewares, also record which auth.md claims are **Confirmed** vs **Aspirational-never-built** vs **Status uncertain — verify** (CONTRIBUTING §8 tags), feeding the auth.md revision map. One pass, two outputs.
+**Route classification doubles as documentation verification.** auth.md describes capabilities the runtime audit did not find implemented (manager removal rules, ownership transfer, owner/manager in-app invitations, scheduled invitation expiry). While classifying every route onto the new middlewares, also record which auth.md claims are **Confirmed** vs **Aspirational-never-built** vs **Status uncertain — verify** (CONTRIBUTING §9 tags), feeding the auth.md revision map. One pass, two outputs.
 
 **Bundle visibility rule:** an account's member list (including supervisory viewers) may show pending invites *targeting that account*; the **bundle** — which can span accounts — is visible only to its creator and the invitee. Per-account viewers must never see a bundle's other grants.
 
@@ -288,7 +288,7 @@ All three items flagged in v1.1 are confirmed, along with the Goal 4 wording ame
 1. **`admin` → `manager` mapping (D10) — confirmed.** Procedure stands: first verify whether any `admin` membership rows exist at all (the stale vocabulary may be type-level only in `packages/auth-client`). If rows exist, map `admin` → `manager`; promote specific users to `owner` manually only where warranted, by explicit owner instruction.
 2. **Site-admin search as filtered scan (D4) — confirmed.** Documented scaling ceiling stands; revisit only if site-admin user search becomes a frequent surface or user count makes scans slow.
 3. **Sole-owner user-deletion path (D9) — confirmed as option (a).** Site-admin may delete/archive the orphaned account entirely: a destructive supervisory action that never views the data and never self-escalates. No supervisory ownership-transfer exception exists. Until the deletion executes, the existing 409-while-sole-owner behavior applies. Phase 6 implements; auth.md Scenario C is updated accordingly in that PR.
-4. **Goal 4 wording amendment — sign-off recorded.** CONTRIBUTING §1.1 Goal 4 changes from "app access via Cognito groups; account membership and role via DynamoDB" to app access *deriving from account membership*, with Cognito groups maintained as a projection. The escalation requirement (CONTRIBUTING §10) is satisfied by this sign-off; the edit itself still lands as its own standalone PR, referencing this ADR, before or alongside Phase 5.
+4. **Goal 4 wording amendment — sign-off recorded.** CONTRIBUTING §1.1 Goal 4 changes from "app access via Cognito groups; account membership and role via DynamoDB" to app access *deriving from account membership*, with Cognito groups maintained as a projection. The escalation requirement (CONTRIBUTING §11) is satisfied by this sign-off; the edit itself still lands as its own standalone PR, referencing this ADR, before or alongside Phase 5.
 
 ## §10. Known costs accepted
 
