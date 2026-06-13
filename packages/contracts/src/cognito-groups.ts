@@ -6,27 +6,51 @@
  * `site-admin` Cognito group — is derived identically on both sides.
  *
  * `cognito:groups` arrives in DIFFERENT shapes depending on the path:
- *   - Cognito SDK / Amplify decoded token payload → a real `string[]`.
- *   - API Gateway REST Cognito authorizer claims map → a STRING. For a user in
- *     multiple groups this is comma- (and sometimes bracket-) joined, e.g.
- *     `"[budget-app-access,site-admin]"` or `"a,b,c"`; a single group is bare
- *     (`"site-admin"`). Some configs use spaces.
+ *   - Cognito SDK / Amplify decoded token payload, or a clean array → `string[]`.
+ *   - A JSON-stringified array string, e.g.
+ *     `'["budget-app-access","admin","site-admin","stock-app-access"]'` — the
+ *     canonical Cognito serialisation, and how the multi-group form is delivered
+ *     on dev. The inner per-element DOUBLE QUOTES are the trap: stripping only
+ *     the outer `[]` leaves tokens like `"site-admin"` that never exact-match
+ *     `site-admin` → a silent admin lockout for any multi-group admin.
+ *   - Unquoted bracket / comma / space forms, e.g. `"[a, b]"`, `"a,b"`, `"a b"`,
+ *     and a bare single group `"site-admin"`.
  *
- * A naive `.split(' ')` silently fails on the comma/bracket form: a multi-group
- * admin collapses to one token and `groups.includes('site-admin')` returns
- * false — a silent admin lockout. This parser tolerates array, comma, bracket,
- * and whitespace forms, and returns trimmed, exact-match tokens (callers MUST
- * use exact `.includes(...)`, never substring matching).
+ * The parser tolerates all of these and returns trimmed, UNQUOTED, exact-match
+ * tokens (callers MUST use exact `.includes(...)`, never substring matching).
  */
 export function parseCognitoGroups(raw: string[] | string | undefined | null): string[] {
+  if (raw == null) return [];
+
+  // Already an array (amplify decoded payload / SDK).
   if (Array.isArray(raw)) {
-    return raw.map((s) => String(s).trim()).filter(Boolean);
+    return raw.map(stripToken).filter(Boolean);
   }
   if (typeof raw !== 'string') return [];
-  return raw
-    .replace(/^\s*\[/, '')      // strip a leading "["
-    .replace(/\]\s*$/, '')      // strip a trailing "]"
-    .split(/[\s,]+/)            // split on commas and/or whitespace
-    .map((s) => s.trim())
+
+  const trimmed = raw.trim();
+
+  // JSON-stringified array form — parse it so the inner per-element quotes are
+  // removed. This is the dev/API-Gateway delivery shape and the regression cause.
+  if (trimmed.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) return parsed.map(stripToken).filter(Boolean);
+    } catch {
+      // Not valid JSON (e.g. an unquoted bracket form "[a, b]") — fall through.
+    }
+  }
+
+  // Bare / unquoted-bracket / space / comma forms.
+  return trimmed
+    .replace(/^\[/, '')
+    .replace(/\]$/, '')
+    .split(/[\s,]+/)
+    .map(stripToken)
     .filter(Boolean);
+}
+
+/** Trim and strip a single pair of surrounding single/double quotes from a token. */
+function stripToken(value: unknown): string {
+  return String(value).trim().replace(/^["']+|["']+$/g, '').trim();
 }

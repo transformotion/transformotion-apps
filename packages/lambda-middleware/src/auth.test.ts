@@ -103,6 +103,13 @@ describe('extractAuthClaims', () => {
     }));
     expect(bracketed.siteAdmin).toBe(true);
 
+    // The live dev regression shape: JSON-stringified array with quoted elements.
+    const jsonArray = extractAuthClaims(makeEvent({
+      sub: 'u1', email: 'a@b.com',
+      'cognito:groups': '["budget-app-access","admin","site-admin","stock-app-access"]',
+    }));
+    expect(jsonArray.siteAdmin).toBe(true);
+
     const nonAdmin = extractAuthClaims(makeEvent({
       sub: 'u2', email: 'b@b.com',
       'cognito:groups': 'budget-app-access,stock-app-access',
@@ -355,6 +362,23 @@ describe('parseCognitoGroups', () => {
   it('parses the API Gateway comma-joined multi-group string', () => {
     expect(parseCognitoGroups('budget-app-access,site-admin,stock-app-access'))
       .toEqual(['budget-app-access', 'site-admin', 'stock-app-access']);
+  });
+
+  // LIVE REGRESSION (dev, 2026-06-13): the dev owner's 4-group token
+  // (groups: budget-app-access, admin, site-admin, stock-app-access) is delivered
+  // as a JSON-STRINGIFIED array. The previous parser stripped only the outer [] and
+  // left the inner quotes, so tokens were '"site-admin"' and includes('site-admin')
+  // was false → Admin link silently hidden. This is the exact failing shape.
+  it('parses a JSON-stringified array (quoted elements) — the dev silent-false regression', () => {
+    const real = '["budget-app-access","admin","site-admin","stock-app-access"]';
+    expect(parseCognitoGroups(real))
+      .toEqual(['budget-app-access', 'admin', 'site-admin', 'stock-app-access']);
+    expect(parseCognitoGroups(real).includes('site-admin')).toBe(true);
+  });
+
+  it('exact-matches inside a JSON-stringified array (no substring false positive)', () => {
+    expect(parseCognitoGroups('["site-admin-readonly","budget-app-access"]').includes('site-admin'))
+      .toBe(false);
   });
 
   it('parses the bracket-wrapped form (with or without spaces after commas)', () => {
