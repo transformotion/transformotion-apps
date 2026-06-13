@@ -677,6 +677,9 @@ importers:
 
   apps/launchpad/functions/accounts:
     dependencies:
+      '@transformotion/contracts':
+        specifier: workspace:*
+        version: link:../../../../packages/contracts
       '@transformotion/lambda-middleware':
         specifier: workspace:*
         version: link:../../../../packages/lambda-middleware

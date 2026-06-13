@@ -9,6 +9,7 @@
     "lint": "echo \"lint: launchpad accounts\""
   },
   "dependencies": {
+    "@transformotion/contracts": "workspace:*",
     "@transformotion/lambda-middleware": "workspace:*"
   },
   "devDependencies": {
