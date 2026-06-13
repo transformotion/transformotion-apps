@@ -71,17 +71,18 @@ Analysis cache is accessed by `transformotion-analysis-cache-{stage}` (read/dele
 
 ## Authorization requirement
 
-All Lambda handlers use helpers from `packages/lambda-middleware`. The four available helpers and when to apply each:
+All Lambda handlers use helpers from `packages/lambda-middleware`. App-data routes use the **data-authority factory** `requireAccountData` (D9, M16); supervisory/ownership routes use `requireAccountAdmin`:
 
 ```typescript
-requireSiteAdmin(auth)                                           // platform admin ops only
-requireAppAccess(auth, 'stock-analyser')                          // entry-point check (every handler)
-requireAccountAccess(auth, 'stock-analyser', accountId)           // standard read/write ops
-requireAccountAccess(auth, 'stock-analyser', accountId, 'manager') // elevated ops (bulk delete, etc.)
-requireAccountOwner(auth, 'stock-analyser', accountId)            // ownership-transfer ops
+const saData = requireAccountData('stock-analyser');             // module scope
+
+saData.read(auth, accountId);                                    // read tier — claims only, viewer passes
+await saData.write(auth, accountId, membershipLoader);          // write tier — claims + live members row, viewer denied
+requireAccountAdmin(/* owner / manager / supervisory guards */); // supervisory & ownership ops
+requireSiteAdmin(auth);                                          // platform admin ops only
 ```
 
-Call `requireAppAccess` at the top of every handler, then `requireAccountAccess` (or `requireAccountOwner`) before each DynamoDB operation. Do not call `requireGroup` directly. See [auth.md](/docs/architecture/auth.md) for full middleware helper documentation.
+Construct `requireAccountData('stock-analyser')` at module scope, then call `.read` on GET branches and `.write` (with a `dynamoMembershipLoader`) before each mutation. There is **no site-admin data bypass** — membership is the only grant of data authority. Per-user rows within an account (settings preferences, D12) use `.read` for the owner's own writes. `requireAccountAccess` and `requireAccountOwner` were **deleted** in M16 Phase 5. Do not call `requireGroup` directly. See [auth.md](/docs/architecture/auth.md) and [route-classification-m16.md](/docs/architecture/route-classification-m16.md).
 
 ## Service layer and data contracts
 

@@ -5,8 +5,7 @@ import {
   noContent,
   ok,
   parseBody,
-  requireAccountAccess,
-  requireAppAccess,
+  requireAccountData,
   requireSiteAdmin,
   withAuth,
   type APIGatewayProxyEvent,
@@ -151,22 +150,27 @@ async function resetOverride(deps: Dependencies, accountId: string) {
   return noContent();
 }
 
+// D9 data-tier gate (no site-admin branch) for the read; the override is
+// operational-config (D9) — interim member + site-admin, rehomed to app-level
+// app-admin config in PR-C.
+const btData = requireAccountData(APP_SLUG);
+
 export function createHandler(deps: Dependencies = defaultDependencies) {
   return withAuth(async ({ auth, account, event }) => {
-    requireAppAccess(auth, APP_SLUG);
-    requireAccountAccess(auth, APP_SLUG, account.accountId);
-
     const resource = event.resource ?? '';
     if (resource === '/api/budget/v1/ai-config' && event.httpMethod === 'GET') {
+      btData.read(auth, account.accountId);
       return readConfig(deps, account.accountId);
     }
 
     if (resource === '/api/budget/v1/ai-config/override' && event.httpMethod === 'PUT') {
+      btData.read(auth, account.accountId);
       requireSiteAdmin(auth);
       return updateOverride(deps, event, account.accountId);
     }
 
     if (resource === '/api/budget/v1/ai-config/override' && event.httpMethod === 'DELETE') {
+      btData.read(auth, account.accountId);
       requireSiteAdmin(auth);
       return resetOverride(deps, account.accountId);
     }

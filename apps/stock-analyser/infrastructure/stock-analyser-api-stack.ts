@@ -143,6 +143,7 @@ export class StockAnalyserApiStack extends cdk.Stack {
     });
     analysisCacheTable.grantReadWriteData(cacheFn);
     jobResultsTable.grantReadData(cacheFn);
+    grantMembershipRead(cacheFn); // D9 write tier on PUT/DELETE — live membership-row check
 
     const cacheIntegration = new apigateway.LambdaIntegration(cacheFn, { proxy: true });
     const cacheKey = this.api.root

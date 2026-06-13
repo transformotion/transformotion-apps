@@ -4,13 +4,15 @@ import {
   withAuth,
   ok,
   badRequest,
-  requireAppAccess,
-  requireAccountAccess,
+  requireAccountData,
   HttpError,
 } from '@transformotion/lambda-middleware';
 import { fetchOhlcv } from '../../_shared/market-data-fetcher';
 import { computeCyclePosition } from '../../../lib/cycle';
 
+// D9 data-tier gate (no site-admin branch). cycle-data is a READ of shared market
+// data; a viewer member may read it.
+const saData = requireAccountData('stock-analyser');
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const TABLE          = process.env.ANALYSIS_CACHE_TABLE!;
 const SHARED         = 'SHARED';
@@ -18,8 +20,7 @@ const CYCLE_TTL      = 3600;  // 1 hour — computed result
 const MARKET_TTL     = 28800; // 8 hours — shared raw OHLCV
 
 export const handler = withAuth(async ({ auth, account, event }) => {
-  requireAppAccess(auth, 'stock-analyser');
-  requireAccountAccess(auth, 'stock-analyser', account.accountId);
+  saData.read(auth, account.accountId);
 
   const ticker = event.queryStringParameters?.ticker;
   if (!ticker) throw badRequest('ticker is required');

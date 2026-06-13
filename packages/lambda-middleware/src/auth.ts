@@ -89,11 +89,6 @@ function isSuperUser(auth: AuthClaims): boolean {
   return auth.siteAdmin;
 }
 
-function hasRequiredRole(roles: string[], minRole: AccountRole): boolean {
-  const minIdx = ROLE_HIERARCHY.indexOf(minRole);
-  return roles.some(r => ROLE_HIERARCHY.indexOf(r as AccountRole) >= minIdx);
-}
-
 /**
  * Throws HttpError(403) unless the user has the site_admin claim or is in the
  * legacy 'admin' / 'site-admin' Cognito group.
@@ -126,26 +121,6 @@ export function requireAnyAppAccess(auth: AuthClaims, apps: string[]): void {
   if (isSuperUser(auth)) return;
   if (apps.some(app => auth.apps.includes(app as EntitledAppSlug))) return;
   throw forbidden(`Access to one of [${apps.join(', ')}] required`);
-}
-
-/**
- * Throws HttpError(403) unless the user has at least `minRole` access to
- * `accountId` within `app`.
- * Passes if `auth.siteAdmin === true`, or `auth.accounts[app]` contains a
- * membership for `accountId` with role ≥ minRole.
- * Role hierarchy (ascending): viewer < member < manager < owner.
- */
-export function requireAccountAccess(
-  auth: AuthClaims,
-  app: AppName,
-  accountId: string,
-  minRole: AccountRole = 'member',
-): void {
-  if (isSuperUser(auth)) return;
-  const appAccounts = auth.accounts[app] ?? [];
-  const membership = appAccounts.find(m => m.accountId === accountId);
-  if (membership && hasRequiredRole([membership.role], minRole)) return;
-  throw forbidden(`Account access required (accountId: ${accountId}, minRole: ${minRole})`);
 }
 
 /** A live membership row, loaded from the account-members table by the caller. */
@@ -219,21 +194,8 @@ export async function requireAccountWrite(
   }
 }
 
-/**
- * Throws HttpError(403) unless the user is the owner of `accountId` within `app`.
- *
- * Checks (in order):
- *   1. site_admin / admin group → always passes
- *   2. `auth.accounts[app]` has a membership for `accountId` with role 'owner'
- */
-export function requireAccountOwner(
-  auth: AuthClaims,
-  app: AppName,
-  accountId: string,
-): void {
-  if (isSuperUser(auth)) return;
-  const appAccounts = auth.accounts[app] ?? [];
-  const membership = appAccounts.find(m => m.accountId === accountId);
-  if (membership?.role === 'owner') return;
-  throw forbidden(`Account ownership required (accountId: ${accountId})`);
-}
+// requireAccountAccess and requireAccountOwner were DELETED in M16 Phase 5 (D9):
+// the site-admin-bypassing data-tier check is replaced by requireAccountData
+// (no site-admin branch) for app data, and by requireAccountAdmin(...) policies
+// for control-plane ownership/role operations. See policy.ts and
+// docs/architecture/route-classification-m16.md.

@@ -992,7 +992,8 @@ Auth follows the same layered architecture as data access. The platform's auth c
 **Helper interface in `packages/lambda-middleware/`.** All Lambda handlers use the canonical helper interface for auth concerns. The interface has two layers:
 
 - **Middleware wrappers** (`middleware.ts`) — `withAuth(handler)` provides JWT plus account context; `withAuthOnly(handler)` provides JWT without account context (for routes that operate on the user themselves rather than account-scoped data). Both internally call `extractAuthClaims` to read raw claims; consumers do not import `extractAuthClaims` directly.
-- **Claim-based helpers** (`auth.ts`) — `requireAppAccess`, `requireAnyAppAccess`, `requireAccountAccess`, `requireAccountOwner`, `requireSiteAdmin`. These operate on the typed `auth` object provided by the wrappers and throw 403 on authorization failure.
+- **Claim-based helpers** (`auth.ts`) — `requireAppAccess`, `requireAnyAppAccess`, `requireSiteAdmin`. These operate on the typed `auth` object provided by the wrappers and throw 403 on authorization failure.
+- **Policy layer** (`policy.ts`, M16 D9) — `requireAccountData(appSlug)` for app-data routes (`.read` = claims-only, viewer passes; `.write` = claims + live members row, viewer denied) and `requireAccountAdmin(...)` for supervisory/ownership routes. There is no site-admin data bypass. The former `requireAccountAccess` / `requireAccountOwner` helpers were deleted in M16 Phase 5.
 
 The full interface and per-helper semantics are documented in `auth.md`.
 

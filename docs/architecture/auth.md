@@ -207,12 +207,12 @@ Account membership is stored in `launchpad-account-members-{stage}` (PK: `accoun
 
 **Ownership transfer.** The current owner can transfer ownership to any other member or manager of the account. The previous owner becomes a manager; they can choose to remove themselves afterwards. The account retains exactly one owner throughout.
 
-**Role hierarchy** (for `requireAccountAccess` minRole checks):
-`owner > manager > member > viewer`. A check for `minRole: 'manager'` succeeds for `owner` and `manager`; fails for `member` and `viewer`.
+**Role hierarchy** (exported as `ROLE_HIERARCHY` from `packages/lambda-middleware`, consumed by the policy layer):
+`owner > manager > member > viewer`. A minimum-role check for `manager` succeeds for `owner` and `manager`; fails for `member` and `viewer`. The policy layer's `roleAtLeast` / `decideMinRole` (D9) evaluate against this ordering; `viewer` is the read floor (read-only), `member` the write floor.
 
-**Write-path row check (D8, M16).** App-data **writes** (Stock Analyser / Budget Tracker mutations) go through `requireAccountWrite` (`packages/lambda-middleware`): the claims membership check **plus** a live read of the caller's `launchpad-account-members` row. The live row is the authority because claims can be stale — a user demoted to `viewer`, disabled, or removed after token issuance still carries the old claim for up to the access-token lifetime. The write is rejected (403) when the row is missing (**fail closed**), the row's `status` is not `active`, or the role is `viewer` (read-only). There is **no site-admin bypass** on this path: membership is the only grant of data authority (D9). Reads stay claims-only — no table read on the hot path. (Layered on the existing claims helpers; folds into the Phase 5 `requireAccountData`/`requireAccountAdmin` split.)
+**Write-path row check (D8, M16).** App-data **writes** (Stock Analyser / Budget Tracker mutations) go through the policy layer's `requireAccountData(appSlug).write(...)` (`packages/lambda-middleware`), which folds `requireAccountWrite`: the claims membership check **plus** a live read of the caller's `launchpad-account-members` row. The live row is the authority because claims can be stale — a user demoted to `viewer`, disabled, or removed after token issuance still carries the old claim for up to the access-token lifetime. The write is rejected (403) when the row is missing (**fail closed**), the row's `status` is not `active`, or the role is `viewer` (read-only). There is **no site-admin bypass** on this path: membership is the only grant of data authority (D9). Reads go through `requireAccountData(appSlug).read(...)` — claims-only, no table read on the hot path, and a `viewer` claim passes (read visibility).
 
-The gate applies to handlers that mutate **account-shared** data, classified by the item's key shape, not by the route alone. Worked examples (Phase 4): Stock Analyser portfolio/watchlist and Budget Tracker transactions/rules/budget-data are gated; **Budget Tracker settings is gated** because its rows are account-scoped (`PK=accountId, SK=settingKey`, no user dimension), whereas **Stock Analyser settings is NOT gated** because its rows are per-user within the account (`SK=USER#{userId}#PREFERENCES`) — a viewer may set their own preference. Read-path cache writes (SA analysis-cache) and site-admin-only AI-config overrides are likewise excluded; the latter is tracked for the Phase 5 two-axis sweep (#416).
+The write gate applies to handlers that mutate **account-shared** data, classified by the item's key shape, not by the route alone (see `docs/architecture/route-classification-m16.md` for the per-route migration record). Worked examples: Stock Analyser portfolio/watchlist and Budget Tracker transactions/rules/budget-data/settings/export are write-gated; **Budget Tracker settings is gated** because its rows are account-scoped (`PK=accountId, SK=settingKey`, no user dimension), whereas **Stock Analyser settings is NOT write-gated** because its rows are per-user within the account (`SK=USER#{userId}#PREFERENCES`, D12) — a viewer may set their own preference. SA analysis-cache writes are now write-gated (member-tier; previously had no row check). Budget Tracker AI routes are write-gated (member-tier, owner ruling #1). AI-config overrides remain member-tier write plus an interim `requireSiteAdmin`; the operational-config admin axis rehomes them in PR-C (#416).
 
 ### Conflict resolution between dimensions
 
@@ -226,7 +226,12 @@ The resolution rule is: **Dimension A is the ceiling.**
 
 In practice: Dimension A governs *whether the user can use the app at all*. Dimension B governs *what operations they can perform on a specific account's data*.
 
-**`site-admin` bypasses both dimensions.** A site-admin user can perform any operation on any app's data on any account, even without explicit app-access group or account membership. Every authorization helper checks site-admin first as an override.
+**`site-admin` does NOT grant data authority (D9, M16 — reversed).** This is the single largest normative change in M16. The platform now operates on two distinct axes:
+
+- **Data authority** — the right to read or write an account's app data. **Membership is the only grant of data authority.** A site-admin with no membership row on an account is denied (404/403) on that account's data, exactly as any non-member is. `requireAccountData` has **no site-admin branch**. The superseded model — "every authorization helper checks site-admin first as an override" — is deleted.
+- **Administrative authority** — supervisory and operational-config operations (member removal, account disable/delete, cross-app directory, app-admin config). These are governed by `requireAccountAdmin` and the `requireSiteAdmin` / app-admin policy guards. Site-admin is supervisory here: it can *remove* members and disable/delete accounts, but it can **never grant itself a role or write account data**. A supervisory action carries no data visibility.
+
+Dimension A (app access) remains the ceiling for data operations as described above. The reversal concerns only the former blanket site-admin data bypass.
 
 ---
 
@@ -242,8 +247,8 @@ In practice: Dimension A governs *whether the user can use the app at all*. Dime
 3. **Reconcile the app-access invariant.** For each app slug (`stock-analyser`, `budget-tracker`):
    - If user has any accounts for the app but is not in `<app>-access`: call `AdminAddUserToGroup`, update the in-memory group list for claim construction.
    - If user is in `<app>-access` but has no accounts: call `AdminRemoveUserFromGroup`, update the in-memory list.
-   - `site-admin` membership overrides the "no accounts" removal — site-admin keeps all access regardless of account memberships.
-4. Build the `apps` claim: JSON-stringified array of app slugs the user has access to (derived from reconciled groups plus site-admin override).
+   - The invariant applies **uniformly** (D11.1, M16): the former `site-admin` override — which retained app-access groups for site-admins regardless of membership — is **removed**. Group membership now tracks account membership for every user. The `site_admin` claim drives supervisory surfaces; it does not retain app-access groups or app-data authority.
+4. Build the `apps` claim: JSON-stringified array of app slugs the user has access to (derived from reconciled groups only — no site-admin all-apps shortcut).
 5. Build the `accounts` claim: JSON-stringified map of app slug to `[{accountId, role}]`, grouped from the membership query results.
 6. Build `site_admin`: the string `"true"` or `"false"` (Cognito requires claim values to be strings).
 7. Set `event.response.claimsAndScopeOverrideDetails.accessTokenGeneration.claimsToAddOrOverride` with the three claims.
@@ -402,26 +407,39 @@ requireAnyAppAccess(auth, appSlugs)
 // Throws 403 unless auth.apps includes at least one of appSlugs OR auth.siteAdmin === true.
 // Use only in platform handlers that serve multiple apps (currently: claude-proxy).
 
-requireAccountAccess(auth, appSlug, accountId, minRole?)
-// Throws 403 unless the caller is a member of accountId for appSlug
-// with role >= minRole (or is site-admin).
-// Role hierarchy (ascending): viewer < member < manager < owner.
-// Default minRole is 'member'. Use before any DynamoDB query for account-scoped data.
+requireAccountData(appSlug)
+// The data-authority middleware factory (D9). Returns an object with:
+//   .read(auth, accountId)          — claims-only membership check; viewer passes
+//                                      (read visibility). No table read on the hot path.
+//   .write(auth, accountId, loader) — folds requireAccountWrite: claims membership
+//                                      PLUS a live members-row read via `loader`.
+//                                      Rejects (403) on missing row (fail closed),
+//                                      non-active status, or viewer role.
+// NO site-admin branch — membership is the only grant of data authority.
+// Replaces requireAccountAccess for all app-data routes.
 
-requireAccountOwner(auth, appSlug, accountId)
-// Throws 403 unless caller is the owner of accountId for appSlug
-// (or is site-admin).
-// Use for account deletion, ownership transfer, and similar
-// operations only the owner can perform.
+requireAccountAdmin(...guards)
+// Administrative-authority composition (D9), built from anyOf(...) over policy
+// guards (requireAccountOwnerRole, requireAccountOwnerOrManager,
+// requireSupervisorySiteAdmin, requireAppAdminForApp, ...). Use for supervisory
+// and ownership-class operations. Replaces requireAccountOwner.
 ```
 
-All helpers check `auth.siteAdmin` first as an override. A site-admin caller passes all authorization checks regardless of app-access or account membership.
+**`requireAccountAccess` and `requireAccountOwner` were deleted in M16 Phase 5 (D9)** — not deprecated, deleted, with zero remaining callers. Both folded a blanket site-admin override that the two-axis model removes. App-data routes use `requireAccountData`; supervisory/ownership routes use `requireAccountAdmin`. The full per-route migration is recorded in `docs/architecture/route-classification-m16.md`.
 
-**Fail-closed semantics.** When `auth.apps` or `auth.accounts` are absent or empty (e.g., due to a pre-token Lambda failure), helpers deny access rather than granting it. The pre-token Lambda documents this under "On failure" above.
+**Authorization tier table (D8/D9).** Three tiers, distinguished by what they consult:
+
+| Tier | Helper | Consults | Site-admin |
+|---|---|---|---|
+| App-data read | `requireAccountData(app).read` | Claims only (`auth.accounts`) | No branch — membership only |
+| App-data write | `requireAccountData(app).write` | Claims **+ live members row** | No branch — membership only |
+| Control-plane / supervisory | `requireAccountAdmin(...)`, `requireSiteAdmin` | Policy guards (live tables / `site_admin` claim) | Supervisory: can remove/disable, never grants data authority |
+
+**Fail-closed semantics.** When `auth.apps` or `auth.accounts` are absent or empty (e.g., due to a pre-token Lambda failure), helpers deny access rather than granting it. The data-path policy guards additionally resolve the target first and return a **uniform not-found** response so missing-membership and missing-resource are indistinguishable. The pre-token Lambda documents the empty-claims case under "On failure" above.
 
 ### Claim-consumption layering
 
-Raw JWT claim reads occur only in the middleware layer (`packages/lambda-middleware/`). Business-logic Lambdas access claims via the typed `auth` object provided by `withAuth` / `withAuthOnly`, using documented helpers (`requireAccountAccess`, `requireAppAccess`, `requireSiteAdmin`, etc.) when authorization decisions are needed. New Lambdas never read claims directly; the middleware layer is the only place raw claim access belongs.
+Raw JWT claim reads occur only in the middleware layer (`packages/lambda-middleware/`). Business-logic Lambdas access claims via the typed `auth` object provided by `withAuth` / `withAuthOnly`, using documented helpers (`requireAccountData`, `requireAccountAdmin`, `requireAppAccess`, `requireSiteAdmin`, etc.) when authorization decisions are needed. New Lambdas never read claims directly; the middleware layer is the only place raw claim access belongs.
 
 This is a layering rule of the same shape as the data-access layered architecture (see `CONTRIBUTING.md` Section 5). Concerns are separated by layer: the middleware layer encapsulates raw-claim concerns; business logic operates on typed values.
 
@@ -438,16 +456,27 @@ Handlers do NOT call `requireGroup` for new work.
 
 Every Lambda handler follows this pattern. Deviations require a written justification in the handler's code.
 
-### Standard app-scoped handler
+### Standard app-scoped handler (data routes)
+
+The data-authority middleware factory is constructed once at module scope, then `.read` / `.write` is called per branch:
 
 ```typescript
-export const handler = withAuth(async ({ auth, account, event }) => {
-  requireAppAccess(auth, 'app-slug');                         // (1) fail fast if user lacks app access
-  requireAccountAccess(auth, 'app-slug', account.accountId); // (2) verify account membership before any data access
+const appData = requireAccountData('app-slug');               // module scope
+const membershipLoader = dynamoMembershipLoader(ddb, process.env.ACCOUNT_MEMBERS_TABLE!);
 
-  // ... handler logic uses account.accountId for all DynamoDB keys
+export const handler = withAuth(async ({ auth, account, event }) => {
+  if (event.requestContext.http.method === 'GET') {
+    appData.read(auth, account.accountId);                    // read tier: claims-only, viewer passes
+    // ... read logic
+  } else {
+    await appData.write(auth, account.accountId, membershipLoader); // write tier: claims + live row, viewer denied
+    // ... mutation logic
+  }
+  // accountId comes from request context; all DynamoDB keys use account.accountId
 });
 ```
+
+`requireAppAccess` is no longer the explicit first call on data routes: `requireAccountData` subsumes app-access (a user with no membership for the app has no account row to match). Supervisory/ownership routes use `requireAccountAdmin(...)` instead of the data factory.
 
 ### Multi-app platform handler (currently: claude-proxy only)
 
@@ -461,13 +490,12 @@ export const handler = withAuth(async ({ auth, account, event }) => {
 
 ### Rules
 
-1. **`requireAppAccess` (or `requireAnyAppAccess`) is the first call in every handler**, before any business logic or DynamoDB access.
-2. **`requireAccountAccess` is called before every DynamoDB read or write** that operates on account-scoped data.
-3. **`accountId` always comes from request context** (`account.accountId`, which is sourced from the `X-Account-Id` request header). Never derive `accountId` from `auth.accounts` or any other JWT claim.
-4. **Elevated operations** (bulk delete, admin overrides) use `requireAccountAccess(auth, appSlug, accountId, 'manager')`.
-5. **Ownership-only operations** (account deletion, ownership transfer) use `requireAccountOwner`.
-6. **Platform-admin operations** (cross-app user management, user disable/delete) use `requireSiteAdmin`.
-7. **`requireGroup` must not appear in new handler code.** It is deprecated and will be removed at 7e-cleanup.
+1. **A policy guard runs before any DynamoDB access.** Data routes call `requireAccountData(app).read`/`.write`; supervisory/ownership routes call `requireAccountAdmin(...)`; platform routes call `requireSiteAdmin`. Multi-app platform handlers (claude-proxy) still call `requireAnyAppAccess` first.
+2. **Read vs write is a tier decision, not a route decision.** Reads use `.read` (claims-only, viewer passes); mutations of account-shared data use `.write` (claims + live members row, viewer denied). User-scoped rows within an account (e.g. SA per-user preferences, D12) use `.read` for the owner's own writes.
+3. **`accountId` always comes from request context** (`account.accountId`, sourced from the `X-Account-Id` request header). Never derive `accountId` from `auth.accounts` or any other JWT claim.
+4. **Elevated / supervisory operations** (member removal, account disable/delete) use `requireAccountAdmin(...)` composed from the relevant policy guards. There is no site-admin data bypass.
+5. **Platform-admin operations** (cross-app user management, user disable/delete, cross-app directory) use `requireSiteAdmin`.
+6. **`requireGroup` must not appear in new handler code.** It is deprecated and will be removed at 7e-cleanup.
 
 ---
 
@@ -631,8 +659,8 @@ An account owner or manager removes someone from a specific account.
 
 Endpoint: `DELETE /accounts/{accountId}/members/{userId}`. Lambda: `account-members-remove`.
 
-Authorization:
-- `requireAccountAccess(auth, appSlug, accountId, minRole: 'manager')`
+Authorization (supervisory — implemented as the route lands in Phase 6):
+- `requireAccountAdmin(requireAccountOwnerOrManager(...))` — owner/manager of the account, or supervisory site-admin. This is an administrative-authority operation, not a data-path one; it carries no data visibility.
 - If the target `userId` is the `owner` of the account: reject. Ownership must be transferred first.
 - If the caller is a `manager` (not owner) and the target is also a `manager`: reject. Managers cannot remove other managers; only the owner can.
 - Self-removal (caller and target are the same user): allowed if the target is not the owner.

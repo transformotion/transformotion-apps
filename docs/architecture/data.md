@@ -309,16 +309,31 @@ Every record in a per-app data table must be keyed by `accountId`. Every
 handler that reads or writes per-app data must verify the caller's membership
 in that account before touching DynamoDB.
 
-Handlers enforce this by calling:
+Handlers enforce this with the data-authority factory (D9, M16):
 
 ```typescript
-requireAccountAccess(auth, 'stock-analyser', accountId)
-// or
-requireAccountAccess(auth, 'budget-tracker', accountId, 'member')
+const saData = requireAccountData('stock-analyser');
+saData.read(auth, accountId);                          // read tier — claims only, viewer passes
+await saData.write(auth, accountId, membershipLoader); // write tier — claims + live members row
 ```
 
-The `accountId` used in DynamoDB operations is always the one already verified
-against the caller's LaunchpadAuth-issued `accounts` claim.
+There is **no site-admin data bypass** — membership is the only grant of data
+authority. The `accountId` used in DynamoDB operations is always the one
+already verified against the caller's LaunchpadAuth-issued `accounts` claim.
+(`requireAccountAccess` was deleted in M16 Phase 5.)
+
+**Row-class authorization in mixed partitions (D12).** Within a single per-app
+table, item key shape determines the authorization tier, not the route:
+
+- **Account-shared rows** (`PK=accountId`, no user dimension — e.g. Budget
+  Tracker transactions/rules/budget-data/settings) are governed by the D8 write
+  tier: a `viewer` reads but cannot write.
+- **User-scoped rows** (`SK` carries the user, e.g. Stock Analyser settings
+  `SK=USER#{userId}#PREFERENCES`) require membership **and** an SK-owner match.
+  A `viewer` may write their **own** preference row because the write affects
+  only their own data; cross-user writes within the account are denied. These
+  routes therefore use `.read` (membership floor), with the per-user SK scoping
+  the mutation to the caller.
 
 ## Account relationships example
 

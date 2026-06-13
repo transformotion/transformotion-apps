@@ -31,9 +31,8 @@
 //   requireSiteAdmin(auth)                              — throws 403 unless site admin
 //   requireAppAccess(auth, app)                         — throws 403 unless user has app access
 //   requireAnyAppAccess(auth, apps)                     — throws 403 unless user has access to any of the apps
-//   requireAccountAccess(auth, app, accountId, minRole) — throws 403 unless user has account access
-//   requireAccountOwner(auth, app, accountId)           — throws 403 unless user owns account
 //   requireAccountWrite(auth, app, accountId, loader)   — D8 write-path: claims + live row (viewer/disabled/missing → 403)
+//   (requireAccountAccess / requireAccountOwner were DELETED in M16 Phase 5 — use the policy layer below)
 
 export { withAuth, withAuthOnly, withPublic }            from './middleware';
 export { ok, created, noContent, errorResponse }        from './response';
@@ -45,8 +44,6 @@ export {
   requireSiteAdmin,
   requireAppAccess,
   requireAnyAppAccess,
-  requireAccountAccess,
-  requireAccountOwner,
   requireAccountWrite,
 }                                                       from './auth';
 export type {

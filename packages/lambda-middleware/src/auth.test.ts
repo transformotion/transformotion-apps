@@ -3,8 +3,6 @@ import {
   requireSiteAdmin,
   requireAppAccess,
   requireAnyAppAccess,
-  requireAccountAccess,
-  requireAccountOwner,
   requireAccountWrite,
   requireGroup,
   extractAuthClaims,
@@ -172,100 +170,9 @@ describe('requireAnyAppAccess', () => {
   });
 });
 
-// ── requireAccountAccess ──────────────────────────────────────────────────────
-
-describe('requireAccountAccess', () => {
-  it('passes when user has member access to account', () => {
-    expect(() => requireAccountAccess(
-      makeClaims({ accounts: { 'budget-tracker': [{ accountId: 'acc-1', role: 'member' }] } }),
-      'budget-tracker', 'acc-1',
-    )).not.toThrow();
-  });
-
-  it('passes when user has viewer access and viewer is required', () => {
-    expect(() => requireAccountAccess(
-      makeClaims({ accounts: { 'budget-tracker': [{ accountId: 'acc-1', role: 'viewer' }] } }),
-      'budget-tracker', 'acc-1', 'viewer',
-    )).not.toThrow();
-  });
-
-  it('throws 403 when user has viewer but member is required', () => {
-    expect(() => requireAccountAccess(
-      makeClaims({ accounts: { 'budget-tracker': [{ accountId: 'acc-1', role: 'viewer' }] } }),
-      'budget-tracker', 'acc-1', 'member',
-    )).toThrow(HttpError);
-  });
-
-  it('passes when user has manager access and member is required', () => {
-    expect(() => requireAccountAccess(
-      makeClaims({ accounts: { 'budget-tracker': [{ accountId: 'acc-1', role: 'manager' }] } }),
-      'budget-tracker', 'acc-1', 'member',
-    )).not.toThrow();
-  });
-
-  it('passes when user has owner access and manager is required', () => {
-    expect(() => requireAccountAccess(
-      makeClaims({ accounts: { 'budget-tracker': [{ accountId: 'acc-1', role: 'owner' }] } }),
-      'budget-tracker', 'acc-1', 'manager',
-    )).not.toThrow();
-  });
-
-  it('throws 403 when user has member but manager is required', () => {
-    expect(() => requireAccountAccess(
-      makeClaims({ accounts: { 'budget-tracker': [{ accountId: 'acc-1', role: 'member' }] } }),
-      'budget-tracker', 'acc-1', 'manager',
-    )).toThrow(HttpError);
-  });
-
-  it('throws 403 when user has access to different account only', () => {
-    expect(() => requireAccountAccess(
-      makeClaims({ accounts: { 'budget-tracker': [{ accountId: 'acc-2', role: 'member' }] } }),
-      'budget-tracker', 'acc-1',
-    )).toThrow(HttpError);
-  });
-
-  it('throws 403 when accounts claim is empty (fail closed — no group fallback)', () => {
-    expect(() => requireAccountAccess(
-      makeClaims({ groups: ['budget-app'] }), 'budget-tracker', 'acc-1',
-    )).toThrow(HttpError);
-  });
-
-  it('throws 403 when accounts claim is empty', () => {
-    expect(() => requireAccountAccess(makeClaims(), 'budget-tracker', 'acc-1')).toThrow(HttpError);
-  });
-
-  it('passes for site admin', () => {
-    expect(() => requireAccountAccess(
-      makeClaims({ siteAdmin: true }), 'budget-tracker', 'acc-1',
-    )).not.toThrow();
-  });
-});
-
-// ── requireAccountOwner ───────────────────────────────────────────────────────
-
-describe('requireAccountOwner', () => {
-  it('passes when user has owner role', () => {
-    expect(() => requireAccountOwner(
-      makeClaims({ accounts: { 'budget-tracker': [{ accountId: 'acc-1', role: 'owner' }] } }),
-      'budget-tracker', 'acc-1',
-    )).not.toThrow();
-  });
-
-  it('throws 403 when user has manager but not owner', () => {
-    expect(() => requireAccountOwner(
-      makeClaims({ accounts: { 'budget-tracker': [{ accountId: 'acc-1', role: 'manager' }] } }),
-      'budget-tracker', 'acc-1',
-    )).toThrow(HttpError);
-  });
-
-  it('throws 403 when accounts claim is empty', () => {
-    expect(() => requireAccountOwner(makeClaims(), 'budget-tracker', 'acc-1')).toThrow(HttpError);
-  });
-
-  it('passes for site admin', () => {
-    expect(() => requireAccountOwner(makeClaims({ siteAdmin: true }), 'budget-tracker', 'acc-1')).not.toThrow();
-  });
-});
+// requireAccountAccess and requireAccountOwner were DELETED in M16 Phase 5 (D9).
+// Their replacements (requireAccountData / requireAccountAdmin + policy guards)
+// are covered by policy.test.ts. No site-admin data bypass exists any more.
 
 // ── resolveAccountContext ─────────────────────────────────────────────────────
 

@@ -1,6 +1,6 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
-import { withAuth, parseBody, ok, requireAppAccess, requireAccountAccess, requireAccountWrite } from '@transformotion/lambda-middleware';
+import { withAuth, parseBody, ok, requireAccountData } from '@transformotion/lambda-middleware';
 import { dynamoMembershipLoader } from '@transformotion/fn-account-membership';
 import type { BudgetSettings } from '@transformotion/budget-domain';
 
@@ -56,14 +56,17 @@ async function updateSettings(event: Parameters<typeof parseBody>[0], accountId:
   return getSettings(accountId);
 }
 
+const btData = requireAccountData('budget-tracker');
+
 export const handler = withAuth(async ({ auth, account, event }) => {
-  requireAppAccess(auth, 'budget-tracker');
-  requireAccountAccess(auth, 'budget-tracker', account.accountId);
   const { accountId } = account;
-  if (event.httpMethod === 'GET')   return getSettings(accountId);
+  if (event.httpMethod === 'GET') {
+    btData.read(auth, accountId);
+    return getSettings(accountId);
+  }
   if (event.httpMethod === 'PATCH') {
-    // Account-SHARED settings (PK=accountId, SK=settingKey, no userId) → D8 write check.
-    await requireAccountWrite(auth, 'budget-tracker', accountId, membershipLoader);
+    // Account-SHARED settings (PK=accountId, SK=settingKey, no userId) → D9 write tier.
+    await btData.write(auth, accountId, membershipLoader);
     return updateSettings(event, accountId);
   }
   throw { statusCode: 400, message: `Unrecognised route: ${event.httpMethod}` };

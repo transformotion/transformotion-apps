@@ -75,17 +75,18 @@ WebSocket connection state is in `budget-tracker.ws-connections-{stage}` (owned 
 
 ## Authorization requirement
 
-All Lambda handlers use helpers from `packages/lambda-middleware`. The four available helpers and when to apply each:
+All Lambda handlers use helpers from `packages/lambda-middleware`. App-data routes use the **data-authority factory** `requireAccountData` (D9, M16); supervisory/ownership routes use `requireAccountAdmin`:
 
 ```typescript
-requireSiteAdmin(auth)                                             // platform admin ops only
-requireAppAccess(auth, 'budget-tracker')                          // entry-point check (every handler)
-requireAccountAccess(auth, 'budget-tracker', accountId)           // standard read/write ops
-requireAccountAccess(auth, 'budget-tracker', accountId, 'manager') // elevated ops (bulk delete, settings wipe, etc.)
-requireAccountOwner(auth, 'budget-tracker', accountId)            // ownership-transfer ops
+const btData = requireAccountData('budget-tracker');               // module scope
+
+btData.read(auth, accountId);                                      // read tier — claims only, viewer passes
+await btData.write(auth, accountId, membershipLoader);            // write tier — claims + live members row, viewer denied
+requireAccountAdmin(/* owner / manager / supervisory guards */);  // supervisory & ownership ops
+requireSiteAdmin(auth);                                            // platform admin ops only
 ```
 
-Call `requireAppAccess` at the top of every handler, then `requireAccountAccess` (or `requireAccountOwner`) before each DynamoDB operation. Do not call `requireGroup` directly. See [auth.md](/docs/architecture/auth.md) for full middleware helper documentation.
+Construct `requireAccountData('budget-tracker')` at module scope, then call `.read` on GET branches and `.write` (with a `dynamoMembershipLoader`) before each mutation. There is **no site-admin data bypass** — membership is the only grant of data authority. `requireAccountAccess` and `requireAccountOwner` were **deleted** in M16 Phase 5. Do not call `requireGroup` directly. See [auth.md](/docs/architecture/auth.md) and [route-classification-m16.md](/docs/architecture/route-classification-m16.md).
 
 ## Adaptor pattern — mandatory constraint
 
@@ -179,7 +180,7 @@ Provider is selected via `config.ai.provider` (`'mock'` or `'claude'`), resolved
 **Adding a new AI feature:**
 1. Add the method to the `AIService` interface in `lib/services/ai/index.ts`
 2. Update the contract in the v0 repo (`transformotion-apps-b8/contracts/budget-tracker/`), commit and push that v0 change, then run `pnpm sync:v0`
-3. Add a matching Lambda route to `apps/budget-tracker/functions/budget-ai/src/index.ts` with `requireAppAccess` + `requireAccountAccess`
+3. Add a matching Lambda route to `apps/budget-tracker/functions/budget-ai/src/index.ts` gated by `requireAccountData('budget-tracker').write` (AI routes are member-tier, owner ruling #1)
 4. Implement the method in `MockAIService` (mock-ai.ts) and `ClaudeAIService` (claude-ai.ts)
 5. Add prompt text in the Lambda (server-side only — never in client code)
 

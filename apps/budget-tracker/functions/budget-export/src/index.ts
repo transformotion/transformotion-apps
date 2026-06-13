@@ -1,6 +1,6 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
-import { withAuth, getQueryParam, requireAppAccess, requireAccountAccess } from '@transformotion/lambda-middleware';
+import { withAuth, getQueryParam, requireAccountData } from '@transformotion/lambda-middleware';
 import type { Transaction } from '@transformotion/budget-domain';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -12,10 +12,11 @@ function toIso(ddmmyyyy: string): string {
   return p.length === 3 ? `${p[2]}-${p[1]}-${p[0]}` : ddmmyyyy;
 }
 
-// GET /api/budget/v1/business-export
+const btData = requireAccountData('budget-tracker');
+
+// GET /api/budget/v1/business-export — export = read tier (viewer allowed)
 export const handler = withAuth(async ({ auth, account, event }) => {
-  requireAppAccess(auth, 'budget-tracker');
-  requireAccountAccess(auth, 'budget-tracker', account.accountId);
+  btData.read(auth, account.accountId);
   const { accountId } = account;
 
   const from = getQueryParam(event, 'from', false);
