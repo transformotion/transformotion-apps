@@ -1,13 +1,14 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
-import { ok, parseBody } from '@transformotion/lambda-middleware';
+import { ok, parseBody, requireAccountData } from '@transformotion/lambda-middleware';
 import type { AuthClaims } from '@transformotion/lambda-middleware';
 import type { Category } from '@transformotion/budget-domain';
 import type { ReviewWorkerPayload } from './review-worker';
 
 const ddb          = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const lambdaClient = new LambdaClient({});
+const btData       = requireAccountData('budget-tracker');
 
 const JOBS_TABLE  = process.env.AI_JOBS_TABLE!;
 const CONN_TABLE  = process.env.WS_CONNECTIONS_TABLE!;
@@ -20,6 +21,9 @@ export async function reviewStart(
 ): Promise<ReturnType<typeof ok>> {
   // Authorization is performed by the handler entry gate (btData.write, D9
   // member-tier). Reaching here means the caller is an active non-viewer member.
+  // Defense-in-depth: re-assert account membership (claims-only) before this
+  // file's own DynamoDB work, per the file-level handler-authz contract.
+  btData.read(auth, accountId);
 
   const { transactions, categories, settings, forceFullSearch } = parseBody<{
     transactions: Array<{ index: number; description: string; amount: string }>;

@@ -11,8 +11,10 @@
 #   (also matches the @aws-sdk/lib-dynamodb Document client variants)
 #
 # Authorization helpers that satisfy the check:
-#   requireAppAccess, requireAnyAppAccess, requireAccountAccess,
-#   requireAccountOwner, requireSiteAdmin
+#   requireAppAccess, requireAnyAppAccess, requireAccountData,
+#   requireAccountAdmin, requireSiteAdmin
+#   (requireAccountAccess / requireAccountOwner were deleted in M16 Phase 5,
+#    D9 — superseded by the requireAccountData / requireAccountAdmin factories.)
 #
 # This is a coarse file-level check - it confirms authorization helpers are
 # present in any file that performs DynamoDB work. It does not verify call
@@ -49,7 +51,7 @@ EXEMPT_PATH_PREFIXES=(
 )
 
 DYNAMO_PATTERN='PutItemCommand|GetItemCommand|QueryCommand|ScanCommand|UpdateItemCommand|DeleteItemCommand|TransactWriteCommand|BatchGetCommand|BatchWriteCommand'
-AUTHZ_PATTERN='requireAppAccess|requireAnyAppAccess|requireAccountAccess|requireAccountOwner|requireSiteAdmin'
+AUTHZ_PATTERN='requireAppAccess|requireAnyAppAccess|requireAccountData|requireAccountAdmin|requireSiteAdmin'
 
 echo "Checking handler authorization patterns..."
 
@@ -90,7 +92,7 @@ fi
 echo ""
 echo "ERROR: The following handlers perform DynamoDB operations without calling"
 echo "an authorization helper (requireAppAccess, requireAnyAppAccess,"
-echo "requireAccountAccess, requireAccountOwner, or requireSiteAdmin)."
+echo "requireAccountData, requireAccountAdmin, or requireSiteAdmin)."
 echo ""
 echo "Violations:"
 for f in "${VIOLATIONS[@]}"; do
