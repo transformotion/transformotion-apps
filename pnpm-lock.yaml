@@ -542,6 +542,9 @@ importers:
       '@radix-ui/react-slot':
         specifier: 1.2.4
         version: 1.2.4(@types/react@19.2.14)(react@19.2.5)
+      '@transformotion/api-client':
+        specifier: workspace:*
+        version: link:../../packages/api-client
       '@transformotion/auth-client':
         specifier: workspace:*
         version: link:../../packages/auth-client

@@ -1,5 +1,8 @@
 import { HttpClient } from './http';
-import type { GetActiveAccountsResponse } from '@transformotion/contracts/launchpad/invitations';
+import type {
+  GetActiveAccountsResponse,
+  ListAccountMembersResponse,
+} from '@transformotion/contracts/launchpad/invitations';
 
 export interface ControlPlaneClientOptions {
   /**
@@ -62,6 +65,48 @@ export class ControlPlaneClient {
       signal,
       { 'X-Account-Id': accountId },
     );
+  }
+
+  /**
+   * GET /accounts/{accountId}/members/detail — full member list for an account
+   * the caller is a member of (M16 Phase 6 R2): each row carries `isLastOwner`;
+   * `pendingInvitations` is present but empty until Phase 8. The `accounts`
+   * handler is `withAuthOnly` (path-id authorized) — no X-Account-Id needed.
+   */
+  getMembersDetail(accountId: string, signal?: AbortSignal): Promise<ListAccountMembersResponse> {
+    return this.http.get(`accounts/${encodeURIComponent(accountId)}/members/detail`, signal);
+  }
+
+  /**
+   * PUT /accounts/{accountId} — rename an account (owner-or-manager; field-guard
+   * limits writes to `name`). Returns the updated account summary.
+   */
+  updateAccount(
+    accountId: string,
+    body: { name: string },
+    signal?: AbortSignal,
+  ): Promise<{ account: { accountId: string; name: string; updatedAt: string } }> {
+    return this.http.put(`accounts/${encodeURIComponent(accountId)}`, body, signal);
+  }
+
+  /**
+   * DELETE /accounts/{accountId}/members/{userId} — remove a member (owner-or-
+   * manager with role-scoped removal, or supervisory site-admin). 403/409 surface
+   * as ApiError with the server message; the target is signed out on success.
+   */
+  removeMember(accountId: string, userId: string, signal?: AbortSignal): Promise<void> {
+    return this.http.delete(
+      `accounts/${encodeURIComponent(accountId)}/members/${encodeURIComponent(userId)}`,
+      signal,
+    );
+  }
+
+  /**
+   * DELETE /accounts/{accountId} — owner-only; BLOCKS with 409 when other members
+   * remain (the server message says to remove them first). Never cascades.
+   */
+  deleteAccount(accountId: string, signal?: AbortSignal): Promise<void> {
+    return this.http.delete(`accounts/${encodeURIComponent(accountId)}`, signal);
   }
 }
 
