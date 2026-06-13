@@ -10,6 +10,7 @@ import {
   decideOwnerOrManager,
   decideOwner,
   decideRoleChange,
+  decideRemoval,
   decideLastOwnerGuard,
   discoveryScope,
   accountRole,
@@ -152,6 +153,34 @@ describe('decideLastOwnerGuard', () => {
   });
   it('does not apply to a non-owner target', () => {
     expect(decideLastOwnerGuard([{ userId: 'o1', role: 'owner' }], 'm1').allow).toBe(true);
+  });
+});
+
+describe('decideRemoval (role model §7a)', () => {
+  it('owner may remove anyone', () => {
+    for (const t of ['owner', 'manager', 'member', 'viewer']) {
+      expect(decideRemoval('owner', t, false).allow).toBe(true);
+    }
+  });
+  it('manager may remove member/viewer ONLY', () => {
+    expect(decideRemoval('manager', 'member', false).allow).toBe(true);
+    expect(decideRemoval('manager', 'viewer', false).allow).toBe(true);
+    expect(decideRemoval('manager', 'manager', false).allow).toBe(false); // no peer removal
+    expect(decideRemoval('manager', 'owner', false).allow).toBe(false);
+  });
+  it('member/viewer may not remove anyone', () => {
+    expect(decideRemoval('member', 'viewer', false).allow).toBe(false);
+    expect(decideRemoval('viewer', 'member', false).allow).toBe(false);
+  });
+  it('self-removal is allowed regardless of role (last-owner floor enforced separately)', () => {
+    expect(decideRemoval('manager', 'manager', true).allow).toBe(true); // manager removes self
+    expect(decideRemoval('owner', 'owner', true).allow).toBe(true);     // owner self — last-owner guard blocks sole owner
+    expect(decideRemoval('member', 'member', true).allow).toBe(true);
+  });
+  it('unknown role on either side → deny', () => {
+    expect(decideRemoval('admin', 'member', false).allow).toBe(false);
+    expect(decideRemoval('owner', 'admin', false).allow).toBe(false);
+    expect(decideRemoval(undefined, 'member', false).allow).toBe(false);
   });
 });
 

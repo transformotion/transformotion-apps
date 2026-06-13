@@ -684,6 +684,9 @@ importers:
         specifier: workspace:*
         version: link:../../../../packages/lambda-middleware
     devDependencies:
+      '@aws-sdk/client-cognito-identity-provider':
+        specifier: ^3
+        version: 3.1032.0
       '@aws-sdk/client-dynamodb':
         specifier: ^3
         version: 3.1032.0

@@ -264,10 +264,11 @@ The account role model is:
 ### Role rules
 
 - Owners can manage account members, except they cannot remove/demote the last remaining owner.
-- Managers can manage users within allowed limits.
+- Managers can manage users within allowed limits: a manager may remove `member`/`viewer` members only, never another manager or an owner. A manager may remove themselves (self-removal).
 - Managers cannot grant `owner`.
 - Members/viewers cannot invite or manage account membership.
 - Last-owner guard is enforced server-side, not only in UI.
+- **Account deletion BLOCKS, it does not cascade (owner-settled, M16 Phase 6).** Owner-only self-service deletion (`DELETE /accounts/{accountId}`) is permitted only when the account is empty of other members — the owner must be the sole member. If other members remain, the request is rejected (409); the owner empties the account via member removal first. There is intentionally **no one-click delete-with-members**. The only sanctioned cascade of a populated account is the supervisory site-admin orphaned-account cleanup (ADR §9.3), a separate path.
 
 ---
 

@@ -506,7 +506,7 @@ The auth/control-plane Lambdas have explicit permission models. Each is document
 
 | Lambda | Wrapper | Authorization | IAM scope |
 |---|---|---|---|
-| `apps/launchpad/functions/accounts` | `withAuthOnly` (M16 P6, ruling #4 — keys off **path** `accountId` + `auth.userId`; never reads `X-Account-Id`, so it must not require one) | Per-request shared wiring loads the account row + all member rows once and closes an in-memory `MembershipLoader` over the array; reads (R1 `GET`, R2 `GET …/members/detail`) gate on `requireAccountAdmin(requireAccountMember)`, write (R3 `PUT`) on `requireAccountAdmin(requireAccountOwnerOrManager)` + field-guard whitelist; uniform-deny so account existence is not probeable. Mutations (`removeMember`/`deleteAccount`) → PR-6B. | `launchpad-accounts` RW + `launchpad-account-members` RW |
+| `apps/launchpad/functions/accounts` | `withAuthOnly` (M16 P6, ruling #4 — keys off **path** `accountId` + `auth.userId`; never reads `X-Account-Id`, so it must not require one) | Per-request shared wiring loads the account row + all member rows once and closes an in-memory `MembershipLoader` over the array; reads (R1 `GET`, R2 `GET …/members/detail`) gate on `requireAccountAdmin(requireAccountMember)`, write (R3 `PUT`) on `requireAccountAdmin(requireAccountOwnerOrManager)` + field-guard whitelist; uniform-deny so account existence is not probeable. PR-6B mutations: `removeMember` (owner-or-manager + `decideRemoval` / LIVE supervisory-site-admin + last-owner floor + `AdminUserGlobalSignOut`), `deleteAccount` (owner-only, **block-if-members → 409** + GlobalSignOut). | `launchpad-accounts` RW + `launchpad-account-members` RW + `cognito-idp:AdminUserGlobalSignOut` & `AdminListGroupsForUser` on the user pool ARN |
 | `apps/launchpad/functions/user` | `withAuthOnly` | User owns their own profile/preferences/active-account. Active-account SET verifies membership via table check (D8 control-plane) | `launchpad-users` RW + `launchpad-accounts` R + `launchpad-account-members` R |
 | `apps/launchpad/functions/account-provisioning` | `withAuthOnly` | None — profile-bootstrap; user has JWT but no account yet (M16 D11: no longer creates accounts) | `launchpad-users` RW + `launchpad-account-members` R + `AdminGetUser` on user pool ARN |
 | `apps/launchpad/functions/access-summary` | `withAuthOnly` | `requireSiteAdmin` — site-admin directory only | `launchpad-users` R + `launchpad-accounts` R + `launchpad-account-members` R + `launchpad-app-admin-grants` R + `ListUsersInGroup` on user pool ARN |
@@ -656,23 +656,22 @@ Three revocation scenarios, each with a specific entry point.
 
 ### Scenario A: Removing a user from an account
 
-An account owner or manager removes someone from a specific account.
+An account owner or manager removes someone from a specific account (or a supervisory site-admin removes a member). Implemented in the `accounts` Lambda (M16 Phase 6 / PR-6B).
 
-Endpoint: `DELETE /accounts/{accountId}/members/{userId}`. Lambda: `account-members-remove`.
+Endpoint: `DELETE /accounts/{accountId}/members/{userId}`.
 
-Authorization (supervisory — implemented as the route lands in Phase 6):
-- `requireAccountAdmin(requireAccountOwnerOrManager(...))` — owner/manager of the account, or supervisory site-admin. This is an administrative-authority operation, not a data-path one; it carries no data visibility.
-- If the target `userId` is the `owner` of the account: reject. Ownership must be transferred first.
-- If the caller is a `manager` (not owner) and the target is also a `manager`: reject. Managers cannot remove other managers; only the owner can.
-- Self-removal (caller and target are the same user): allowed if the target is not the owner.
+Authorization — `requireAccountAdmin` (anyOf):
+- **owner-or-manager** of the account AND the removal is role-legal (`decideRemoval`): an owner may remove anyone; a manager may remove `member`/`viewer` members ONLY (never another manager or an owner); self-removal is allowed; OR
+- **supervisory site-admin**, verified **LIVE** via `AdminListGroupsForUser` (not the token claim — supervisory removal is a sensitive mutation that must not trust a stale claim).
+- **Last-owner floor** (`decideLastOwnerGuard`) applies to EVERYONE incl. supervisory site-admin: the sole owner cannot be removed (409 — transfer or delete the account). Orphaning a populated account is only the §9.3 cleanup (separate).
 
-Steps:
-1. Validate authorization per the rules above.
-2. Delete the row in `launchpad-account-members-{stage}` for `(accountId, userId)`.
-3. Update the target user's `custom:accounts` attribute to remove `accountId`.
-4. Call `AdminUserGlobalSignOut` on the target user — refresh tokens invalidated immediately.
+Steps (fail-closed ordering):
+1. Resolve the account + members; authorize per above. Loader/Cognito errors → **503** (never proceed).
+2. Enforce the last-owner floor (409 if the target is the sole owner).
+3. Delete the row in `launchpad-account-members-{stage}` for `(accountId, userId)` — the authoritative control-plane removal. From this instant the removed user's app-data **writes** fail closed via the live row-check (D8), and their next token refresh drops the account.
+4. Call `AdminUserGlobalSignOut` on the target — invalidates refresh tokens immediately. A sign-out failure is **surfaced as 502, never a silent success**; the row-delete is idempotent on retry. (No `custom:accounts` write — D11.)
 
-After this: the target user's existing access token remains valid until expiry (up to 1 hour). On their next token refresh, the pre-token Lambda reads the updated memberships and issues a token without the removed account. If this was the user's last account in a given app, the invariant reconciliation in the pre-token Lambda automatically removes them from that app's `-access` group.
+After this: the target's existing access token remains valid until expiry (≤1h), but writes already fail closed. On next refresh the pre-token Lambda issues a token without the account; if it was the user's last account in an app, the invariant reconciliation removes them from that app's `-access` group.
 
 ### Scenario B: Disabling a user
 
@@ -745,7 +744,7 @@ Launchpad owns the live onboarding, user profile/preference, account administrat
 | `GET /accounts/{accountId}` | `launchpad-accounts-{stage}` | R1 — account + member list to any **active member** (`requireAccountMember`); uniform-deny. |
 | `GET /accounts/{accountId}/members/detail` | `launchpad-accounts-{stage}` | R2 — full `ListAccountMembersResponse` (members with `isLastOwner`; `pendingInvitations: []` until Phase 8) to any active member; the v0 account-management-view target. |
 | `PUT /accounts/{accountId}` | `launchpad-accounts-{stage}` | R3 — updates `name` for **owner-or-manager** + field-guard whitelist (`ownerId`/billing owner-only). |
-| `DELETE /accounts/{accountId}` | `launchpad-accounts-{stage}` | PR-6B — deletes account + member records (owner / supervisory site-admin + GlobalSignOut). |
+| `DELETE /accounts/{accountId}` | `launchpad-accounts-{stage}` | PR-6B — **owner-only**; **BLOCKS if other members exist (409)**, never cascades (empty via removeMember first); + GlobalSignOut. Populated-account cascade is ADR §9.3 only. |
 | `GET /accounts/{accountId}/members` | `launchpad-accounts-{stage}` | Legacy thin member list — retained, unwired-to-UI; superseded by `…/members/detail`. |
 | `DELETE /accounts/{accountId}/members/{userId}` | `launchpad-accounts-{stage}` | Removes a member after owner verification. |
 | `POST /accounts/{accountId}/invitations` | `launchpad-invitations-{stage}` | Creates an invitation after owner verification. |
