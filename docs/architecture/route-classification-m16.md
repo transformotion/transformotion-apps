@@ -68,19 +68,20 @@ This table is the **security-review artifact** for the site-admin-bypass removal
 | `PUT /api/user/preferences` | user | withAuthOnly | `auth-only` (self) | own prefs | Confirmed | PR-B (doc only) |
 | `GET /api/user/active-accounts` | user | withAuthOnly | `auth-only` (self) | own selections (D7) | Confirmed | PR-B (doc only) |
 | `PUT /api/user/active-accounts/{appSlug}` | user | withAuthOnly + table membership verify | `auth-only` (self) + membership verify (D7) | self-service; verifies own membership | Confirmed | PR-B (doc only) |
-| `POST /accounts` | accounts | withAuth | `auth-only` (creator-owns) | **withAuth requires X-Account-Id to CREATE an account — see ruling #4** | Status-uncertain | verify |
-| `GET /accounts/{accountId}` | accounts | withAuth + ad-hoc `members.some` | `requireAccountAdmin(account-member)` | account metadata; used by app selectors | **ruling #3: any member** | **Phase 6** † |
-| `GET /accounts/{accountId}/members` | accounts | withAuth + ad-hoc `members.some` | `requireAccountAdmin(account-member)` | member list | **ruling #3: any member** | **Phase 6** † |
-| `PUT /accounts/{accountId}` | accounts | withAuth + ad-hoc `ownerId===userId` | `requireAccountAdmin(account-owner-or-manager)` | account settings | **ruling #2: owner-or-manager** | **Phase 6** † |
-| `DELETE /accounts/{accountId}` | accounts | withAuth + ad-hoc owner | `requireAccountAdmin(owner)` + sole-owner deletion (D9 §9.3) | destructive | Status-uncertain-resolved | **Phase 6** (mutation) |
-| `DELETE /accounts/{accountId}/members/{userId}` | accounts | withAuth + ad-hoc | `requireAccountAdmin(anyOf(owner-or-manager + last-owner-guard, supervisory-site-admin))` | remove member | Aspirational (manager-removal rules never built) | **Phase 6** (mutation) |
+| `POST /accounts` | accounts | ~~withAuth~~ → `withAuthOnly` | `auth-only` (creator-owns) | **ruling #4 CONFIRMED & FIXED: withAuth forced X-Account-Id via resolveAccountContext; create has no account → switched handler to withAuthOnly** | Resolved | **PR-6A** |
+| `GET /accounts/{accountId}` | accounts | ad-hoc `members.some` + 404 leak → `requireAccountMember` | `requireAccountAdmin(account-member)` | R1 — account metadata (app selectors); uniform-deny (existence not probeable) | **ruling #3: any member** | **PR-6A** |
+| `GET /accounts/{accountId}/members/detail` | accounts | *(new route)* | `requireAccountAdmin(account-member)` | **R2 — full ListAccountMembersResponse (isLastOwner; pendingInvitations:[] until Phase 8)**; v0 account-management-view target; displayName enrichment (D6) deferred | **ruling #3: any member** | **PR-6A** |
+| `GET /accounts/{accountId}/members` | accounts | ad-hoc `members.some` (unchanged) | *(legacy thin — superseded by `/members/detail`)* | legacy thin list; unwired-to-UI; retire once `/members/detail` is the sole reader (see §8 retirement map) | legacy / retire | unwired |
+| `PUT /accounts/{accountId}` | accounts | ad-hoc `ownerId===userId` → owner-or-manager | `requireAccountAdmin(account-owner-or-manager)` + field-guard | R3 — account settings; manager+owner write `{name}`; `ownerId`/billing owner-only (ruling #2 field-guard) | **ruling #2: owner-or-manager** | **PR-6A** |
+| `DELETE /accounts/{accountId}` | accounts | withAuthOnly + ad-hoc owner | `requireAccountAdmin(owner)` + sole-owner deletion (D9 §9.3) + GlobalSignOut | destructive | Status-uncertain-resolved | **Phase 6 / PR-6B** |
+| `DELETE /accounts/{accountId}/members/{userId}` | accounts | withAuthOnly + ad-hoc | `requireAccountAdmin(anyOf(owner-or-manager + last-owner-guard, supervisory-site-admin))` + GlobalSignOut | remove member | Aspirational (manager-removal rules never built) | **Phase 6 / PR-6B** |
 | `POST /accounts/{accountId}/invitations` | invitations | withAuth + ad-hoc `ownerId===userId` | `requireAccountAdmin(owner-or-manager / canCreateInvitationGrant)` | legacy single-invite | Aspirational (owner/manager in-app invite never built) | **Phase 8** (bundles) |
 | `GET /api/admin/...access-summary` (access-summary) | access-summary | requireSiteAdmin (claim) | `requireAccountAdmin(supervisory-site-admin)` | directory read; app-admin app-scope = Phase 7 | Confirmed (extended P7) | PR-B |
 | `GET /api/admin/ai-runtime-config` | ai-runtime-config | requireSiteAdmin | `operational-config` (supervisory-site-admin read) | platform AI config | Confirmed | PR-B / PR-C |
 | `PUT …/ai-runtime-config/platform-default` | ai-runtime-config | requireSiteAdmin | `operational-config` (site-admin **default**, D9) | platform default | Confirmed | PR-B / PR-C |
 | `PUT/DELETE …/ai-runtime-config/apps/{appSlug}/override` | ai-runtime-config | requireSiteAdmin | `operational-config` → **app-admin override** (D9) | per-app override | Status-uncertain-resolved | **PR-C** |
 
-> **† PR-B scope boundary (launchpad `accounts` handler).** The `accounts` Lambda co-locates the read/settings routes above with the **member-management mutation** routes (`removeMember`, `deleteAccount`) that are explicitly **Phase 6**, plus `createAccount`. Migrating it onto `requireAccountAdmin` is done as **one coherent pass in Phase 6** rather than partially in PR-B, to avoid touching the Phase-6 mutation paths in this security PR. Its current ad-hoc checks (`ownerId===userId`, `members.some`) are **not** a site-admin bypass — they already gate on ownership/membership — so the D9 site-admin-bypass-removal goal is fully met by PR-B without them. The rulings above are recorded as the authority for that Phase-6 migration. `access-summary` (site-admin) and the `/api/user/*` self routes ARE correct as-is and need no migration.
+> **Phase-6 split (launchpad `accounts` handler).** The `accounts` Lambda was deferred whole from PR-B (its ad-hoc `ownerId===userId` / `members.some` checks were never a site-admin bypass, so PR-B's D9 goal was met without it). Phase 6 migrates it in two PRs: **PR-6A** (this PR) does the non-destructive reads + name + loader wiring — R1 `GET /accounts/{accountId}`, R2 the new `GET …/members/detail`, R3 `PUT …` with the field-guard, and R7 the `withAuthOnly` fix; **PR-6B** does the destructive mutations — `removeMember` and `deleteAccount` with `requireAccountAdmin`, last-owner/sole-owner guards, and `AdminUserGlobalSignOut`. `access-summary` (site-admin) and the `/api/user/*` self routes are correct as-is.
 
 ## 4. Non-REST-route functions (no route classification; documented for completeness)
 
@@ -116,7 +117,73 @@ This table is the **security-review artifact** for the site-admin-bypass removal
 - **Pre-token Lambda (D11.1):** remove the site-admin group-retention override in `reconcileInvariant` — the invariant applies uniformly; the `site-admin` Cognito group drives supervisory surfaces only. (M16 Phase 6 additionally removes the `site_admin` token claim — admin status is read from the group.)
 - **Group-based admin sweep (#416):** `cognito:groups` site-admin fallback already removed in PR-A (auth-client). PR-B confirms no remaining group-based authorization in backend handlers (only `requireSiteAdmin`, which reads the `siteAdmin` claim — Confirmed, not group-based).
 
-## 7. auth.md verification summary (feeds the revision map)
+## 7. Role model & Phase-6 decisions (PR-6A)
+
+### (a) Role model (canonical, owner-settled)
+
+`owner > manager > member/viewer`. An actor may only manage roles **strictly
+below** their own.
+
+- **Owner** — full control: change any role, remove anyone (bounded only by the
+  last-owner floor); ownership transfer is deferred (see R6).
+- **Manager** — change roles **within `{member, viewer}`**, remove members/viewers,
+  and **may self-demote** (manager → member/viewer). MAY NOT create, modify, or
+  remove another manager or an owner; MAY NOT promote anyone to manager or owner.
+- **Member / viewer** — no management powers.
+
+Removal symmetry (keep remove + role-change aligned): a manager may remove
+members/viewers only; only an **owner** removes or demotes a manager or owner;
+manager self-removal/self-demote is allowed (still subject to the last-owner floor).
+
+### (b) Multi-owner affirmation
+
+Multi-owner is **permitted** at the contract + policy-helper level. The last-owner
+guard is a **FLOOR** (an account must retain ≥1 owner; never zero) — **NOT a cap**.
+No product path that **creates a second owner** or **transfers ownership** is built
+yet; it is deferred with role-change (R6). In practice every account has exactly one
+owner because no feature mints another. This is intentional, not an oversight — do
+not add a single-owner cap, and do not change `decideLastOwnerGuard` /
+`decideRoleChange` to enforce `=1`.
+
+### (c) `decideRoleChange` correction (carried into PR-6B)
+
+`packages/lambda-middleware/src/policy.ts:decideRoleChange` is currently **broader
+than the model in (a)**: its manager branch allows `member→manager` promotion and
+editing peer managers (it only denies `newRole==='owner'` and changing an existing
+owner). It has **zero callers** today (role-change route is not built). When **PR-6B**
+wires `PUT /accounts/{accountId}/members/{userId}/role`, `decideRoleChange` MUST be
+tightened to: manager may act only when **both** `currentTargetRole ∈ {member,viewer}`
+**and** `newRole ∈ {member,viewer}`; deny otherwise. Plus a **handler-level
+self-demote carve-out** (actor === target may lower their own role) and the **R5
+self-removal carve-out** (a manager may remove themselves; last-owner floor still
+applies). `decideLastOwnerGuard` is floor-based and correct as-is.
+
+### (d) Phantom-resolution note (6A0)
+
+The missing **"Admin"** menu entry on the live launchpad is **EXPECTED, not a
+regression** — the admin UI / nav shell is unmerged (it lives in the v0 repo), so
+nothing sits behind the site-admin gate yet. 6A0 group-derivation is **verified
+correct** on a real native-array `cognito:groups` token (`siteAdmin=true` end-to-end,
+confirmed via fresh-incognito console). `parseCognitoGroups`, the `site_admin` claim
+removal, and the group-derivation are confirmed correct.
+
+### (e) Legacy-row retirement map (`launchpadRoutes`)
+
+A future collapse is a **real migration with a tail**, NOT a clean delete — roughly
+half of `launchpadRoutes` is PERMANENT and still consumed.
+
+| Legacy route | Retires when | Owning PR |
+|---|---|---|
+| `GET /accounts/{accountId}/members` (thin) | `/members/detail` is the sole reader | retireable as of **PR-6A** (successor shipped) |
+| `DELETE /accounts/{accountId}/members/{userId}` | API-table policy version + GlobalSignOut ships | **PR-6B** |
+| `PUT /accounts/{accountId}` / `DELETE /accounts/{accountId}` | 6A/6B successors live + zero consumers | **PR-6A (PUT) / PR-6B (DELETE)** |
+| `POST` / `GET /accounts/{accountId}/invitations` (single-invite) | bundle routes ship | **Phase 8** |
+| **PERMANENT — not retirement candidates** (distinct responsibility, still consumed): `/health`, `/auth/lookup-provider`, `/auth/setup`, `/api/user/profile`, `/api/user/preferences`, `GET /api/admin/ai-runtime-config`, `PUT …/platform-default`, and `GET /accounts/{accountId}` (account-metadata for selectors). | — | — |
+
+(See the full read-only legacy-route audit for per-row successor / shape-conflict /
+consumer data.)
+
+## 8. auth.md verification summary (feeds the revision map)
 
 - **Confirmed:** all SA/BT data routes; user self routes; ws-authorizer claims check; access-summary site-admin; auth/setup; lookup-provider public.
 - **Aspirational-never-built:** owner/manager in-app invitations (invitations handler is owner-only single-invite, not the bundle model); manager member-removal rules; site-admin write of per-account AI config (was permitted by `requireSiteAdmin` but contradicts D9 — corrected via PR-C).

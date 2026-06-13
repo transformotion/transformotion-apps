@@ -506,7 +506,7 @@ The auth/control-plane Lambdas have explicit permission models. Each is document
 
 | Lambda | Wrapper | Authorization | IAM scope |
 |---|---|---|---|
-| `apps/launchpad/functions/accounts` | `withAuth` | Inline per-route membership/owner checks against account tables | `launchpad-accounts` RW + `launchpad-account-members` RW |
+| `apps/launchpad/functions/accounts` | `withAuthOnly` (M16 P6, ruling #4 — keys off **path** `accountId` + `auth.userId`; never reads `X-Account-Id`, so it must not require one) | Per-request shared wiring loads the account row + all member rows once and closes an in-memory `MembershipLoader` over the array; reads (R1 `GET`, R2 `GET …/members/detail`) gate on `requireAccountAdmin(requireAccountMember)`, write (R3 `PUT`) on `requireAccountAdmin(requireAccountOwnerOrManager)` + field-guard whitelist; uniform-deny so account existence is not probeable. Mutations (`removeMember`/`deleteAccount`) → PR-6B. | `launchpad-accounts` RW + `launchpad-account-members` RW |
 | `apps/launchpad/functions/user` | `withAuthOnly` | User owns their own profile/preferences/active-account. Active-account SET verifies membership via table check (D8 control-plane) | `launchpad-users` RW + `launchpad-accounts` R + `launchpad-account-members` R |
 | `apps/launchpad/functions/account-provisioning` | `withAuthOnly` | None — profile-bootstrap; user has JWT but no account yet (M16 D11: no longer creates accounts) | `launchpad-users` RW + `launchpad-account-members` R + `AdminGetUser` on user pool ARN |
 | `apps/launchpad/functions/access-summary` | `withAuthOnly` | `requireSiteAdmin` — site-admin directory only | `launchpad-users` R + `launchpad-accounts` R + `launchpad-account-members` R + `launchpad-app-admin-grants` R + `ListUsersInGroup` on user pool ARN |
@@ -742,10 +742,11 @@ Launchpad owns the live onboarding, user profile/preference, account administrat
 | `GET /api/user/profile` | `launchpad-user-{stage}` | Reads the caller's profile/preferences from `launchpad-users-{stage}`. |
 | `PUT /api/user/preferences` | `launchpad-user-{stage}` | Merges caller-owned preferences into `launchpad-users-{stage}`. |
 | `POST /accounts` | `launchpad-accounts-{stage}` | Creates a new account and owner membership in Launchpad-owned auth-domain tables. |
-| `GET /accounts/{accountId}` | `launchpad-accounts-{stage}` | Returns account and member list after membership verification. |
-| `PUT /accounts/{accountId}` | `launchpad-accounts-{stage}` | Updates account name after owner verification. |
-| `DELETE /accounts/{accountId}` | `launchpad-accounts-{stage}` | Deletes account and member records after owner verification. |
-| `GET /accounts/{accountId}/members` | `launchpad-accounts-{stage}` | Lists members after membership verification. |
+| `GET /accounts/{accountId}` | `launchpad-accounts-{stage}` | R1 — account + member list to any **active member** (`requireAccountMember`); uniform-deny. |
+| `GET /accounts/{accountId}/members/detail` | `launchpad-accounts-{stage}` | R2 — full `ListAccountMembersResponse` (members with `isLastOwner`; `pendingInvitations: []` until Phase 8) to any active member; the v0 account-management-view target. |
+| `PUT /accounts/{accountId}` | `launchpad-accounts-{stage}` | R3 — updates `name` for **owner-or-manager** + field-guard whitelist (`ownerId`/billing owner-only). |
+| `DELETE /accounts/{accountId}` | `launchpad-accounts-{stage}` | PR-6B — deletes account + member records (owner / supervisory site-admin + GlobalSignOut). |
+| `GET /accounts/{accountId}/members` | `launchpad-accounts-{stage}` | Legacy thin member list — retained, unwired-to-UI; superseded by `…/members/detail`. |
 | `DELETE /accounts/{accountId}/members/{userId}` | `launchpad-accounts-{stage}` | Removes a member after owner verification. |
 | `POST /accounts/{accountId}/invitations` | `launchpad-invitations-{stage}` | Creates an invitation after owner verification. |
 
@@ -779,5 +780,6 @@ The current state has the interface duplicated across `packages/auth-client/`, `
 
 - OAuth resource server custom scopes as an alternative or complement to group-based checks — tracked as Issue #42.
 - Capability-level permissions within an app beyond `view/user/admin`.
-- Multi-owner accounts.
 - Per-browser-session active account (alternative to `custom:active_accounts`).
+
+(Multi-owner accounts are **in scope** as of `m16.0.0` — permitted at contract/policy level with the last-owner guard as a floor; see `route-classification-m16.md` §7b.)

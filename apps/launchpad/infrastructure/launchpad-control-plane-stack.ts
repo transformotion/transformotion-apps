@@ -345,6 +345,10 @@ export class LaunchpadControlPlaneStack extends cdk.Stack {
 
     const membersResource = accountResource.addResource('members');
     membersResource.addMethod('GET', accountsIntegration, authOptions);
+    // M16 Phase 6 (R2): full member detail (ListAccountMembersResponse).
+    membersResource
+      .addResource('detail')
+      .addMethod('GET', accountsIntegration, authOptions);
     membersResource
       .addResource('{userId}')
       .addMethod('DELETE', accountsIntegration, authOptions);
