@@ -1364,6 +1364,9 @@ importers:
 
   packages/auth-client:
     dependencies:
+      '@transformotion/contracts':
+        specifier: workspace:*
+        version: link:../contracts
       aws-amplify:
         specifier: ^6.16.4
         version: 6.16.4

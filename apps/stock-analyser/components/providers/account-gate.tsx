@@ -8,9 +8,10 @@ import { useActiveAccountStore } from '@/stores/active-account/use-active-accoun
  * Gates Stock Analyser private surfaces on app-account membership (M16 D7/D9).
  *
  * - membership present  → renders the app.
- * - zero membership     → "no access" terminal state. Admin claims (site_admin /
- *   app_admin) grant NOTHING here: data authority is membership-only (D9), so an
- *   admin without a Stock Analyser membership sees the same no-access state.
+ * - zero membership     → "no access" terminal state. Admin status (site-admin
+ *   Cognito group / app_admin) grants NOTHING here: data authority is
+ *   membership-only (D9), so an admin without a Stock Analyser membership sees
+ *   the same no-access state.
  * - control-plane error → an error/RETRY state, deliberately DISTINCT from
  *   no-access: an outage must never masquerade as revocation.
  *

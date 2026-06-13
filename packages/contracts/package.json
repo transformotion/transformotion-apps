@@ -6,6 +6,7 @@
   "types": "./src/index.ts",
   "typesVersions": {
     "*": {
+      "cognito-groups": ["src/cognito-groups.ts"],
       "_shared/api": ["src/_shared/api.ts"],
       "_shared/auth": ["src/_shared/auth.ts"],
       "_shared/runtime-config": ["src/_shared/runtime-config.ts"],
@@ -26,6 +27,7 @@
     }
   },
   "exports": {
+    "./cognito-groups": "./src/cognito-groups.ts",
     "./_shared/api": "./src/_shared/api.ts",
     "./_shared/auth": "./src/_shared/auth.ts",
     "./_shared/runtime-config": "./src/_shared/runtime-config.ts",

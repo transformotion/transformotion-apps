@@ -8,9 +8,9 @@ import { useActiveAccountStore } from '@/stores/active-account/use-active-accoun
  * Gates Budget Tracker private surfaces on app-account membership (M16 D7/D9).
  *
  * - membership present  → renders the app.
- * - zero membership     → terminal "no access" state. Admin claims grant NOTHING
- *   here: data authority is membership-only (D9), so a site_admin / app_admin
- *   without a Budget Tracker membership sees the same no-access state.
+ * - zero membership     → terminal "no access" state. Admin status grants NOTHING
+ *   here: data authority is membership-only (D9), so a site-admin (Cognito group)
+ *   / app_admin without a Budget Tracker membership sees the same no-access state.
  * - control-plane error → an error/RETRY state, deliberately DISTINCT from
  *   no-access: an outage must never masquerade as revocation.
  *

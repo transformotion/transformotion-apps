@@ -9,6 +9,7 @@ import {
   getCurrentUser as amplifyGetCurrentUser,
   fetchAuthSession,
 } from 'aws-amplify/auth'
+import { parseCognitoGroups } from '@transformotion/contracts/cognito-groups'
 import type { AuthService, AuthSession, AuthTokens, User, Account, SignInCredentials, SignUpCredentials } from './index'
 
 /**
@@ -58,12 +59,13 @@ export class CognitoAuthService implements AuthService {
       const email      = claims['email'] as string
       const givenName  = claims['given_name'] as string | undefined
       const familyName = claims['family_name'] as string | undefined
-      // M16 D11 addendum (Phase 5): the explicit `site_admin` claim is the SOLE
-      // admin-status source. The legacy `cognito:groups` fallback is removed —
-      // with no claim, admin status fails to `false`. The pre-token Lambda always
-      // stamps `site_admin` from the group, so this is not a behaviour change for
-      // real users; it removes a second, group-derived source of truth.
-      const siteAdmin  = claims['site_admin'] === 'true'
+      // M16 Phase 6 (D11): platform admin status comes from the `site-admin`
+      // Cognito group. The earlier `site_admin` token claim was an unintended
+      // projection of the same group and has been removed — the frontend now
+      // consolidates on the group directly (read from `cognito:groups`). This is
+      // artifact removal, not a behaviour change: the group is unchanged.
+      const groups = parseCognitoGroups(claims['cognito:groups'] as string[] | string | undefined)
+      const siteAdmin  = groups.includes('site-admin')
       // Surface the `app_admin` claim (emitted by the pre-token Lambda; D5) so the
       // client can gate app-admin surfaces by claim. JSON array of appSlugs.
       const appAdmin   = parseSlugArrayClaim(claims['app_admin'])

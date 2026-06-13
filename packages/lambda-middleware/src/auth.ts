@@ -1,15 +1,17 @@
 import type { APIGatewayProxyEvent } from './types';
 import type { AuthClaims, AccountContext, AppName, AccountRole } from './types';
 import type { AccountMembership, EntitledAppSlug } from '@transformotion/contracts/_shared/auth';
+import { parseCognitoGroups } from '@transformotion/contracts/cognito-groups';
 import { unauthorised, badRequest, forbidden, HttpError } from './errors';
 
 /**
  * Extract and validate the Cognito JWT claims that API Gateway injects into
  * `requestContext.authorizer.claims` after a successful authoriser check.
  *
- * Parses both legacy `cognito:groups` and the new `apps`, `accounts`, and
- * `site_admin` claims injected by the pre-token generation Lambda. Falls back
- * gracefully when the new claims are absent (transition period).
+ * Parses `cognito:groups` (the source of platform admin status — the
+ * `site-admin` group) and the `apps` / `accounts` claims injected by the
+ * pre-token generation Lambda. Falls back gracefully when the new claims are
+ * absent (transition period).
  *
  * Throws HttpError(401) if the claims map is missing or incomplete.
  */
@@ -26,8 +28,11 @@ export function extractAuthClaims(event: APIGatewayProxyEvent): AuthClaims {
   if (!userId) throw unauthorised('JWT claim `sub` missing');
   if (!email)  throw unauthorised('JWT claim `email` missing');
 
-  const groupsRaw = claims['cognito:groups'] ?? '';
-  const groups = groupsRaw ? groupsRaw.split(' ').filter(Boolean) : [];
+  // Shared parser: tolerates the API Gateway authorizer's comma/bracket form as
+  // well as space-delimited and array shapes (M16 Phase 6 — admin status now
+  // rides this parse, so a naive space-split would silently lock out multi-group
+  // admins). See @transformotion/contracts/cognito-groups.
+  const groups = parseCognitoGroups(claims['cognito:groups']);
 
   // New claims injected by pre-token Lambda — parse with fallbacks for transition period
   let apps: EntitledAppSlug[] = [];
@@ -42,7 +47,11 @@ export function extractAuthClaims(event: APIGatewayProxyEvent): AuthClaims {
     if (raw) accounts = JSON.parse(raw) as Partial<Record<EntitledAppSlug, AccountMembership[]>>;
   } catch { /* absent or malformed — fall back to groups */ }
 
-  const siteAdmin = claims['site_admin'] === 'true';
+  // M16 Phase 6 (D11): platform admin status is sourced SOLELY from the
+  // `site-admin` Cognito group (cognito:groups), never a token claim. The
+  // `site_admin` claim was an unintended projection and is no longer emitted.
+  // Deriving here keeps every downstream `auth.siteAdmin` reader on the group.
+  const siteAdmin = groups.includes('site-admin');
 
   return { userId, email, groups, apps, accounts, siteAdmin };
 }
@@ -73,7 +82,8 @@ export function userInGroup(claims: AuthClaims, group: string): boolean {
 
 /**
  * Throws HttpError(403) if the user is not in at least one of the required groups.
- * @deprecated Prefer requireAppAccess / requireAccountAccess for new code.
+ * @deprecated Prefer requireAppAccess / the policy layer (requireAccountData /
+ * requireAccountAdmin) for new code.
  */
 export function requireGroup(claims: AuthClaims, ...groups: string[]): void {
   const hasGroup = groups.some(g => claims.groups.includes(g));
@@ -90,8 +100,9 @@ function isSuperUser(auth: AuthClaims): boolean {
 }
 
 /**
- * Throws HttpError(403) unless the user has the site_admin claim or is in the
- * legacy 'admin' / 'site-admin' Cognito group.
+ * Throws HttpError(403) unless the user is in the `site-admin` Cognito group
+ * (the sole source of platform admin status; `auth.siteAdmin` is derived from
+ * `cognito:groups` in extractAuthClaims).
  */
 export function requireSiteAdmin(auth: AuthClaims): void {
   if (!isSuperUser(auth)) throw forbidden('Site admin access required');

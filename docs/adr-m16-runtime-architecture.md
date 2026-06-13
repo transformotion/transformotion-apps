@@ -250,6 +250,15 @@ The `apps` claim survives as a projection (lean derivation from memberships + re
 
 ### Addendum (v1.3, owner-confirmed 2026-06-12): `site_admin` claim is the sole admin-status source
 
+> **SUPERSEDED in M16 Phase 6 (owner-confirmed, v0 contract `m16.2.0`).** The
+> direction below — "the `site_admin` claim is the sole source" — is reversed:
+> the `site_admin` **claim is removed entirely**, and the **`site-admin` Cognito
+> group is the sole source of admin status** (the claim was an unintended
+> projection of the same group). Backend (`extractAuthClaims`) and frontend
+> (`cognito-auth`) both derive admin status from `cognito:groups`. The v1.3 goal
+> (one source, read everywhere) stands; the chosen source is the group, not a
+> claim. The text below is retained as the decision record it superseded.
+
 The explicit **`site_admin` claim is the SOLE source of admin status** for **all** UI and backend checks. The `cognito:groups` fallback in `packages/auth-client` (which currently treats membership of the `site-admin` group as admin when the claim is absent) is **deleted in Phase 5** — with no claim, admin status **fails to `false`**. In the same Phase 5 client-auth consolidation, the **`app_admin` claim is surfaced in `auth-client`** (today it is emitted by the pre-token Lambda but not exposed by the client). The Phase 5 **route-classification sweep** additionally inventories and removes **any other group-based admin checks** across the codebase, replacing them with the explicit claims.
 
 **No change to admin GRANTING.** Site-admin bestowal remains **group membership managed only by existing site-admins**; the pre-token Lambda continues to derive the `site_admin` claim from that group. What v1.3 unifies is **claim derivation/consumption** (one claim, read everywhere), not how the underlying authority is granted.

@@ -60,8 +60,11 @@ those stacks. They are not live ownership surfaces.
   - `launchpad-invitations-{stage}`
   - `launchpad-rate-limits-{stage}`
 
-The pre-token trigger emits the `apps`, `accounts`, and `site_admin` claims
+The pre-token trigger emits the `apps`, `accounts`, and `app_admin` claims
 consumed by Launchpad, Stock Analyser, Budget Tracker, and migration utilities.
+Platform admin status is NOT a claim — it is read from the `site-admin` Cognito
+group (`cognito:groups`); the `site_admin` claim was removed in M16 Phase 6
+(v0 contract `m16.2.0` / D11).
 
 ## Launchpad Control Plane
 
@@ -198,8 +201,13 @@ Current authorization state after the two-axis policy foundation lands
   Supervisory/ownership routes use `requireAccountAdmin(...)`.
 - **Pre-token site-admin override removed (D11.1).** The app-access invariant in
   `launchpad-pre-token-generation-{stage}` now applies uniformly; the former
-  site-admin group-retention and all-apps shortcuts are gone. `site_admin` is
-  sourced solely from the claim path and drives supervisory surfaces only.
+  site-admin group-retention and all-apps shortcuts are gone.
+- **`site_admin` claim removed (M16 Phase 6, v0 `m16.2.0` / D11).** The pre-token
+  Lambda no longer emits `site_admin`. Platform admin status is sourced solely
+  from the `site-admin` Cognito group: backend `extractAuthClaims` derives
+  `auth.siteAdmin` from `cognito:groups`, the frontend derives
+  `metadata.siteAdmin` likewise, and the `budget-ai` proxy propagates
+  `cognito:groups` (not a claim) to `claude-proxy`.
 - **Cache and AI write gates added.** SA `analysis-cache` writes and BT
   `budget-ai` routes are now write-gated (member-tier) and granted GetItem on
   `launchpad-account-members-{stage}` via `grantMembershipRead`. AI-config

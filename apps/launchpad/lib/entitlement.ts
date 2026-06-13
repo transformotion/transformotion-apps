@@ -3,7 +3,8 @@
  *
  * Tiles derive from the user's per-app membership (the access projection), NOT
  * from a hard-coded list (ADR D11). Admin/control-plane surfaces gate on the
- * site_admin / app_admin claims elsewhere — never on app membership.
+ * site-admin Cognito group / `app_admin` claim elsewhere — never on app
+ * membership (the `site_admin` claim was removed in M16 Phase 6).
  *
  * Everything here is pure and framework-free so it can be unit-tested without a
  * DOM; the React component maps slugs to icons/launch handlers.
