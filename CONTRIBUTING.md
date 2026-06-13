@@ -1529,7 +1529,53 @@ platform on every platform stack change.
 
 ---
 
-## 8. The status-tag system
+## 8. Working Agreement — scope provenance and decision discipline
+
+This section codifies process lessons from the M11/M16 account-lifecycle
+milestone. It is normative and applies to all phase work.
+
+Every feature, endpoint, or UI surface built in a phase MUST carry a
+**provenance tag**, recorded in the phase brief and the PR body, *before*
+implementation:
+
+- **prototyped** — it exists in the v0 prototype (cite the screen or behaviour).
+- **contracted** — it is defined in the m16/m17 contracts (cite the type, route,
+  or `behaviour.md` clause).
+- **net-new** — neither.
+
+**Rules.**
+
+1. **No net-new work inside a phase.** If an item is net-new, STOP and raise it as
+   a backlog issue — do not build it as part of phase work. Net-new may enter the
+   build path only via the normal route: prototype in v0 → promote to contract →
+   implement. The owner may explicitly fast-track, but only as a recorded,
+   deliberate exception.
+2. **Sub-questions never legitimise an unscoped parent.** Before resolving a detail
+   question about a feature (e.g. "should `deleteAccount` block or cascade?"),
+   confirm the feature itself is prototyped or contracted. If the parent has no
+   provenance, the parent is the issue — raise it; do not answer the sub-question.
+3. **Per-phase gap analysis precedes wiring.** Before a phase's implementation
+   begins, enumerate the phase's needs against the prototype/contract coverage as a
+   single gap list. Anything the phase needs that is not covered is resolved (or
+   explicitly deferred) UP FRONT, not discovered during wire-up. The gap list is the
+   phase's scope boundary: items not in it are out of scope by construction.
+4. **Scope-expanding suggestions must be tagged in the same breath.** Any
+   recommendation that adds scope ("complete the surface", "while we're here", "for
+   consistency", "for parity") MUST state the candidate's provenance tag and flag
+   net-new *before* the recommendation. An untagged additive recommendation is a
+   process violation.
+5. **Verify the artifact, not the report.** Decisions are made against the actual
+   code/contract/prototype state, not against a summary of it. When a report and an
+   artifact could disagree, check the artifact.
+
+**Enforcement.** Phase briefs carry provenance tags per item; PRs restate them;
+reviewers reject untagged or net-new-tagged phase work. These rules are mirrored in
+the project custom instructions that govern the chat-side design partner, since the
+same drift originates there.
+
+---
+
+## 9. The status-tag system
 
 Documents that have a "status" column for findings (the architectural
 inventory; verification reports; audit-style outputs) use a six-tag
@@ -1556,7 +1602,7 @@ six.
 
 ---
 
-## 9. Archived documents
+## 10. Archived documents
 
 Documents that have been superseded live in `/docs/archive/`. Each
 archived document carries a header at the top:
@@ -1584,7 +1630,7 @@ PLAN.md's documentation reconciliation milestone (Stage 0c).
 
 ---
 
-## 10. Changing this document
+## 11. Changing this document
 
 This document is itself operational — changes to ways of working are made
 by changing this document, in PRs.
@@ -1599,8 +1645,9 @@ Changes to Section 3 (repository structure) are coordinated with the
 relevant code reorganisation and ratified through the architecture
 decision process.
 
-Changes to Section 4 (workflow) and Section 7 (operating principles) are
-made when ways of working change. The change itself is a PR and goes
+Changes to Section 4 (workflow), Section 7 (operating principles), and
+Section 8 (Working Agreement — scope provenance and decision discipline)
+are made when ways of working change. The change itself is a PR and goes
 through normal review.
 
 Changes to Section 5 (architectural patterns) and Section 6 (utility
@@ -1609,5 +1656,5 @@ decisions change. Such changes are typically ratified through dedicated
 decision work (e.g., milestone-scoped decision documents) before
 landing in this document.
 
-Changes to Section 8 (status-tag system) and Section 9 (archived
+Changes to Section 9 (status-tag system) and Section 10 (archived
 documents) are mechanical.

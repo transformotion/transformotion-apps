@@ -4,7 +4,7 @@
 **Date:** 2026-06-12
 **Consumes:** ADR v1.3 D5/D8/D9/D11/D12; permissions model §6.3 matrix, §8 discovery, §10 settings; #416 rulings.
 
-This table is the **security-review artifact** for the site-admin-bypass removal (ADR D9): every existing route is mapped to its new middleware. It doubles as the **auth.md verification sweep** (CONTRIBUTING §8 tags). Completeness over speed.
+This table is the **security-review artifact** for the site-admin-bypass removal (ADR D9): every existing route is mapped to its new middleware. It doubles as the **auth.md verification sweep** (CONTRIBUTING §9 tags). Completeness over speed.
 
 ## Legend
 
@@ -17,7 +17,7 @@ This table is the **security-review artifact** for the site-admin-bypass removal
 - `operational-config` — D9 administrative-axis service config (site-admin default / app-admin override); grants no account-data access.
 - `ws-authorizer` / `internal-invoke` / `health` — non-REST-route Lambdas.
 
-**auth.md verification tag** (CONTRIBUTING §8): `Confirmed` · `Aspirational-never-built` · `Status-uncertain-resolved`.
+**auth.md verification tag** (CONTRIBUTING §9): `Confirmed` · `Aspirational-never-built` · `Status-uncertain-resolved`.
 
 **Migrates in:** which phase actually swaps the guard. PR-B = this phase. Phase 6/8/9 = deferred mutation/invitation/redemption surfaces (out of Phase 5 scope). PR-C = AI-config rehoming.
 
