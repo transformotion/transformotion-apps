@@ -150,10 +150,12 @@ async function resetOverride(deps: Dependencies, accountId: string) {
   return noContent();
 }
 
-  // D9 data-tier gate (no site-admin branch) for the read; the override is
-  // operational-config (D9) — interim member + site-admin, rehomed to app-level
-  // app-admin config in PR-C.
-  const btData = requireAccountData(APP_SLUG);
+// D9 data-tier gate (no site-admin branch) for the read; the override is
+// operational-config (D9) — interim member + site-admin, rehomed to app-level
+// app-admin config in PR-C.
+const btData = requireAccountData(APP_SLUG);
+
+export function createHandler(deps: Dependencies = defaultDependencies) {
   return withAuth(async ({ auth, account, event }) => {
     const resource = event.resource ?? '';
     if (resource === '/api/budget/v1/ai-config' && event.httpMethod === 'GET') {

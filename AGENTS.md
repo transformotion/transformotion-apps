@@ -258,9 +258,12 @@ These rules are stronger than local convenience.
    account-scoped data must validate membership before DynamoDB access.
 
 6. Auth middleware is mandatory for protected handlers.
-   Account-scoped handlers use `withAuth`, then call `requireAppAccess` and
-   `requireAccountAccess` or stronger helpers. Auth-only handlers use
-   `withAuthOnly`. Public handlers require an explicit justification.
+   Account-scoped data handlers use `withAuth`, then the data-authority factory
+   `requireAccountData(appSlug).read`/`.write` (D9, M16); supervisory/ownership
+   handlers use `requireAccountAdmin`. There is no site-admin data bypass.
+   Auth-only handlers use `withAuthOnly`. Public handlers require an explicit
+   justification. (`requireAccountAccess`/`requireAccountOwner` were deleted in
+   M16 Phase 5.)
 
 7. IAM boundaries must only get tighter or more explicit.
    Do not broaden IAM permissions to unblock code. If a new permission is

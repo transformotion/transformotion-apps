@@ -181,3 +181,27 @@ After Platform auth decommission deploy:
 - Migration Utilities authorize LaunchpadAuth tokens.
 - Platform deploy manages substrate only plus the one-time empty legacy stack
   templates needed to delete former resources.
+
+## M16 Authorization Model (Phase 5)
+
+Current authorization state after the two-axis policy foundation lands
+(`docs/adr-m16-runtime-architecture.md` D9/D11; PR #440):
+
+- **Data authority is membership-only.** App-data routes in Stock Analyser and
+  Budget Tracker are gated by the `requireAccountData(appSlug)` factory in
+  `packages/lambda-middleware` (`.read` = claims-only, viewer passes; `.write` =
+  claims + live `launchpad-account-members` row, viewer denied). There is no
+  site-admin branch on the data path. The per-route migration record is
+  `docs/architecture/route-classification-m16.md`.
+- **`requireAccountAccess` and `requireAccountOwner` are deleted** (not
+  deprecated) from `packages/lambda-middleware`; zero remaining callers.
+  Supervisory/ownership routes use `requireAccountAdmin(...)`.
+- **Pre-token site-admin override removed (D11.1).** The app-access invariant in
+  `launchpad-pre-token-generation-{stage}` now applies uniformly; the former
+  site-admin group-retention and all-apps shortcuts are gone. `site_admin` is
+  sourced solely from the claim path and drives supervisory surfaces only.
+- **Cache and AI write gates added.** SA `analysis-cache` writes and BT
+  `budget-ai` routes are now write-gated (member-tier) and granted GetItem on
+  `launchpad-account-members-{stage}` via `grantMembershipRead`. AI-config
+  overrides remain member-tier write + interim `requireSiteAdmin` pending the
+  operational-config admin axis (PR-C, #416).

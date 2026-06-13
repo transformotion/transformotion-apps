@@ -213,11 +213,13 @@ async function resetOverride(deps: Dependencies, accountId: string) {
   return noContent();
 }
 
-  // D9 data-tier gate (no site-admin branch). Settings rows are D12 user-scoped
-  // (SK=USER#{userId}#PREFERENCES): a viewer MAY read AND write their OWN prefs,
-  // so both /settings GET and PATCH use .read (membership) — the handler keys by
-  // auth.userId, enforcing the SK-owner match by construction.
-  const saData = requireAccountData(APP_SLUG);
+// D9 data-tier gate (no site-admin branch). Settings rows are D12 user-scoped
+// (SK=USER#{userId}#PREFERENCES): a viewer MAY read AND write their OWN prefs,
+// so both /settings GET and PATCH use .read (membership) — the handler keys by
+// auth.userId, enforcing the SK-owner match by construction.
+const saData = requireAccountData(APP_SLUG);
+
+export function createHandler(deps: Dependencies = defaultDependencies) {
   return withAuth(async ({ auth, account, event }) => {
     const resource = event.resource ?? '';
     if (resource === '/settings' && event.httpMethod === 'GET') {
