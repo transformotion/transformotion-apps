@@ -57,7 +57,7 @@ async function queryAppAdminGrants(userId: string): Promise<AppAdminGrantRow[]> 
   // M16: the app-admin-grants table is the newest read in this trigger. Isolate
   // its failure so it degrades to an empty app_admin claim rather than rejecting
   // the Promise.all below — which the outer handler would otherwise catch by
-  // dropping ALL claims. Core apps/accounts/site_admin claims still get emitted.
+  // dropping ALL claims. Core apps/accounts claims still get emitted.
   try {
     const res = await ddb.send(new QueryCommand({
       TableName: APP_ADMIN_GRANTS_TABLE,
@@ -133,8 +133,8 @@ async function reconcileInvariant(
     // D11 item 1 (Phase 5): the site-admin override is REMOVED — the invariant
     // (group membership ⇔ ≥1 account for the app) applies uniformly. A site-admin
     // with no accounts for an app is removed from its access group like anyone
-    // else; site-admin's supervisory power rides the site_admin claim, not
-    // app-access groups.
+    // else; site-admin's supervisory power rides the site-admin Cognito group
+    // (read from cognito:groups), not app-access groups.
     if (hasAccounts && !inGroup) {
       console.log(`[launchpad-pre-token] reconcile: adding ${userId} to ${accessGroup}`);
       try {
@@ -170,7 +170,7 @@ function buildAppsList(reconciledGroups: string[]): string[] {
   // D11 item 1 (Phase 5): no site-admin all-apps shortcut — the apps claim
   // reflects the reconciled (membership-derived) access groups uniformly. A
   // site-admin without membership does not receive app-data access; supervisory
-  // surfaces are driven by the site_admin claim, not the apps claim.
+  // surfaces are driven by the site-admin Cognito group, not the apps claim.
   return APP_SLUGS.filter(slug => reconciledGroups.includes(ACCESS_GROUP[slug]));
 }
 
@@ -181,7 +181,6 @@ export const handler = async (
     const userId = event.userName;
     const userPoolId = event.userPoolId;
     const currentGroups = event.request.groupConfiguration.groupsToOverride ?? [];
-    const isSiteAdmin = currentGroups.includes('site-admin');
 
     console.log('[launchpad-pre-token] userId:', userId, 'groups:', currentGroups.join(','));
 
@@ -210,14 +209,16 @@ export const handler = async (
       .map(g => g.appSlug)
       .filter(slug => APP_SLUGS.includes(slug));
 
+    // M16 Phase 6 (D11): the `site_admin` claim is REMOVED. Platform admin status
+    // is sourced solely from the `site-admin` Cognito group (cognito:groups);
+    // consumers read the group, never a claim. Emitted claims are app/account scoped.
     const claims: Record<string, string> = {
       apps: JSON.stringify(buildAppsList(reconciledGroups)),
       accounts: JSON.stringify(accountsByApp),
-      site_admin: String(isSiteAdmin),
       app_admin: JSON.stringify(appAdminSlugs),
     };
 
-    console.log('[launchpad-pre-token] claims apps:', claims['apps'], 'site_admin:', claims['site_admin'], 'app_admin:', claims['app_admin']);
+    console.log('[launchpad-pre-token] claims apps:', claims['apps'], 'app_admin:', claims['app_admin']);
 
     event.response = {
       claimsOverrideDetails: {

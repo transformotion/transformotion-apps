@@ -20,10 +20,11 @@ export async function invokeProxy(
         claims: {
           sub:              auth.userId,
           email:            auth.email,
+          // Propagate cognito:groups — claude-proxy re-derives site-admin status
+          // from the `site-admin` group (M16 Phase 6 / D11; no site_admin claim).
           'cognito:groups': auth.groups.join(' '),
           apps:             JSON.stringify(auth.apps),
           accounts:         JSON.stringify(auth.accounts),
-          site_admin:       String(auth.siteAdmin),
         },
       },
     },

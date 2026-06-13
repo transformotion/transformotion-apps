@@ -57,10 +57,11 @@ function event(
         claims: {
           sub: 'admin-user',
           email: 'admin@example.com',
-          'cognito:groups': '',
+          // M16 Phase 6 (D11): platform admin status comes from the site-admin
+          // Cognito group, not a token claim.
+          'cognito:groups': siteAdmin ? 'site-admin' : '',
           apps: JSON.stringify([]),
           accounts: JSON.stringify(accounts),
-          site_admin: String(siteAdmin),
         },
       },
     },

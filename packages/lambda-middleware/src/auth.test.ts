@@ -11,6 +11,7 @@ import {
 import type { AccountMembershipRow } from './auth';
 import type { AuthClaims } from './types';
 import { HttpError } from './errors';
+import { parseCognitoGroups } from '@transformotion/contracts/cognito-groups';
 import type { APIGatewayProxyEvent } from 'aws-lambda';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -71,9 +72,57 @@ describe('extractAuthClaims', () => {
     expect(claims.accounts).toEqual({ 'budget-tracker': [{ accountId: 'acc-1', role: 'member' }] });
   });
 
-  it('parses site_admin claim', () => {
-    const claims = extractAuthClaims(makeEvent({ sub: 'u1', email: 'a@b.com', site_admin: 'true' }));
-    expect(claims.siteAdmin).toBe(true);
+  it('derives siteAdmin from the site-admin Cognito group (no claim)', () => {
+    const admin = extractAuthClaims(makeEvent({
+      sub: 'u1', email: 'a@b.com', 'cognito:groups': 'budget-app-access site-admin',
+    }));
+    expect(admin.siteAdmin).toBe(true);
+
+    const regular = extractAuthClaims(makeEvent({
+      sub: 'u2', email: 'b@b.com', 'cognito:groups': 'budget-app-access',
+    }));
+    expect(regular.siteAdmin).toBe(false);
+  });
+
+  // The dev owner's real token holds app-access groups AND site-admin. The API
+  // Gateway REST authorizer serialises cognito:groups for multi-group users as a
+  // COMMA- (and sometimes bracket-) joined string — a naive space-split would
+  // silently resolve siteAdmin=false here. This is the group-gate path that
+  // access-summary / ai-runtime-config depend on.
+  it('derives siteAdmin=true for a multi-group admin in the API Gateway comma format', () => {
+    const comma = extractAuthClaims(makeEvent({
+      sub: 'u1', email: 'a@b.com',
+      'cognito:groups': 'budget-app-access,site-admin,stock-app-access',
+    }));
+    expect(comma.groups).toEqual(['budget-app-access', 'site-admin', 'stock-app-access']);
+    expect(comma.siteAdmin).toBe(true);
+
+    const bracketed = extractAuthClaims(makeEvent({
+      sub: 'u1', email: 'a@b.com',
+      'cognito:groups': '[budget-app-access, site-admin]',
+    }));
+    expect(bracketed.siteAdmin).toBe(true);
+
+    const nonAdmin = extractAuthClaims(makeEvent({
+      sub: 'u2', email: 'b@b.com',
+      'cognito:groups': 'budget-app-access,stock-app-access',
+    }));
+    expect(nonAdmin.siteAdmin).toBe(false);
+  });
+
+  it('requireSiteAdmin passes for a multi-group admin (comma format) — the ai-runtime-config gate path', () => {
+    const auth = extractAuthClaims(makeEvent({
+      sub: 'u1', email: 'a@b.com',
+      'cognito:groups': 'budget-app-access,site-admin,stock-app-access',
+    }));
+    expect(() => requireSiteAdmin(auth)).not.toThrow();
+  });
+
+  it('ignores any site_admin token claim (removed in m16.2.0 — group is the source)', () => {
+    const claims = extractAuthClaims(makeEvent({
+      sub: 'u1', email: 'a@b.com', site_admin: 'true', 'cognito:groups': '',
+    }));
+    expect(claims.siteAdmin).toBe(false);
   });
 
   it('falls back gracefully when apps/accounts are malformed JSON', () => {
@@ -97,16 +146,12 @@ describe('extractAuthClaims', () => {
 // ── requireSiteAdmin ──────────────────────────────────────────────────────────
 
 describe('requireSiteAdmin', () => {
-  it('passes when siteAdmin claim is true', () => {
+  it('passes when siteAdmin is true (derived from the site-admin group upstream)', () => {
     expect(() => requireSiteAdmin(makeClaims({ siteAdmin: true }))).not.toThrow();
   });
 
-  it('throws 403 when only legacy admin group is present', () => {
+  it('throws 403 for a non-site-admin group', () => {
     expect(() => requireSiteAdmin(makeClaims({ groups: ['admin'] }))).toThrow(HttpError);
-  });
-
-  it('throws 403 when only legacy site-admin group is present', () => {
-    expect(() => requireSiteAdmin(makeClaims({ groups: ['site-admin'] }))).toThrow(HttpError);
   });
 
   it('throws 403 for regular user with no claims', () => {
@@ -299,5 +344,50 @@ describe('requireAccountWrite', () => {
       requireAccountWrite(makeClaims({ siteAdmin: true }), 'budget-tracker', 'acc-1', l),
     ).rejects.toMatchObject({ statusCode: 403 });
     expect(l.calls).toHaveLength(0);
+  });
+});
+
+// ── parseCognitoGroups (shared single source of truth — M16 Phase 6) ──────────
+// Exercised against the ACTUAL API Gateway authorizer shapes, not the
+// space-delimited assumption. The same parser backs the frontend auth client.
+
+describe('parseCognitoGroups', () => {
+  it('parses the API Gateway comma-joined multi-group string', () => {
+    expect(parseCognitoGroups('budget-app-access,site-admin,stock-app-access'))
+      .toEqual(['budget-app-access', 'site-admin', 'stock-app-access']);
+  });
+
+  it('parses the bracket-wrapped form (with or without spaces after commas)', () => {
+    expect(parseCognitoGroups('[budget-app-access,site-admin]'))
+      .toEqual(['budget-app-access', 'site-admin']);
+    expect(parseCognitoGroups('[budget-app-access, site-admin]'))
+      .toEqual(['budget-app-access', 'site-admin']);
+  });
+
+  it('parses the space-delimited form', () => {
+    expect(parseCognitoGroups('budget-app-access site-admin'))
+      .toEqual(['budget-app-access', 'site-admin']);
+  });
+
+  it('parses a bare single group', () => {
+    expect(parseCognitoGroups('site-admin')).toEqual(['site-admin']);
+  });
+
+  it('passes an array (amplify decoded token) through, trimmed', () => {
+    expect(parseCognitoGroups(['budget-app-access', ' site-admin ']))
+      .toEqual(['budget-app-access', 'site-admin']);
+  });
+
+  it('returns [] for empty / undefined / null', () => {
+    expect(parseCognitoGroups('')).toEqual([]);
+    expect(parseCognitoGroups(undefined)).toEqual([]);
+    expect(parseCognitoGroups(null)).toEqual([]);
+  });
+
+  it('exact-matches group names (no substring false positives)', () => {
+    // 'site-admin-readonly' must NOT satisfy a `.includes('site-admin')` check.
+    expect(parseCognitoGroups('site-admin-readonly,budget-app-access'))
+      .toEqual(['site-admin-readonly', 'budget-app-access']);
+    expect(parseCognitoGroups('site-admin-readonly').includes('site-admin')).toBe(false);
   });
 });

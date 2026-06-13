@@ -113,7 +113,7 @@ This table is the **security-review artifact** for the site-admin-bypass removal
 - **`requireAccountAccess` — DELETE.** 14 callers (all SA/BT app-data handlers above) migrate to `requireAccountData`. Zero callers remain → helper deleted from `packages/lambda-middleware/src/auth.ts`.
 - **`requireAccountOwner` — DELETE.** **0 callers** in the repo (launchpad uses ad-hoc `ownerId` checks, migrated to `requireAccountAdmin(owner…)`). Clean delete.
 - **`requireAppAccess` — RETAINED**, but no longer on app-data routes: `requireAccountData.read/write` checks `accounts[app]` membership, which subsumes app entitlement. Its site-admin branch therefore no longer sits on any app-data path. (Still used by `requireAnyAppAccess`/legacy; not in scope to delete.)
-- **Pre-token Lambda (D11.1):** remove the site-admin group-retention override in `reconcileInvariant` — the invariant applies uniformly; `site_admin` claim continues to drive supervisory surfaces only.
+- **Pre-token Lambda (D11.1):** remove the site-admin group-retention override in `reconcileInvariant` — the invariant applies uniformly; the `site-admin` Cognito group drives supervisory surfaces only. (M16 Phase 6 additionally removes the `site_admin` token claim — admin status is read from the group.)
 - **Group-based admin sweep (#416):** `cognito:groups` site-admin fallback already removed in PR-A (auth-client). PR-B confirms no remaining group-based authorization in backend handlers (only `requireSiteAdmin`, which reads the `siteAdmin` claim — Confirmed, not group-based).
 
 ## 7. auth.md verification summary (feeds the revision map)

@@ -11,7 +11,7 @@ export interface AuthClaims {
   userId: string;
   /** Email address (from the `email` claim). */
   email: string;
-  /** Legacy Cognito groups (space-separated, still present for fallback). */
+  /** Cognito groups (from `cognito:groups`). Sole source of platform admin status (`site-admin`). */
   groups: string[];
   /** Apps the user has been granted access to, e.g. ['budget-tracker', 'stock-analyser']. */
   apps: EntitledAppSlug[];
@@ -21,7 +21,7 @@ export interface AuthClaims {
    * Empty until pre-token Lambda is live.
    */
   accounts: Partial<Record<EntitledAppSlug, AccountMembership[]>>;
-  /** True when the user has the platform-wide site_admin claim. */
+  /** True when the user is in the `site-admin` Cognito group (derived from `groups`). */
   siteAdmin: boolean;
 }
 

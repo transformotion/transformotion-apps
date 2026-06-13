@@ -320,7 +320,8 @@ export function Launchpad({
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
 
-  // Admin/control-plane surfaces gate on the site_admin claim, NOT app membership (D11).
+  // Admin/control-plane surfaces gate on the site-admin Cognito group (via
+  // metadata.siteAdmin), NOT app membership (D11; no site_admin claim).
   const isSiteAdmin = authUser?.metadata?.siteAdmin === true
 
   const data = useLaunchpadData(authUser)

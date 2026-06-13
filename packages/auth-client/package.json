@@ -9,6 +9,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@transformotion/contracts": "workspace:*",
     "aws-amplify": "^6.16.4"
   },
   "devDependencies": {
