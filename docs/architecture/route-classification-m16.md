@@ -100,7 +100,7 @@ This table is the **security-review artifact** for the site-admin-bypass removal
 
 1. **BT AI routes — `POST /ai/review`, `POST /ai/csv-analysis` (budget-ai).** **RULING: member-tier (`requireAccountData.write` semantics)** — claims + live membership row, **viewer rejected**. Running AI consumes provider cost and writes a job row; viewers stay read-only. *Implementation note: budget-ai gains a membership loader + `dynamodb:GetItem` grant on `launchpad-account-members-{stage}` (it previously had claims only).*
 
-2. **`PUT /accounts/{accountId}` (updateAccount).** **RULING: owner-or-manager** → `requireAccountAdmin(account-owner-or-manager)`. Managers may edit account settings (matrix default).
+2. **`PUT /accounts/{accountId}` (updateAccount).** **RULING: owner-or-manager** → `requireAccountAdmin(account-owner-or-manager)`. Managers may edit account settings (matrix default). *Field-guard caveat: owner-or-manager applies to general account settings ONLY. Ownership and billing fields (e.g. `ownerId`, ownership transfer) remain owner-only and MUST be enforced via a field-level guard inside the Phase-6 updateAccount handler. A manager must not be able to PUT a change to `ownerId`.*
 
 3. **`GET /accounts/{accountId}` and `GET …/members`.** **RULING: any active member** → `requireAccountAdmin(account-member)`. Any active member may view their account's metadata + member list.
 
