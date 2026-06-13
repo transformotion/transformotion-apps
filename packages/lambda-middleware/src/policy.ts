@@ -140,6 +140,34 @@ export function decideRoleChange(
 }
 
 /**
+ * Member-removal legality (role model — route-classification §7a; ADR D9). The
+ * removal-axis sibling of {@link decideRoleChange}, kept aligned with it.
+ *  - self-removal (`isSelf`) → ALLOW — a manager may remove themselves; the
+ *    last-owner FLOOR (a sole owner cannot self-remove) is enforced SEPARATELY by
+ *    {@link decideLastOwnerGuard}.
+ *  - owner actor → may remove anyone.
+ *  - manager actor → may remove `member`/`viewer` ONLY; never a manager or owner.
+ *  - member/viewer actor → may not remove anyone.
+ *  - unknown role on either side → deny (deny-by-default).
+ * Supervisory site-admin removal is authorized separately (not via this decider).
+ */
+export function decideRemoval(
+  actorRole: string | undefined,
+  targetRole: string | undefined,
+  isSelf: boolean,
+): PolicyDecision {
+  if (!isKnownRole(actorRole) || !isKnownRole(targetRole)) return deny('unknown role');
+  if (isSelf) return ALLOW;
+  if (actorRole === 'owner') return ALLOW;
+  if (actorRole === 'manager') {
+    return targetRole === 'member' || targetRole === 'viewer'
+      ? ALLOW
+      : deny('managers may remove only members/viewers');
+  }
+  return deny('only owner or manager may remove members');
+}
+
+/**
  * Last-owner guard: the sole remaining owner cannot be removed or demoted
  * (permissions model §4.5; ADR D9 owner-model supersession). Applies only when
  * the target is currently an owner.

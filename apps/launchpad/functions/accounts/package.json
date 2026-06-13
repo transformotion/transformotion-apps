@@ -13,6 +13,7 @@
     "@transformotion/lambda-middleware": "workspace:*"
   },
   "devDependencies": {
+    "@aws-sdk/client-cognito-identity-provider": "^3",
     "@aws-sdk/client-dynamodb": "^3",
     "@aws-sdk/lib-dynamodb": "^3",
     "@types/aws-lambda": "^8",

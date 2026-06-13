@@ -264,6 +264,7 @@ export class LaunchpadControlPlaneStack extends cdk.Stack {
         APP_CLIENT_STOCK_ANALYSER: stockAnalyserAppClientId,
         APP_CLIENT_BUDGET_TRACKER: budgetTrackerAppClientId,
         APP_SLUGS: appSlugs.join(','),
+        USER_POOL_ID: userPoolId,
       },
       bundling: {
         externalModules: ['@aws-sdk/*'],
@@ -274,6 +275,16 @@ export class LaunchpadControlPlaneStack extends cdk.Stack {
 
     accountsTable.grantReadWriteData(accountsFn);
     accountMembersTable.grantReadWriteData(accountsFn);
+    // M16 Phase 6 (PR-6B): member removal / account deletion terminate the target's
+    // session (AdminUserGlobalSignOut, D8) and verify supervisory site-admin LIVE
+    // (AdminListGroupsForUser, D-3). Scoped to exactly these two actions on the pool.
+    accountsFn.addToRolePolicy(new iam.PolicyStatement({
+      actions: [
+        'cognito-idp:AdminUserGlobalSignOut',
+        'cognito-idp:AdminListGroupsForUser',
+      ],
+      resources: [userPoolArn],
+    }));
 
     // M16 Phase 2 — access summary (site-admin directory of all users with app/account access)
     const accessSummaryFn = new lambdaNodejs.NodejsFunction(this, 'AccessSummaryFn', {

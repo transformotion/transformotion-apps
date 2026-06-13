@@ -8,6 +8,11 @@ import {
   TransactWriteCommand,
 } from '@aws-sdk/lib-dynamodb';
 import {
+  CognitoIdentityProviderClient,
+  AdminUserGlobalSignOutCommand,
+  AdminListGroupsForUserCommand,
+} from '@aws-sdk/client-cognito-identity-provider';
+import {
   withAuthOnly,
   parseBody,
   getPathParam,
@@ -16,23 +21,57 @@ import {
   noContent,
   badRequest,
   forbidden,
-  notFound,
+  conflict,
+  HttpError,
   requireAccountAdmin,
   requireAccountMember,
   requireAccountOwnerOrManager,
   requireAccountOwnerRole,
+  requireSupervisorySiteAdmin,
+  decideRemoval,
+  decideLastOwnerGuard,
+  allOf,
   UNIFORM_DENY,
   type APIGatewayProxyEvent,
   type MembershipLoader,
+  type SiteAdminLoader,
 } from '@transformotion/lambda-middleware';
 import type { AccountMemberRow, ListAccountMembersResponse } from '@transformotion/contracts/launchpad/invitations';
 import type { AccountRole, UserStatus } from '@transformotion/contracts/_shared/auth';
 import { randomUUID } from 'crypto';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+const cognito = new CognitoIdentityProviderClient({});
 
 const ACCOUNTS_TABLE = process.env.ACCOUNTS_TABLE!;
 const ACCOUNT_MEMBERS_TABLE = process.env.ACCOUNT_MEMBERS_TABLE!;
+const USER_POOL_ID = process.env.USER_POOL_ID!;
+
+/**
+ * Live supervisory-site-admin check (D-3): read the `site-admin` group membership
+ * LIVE via AdminListGroupsForUser, NOT from the caller's token — supervisory
+ * removal is a sensitive mutation and must not trust a stale claim. Loader throws
+ * propagate as 503 (fail closed) through requireSupervisorySiteAdmin's safeLoad.
+ */
+const siteAdminLoader: SiteAdminLoader = async (userId: string) => {
+  const res = await cognito.send(new AdminListGroupsForUserCommand({
+    UserPoolId: USER_POOL_ID,
+    Username: userId,
+  }));
+  return (res.Groups ?? []).some((g) => g.GroupName === 'site-admin');
+};
+
+/**
+ * Terminate the target's session (D8). AdminUserGlobalSignOut invalidates refresh
+ * tokens immediately, so the only residual is the bounded ≤1h access-token window.
+ * Failures are SURFACED by the caller (never a silent success).
+ */
+async function globalSignOut(userId: string): Promise<void> {
+  await cognito.send(new AdminUserGlobalSignOutCommand({
+    UserPoolId: USER_POOL_ID,
+    Username: userId,
+  }));
+}
 
 // M16 D3 / Refs #162: appSlug is derived from the Cognito app-client used to obtain the token.
 const APP_CLIENT_TO_SLUG: Record<string, string> = Object.fromEntries(
@@ -223,27 +262,23 @@ async function updateAccount(event: APIGatewayProxyEvent, accountId: string, use
   return ok({ account: { accountId, name: name.trim(), updatedAt: now } });
 }
 
-async function deleteAccount(accountId: string, userId: string) {
-  await requireOwner(accountId, userId);
+// PR-6B — DELETE /accounts/{accountId}: OWNER-ONLY self-service deletion. BLOCKS,
+// does NOT cascade (owner-settled): an owner may delete only an account they have
+// already emptied — sole member (themselves). If other members exist → 409 (empty
+// it first via removeMember). The ONLY sanctioned cascade of a populated account is
+// the ADR §9.3 site-admin orphaned-account cleanup, ruled separately and NOT here —
+// there is intentionally no one-click delete-with-members.
+async function deleteAccount(accountId: string, requesterId: string) {
+  const { account, members, callerLoader } = await loadAccountContext(accountId);
+  await requireAccountAdmin(() => requireAccountOwnerRole(callerLoader, accountId, requesterId));
+  if (!account) throw forbidden(UNIFORM_DENY);
 
-  const membersRes = await ddb.send(new QueryCommand({
-    TableName: ACCOUNT_MEMBERS_TABLE,
-    KeyConditionExpression: 'accountId = :aid',
-    ExpressionAttributeValues: { ':aid': accountId },
-    ProjectionExpression: 'userId',
-  }));
-
-  const memberDeletes = (membersRes.Items ?? []).map(m => ({
-    Delete: {
-      TableName: ACCOUNT_MEMBERS_TABLE,
-      Key: { accountId, userId: m['userId'] as string },
-    },
-  }));
-
-  if (memberDeletes.length > 99) {
-    throw badRequest('Cannot delete an account with more than 99 members via this endpoint');
+  if (members.length > 1) {
+    throw conflict('Account still has other members — remove them first, then delete the account.');
   }
 
+  // Fail-closed ordering (same as removal): delete control-plane state FIRST, then
+  // sign out the sole member. A GlobalSignOut failure is surfaced, never silent.
   await ddb.send(new TransactWriteCommand({
     TransactItems: [
       {
@@ -253,9 +288,18 @@ async function deleteAccount(accountId: string, userId: string) {
           ConditionExpression: 'attribute_exists(accountId)',
         },
       },
-      ...memberDeletes,
+      ...members.map(m => ({
+        Delete: { TableName: ACCOUNT_MEMBERS_TABLE, Key: { accountId, userId: m.userId } },
+      })),
     ],
   }));
+
+  try {
+    for (const m of members) await globalSignOut(m.userId);
+  } catch (err) {
+    console.error('[accounts] GlobalSignOut failed after account deletion:', err);
+    throw new HttpError(502, 'Account deleted, but session termination failed — retry to complete sign-out (the member\'s existing session may persist until token expiry).');
+  }
 
   return noContent();
 }
@@ -285,28 +329,58 @@ async function listMembers(accountId: string, userId: string) {
   });
 }
 
+// PR-6B (R5) — DELETE /accounts/{accountId}/members/{userId}: owner-or-manager with
+// role-scoped removal (decideRemoval), OR supervisory site-admin (verified LIVE).
+// Last-owner FLOOR applies universally; AdminUserGlobalSignOut on success (D8).
 async function removeMember(accountId: string, requesterId: string, targetUserId: string) {
-  await requireOwner(accountId, requesterId);
+  const { account, members, callerLoader } = await loadAccountContext(accountId);
+  if (!account) throw forbidden(UNIFORM_DENY);
 
-  if (targetUserId === requesterId) {
-    throw badRequest('Owner cannot remove themselves - delete the account instead');
+  // Resolve the target first (fail closed): a non-member target is indistinguishable
+  // from no access.
+  const targetRow = members.find(m => m.userId === targetUserId);
+  if (!targetRow) throw forbidden(UNIFORM_DENY);
+
+  const callerRow = members.find(m => m.userId === requesterId);
+  const isSelf = requesterId === targetUserId;
+
+  // Authorization (requireAccountAdmin = anyOf over the branches): (owner-or-manager
+  // AND role-scoped removal legal) OR supervisory site-admin (LIVE group check).
+  // A loader/Cognito error in the supervisory branch surfaces as 503 (fail closed).
+  await requireAccountAdmin(
+    () => allOf(
+      () => requireAccountOwnerOrManager(callerLoader, accountId, requesterId),
+      async () => {
+        if (!decideRemoval(callerRow?.role, targetRow.role, isSelf).allow) {
+          throw forbidden(UNIFORM_DENY);
+        }
+      },
+    ),
+    () => requireSupervisorySiteAdmin(siteAdminLoader, requesterId),
+  );
+
+  // Last-owner FLOOR — applies to EVERYONE incl. supervisory site-admin: you cannot
+  // remove the sole owner and orphan the account; delete the account instead (§9.3).
+  if (!decideLastOwnerGuard(members, targetUserId).allow) {
+    throw conflict('Cannot remove the last owner — transfer ownership or delete the account.');
   }
 
+  // Fail-closed ordering: control-plane removal FIRST (authoritative — app-data writes
+  // fail closed instantly via the live row-check, and the target's next token refresh
+  // drops the account). Then terminate the session; surface a sign-out failure.
   await ddb.send(new DeleteCommand({
     TableName: ACCOUNT_MEMBERS_TABLE,
     Key: { accountId, userId: targetUserId },
   }));
 
-  return noContent();
-}
+  try {
+    await globalSignOut(targetUserId);
+  } catch (err) {
+    console.error('[accounts] GlobalSignOut failed after member removal:', err);
+    throw new HttpError(502, 'Member removed, but session termination failed — retry to complete sign-out (the member\'s existing session may persist until token expiry).');
+  }
 
-async function requireOwner(accountId: string, userId: string) {
-  const res = await ddb.send(new GetCommand({
-    TableName: ACCOUNTS_TABLE,
-    Key: { accountId },
-  }));
-  if (!res.Item) throw notFound(`Account '${accountId}' not found`);
-  if (res.Item['ownerId'] !== userId) throw forbidden('Only the account owner can perform this action');
+  return noContent();
 }
 
 // withAuthOnly (M16 Phase 6, ruling #4): this control-plane handler keys off the
@@ -333,7 +407,7 @@ export const handler = withAuthOnly(async ({ auth, event }) => {
     return listMembers(accountId, userId);
   }
 
-  // 6B: member removal (gate unchanged in 6A).
+  // PR-6B (R5): member removal.
   if (resource === '/accounts/{accountId}/members/{userId}' && event.httpMethod === 'DELETE') {
     const targetUserId = getPathParam(event, 'userId');
     return removeMember(accountId, userId, targetUserId);
@@ -341,7 +415,7 @@ export const handler = withAuthOnly(async ({ auth, event }) => {
 
   if (event.httpMethod === 'GET') return getAccount(accountId, userId);            // R1
   if (event.httpMethod === 'PUT') return updateAccount(event, accountId, userId);  // R3
-  if (event.httpMethod === 'DELETE') return deleteAccount(accountId, userId);      // 6B (unchanged)
+  if (event.httpMethod === 'DELETE') return deleteAccount(accountId, userId);      // PR-6B
 
   throw badRequest(`Unrecognised route: ${event.httpMethod} ${resource}`);
 });

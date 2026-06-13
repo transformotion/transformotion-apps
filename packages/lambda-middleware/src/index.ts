@@ -85,6 +85,7 @@ export {
   decideOwnerOrManager,
   decideOwner,
   decideRoleChange,
+  decideRemoval,
   decideLastOwnerGuard,
   discoveryScope,
   UNIFORM_DENY,

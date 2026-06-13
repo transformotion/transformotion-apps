@@ -73,8 +73,8 @@ This table is the **security-review artifact** for the site-admin-bypass removal
 | `GET /accounts/{accountId}/members/detail` | accounts | *(new route)* | `requireAccountAdmin(account-member)` | **R2 — full ListAccountMembersResponse (isLastOwner; pendingInvitations:[] until Phase 8)**; v0 account-management-view target; displayName enrichment (D6) deferred | **ruling #3: any member** | **PR-6A** |
 | `GET /accounts/{accountId}/members` | accounts | ad-hoc `members.some` (unchanged) | *(legacy thin — superseded by `/members/detail`)* | legacy thin list; unwired-to-UI; retire once `/members/detail` is the sole reader (see §8 retirement map) | legacy / retire | unwired |
 | `PUT /accounts/{accountId}` | accounts | ad-hoc `ownerId===userId` → owner-or-manager | `requireAccountAdmin(account-owner-or-manager)` + field-guard | R3 — account settings; manager+owner write `{name}`; `ownerId`/billing owner-only (ruling #2 field-guard) | **ruling #2: owner-or-manager** | **PR-6A** |
-| `DELETE /accounts/{accountId}` | accounts | withAuthOnly + ad-hoc owner | `requireAccountAdmin(owner)` + sole-owner deletion (D9 §9.3) + GlobalSignOut | destructive | Status-uncertain-resolved | **Phase 6 / PR-6B** |
-| `DELETE /accounts/{accountId}/members/{userId}` | accounts | withAuthOnly + ad-hoc | `requireAccountAdmin(anyOf(owner-or-manager + last-owner-guard, supervisory-site-admin))` + GlobalSignOut | remove member | Aspirational (manager-removal rules never built) | **Phase 6 / PR-6B** |
+| `DELETE /accounts/{accountId}` | accounts | ad-hoc owner → `requireAccountOwnerRole` | `requireAccountAdmin(owner)` — **BLOCK-if-members (409), never cascade** + GlobalSignOut | destructive; owner-only self-service; sole-member only; populated-account cascade is ADR §9.3 only (separate) | Resolved (block ruling) | **PR-6B** |
+| `DELETE /accounts/{accountId}/members/{userId}` | accounts | ad-hoc owner → policy | `requireAccountAdmin(`owner-or-manager + `decideRemoval` + last-owner-guard`, OR supervisory-site-admin LIVE)` + GlobalSignOut | remove member; manager scope = members/viewers; self-removal allowed; last-owner floor | Resolved | **PR-6B** |
 | `POST /accounts/{accountId}/invitations` | invitations | withAuth + ad-hoc `ownerId===userId` | `requireAccountAdmin(owner-or-manager / canCreateInvitationGrant)` | legacy single-invite | Aspirational (owner/manager in-app invite never built) | **Phase 8** (bundles) |
 | `GET /api/admin/...access-summary` (access-summary) | access-summary | requireSiteAdmin (claim) | `requireAccountAdmin(supervisory-site-admin)` | directory read; app-admin app-scope = Phase 7 | Confirmed (extended P7) | PR-B |
 | `GET /api/admin/ai-runtime-config` | ai-runtime-config | requireSiteAdmin | `operational-config` (supervisory-site-admin read) | platform AI config | Confirmed | PR-B / PR-C |
@@ -182,6 +182,33 @@ half of `launchpadRoutes` is PERMANENT and still consumed.
 
 (See the full read-only legacy-route audit for per-row successor / shape-conflict /
 consumer data.)
+
+### (f) Member-mutation rules (PR-6B, owner-settled)
+
+**removeMember** `DELETE /accounts/{accountId}/members/{userId}` — `requireAccountAdmin`
+of either (owner-or-manager AND `decideRemoval` legal) OR supervisory-site-admin
+verified **LIVE** via `AdminListGroupsForUser` (D-3, never token-only). `decideRemoval`:
+owner removes anyone; manager removes `member`/`viewer` only (never a manager/owner);
+self-removal allowed. The **last-owner floor** (`decideLastOwnerGuard`) applies to
+**everyone incl. supervisory site-admin** — the sole owner cannot be removed (orphaning
+is only the §9.3 cleanup, separate). `AdminUserGlobalSignOut` on success (D8).
+
+**deleteAccount** `DELETE /accounts/{accountId}` — **owner-only** (`requireAccountOwnerRole`),
+and **BLOCKS, never cascades** (owner ruling): an owner may delete only an account they
+have already emptied (**sole member = themselves**); **if other members exist → 409**
+(empty it first via removeMember). The `>99` guard is now `>1`. There is intentionally
+**no one-click delete-with-members**; the ONLY sanctioned cascade of a populated account
+is the ADR §9.3 site-admin orphaned-account cleanup (ruled separately, not this route).
+Ratified here and in the permissions model.
+
+**Fail-closed ordering (both mutations).** (1) Authorize (loader/Cognito errors →
+**503**, never proceed). (2) Resolve target + last-owner / block-if-members. (3)
+**Control-plane state FIRST** — delete the membership row / account+rows. This is the
+authoritative security boundary: from that instant app-data **writes** fail closed via
+the live row-check (D8), and the target's next token refresh drops the account. (4)
+`AdminUserGlobalSignOut` (accelerator — kills refresh tokens so only the bounded ≤1h
+access-token window remains). A sign-out failure is **surfaced as 502, never a silent
+success** (the row is already deleted; retry is idempotent).
 
 ## 8. auth.md verification summary (feeds the revision map)
 
