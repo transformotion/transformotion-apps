@@ -1573,6 +1573,67 @@ reviewers reject untagged or net-new-tagged phase work. These rules are mirrored
 the project custom instructions that govern the chat-side design partner, since the
 same drift originates there.
 
+### 8.A — v0 is the design of record (reproduction, not re-decision)
+
+The rules above govern whether work is in scope. This subsection governs how a
+prototyped surface is built: the v0 prototype is the settled design, and wire-up
+reproduces it rather than re-deciding it.
+
+1. Settled v0 decisions are read from v0, not re-raised. Where the prototype
+   shows how a surface looks or behaves, that is binding. At wire-up a question
+   the prototype already answers is answered by consulting the prototype — it
+   does not return to the owner. Re-opening a v0-settled decision during wiring
+   is the failure this rule exists to prevent.
+
+2. Two authorities. v0 is canonical for user-facing
+   experience and behaviour. The ADR and contracts are canonical for
+   authorization rules and data/API shapes. Pure authorization logic
+   (role-removal scope, last-owner guard, block-if-members) is decided in the
+   ADR/contract and is NOT re-prototyped in v0 mocks. Any user-facing surface or
+   interaction MUST exist in v0 before runtime builds it.
+
+3. The two gates are independent. The four-way classification in AGENTS.md
+   (contract-changing / non-contract polish / runtime-only / emergency) tests
+   contract-SHAPE drift. The provenance gate (§8 rule 1) tests whether the
+   behaviour/UX exists in v0 or contract at all. Passing the first does not
+   discharge the second. "Runtime-only / no v0 impact" justifies only changes to
+   HOW an already-agreed contract or prototype is implemented — never the
+   introduction of behaviour or UX absent from both. (Phase 6 delete-account
+   changed no shape yet introduced a whole feature; parked as #447 by this gate,
+   not the shape gate.)
+
+4. Rebuild-fidelity. Because v0 components are coupled to mock persistence,
+   runtime REBUILDS a prototyped surface against live services rather than
+   porting it. A rebuild must reproduce the prototype's behaviour, controls, and
+   layout. Every deviation — added, removed, or changed control or flow — MUST
+   appear in the PR body as a provenance-tagged disposition list (keep / cut /
+   disable + reason); net-new deviations stop and are raised, not built.
+   Reference example: PR #446 (member-management rebuild), whose "Control
+   disposition (every v0 control)" table is the canonical form — including a
+   net-new affordance flagged as "KEEP (added)".
+
+5. Disposition list plus visual diff. The disposition list captures INTENDED
+   deviation; it does not catch SILENT drift — wrong data rendered, a projection
+   left unwired, styling not carried (e.g. a greeting showing a username where v0
+   shows displayName). A UI-bearing rebuild PR for a prototyped surface therefore
+   also carries a visual diff against the v0 surface. Disposition list = intent;
+   visual diff = result; both required.
+
+6. Real-world seams. Where a v0 surface mocks a real-world mechanism it cannot
+   embody — email delivery, an inbox, SMS, an external IdP screen, a payment
+   page — v0 is canonical for the experience UP TO the seam, and the real
+   mechanism replaces the mock AT the seam. The mocked stand-in is explicitly NOT
+   a surface to reproduce. The experience v0 proves around the seam still binds:
+   what the user can do, the post-seam surface (e.g. the redemption screen after
+   the email click), and the proven states (valid / expired / wrong-identity /
+   already-redeemed). Which mocked surfaces are real-world seams MUST be named in
+   the phase gap analysis ("redemption email = real-world seam; v0 canonical to
+   the click, real email beyond"), not asserted during wire-up by whoever is
+   building.
+
+The gap analysis (§8 rule 3) remains the front gate; it now also enumerates
+real-world seams and expected rebuild deviations, up front.
+
 ---
 
 ## 9. The status-tag system
