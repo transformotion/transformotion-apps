@@ -190,6 +190,13 @@ change data/API/WSS/cache/mock/settings/runtime semantics. If polish affects
 both v0 and runtime, prefer v0-first or paired v0/runtime PRs. Runtime PRs still
 need either a v0 PR/commit reference or a clear no-v0-impact reason.
 
+This polish license does NOT apply to a surface that v0 has prototyped. For a
+v0-prototyped surface, runtime reproduces the prototype (CONTRIBUTING.md §8.A
+rule 4); "component arrangement" is not free polish there. Changed controls,
+flow, or layout are deviations requiring a provenance-tagged disposition list,
+and the PR carries a visual diff against the v0 surface. Runtime-side
+rearrangement of a prototyped surface without that record is drift, not polish.
+
 Runtime-first contract-changing work is allowed only as an emergency hotfix:
 the issue must be urgent, the owner must explicitly approve runtime-first work
 before implementation, and the PR must include an `Emergency v0 Reconciliation`
