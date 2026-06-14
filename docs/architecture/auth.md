@@ -73,13 +73,14 @@ Email only.
 The Launchpad-owned trigger is active for dev authentication.
 `LaunchpadAuthStack` attaches `launchpad-pre-token-generation-{stage}` to the
 Launchpad-owned User Pool. The trigger reads Launchpad-owned tables and emits
-the `apps`, `accounts`, and `app_admin` claims used by Launchpad, Stock
-Analyser, and Budget Tracker. (Platform admin status is read from the
-`site-admin` Cognito group, not a claim — M16 Phase 6 / D11.)
+the `apps` and `accounts` claims used by Launchpad, Stock Analyser, and Budget
+Tracker. (Both platform admin status **and** app-admin status are read from
+Cognito groups — `site-admin` and `{app}-app-admin` respectively — not from
+claims. There is no `site_admin` claim and no `app_admin` claim.)
 
 | Trigger | Function | Purpose |
 |---|---|---|
-| Pre-token generation | `launchpad-pre-token-generation-{stage}` | Injects `apps`, `accounts`, `app_admin` custom claims - see below |
+| Pre-token generation | `launchpad-pre-token-generation-{stage}` | Injects `apps`, `accounts` custom claims - see below |
 
 ---
 
@@ -173,23 +174,42 @@ For setup instructions see `docs/social-idp-setup.md`.
 
 ## Permission model — two dimensions
 
-### Dimension A: App access (Cognito groups)
+> **Status — groups-authoritative correction (canonical target).** This section
+> describes the corrected, canonical permission model: **Cognito groups are the
+> sole authority** for the administrative + app-access dimension (site-admin,
+> app-access, app-admin), projected into the token; the **`accounts` claim** is
+> the sole authority for account membership and role. There are **no
+> `site_admin` / `app_admin` claims** — group membership in the token *is* the
+> signal. Two parts of this are **not yet true in runtime** and are tracked for
+> the v0/contract-then-runtime correction: (1) the `app_admin` claim is still
+> emitted and must be struck in favour of `{app}-app-admin` groups, and (2) the
+> `{app}-app-admin` Cognito groups do not yet exist and must be created.
+> Everything else here is current.
 
-Three Cognito groups control app access:
+The two dimensions are: **Dimension 1 — Cognito groups** (authority for site-admin, app-access, app-admin) and **Dimension 2 — the `accounts` claim** (authority for account memberships and roles). No custom token claim may duplicate a group-controlled permission.
+
+### Dimension A: Cognito groups (site-admin, app-access, app-admin)
+
+Cognito groups are authoritative for three things:
 
 | Group | Grants |
 |---|---|
-| `stock-app-access` | User has access to Stock Signal |
-| `budget-app-access` | User has access to Budget Tracker |
-| `site-admin` | Platform-wide admin: can invite anyone to any app; implicit access to all apps at owner level on all accounts |
+| `site-admin` | Platform-level **supervisory** authority. Sourced from the `site-admin` group (no claim). Does **not** grant private app data, account membership, or any account role. |
+| `stock-app-access` / `budget-app-access` | The user may enter that app's shell. App-access alone does **not** grant private data — account membership is still required. |
+| `stock-app-admin` / `budget-app-admin` | App-scoped control-plane authority (invitee discovery, app-provision grants, app-level config). Grants **no** private data, **no** account membership, and does **not** satisfy `account-member` / `account-owner-or-manager`. Created/removed only by site-admin. |
 
 **Single-tier app access is deliberate.** Capability-level within an app (who can read, write, invite, delete) is expressed entirely by Dimension B (account roles). A user either has access to an app or they do not; *what they can do* within the app is determined by which accounts they belong to and in what role.
 
-**App-access groups are derived from account membership.** The pre-token Lambda enforces the invariant: a user is in `stock-app-access` iff they have at least one Stock Signal account. Same pattern for `budget-app-access`. If the two diverge (e.g., due to manual manipulation or a bug), the pre-token Lambda reconciles by trusting account membership as the authoritative source and updating group membership to match.
+**App-access is independently held — the invariant is one-directional.**
 
-**`site-admin` is first-class and explicit.** It is not derived from any other state; it is an explicit Cognito group grant and represents platform-level administrative authority.
+- **Membership ⟹ app-access.** Any account grant (account-invite *or* app-provision, and self-service account creation) ensures the user holds the app's access group; the pre-token Lambda also adds the access group for any user who has ≥1 account in the app and lacks it. You can never be an account member of an app without app-access.
+- **App-access ⇏ membership.** "Has app-access, no accounts" is a **valid, designed state** (see [App-access with no accounts](#app-access-with-no-accounts-permitted-state)). App-access is granted independently (app-provision, or a direct site-admin grant) and is **NOT** removed when a user's account count for the app reaches zero. The previous biconditional — "a user is in `stock-app-access` *iff* they have ≥1 account", with the access group auto-removed at zero accounts — is **superseded**: the pre-token Lambda keeps only the add-on-membership direction, never the remove-on-zero direction.
 
-> **Migration note:** Currently deployed groups are `admin`, `stock-app`, `budget-app`, `transformotion`, `family`. Target groups (`stock-app-access`, `budget-app-access`, `site-admin`) are introduced in sub-phase 7e-prep-1. During migration both old and new groups coexist; handlers accept either. Old groups (and `transformotion`, `family` which reference features not in current scope) are removed at 7e-cleanup.
+**App-admin is a Cognito group, not a claim — and the grants table is a projection.** App-admin authority is `cognito:groups` membership in `{app}-app-admin`; the policy guard `requireAppAdminForApp` resolves from the group, never from a table. The `launchpad-app-admin-grants-{stage}` table is a **non-authoritative read-projection** maintained from group membership; it exists only to populate admin/discovery UI efficiently (the site-admin directory, and Phase 7 "who admins app X" enumeration, which `ListUsersInGroup` serves poorly). Nothing reads it for an authorization decision.
+
+**`site-admin` is first-class and explicit.** It is not derived from any other state; it is an explicit Cognito group grant and represents platform-level supervisory authority. It does not, by itself, grant app data, account membership, or app-access.
+
+> **Migration note:** Currently deployed groups are `site-admin`, `stock-app-access`, `budget-app-access`, plus legacy `admin`, `stock-app`, `budget-app`, `transformotion`, `family`. The `{app}-app-admin` groups (`stock-app-admin`, `budget-app-admin`) **do not yet exist** and are created as part of the groups-authoritative correction; existing table-derived app-admins are migrated into real group membership at that time. Legacy groups are removed at 7e-cleanup.
 
 ### Dimension B: Account membership (DynamoDB)
 
@@ -236,6 +256,31 @@ Dimension A (app access) remains the ceiling for data operations as described ab
 
 ---
 
+## App-access with no accounts (permitted state)
+
+A user who holds an app-access group but has **no account** in that app is a valid, designed state — not an error to reconcile away. It arises two ways: an **app-provision** invitation (an admin provisions access ahead of any account), and **self-service** bootstrap (a user granted app-access creates their own first account).
+
+What such a user can do, and only this:
+
+- **Enter the app shell.** The access group admits them to the app.
+- **See a no-account / "create account" setup state.** No private data is loaded; there is no global or default account fallback. (See [Three-state tile model](#three-state-tile-model) for the launchpad-side empty state.)
+- **Create their own account** if product policy allows self-service creation — `POST /accounts`, which requires the app-access group and an active user, does **not** require a pre-existing membership, and makes the creator the `owner` of the new account.
+
+They **cannot** read or write any account's private data until a membership exists.
+
+## App-access and app-admin lifecycle (Cognito group operations)
+
+Because groups are authoritative, granting and removing app-access or app-admin are **Cognito group operations**, and any control-plane grant record is a downstream projection.
+
+- **Grant app-access** — `AdminAddUserToGroup(<app>-access)`. The user may enter the shell; gains no membership, no app-admin, no private data.
+- **Remove app-access** — `AdminRemoveUserFromGroup(<app>-access)`. The user can no longer enter the shell; app-data routes fail closed; the active account for that app is cleared. Account memberships are **not** automatically removed (retained for audit/reactivation) unless the operation is the full app-removal cascade below.
+- **Grant app-admin** — `AdminAddUserToGroup(<app>-admin)`, **site-admin only**. Confers app-scoped control-plane authority; confers no app-access (grant separately if the admin also needs the shell), no membership, no private data. The grants table projection is updated to match.
+- **Remove app-admin** — `AdminRemoveUserFromGroup(<app>-admin)`. App-access and memberships are untouched.
+
+**Account grant ⟹ app-access (implicit).** Granting account membership — whether via account-invite, app-provision, or self-service creation — **ensures the user holds the app-access group**. An account-invite to a user who does not yet have app-access grants it as part of redemption; a member can never lack the access group. This closes the gap where account membership and app-access could be granted independently: in this model, membership always implies access (the converse does not hold — see the one-directional invariant above).
+
+---
+
 ## Pre-token generation Lambda
 
 **Function:** `transformotion-pre-token-generation-{stage}`
@@ -245,13 +290,13 @@ Dimension A (app access) remains the ceiling for data operations as described ab
 
 1. Read the user's Cognito groups from the event (`event.request.groupConfiguration.groupsToOverride`).
 2. Query `launchpad-account-members-{stage}` for all rows where `userId = <event.userName>` — returns all of the user's account memberships across all apps.
-3. **Reconcile the app-access invariant.** For each app slug (`stock-analyser`, `budget-tracker`):
-   - If user has any accounts for the app but is not in `<app>-access`: call `AdminAddUserToGroup`, update the in-memory group list for claim construction.
-   - If user is in `<app>-access` but has no accounts: call `AdminRemoveUserFromGroup`, update the in-memory list.
-   - The invariant applies **uniformly** (D11.1, M16): the former `site-admin` override — which retained app-access groups for site-admins regardless of membership — is **removed**. Group membership now tracks account membership for every user. The `site-admin` Cognito group drives supervisory surfaces; it does not retain app-access groups or app-data authority.
-4. Build the `apps` claim: JSON-stringified array of app slugs the user has access to (derived from reconciled groups only — no site-admin all-apps shortcut).
+3. **Maintain the membership ⟹ app-access direction.** For each app slug (`stock-analyser`, `budget-tracker`):
+   - If the user has any accounts for the app but is not in `<app>-access`: call `AdminAddUserToGroup`, update the in-memory group list for claim construction.
+   - **The reverse is NOT applied.** A user in `<app>-access` with no accounts is a valid state ("access, no accounts") and the access group is **left in place** — the former remove-on-zero branch is removed (groups-authoritative correction). App-access is removed only by an explicit grant-removal/app-removal operation, never by the pre-token reconciliation.
+   - The `site-admin` Cognito group drives supervisory surfaces; it does not retain app-access groups or app-data authority for apps the user has no access group for.
+4. Build the `apps` claim: JSON-stringified array of app slugs the user has access to (derived from the user's app-access groups).
 5. Build the `accounts` claim: JSON-stringified map of app slug to `[{accountId, role}]`, grouped from the membership query results.
-6. Build the `app_admin` claim from `launchpad-app-admin-grants-{stage}`. **No `site_admin` claim is emitted** (M16 Phase 6 / D11) — admin status is read from the `site-admin` Cognito group on the consumer side.
+6. **No admin claims are emitted.** Site-admin and app-admin status both travel in `cognito:groups` (`site-admin`, `{app}-app-admin`) and are read group-side by consumers. The former `app_admin` claim (table-derived) and `site_admin` claim are **not** emitted (groups-authoritative correction). The Lambda therefore does **not** read `launchpad-app-admin-grants-{stage}` — that table is a UI/discovery projection read elsewhere, not a claim source.
 7. Set `event.response.claimsAndScopeOverrideDetails.accessTokenGeneration.claimsToAddOrOverride` with the claims.
 8. Also set the same on `idTokenGeneration.claimsToAddOrOverride` so both tokens carry the claims.
 
@@ -263,15 +308,14 @@ Dimension A (app access) remains the ceiling for data operations as described ab
 
 ## Claim shape
 
-> **M16 Phase 6 update (Stale-by-decision):** the `site_admin` claim is **removed** (v0 contract `m16.2.0`). Platform admin status is sourced solely from the `site-admin` Cognito group (`cognito:groups`); it was never a separate authority, only a projection of the group. Phase 2's lean-triple `accounts` and the `app_admin` claim remain.
+> **Groups-authoritative correction (Stale-by-decision):** the `app_admin` claim is **removed**, alongside the already-removed `site_admin` claim. App-admin status is sourced solely from the `{app}-app-admin` Cognito groups (`cognito:groups`); it was a duplicate of group state, never an independent authority. Phase 2's lean-triple `accounts` remains; the only custom claims are `apps` and `accounts`.
 
-The pre-token generation Lambda injects three custom claims on every token issuance:
+The pre-token generation Lambda injects two custom claims on every token issuance:
 
 ```json
 {
   "apps": "[\"stock-analyser\",\"budget-tracker\"]",
-  "accounts": "{\"stock-analyser\":[{\"accountId\":\"uuid-1\",\"role\":\"owner\"}],\"budget-tracker\":[{\"accountId\":\"uuid-2\",\"role\":\"manager\"}]}",
-  "app_admin": "[\"stock-analyser\"]"
+  "accounts": "{\"stock-analyser\":[{\"accountId\":\"uuid-1\",\"role\":\"owner\"}],\"budget-tracker\":[{\"accountId\":\"uuid-2\",\"role\":\"manager\"}]}"
 }
 ```
 
@@ -280,12 +324,11 @@ The values are JSON-stringified strings (Cognito requires claim values to be pri
 Logical shape after parsing (M16 D8 lean triples):
 
 ```
-apps:       string[]                                           — app slugs the user can access (derived from memberships + reconciled groups)
-accounts:   Record<appSlug, Array<{accountId, role}>>          — per-app lean membership triples; M16 role vocabulary (owner|manager|member|viewer)
-app_admin:  string[]                                           — app slugs where user holds app-admin authority (sourced from launchpad-app-admin-grants-{stage})
+apps:       string[]                                           — app slugs the user can access (from the user's app-access groups)
+accounts:   Record<appSlug, Array<{accountId, role}>>          — per-app lean membership triples; role vocabulary owner|manager|member|viewer
 ```
 
-**Platform admin status is NOT a claim.** It is read from the `site-admin` Cognito group via `cognito:groups` (both tokens carry it). Backend (`extractAuthClaims` → `auth.siteAdmin`) and frontend (`cognito-auth` → `metadata.siteAdmin`) derive it from the group; there is no `site_admin` claim.
+**Admin status is NOT a claim — neither platform nor app.** Platform admin is read from the `site-admin` Cognito group via `cognito:groups`; app-admin is read from the `{app}-app-admin` Cognito groups via `cognito:groups` (both tokens carry groups). Backend (`extractAuthClaims` → `auth.siteAdmin`, and the app-admin policy guard) and frontend derive both from groups; there is no `site_admin` claim and no `app_admin` claim.
 
 **Staleness is bounded and accepted (D8).** Access-token lifetime is 1 hour; a removed user's stale token retains read visibility for up to an hour. **Staleness gives lingering read visibility, never lingering write capability.** The moment a removed or demoted user attempts any app-data write, the table check fails closed.
 
@@ -339,7 +382,7 @@ https://dev.apps.transformotion.com.au/sign-in/callback?code=<auth-code>&state=<
 
 The Hosted UI session cookie is what enables SSO across the three app clients — when the user navigates from the launchpad to Stock Signal, the Stock Signal client's auth flow finds the existing session cookie and silently re-authenticates without re-prompting.
 
-**Step 8 — API calls.** When the frontend calls a Lambda-backed API, it includes the access token in the `Authorization: Bearer <token>` header. API Gateway's Cognito authorizer validates the JWT signature against Cognito's public keys and confirms the token has not expired. The auth middleware in the Lambda handler parses the custom claims (`apps`, `accounts`, `app_admin`) plus `cognito:groups` (the `site-admin` group → `auth.siteAdmin`) and constructs the `auth` object for the handler to use.
+**Step 8 — API calls.** When the frontend calls a Lambda-backed API, it includes the access token in the `Authorization: Bearer <token>` header. API Gateway's Cognito authorizer validates the JWT signature against Cognito's public keys and confirms the token has not expired. The auth middleware in the Lambda handler parses the custom claims (`apps`, `accounts`) plus `cognito:groups` (the `site-admin` group → `auth.siteAdmin`; the `{app}-app-admin` groups → app-admin authority) and constructs the `auth` object for the handler to use.
 
 **Step 9 — Token refresh.** Every hour (default access token lifetime), the frontend detects the token is about to expire and calls the refresh endpoint. Cognito invokes the pre-token Lambda again and issues new access + ID tokens. The fresh token reflects any changes to the user's groups or account memberships since the last issuance (up to the 1-hour staleness window).
 
@@ -347,7 +390,7 @@ The Hosted UI session cookie is what enables SSO across the three app clients �
 
 ## Three-state tile model
 
-> **M16 Phase 3 (D11) — revised.** Tiles now derive from the user's **account membership** (the access projection), read at runtime via the active-account read API (`GET /api/user/active-accounts`): the set of apps in which the user holds at least one account is the entitlement set. The previous rule — *"tiles from the `apps` claim plus a hardcoded deployed list"* — is **Stale-by-decision**. The `apps` claim survives as a coarse projection, but Launchpad reads entitlement from membership, and **admin/control-plane surfaces gate on the `site-admin` Cognito group / `app_admin` claim, never on app membership.**
+> **M16 Phase 3 (D11) — revised.** Tiles now derive from the user's **account membership** (the access projection), read at runtime via the active-account read API (`GET /api/user/active-accounts`): the set of apps in which the user holds at least one account is the entitlement set. The previous rule — *"tiles from the `apps` claim plus a hardcoded deployed list"* — is **Stale-by-decision**. The `apps` claim survives as a coarse projection, but Launchpad reads entitlement from membership, and **admin/control-plane surfaces gate on the `site-admin` Cognito group / `{app}-app-admin` group, never on app membership.**
 
 The launchpad resolves each app tile from two conditions — entitlement (membership) and deployment:
 
@@ -359,7 +402,7 @@ The launchpad resolves each app tile from two conditions — entitlement (member
 
 A user with **zero** memberships sees an explicit empty state ("No apps yet — access arrives by invitation") — by design a real first-login state, never a blank page or an error. Backfill tolerance: missing or legacy entitlement data resolves to "not entitled" (no tile), never a crash.
 
-App deployment state is statically known to the launchpad (a catalogue of app slugs each carrying a `deployed` flag). Membership controls **visibility**; deployment controls **interactivity**. Not-deployed catalogue entries (coming-soon/marketing) stay hidden by default, preserving the pre-M16 deployed/coming-soon handling. Admin surfaces (e.g. AI runtime settings, and a future Users & Access view) are shown from the `site-admin` Cognito group / `app_admin` claim independently of any app tile.
+App deployment state is statically known to the launchpad (a catalogue of app slugs each carrying a `deployed` flag). Membership controls **visibility**; deployment controls **interactivity**. Not-deployed catalogue entries (coming-soon/marketing) stay hidden by default, preserving the pre-M16 deployed/coming-soon handling. Admin surfaces (e.g. AI runtime settings, and a future Users & Access view) are shown from the `site-admin` Cognito group / `{app}-app-admin` group independently of any app tile.
 
 ---
 
@@ -706,6 +749,20 @@ If no ownership rows remain: proceed:
 
 After this: the user record is gone from Cognito. Existing access tokens remain valid for up to 1 hour, then expire naturally.
 
+### Scenario D: Removing all access to an app (the app-removal cascade)
+
+Removing a user from an app entirely is a **cascade**, because app-scoped state spans three places. Removing app-access alone (Scenario above under lifecycle) does *not* clean these up; the full removal must, in order:
+
+1. **Remove the app-access group** — `AdminRemoveUserFromGroup(<app>-access)`. The user can no longer enter the app shell.
+2. **Remove the app-admin group if present** — `AdminRemoveUserFromGroup(<app>-admin)`. App-admin must not outlive app access — an app-admin for an app the user can no longer enter is exactly the dangling-authority state the groups model forbids.
+3. **Deactivate the user's account memberships for that app** — remove/disable every `launchpad-account-members-{stage}` row for accounts in `appSlug`. Accounts are app-scoped, so losing the app means losing the app's account memberships. The single-owner guard applies: if the user is the sole `owner` of an account, ownership must be transferred (or the account emptied/deleted) first, by the same 409 rule as user deletion.
+4. **Clear the active account** for that app (D7 `activeAccounts` map) so no inaccessible selection is retained.
+5. **Invalidate refresh tokens** — `AdminUserGlobalSignOut` — so the cascade takes effect at next token issuance rather than lingering the full access-token window.
+
+**Invariant enforced by the cascade:** because membership ⟹ app-access (groups maintained from membership) and app-admin presupposes app access, losing app access must drop app-admin and app-scoped membership together. The `requireAppAdminForApp` guard reads the live `{app}-app-admin` group, so a removed group denies immediately on the admin axis; app-data writes fail closed on the missing membership row. The grants-table projection is updated to reflect the removed group.
+
+Authorization: `requireSiteAdmin` (platform-supervisory removal). This is distinct from a user **removing themselves** from a single account (account-member self-removal) and from account-member removal by an owner/manager (Scenario A) — the cascade is whole-app removal, not single-account.
+
 ---
 
 ## Forgot-provider flow
@@ -769,7 +826,7 @@ Components, services, and hooks access claim-derived data only via the `AuthServ
 
 **Stable identity vs reactive account state (#210).** `AuthService.getCurrentUser()` is the read-once stable-identity accessor (name, email, userId from cached token claims). The reactive, mutable **per-app active account** is control-plane-owned (D7) and lives in each app's account store — never in the stable-identity path. `getAccountIdForApp` (first membership from the token's `accounts` claim) is a legacy convenience superseded by the control-plane active-account read in the app layer (Phase 4 SA/BT wiring).
 
-**Active-account consumption (D7, M16 Phase 4).** Stock Analyser and Budget Tracker read and set their active account through the Launchpad control plane via a shared `ControlPlaneClient` (`@transformotion/api-client`, built on the stage-safe HttpClient): `GET /api/user/active-accounts` (the active account per app) and `PUT /api/user/active-accounts/{appSlug}` (switch; the server fails closed on non-membership). The selected account is the single source of truth for the `X-Account-Id` header on every app-data request — never first-account-from-token, never browser-local state as authority. A reactive account store loads the selection at startup; an **AccountGate** blocks private surfaces until access is confirmed, and **admin status grants nothing here** — a site-admin (group) / `app_admin` without a membership for the app sees the same no-access state as any non-member (D9). A control-plane **failure** renders a distinct error/retry state ("couldn't determine your access"), never the no-access state, so an outage cannot masquerade as revocation.
+**Active-account consumption (D7, M16 Phase 4).** Stock Analyser and Budget Tracker read and set their active account through the Launchpad control plane via a shared `ControlPlaneClient` (`@transformotion/api-client`, built on the stage-safe HttpClient): `GET /api/user/active-accounts` (the active account per app) and `PUT /api/user/active-accounts/{appSlug}` (switch; the server fails closed on non-membership). The selected account is the single source of truth for the `X-Account-Id` header on every app-data request — never first-account-from-token, never browser-local state as authority. A reactive account store loads the selection at startup; an **AccountGate** blocks private surfaces until access is confirmed, and **admin status grants nothing here** — a site-admin or app-admin (Cognito group) without a membership for the app sees the same no-access state as any non-member (D9). A control-plane **failure** renders a distinct error/retry state ("couldn't determine your access"), never the no-access state, so an outage cannot masquerade as revocation.
 
 The current state has the interface duplicated across `packages/auth-client/`, `apps/stock-analyser/`, and `apps/budget-tracker/`, with the production implementation only existing for stock-analyser. Migration to the canonical pattern (interface in contracts, both implementations in `packages/auth-client/`, build-time selection) happens alongside the production bug fix for the missing `accounts` JWT claim.
 
