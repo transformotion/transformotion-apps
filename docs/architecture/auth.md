@@ -172,6 +172,7 @@ For setup instructions see `docs/social-idp-setup.md`.
 
 ---
 
+<!-- mirror:start -->
 ## Permission model — two dimensions
 
 > **Status — groups-authoritative correction (canonical target).** This section
@@ -279,6 +280,8 @@ Because groups are authoritative, granting and removing app-access or app-admin 
 
 **Account grant ⟹ app-access (implicit).** Granting account membership — whether via account-invite, app-provision, or self-service creation — **ensures the user holds the app-access group**. An account-invite to a user who does not yet have app-access grants it as part of redemption; a member can never lack the access group. This closes the gap where account membership and app-access could be granted independently: in this model, membership always implies access (the converse does not hold — see the one-directional invariant above).
 
+<!-- mirror:end -->
+
 ---
 
 ## Pre-token generation Lambda
@@ -306,6 +309,7 @@ Because groups are authoritative, granting and removing app-access or app-admin 
 
 ---
 
+<!-- mirror:start -->
 ## Claim shape
 
 > **Groups-authoritative correction (Stale-by-decision):** the `app_admin` claim is **removed**, alongside the already-removed `site_admin` claim. App-admin status is sourced solely from the `{app}-app-admin` Cognito groups (`cognito:groups`); it was a duplicate of group state, never an independent authority. Phase 2's lean-triple `accounts` remains; the only custom claims are `apps` and `accounts`.
@@ -338,6 +342,8 @@ Plus the standard Cognito claims (`sub`, `email`, `cognito:groups`, token lifeti
 
 **Launchpad renders tiles from the user's per-app membership** (the access projection, read at runtime via `GET /api/user/active-accounts`), not by inspecting the `apps` claim directly — see [Three-state tile model](#three-state-tile-model) (M16 Phase 3, D11).
 **API handlers enforce per-account authorization by inspecting `accounts`.**
+
+<!-- mirror:end -->
 
 ---
 
@@ -749,6 +755,7 @@ If no ownership rows remain: proceed:
 
 After this: the user record is gone from Cognito. Existing access tokens remain valid for up to 1 hour, then expire naturally.
 
+<!-- mirror:start -->
 ### Scenario D: Removing all access to an app (the app-removal cascade)
 
 Removing a user from an app entirely is a **cascade**, because app-scoped state spans three places. Removing app-access alone (Scenario above under lifecycle) does *not* clean these up; the full removal must, in order:
@@ -762,6 +769,8 @@ Removing a user from an app entirely is a **cascade**, because app-scoped state 
 **Invariant enforced by the cascade:** because membership ⟹ app-access (groups maintained from membership) and app-admin presupposes app access, losing app access must drop app-admin and app-scoped membership together. The `requireAppAdminForApp` guard reads the live `{app}-app-admin` group, so a removed group denies immediately on the admin axis; app-data writes fail closed on the missing membership row. The grants-table projection is updated to reflect the removed group.
 
 Authorization: `requireSiteAdmin` (platform-supervisory removal). This is distinct from a user **removing themselves** from a single account (account-member self-removal) and from account-member removal by an owner/manager (Scenario A) — the cascade is whole-app removal, not single-account.
+
+<!-- mirror:end -->
 
 ---
 
