@@ -1608,6 +1608,9 @@ reproduces it rather than re-deciding it.
    layout. Every deviation — added, removed, or changed control or flow — MUST
    appear in the PR body as a provenance-tagged disposition list (keep / cut /
    disable + reason); net-new deviations stop and are raised, not built.
+   Reference example: PR #446 (member-management rebuild), whose "Control
+   disposition (every v0 control)" table is the canonical form — including a
+   net-new affordance flagged as "KEEP (added)".
 
 5. Disposition list plus visual diff. The disposition list captures INTENDED
    deviation; it does not catch SILENT drift — wrong data rendered, a projection
