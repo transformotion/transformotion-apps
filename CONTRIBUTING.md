@@ -1585,7 +1585,7 @@ reproduces it rather than re-deciding it.
    does not return to the owner. Re-opening a v0-settled decision during wiring
    is the failure this rule exists to prevent.
 
-2. Two authorities (see Project Knowledge §5). v0 is canonical for user-facing
+2. Two authorities. v0 is canonical for user-facing
    experience and behaviour. The ADR and contracts are canonical for
    authorization rules and data/API shapes. Pure authorization logic
    (role-removal scope, last-owner guard, block-if-members) is decided in the
