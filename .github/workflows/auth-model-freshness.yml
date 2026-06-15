@@ -1,0 +1,69 @@
+name: Auth Model Mirror Freshness
+
+# PART B — the GATE. Fails (red) when the v0 repo's COMMITTED
+# contracts/auth-model.md differs from a fresh extraction of THIS repo's auth.md
+# fenced span. It compares the v0 mirror against the runtime auth.md SOURCE — it
+# never regenerates-then-self-diffs (that pattern always passes).
+#
+# Home: this runs in the RUNTIME repo (clobber-proof — a v0-tool push cannot
+# remove it). It reuses v0's check-auth-model-synced.sh, which regenerates from
+# runtime auth.md via the shared generator and diffs the committed v0 file, so
+# the source side and the v0 side agree by construction.
+#
+# Status-check name (require this on RUNTIME main branch protection):
+#   Auth Model Mirror Freshness / freshness
+#
+# Triggers: after auth.md lands on main (so a stale mirror shows red until the
+# Part A sync PR is merged), plus a daily drift sweep and manual dispatch. It is
+# deliberately NOT a blocking check on auth.md PRs (the mirror updates only after
+# merge, which would otherwise deadlock).
+#
+# Required Actions secrets (same App as Part A; read access is sufficient here):
+#   AUTH_MODEL_SYNC_APP_ID, AUTH_MODEL_SYNC_PRIVATE_KEY
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - docs/architecture/auth.md
+  schedule:
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  freshness:
+    name: freshness
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout runtime (auth.md source)
+        uses: actions/checkout@v4
+        with:
+          path: runtime
+
+      - name: Mint GitHub App token (read the v0 repo)
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.AUTH_MODEL_SYNC_APP_ID }}
+          private-key: ${{ secrets.AUTH_MODEL_SYNC_PRIVATE_KEY }}
+          owner: transformotion
+          repositories: transformotion-apps-b8
+
+      - name: Clone v0 repo (its committed mirror) with the App token
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          git clone --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/transformotion/transformotion-apps-b8.git" v0
+
+      - name: Compare v0's committed mirror against the runtime auth.md source
+        env:
+          RUNTIME_REPO_PATH: ${{ github.workspace }}/runtime
+        run: |
+          # check-auth-model-synced.sh regenerates from runtime auth.md (via the
+          # shared generator) and diffs the COMMITTED v0 contracts/auth-model.md.
+          # Red when they differ — i.e. auth.md changed but the mirror has not
+          # been regenerated/merged, or the mirror was hand-edited.
+          bash v0/scripts/ci/check-auth-model-synced.sh
