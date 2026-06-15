@@ -1,0 +1,92 @@
+name: Auth Model Mirror Sync
+
+# PART A — when the canonical auth.md changes on main, regenerate the v0 mirror
+# (contracts/auth-model.md in transformotion-apps-b8) and open a PR there.
+#
+# Direction: runtime owns auth.md and syncs DOWN to v0. The runtime repo is
+# PUBLIC; the WRITE into the PRIVATE v0 repo uses a GitHub App installation token
+# (App: auth-model-mirror-sync, scoped contents:write + pull-requests:write on
+# transformotion-apps-b8 only). The token is minted per-run and is short-lived.
+#
+# Required Actions secrets in THIS (runtime) repo:
+#   AUTH_MODEL_SYNC_APP_ID        — the GitHub App ID (4063106)
+#   AUTH_MODEL_SYNC_PRIVATE_KEY   — the GitHub App private key (PEM)
+# (Installation 140534760 is auto-resolved by the token action from app-id +
+#  owner + repositories; it does not need to be stored.)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - docs/architecture/auth.md
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    name: sync
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout runtime (auth.md source)
+        uses: actions/checkout@v4
+        with:
+          path: runtime
+
+      - name: Mint GitHub App token (scoped to the v0 repo)
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.AUTH_MODEL_SYNC_APP_ID }}
+          private-key: ${{ secrets.AUTH_MODEL_SYNC_PRIVATE_KEY }}
+          owner: transformotion
+          repositories: transformotion-apps-b8
+
+      - name: Clone v0 repo (target) with the App token
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          git clone "https://x-access-token:${GH_TOKEN}@github.com/transformotion/transformotion-apps-b8.git" v0
+
+      - name: Regenerate the mirror with v0's own generator (single source of logic)
+        env:
+          RUNTIME_REPO_PATH: ${{ github.workspace }}/runtime
+        run: |
+          # sync-auth-model.sh extracts the mirror:start/end span from
+          # runtime auth.md and writes v0/contracts/auth-model.md — the exact
+          # generator the v0 freshness check uses, so source and check agree.
+          bash v0/scripts/sync-auth-model.sh
+
+      - name: Open a PR into the v0 repo if the mirror changed
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          cd v0
+          if git diff --quiet -- contracts/auth-model.md; then
+            echo "Mirror already in sync with auth.md; nothing to open."
+            exit 0
+          fi
+
+          SHORT_SHA="$(git -C "$GITHUB_WORKSPACE/runtime" rev-parse --short HEAD)"
+          FULL_SHA="$(git -C "$GITHUB_WORKSPACE/runtime" rev-parse HEAD)"
+          BRANCH="auth-model-sync/${SHORT_SHA}"
+
+          git config user.name "auth-model-mirror-sync[bot]"
+          git config user.email "auth-model-mirror-sync[bot]@users.noreply.github.com"
+          git checkout -B "$BRANCH"
+          git add contracts/auth-model.md
+          git commit -m "chore: regenerate auth-model mirror from auth.md@${SHORT_SHA}"
+          git push --force-with-lease origin "$BRANCH"
+
+          # Create the PR only if one is not already open for this branch.
+          if [ -z "$(gh pr list --repo transformotion/transformotion-apps-b8 --head "$BRANCH" --state open --json number --jq '.[].number')" ]; then
+            gh pr create \
+              --repo transformotion/transformotion-apps-b8 \
+              --base main \
+              --head "$BRANCH" \
+              --title "chore: regenerate auth-model mirror from auth.md@${SHORT_SHA}" \
+              --body "$(printf 'Regenerated %s from the runtime source of truth.\n\nSource: transformotion/transformotion-apps@%s\n  docs/architecture/auth.md (mirror:start/end span)\n\nSingle-file change; one-click merge after the freshness check passes. Do not edit the file by hand — it is generated; raise changes against the runtime auth.md.\n\n🤖 auth-model-mirror-sync' 'contracts/auth-model.md' "${FULL_SHA}")"
+          else
+            echo "An open PR already exists for ${BRANCH}; updated its branch."
+          fi
