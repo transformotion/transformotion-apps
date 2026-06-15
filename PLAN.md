@@ -48,7 +48,7 @@ The full constraint statement is in `/CONTRIBUTING.md` Section 1.2.
 
 ## 2. How this plan is structured
 
-The plan is organised as 13 milestones (M0 through M12) plus a setup
+The plan is organised as 18 milestones (M0 through M17) plus a setup
 milestone (M-setup) for documentation and project-tracking infrastructure.
 Milestones are sequenced by dependency, not by priority. Each milestone
 has:
@@ -1389,7 +1389,70 @@ Can run in parallel with M7 once M2.1 lands. Migration depends on infrastructure
 
 ---
 
-## 21. Beyond M14
+## 21. M17 — Production cutover (go-live)
+
+### Purpose
+
+Bring the platform from dev-only (develop is canonical, single user =
+owner) to a live prod environment on main with external users. This is
+the gate the owner set: prod go-live requires invitee onboarding (M11)
+to be complete first. Prod cutover is deliberate, milestone-scoped work
+— not plumbing to be done incrementally.
+
+Throughout the build phase, main is intentionally **unborn** — reserved
+for prod and never touched; develop is canonical, and the default branch
+was pointed at develop (2026-06-15) to match that reality. Go-live
+reverses this: main becomes live, and the develop→main promotion **is**
+the launch event. The specific cutover landmines surfaced during the M11
+auth-mirror work are tracked in issue #454 ("Prod-cutover landmines
+(branch/env/protection)").
+
+### Outcome
+
+- **main becomes the live prod trunk.** The go-live is the develop→main
+  promotion, done consciously as the launch event — not as plumbing for
+  some other task. Expect a large promotion (develop was 440+ commits
+  ahead of a stale main during the build phase).
+- **Branch protection exists on main before external users.** The repo
+  has no branch protection today; at cutover, main (= prod) requires it:
+  no force-push, require PRs, likely require CI.
+- **Every workflow's branch-targeting is re-audited at cutover.** Deploy
+  and auth-mirror workflows are currently keyed to `[develop, main]` /
+  develop. Re-verify each workflow's trigger and checkout ref so nothing
+  assumes the build-phase branch model. (The build-phase mismatch —
+  workflows assuming main while the repo lived on develop — caused
+  repeated surprises during M11; verify, don't assume.)
+- **Default-branch decision revisited.** If/when main genuinely becomes
+  the trunk at go-live, revisit whether the default branch should flip
+  back to main (it points at develop now, correct for the build phase).
+- **Prod environment, secrets, and credentials confirmed.** A prod
+  environment with prod-scoped secrets and credentials exists and is
+  separate from dev before go-live.
+
+### Goals served
+
+Goal 2 (deploy / operational hygiene) and the platform's transition to
+serving external users. The cutover is the precondition for any
+multi-user / external-user operation.
+
+### Gate to next
+
+A live prod environment on main: develop promoted to main, branch
+protection in force, every workflow re-audited against the prod branch
+model, and prod environment/secrets verified — with external users able
+to onboard via the M11 invitation flow. (Terminal milestone: this is the
+go-live event, not a gate into further build-phase work.)
+
+### Dependencies
+
+- **M16 — Account lifecycle and invitation, complete (hard gate).** Prod
+  go-live requires invitee onboarding (the M11 invitation flow) to be
+  complete first — the owner-set gate. Cutover does not begin until the
+  account-lifecycle and invitation work is done.
+
+---
+
+## 22. Beyond M14
 
 The following items are scoped but not yet sequenced into milestones.
 They live in the "Backlog" GitHub milestone (a holding area, not a
@@ -1448,7 +1511,7 @@ out of the Backlog milestone.
 
 ---
 
-## 22. Discipline and update rules
+## 23. Discipline and update rules
 
 ### 20.1 Updating this document
 
@@ -1488,7 +1551,7 @@ document in the same PR.
 
 ---
 
-## 23. Reference — milestone summary table
+## 24. Reference — milestone summary table
 
 For quick visual reference. The full text above is the canonical source.
 
@@ -1512,6 +1575,7 @@ For quick visual reference. The full text above is the canonical source.
 | M14 | Deployment verification | 2, 1, 3 | M13 |
 | M15 | v0-canonical transition | 2, 4 | M6 |
 | M16 | Account lifecycle and invitation | 3, 4 | M11, M15 |
+| M17 | Production cutover (go-live) | 2 | M16 |
 
 M8, M9, M10 can run in parallel. M11 follows M10. M7 can run in parallel
 with M6 once M2 and M3 complete. M13 and M14 are sequenced strictly
