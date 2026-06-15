@@ -1,6 +1,7 @@
 name: Auth Model Mirror Sync
 
-# PART A — when the canonical auth.md changes on main, regenerate the v0 mirror
+# PART A — when the canonical auth.md changes on develop (the repo's active
+# branch; the default branch `main` is a stale mirror), regenerate the v0 mirror
 # (contracts/auth-model.md in transformotion-apps-b8) and open a PR there.
 #
 # Direction: runtime owns auth.md and syncs DOWN to v0. The runtime repo is
@@ -16,7 +17,7 @@ name: Auth Model Mirror Sync
 
 on:
   push:
-    branches: [main]
+    branches: [develop, main]
     paths:
       - docs/architecture/auth.md
   workflow_dispatch:
@@ -29,10 +30,14 @@ jobs:
     name: sync
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout runtime (auth.md source)
+      - name: Checkout runtime (auth.md source — develop is the source of truth)
         uses: actions/checkout@v4
         with:
           path: runtime
+          # Pin to develop: it is the active branch. The default branch (main)
+          # is a stale mirror, so without this, workflow_dispatch (and any main
+          # push) would read a fenceless auth.md. develop is the canonical source.
+          ref: develop
 
       - name: Mint GitHub App token (scoped to the v0 repo)
         id: app-token

@@ -10,20 +10,22 @@ name: Auth Model Mirror Freshness
 # runtime auth.md via the shared generator and diffs the committed v0 file, so
 # the source side and the v0 side agree by construction.
 #
-# Status-check name (require this on RUNTIME main branch protection):
-#   Auth Model Mirror Freshness / freshness
+# Status-check name: Auth Model Mirror Freshness / freshness
+# Used as a MONITOR, not a required branch-protection check (it does not run on
+# pull_request, so requiring it would block every PR). The red signal + the Part
+# A auto-PR are the enforcement loop.
 #
-# Triggers: after auth.md lands on main (so a stale mirror shows red until the
-# Part A sync PR is merged), plus a daily drift sweep and manual dispatch. It is
-# deliberately NOT a blocking check on auth.md PRs (the mirror updates only after
-# merge, which would otherwise deadlock).
+# Triggers: after auth.md lands on develop (the active branch; main is a stale
+# mirror), so a stale v0 mirror shows red until the Part A sync PR is merged;
+# plus a daily drift sweep and manual dispatch. Deliberately NOT a blocking check
+# on auth.md PRs (the mirror updates only after merge, which would deadlock).
 #
 # Required Actions secrets (same App as Part A; read access is sufficient here):
 #   AUTH_MODEL_SYNC_APP_ID, AUTH_MODEL_SYNC_PRIVATE_KEY
 
 on:
   push:
-    branches: [main]
+    branches: [develop, main]
     paths:
       - docs/architecture/auth.md
   schedule:
@@ -38,10 +40,14 @@ jobs:
     name: freshness
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout runtime (auth.md source)
+      - name: Checkout runtime (auth.md source — develop is the source of truth)
         uses: actions/checkout@v4
         with:
           path: runtime
+          # Pin to develop (the active branch). schedule / workflow_dispatch
+          # otherwise check out the default branch (main), which is a stale
+          # mirror with no mirror:start/end fences -> the check would go red.
+          ref: develop
 
       - name: Mint GitHub App token (read the v0 repo)
         id: app-token
