@@ -2,6 +2,7 @@ import { HttpClient } from './http';
 import type {
   GetActiveAccountsResponse,
   ListAccountMembersResponse,
+  UserAccessSummary,
 } from '@transformotion/contracts/launchpad/invitations';
 
 export interface ControlPlaneClientOptions {
@@ -51,6 +52,17 @@ export class ControlPlaneClient {
       { accountId },
       signal,
     );
+  }
+
+  /**
+   * GET /api/admin/users/access — cross-app/cross-account access summary for
+   * EVERY user (M16 Phase 6 / M11 Users & Access). Site-admin only; the server
+   * fails closed (403) for non-site-admins. Returns one `UserAccessSummary` per
+   * user, matching the v0 `listUserAccess()` shape so the ported Users & Access
+   * view wires with no adapter.
+   */
+  getUserAccess(signal?: AbortSignal): Promise<{ users: UserAccessSummary[] }> {
+    return this.http.get('api/admin/users/access', signal);
   }
 
   /**
@@ -107,6 +119,20 @@ export class ControlPlaneClient {
    */
   deleteAccount(accountId: string, signal?: AbortSignal): Promise<void> {
     return this.http.delete(`accounts/${encodeURIComponent(accountId)}`, signal);
+  }
+
+  /**
+   * PUT /api/admin/users/{userId}/status — site-admin supervisory disable/enable
+   * (M11 Users & Access). `disabled` blocks the user across all apps and signs
+   * them out; `active` re-enables. The server is the authority (site-admin only,
+   * cannot self-disable); 403 surfaces as ApiError with the server message.
+   */
+  setUserStatus(
+    userId: string,
+    status: 'active' | 'disabled',
+    signal?: AbortSignal,
+  ): Promise<{ userId: string; status: 'active' | 'disabled' }> {
+    return this.http.put(`api/admin/users/${encodeURIComponent(userId)}/status`, { status }, signal);
   }
 }
 

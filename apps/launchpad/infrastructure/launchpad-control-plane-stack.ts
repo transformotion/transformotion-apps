@@ -321,6 +321,39 @@ export class LaunchpadControlPlaneStack extends cdk.Stack {
       resources: [userPoolArn],
     }));
 
+    // M11 Users & Access — site-admin supervisory user disable/enable
+    // (PUT /api/admin/users/{userId}/status).
+    const adminUsersFn = new lambdaNodejs.NodejsFunction(this, 'AdminUsersFn', {
+      functionName: `launchpad-admin-users-${stage}`,
+      entry: path.join(__dirname, '../functions/admin-users/src/index.ts'),
+      handler: 'handler',
+      runtime: lambda.Runtime.NODEJS_20_X,
+      timeout: cdk.Duration.seconds(15),
+      memorySize: 256,
+      environment: {
+        USERS_TABLE: usersTable.tableName,
+        USER_POOL_ID: userPoolId,
+      },
+      bundling: {
+        externalModules: ['@aws-sdk/*'],
+        minify: true,
+        sourceMap: false,
+      },
+    });
+
+    usersTable.grantReadWriteData(adminUsersFn); // persist status
+    // Live site-admin check (don't trust the stale claim) + disable/enable +
+    // terminate existing sessions on disable. Scoped to the pool ARN.
+    adminUsersFn.addToRolePolicy(new iam.PolicyStatement({
+      actions: [
+        'cognito-idp:AdminListGroupsForUser',
+        'cognito-idp:AdminDisableUser',
+        'cognito-idp:AdminEnableUser',
+        'cognito-idp:AdminUserGlobalSignOut',
+      ],
+      resources: [userPoolArn],
+    }));
+
     const invitationsTable = dynamodb.Table.fromTableName(
       this,
       'InvitationsTable',
@@ -482,10 +515,15 @@ export class LaunchpadControlPlaneStack extends cdk.Stack {
 
     // M16 Phase 2 — admin user access directory
     const adminResource = apiResource.addResource('admin');
-    adminResource
-      .addResource('users')
+    const adminUsersResource = adminResource.addResource('users');
+    adminUsersResource
       .addResource('access')
       .addMethod('GET', new apigateway.LambdaIntegration(accessSummaryFn, { proxy: true }), authOptions);
+    // M11 Users & Access — supervisory disable/enable.
+    adminUsersResource
+      .addResource('{userId}')
+      .addResource('status')
+      .addMethod('PUT', new apigateway.LambdaIntegration(adminUsersFn, { proxy: true }), authOptions);
 
     const aiRuntimeConfigResource = adminResource.addResource('ai-runtime-config');
     const aiRuntimeConfigIntegration = new apigateway.LambdaIntegration(aiRuntimeConfigFn, { proxy: true });
