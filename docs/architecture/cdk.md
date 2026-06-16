@@ -63,7 +63,7 @@ read-only and keep provider execution in their app runtimes.
 | `launchpad-accounts-{stage}` | `apps/launchpad/functions/accounts` | `POST /accounts`, `GET/PUT/DELETE /accounts/{id}`, `GET /accounts/{id}/members`, `DELETE /accounts/{id}/members/{userId}` |
 | `launchpad-invitations-{stage}` | `apps/launchpad/functions/invitations` | `POST /accounts/{id}/invitations` |
 | `launchpad-invitation-bundles-{stage}` | `apps/launchpad/functions/invitation-bundles` | `POST /api/invitations/bundles` (create) |
-| `launchpad-invitation-redemption-{stage}` | `apps/launchpad/functions/invitation-redemption` | `POST /api/invitations/bundles/{bundleId}/redeem` |
+| `launchpad-invitation-redemption-{stage}` | `apps/launchpad/functions/invitation-redemption` | `POST /api/invitations/bundles/{bundleId}/redeem` + `…/redeem-as` (dev-only bypass, STAGE-guarded) |
 | `launchpad-ai-runtime-config-{stage}` | `apps/launchpad/functions/ai-runtime-config` | `GET /api/admin/ai-runtime-config`, `PUT /api/admin/ai-runtime-config/platform-default`, `PUT/DELETE /api/admin/ai-runtime-config/apps/{appSlug}/override` |
 | `launchpad-pre-token-generation-{stage}` | `apps/launchpad/functions/pre-token-generation` | Cognito pre-token generation trigger |
 
