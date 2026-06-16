@@ -39,7 +39,7 @@ import {
   type SiteAdminLoader,
 } from '@transformotion/lambda-middleware';
 import type { AccountMemberRow, ListAccountMembersResponse } from '@transformotion/contracts/launchpad/invitations';
-import { appAccessGroup, type AccountRole, type EntitledAppSlug, type UserStatus } from '@transformotion/contracts/_shared/auth';
+import { appAccessGroup, APP_GROUP_PREFIX, type AccountRole, type EntitledAppSlug, type UserStatus } from '@transformotion/contracts/_shared/auth';
 import { randomUUID } from 'crypto';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -75,13 +75,8 @@ async function globalSignOut(userId: string): Promise<void> {
   }));
 }
 
-// M16 D3 / Refs #162: appSlug is derived from the Cognito app-client used to obtain the token.
-const APP_CLIENT_TO_SLUG: Record<string, string> = Object.fromEntries(
-  (process.env.APP_SLUGS ?? '').split(',').filter(Boolean).map(slug => [
-    process.env[`APP_CLIENT_${slug.toUpperCase().replace(/-/g, '_')}`]!,
-    slug,
-  ]),
-);
+/** Known entitled app slugs (the contract's `{app}-app-access` namespace). */
+const ENTITLED_APP_SLUGS = new Set(Object.keys(APP_GROUP_PREFIX));
 
 /** Raw account-members row shape as stored. */
 interface MemberRecord {
@@ -147,31 +142,33 @@ const createAccountDeps: CreateAccountDeps = {
 //
 // auth.md ("Create their own account"): requires the app-access group + an active
 // user; does NOT require a pre-existing membership; the creator becomes `owner`.
-// appSlug is resolved from the Cognito app-client (`aud`), per the contract's
-// `auth: 'account'` app context — never the request body.
+// m16.6.0: `appSlug` travels in the request body. The launchpad is multi-app and
+// its token can't say which app the user clicked — that's request data (the tile).
+// AUTHORIZATION is unchanged: the body says WHICH app; the caller's access GROUP
+// authorizes it. Works with the launchpad token (whose `aud` is the launchpad
+// client) precisely because the app no longer comes from `aud`.
 export async function createAccount(
   event: APIGatewayProxyEvent,
   auth: Pick<AuthClaims, 'userId' | 'email' | 'groups'>,
   deps: CreateAccountDeps = createAccountDeps,
 ) {
   const { userId, email } = auth;
-  const { name } = parseBody<{ name: string }>(event);
+  const { name, appSlug } = parseBody<{ name?: string; appSlug?: string }>(event);
   if (!name?.trim()) throw badRequest('name is required');
 
-  // M16 D3 / Refs #162: resolve appSlug from the Cognito app-client (aud claim).
-  // The create-first-account flow is app-scoped, so the app context is required.
-  const claims = event.requestContext?.authorizer?.claims as Record<string, string> | undefined;
-  const aud = claims?.aud;
-  const appSlug = (aud ? APP_CLIENT_TO_SLUG[aud] : undefined) as EntitledAppSlug | undefined;
-  if (!appSlug) throw badRequest('Could not resolve app context for account creation');
+  // Validate the target app (required; must be a known entitled app) → 400.
+  if (!appSlug || !ENTITLED_APP_SLUGS.has(appSlug)) {
+    throw badRequest('appSlug is required and must be a known app');
+  }
+  const slug = appSlug as EntitledAppSlug;
 
-  // auth.md: POST /accounts REQUIRES the `{app}-app-access` group (groups-
-  // authoritative). The creator must already hold access (granted via app-grant
-  // or a direct grant); self-service creation does NOT bootstrap access. The
-  // create-first-account surface only appears once the token carries this group.
-  const accessGroup = appAccessGroup(appSlug);
+  // auth.md "Create their own account": REQUIRES the `{appSlug}-app-access` group
+  // (groups-authoritative). The body specifies the app; the caller's access group
+  // AUTHORIZES it — a caller without `{appSlug}-app-access` is denied regardless of
+  // the appSlug sent (fail closed). Self-service creation does NOT bootstrap access.
+  const accessGroup = appAccessGroup(slug);
   if (!auth.groups.includes(accessGroup)) {
-    throw forbidden(`Access to '${appSlug}' is required to create an account`);
+    throw forbidden(`Access to '${slug}' is required to create an account`);
   }
 
   const accountId = randomUUID();
@@ -182,14 +179,14 @@ export async function createAccount(
       {
         Put: {
           TableName: deps.accountsTable,
-          Item: { accountId, appSlug, name: name.trim(), ownerId: userId, plan: 'free', createdAt: now, updatedAt: now },
+          Item: { accountId, appSlug: slug, name: name.trim(), ownerId: userId, plan: 'free', createdAt: now, updatedAt: now },
           ConditionExpression: 'attribute_not_exists(accountId)',
         },
       },
       {
         Put: {
           TableName: deps.accountMembersTable,
-          Item: { accountId, userId, email, appSlug, role: 'owner', joinedAt: now },
+          Item: { accountId, userId, email, appSlug: slug, role: 'owner', joinedAt: now },
         },
       },
     ],
@@ -212,7 +209,7 @@ export async function createAccount(
   }
 
   return created({
-    account: { accountId, appSlug, name: name.trim(), ownerId: userId, plan: 'free', createdAt: now },
+    account: { accountId, appSlug: slug, name: name.trim(), ownerId: userId, plan: 'free', createdAt: now },
   });
 }
 

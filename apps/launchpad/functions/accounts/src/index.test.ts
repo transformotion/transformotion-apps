@@ -41,14 +41,18 @@ function makeDeps(opts: { cognitoThrows?: boolean } = {}): { deps: CreateAccount
 
 // aud 'client-sa' maps to stock-analyser via the vitest.config env → access group
 // 'stock-app-access'. groups carries the caller's cognito:groups for the gate.
-function event(name: unknown, groups: string[], aud: string | undefined = 'client-sa') {
+// m16.6.0: { name, appSlug } in the body. Omit a field by passing `undefined`.
+function event(name: unknown, appSlug: unknown) {
+  const body: Record<string, unknown> = {};
+  if (name !== undefined) body.name = name;
+  if (appSlug !== undefined) body.appSlug = appSlug;
   return {
     resource: '/accounts',
     httpMethod: 'POST',
     pathParameters: null,
     headers: {},
-    requestContext: { authorizer: { claims: { sub: 'user-1', email: 'u@example.com', aud } } },
-    body: name === undefined ? null : JSON.stringify({ name }),
+    requestContext: { authorizer: { claims: { sub: 'user-1', email: 'u@example.com' } } },
+    body: JSON.stringify(body),
     isBase64Encoded: false,
   } as never;
 }
@@ -64,7 +68,7 @@ describe('createAccount (POST /accounts) — M11 A4', () => {
     const { deps, rec } = makeDeps();
     // createAccount is the inner unit; its `body` is the raw object the middleware
     // wrapper would later stringify (not a JSON string).
-    const res = (await createAccount(event('Household', ['stock-app-access']), auth(['stock-app-access']), deps)) as {
+    const res = (await createAccount(event('Household', 'stock-analyser'), auth(['stock-app-access']), deps)) as {
       statusCode: number;
       body: { account: { accountId: string; appSlug: string; name: string; ownerId: string } };
     };
@@ -91,9 +95,9 @@ describe('createAccount (POST /accounts) — M11 A4', () => {
     expect(rec.groupAdds[0]).toMatchObject({ UserPoolId: 'pool-test', Username: 'user-1', GroupName: 'stock-app-access' });
   });
 
-  it('rejects (403) a caller who does NOT hold the {app}-app-access group', async () => {
+  it('rejects (403) a caller who does NOT hold the {appSlug}-app-access group', async () => {
     const { deps, rec } = makeDeps();
-    expect(await statusOf(createAccount(event('Household', []), auth([]), deps))).toBe(403);
+    expect(await statusOf(createAccount(event('Household', 'stock-analyser'), auth([]), deps))).toBe(403);
     // No writes on a denied create.
     expect(rec.ddbCommands).toHaveLength(0);
     expect(rec.groupAdds).toHaveLength(0);
@@ -101,22 +105,34 @@ describe('createAccount (POST /accounts) — M11 A4', () => {
 
   it('rejects (403) a site-admin who lacks the access group (no self-grant bypass)', async () => {
     const { deps } = makeDeps();
-    expect(await statusOf(createAccount(event('Household', ['site-admin']), auth(['site-admin']), deps))).toBe(403);
+    expect(await statusOf(createAccount(event('Household', 'stock-analyser'), auth(['site-admin']), deps))).toBe(403);
   });
 
-  it('rejects (400) when the app context (aud) cannot be resolved', async () => {
+  it('rejects (403) when the caller holds a DIFFERENT app\'s access group (body app ≠ authorized app)', async () => {
+    // The body says stock-analyser; the caller only holds budget access → denied,
+    // regardless of the appSlug sent (authorization is the group, not the body).
     const { deps } = makeDeps();
-    expect(await statusOf(createAccount(event('Household', ['stock-app-access'], 'client-unknown'), auth(['stock-app-access']), deps))).toBe(400);
+    expect(await statusOf(createAccount(event('Household', 'stock-analyser'), auth(['budget-app-access']), deps))).toBe(403);
+  });
+
+  it('rejects (400) an unknown appSlug', async () => {
+    const { deps } = makeDeps();
+    expect(await statusOf(createAccount(event('Household', 'not-an-app'), auth(['stock-app-access']), deps))).toBe(400);
+  });
+
+  it('rejects (400) a missing appSlug', async () => {
+    const { deps } = makeDeps();
+    expect(await statusOf(createAccount(event('Household', undefined), auth(['stock-app-access']), deps))).toBe(400);
   });
 
   it('rejects (400) a blank name', async () => {
     const { deps } = makeDeps();
-    expect(await statusOf(createAccount(event('   ', ['stock-app-access']), auth(['stock-app-access']), deps))).toBe(400);
+    expect(await statusOf(createAccount(event('   ', 'stock-analyser'), auth(['stock-app-access']), deps))).toBe(400);
   });
 
   it('ensure-group is best-effort: a Cognito blip does not fail an otherwise-successful create', async () => {
     const { deps, rec } = makeDeps({ cognitoThrows: true });
-    const res = (await createAccount(event('Household', ['stock-app-access']), auth(['stock-app-access']), deps)) as { statusCode: number };
+    const res = (await createAccount(event('Household', 'stock-analyser'), auth(['stock-app-access']), deps)) as { statusCode: number };
     expect(res.statusCode).toBe(201);
     expect(rec.ddbCommands).toHaveLength(1); // account+membership still written
   });
