@@ -449,6 +449,32 @@ export class LaunchpadControlPlaneStack extends cdk.Stack {
     // No Cognito grant: sender authorization (site-admin / app-admin) reads the
     // token's cognito:groups — no AWS calls. Grants are CONFERRED at redemption (A5).
 
+    // M11 Composer — invitee discovery (POST /api/invitations/invitee-search).
+    const inviteeSearchFn = new lambdaNodejs.NodejsFunction(this, 'InviteeSearchFn', {
+      functionName: `launchpad-invitee-search-${stage}`,
+      entry: path.join(__dirname, '../functions/invitee-search/src/index.ts'),
+      handler: 'handler',
+      runtime: lambda.Runtime.NODEJS_20_X,
+      timeout: cdk.Duration.seconds(15),
+      memorySize: 256,
+      environment: {
+        USERS_TABLE: usersTable.tableName,
+        ACCOUNTS_TABLE: accountsTable.tableName,
+        ACCOUNT_MEMBERS_TABLE: accountMembersTable.tableName,
+        INVITATIONS_TABLE: invitationsTable.tableName,
+      },
+      bundling: {
+        externalModules: ['@aws-sdk/*'],
+        minify: true,
+        sourceMap: false,
+      },
+    });
+
+    usersTable.grantReadData(inviteeSearchFn);          // directory
+    accountsTable.grantReadData(inviteeSearchFn);       // account names/apps
+    accountMembersTable.grantReadData(inviteeSearchFn); // scope + reasons (+ userId-index)
+    invitationsTable.grantReadData(inviteeSearchFn);    // pending invitees
+
     const accountsIntegration = new apigateway.LambdaIntegration(accountsFn, { proxy: true });
     const accountsResource = this.api.root.addResource('accounts');
     accountsResource.addMethod('POST', accountsIntegration, authOptions);
@@ -464,18 +490,27 @@ export class LaunchpadControlPlaneStack extends cdk.Stack {
     membersResource
       .addResource('detail')
       .addMethod('GET', accountsIntegration, authOptions);
-    membersResource
-      .addResource('{userId}')
-      .addMethod('DELETE', accountsIntegration, authOptions);
+    const memberResource = membersResource.addResource('{userId}');
+    memberResource.addMethod('DELETE', accountsIntegration, authOptions);
+    // R6 — member role change (owner/manager; role-scoped).
+    memberResource.addResource('role').addMethod('PUT', accountsIntegration, authOptions);
 
     accountResource
       .addResource('invitations')
       .addMethod('POST', new apigateway.LambdaIntegration(invitationsFn, { proxy: true }), authOptions);
 
-    // M11 invitation-bundle routes under /api/invitations/bundles.
-    const bundlesResource = apiResource.addResource('invitations').addResource('bundles');
+    // M11 invitation routes under /api/invitations.
+    const invitationsApiResource = apiResource.addResource('invitations');
+    // Composer invitee discovery (POST /api/invitations/invitee-search).
+    invitationsApiResource
+      .addResource('invitee-search')
+      .addMethod('POST', new apigateway.LambdaIntegration(inviteeSearchFn, { proxy: true }), authOptions);
+    const bundlesResource = invitationsApiResource.addResource('bundles');
     // Chunk 3 — POST create (auth-only; per-grant sender authorization in-handler).
-    bundlesResource.addMethod('POST', new apigateway.LambdaIntegration(invitationBundlesFn, { proxy: true }), authOptions);
+    const invitationBundlesIntegration = new apigateway.LambdaIntegration(invitationBundlesFn, { proxy: true });
+    bundlesResource.addMethod('POST', invitationBundlesIntegration, authOptions);
+    // GET list — Redemption Demo inbox / admin review (site-admin all; else own).
+    bundlesResource.addMethod('GET', invitationBundlesIntegration, authOptions);
     const bundleResource = bundlesResource.addResource('{bundleId}');
     const redemptionIntegration = new apigateway.LambdaIntegration(invitationRedemptionFn, { proxy: true });
     // A5 — POST {bundleId}/redeem (auth-only; invitee-only enforced in-handler).

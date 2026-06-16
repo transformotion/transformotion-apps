@@ -1,22 +1,21 @@
 'use client'
 
-import { UserPlus } from 'lucide-react'
+import { Suspense } from 'react'
 import { AdminShell } from '@/components/launchpad/admin/admin-shell'
-import { AdminPlaceholder } from '@/components/launchpad/admin/admin-placeholder'
+import { InviteComposerView } from '@/components/launchpad/admin/invite-composer-view'
+import { useAdminViewer } from '@/lib/admin/use-admin-viewer'
 
-// Placeholder until the Invite Composer is ported (needs the discovery-engine
-// backend + v0-first contract). Keeps the nav coherent.
 export default function AdminInvitePage() {
+  const viewer = useAdminViewer()
   return (
     <AdminShell
       title="Invite User"
-      subtitle="Compose an invitation bundle — account invites and app-access grants."
+      subtitle="Compose an invitation bundle — account invites and app-access grants. One email, one redemption link."
     >
-      <AdminPlaceholder
-        icon={UserPlus}
-        title="Invite User — porting in progress"
-        description="This surface is being ported from v0 and wired to the live invitation engine."
-      />
+      {/* Suspense: InviteComposerView reads search params (account handoff). */}
+      <Suspense fallback={<p className="text-sm text-muted-foreground">Loading composer…</p>}>
+        {viewer ? <InviteComposerView viewer={viewer} /> : null}
+      </Suspense>
     </AdminShell>
   )
 }

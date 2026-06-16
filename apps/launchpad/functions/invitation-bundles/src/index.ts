@@ -1,5 +1,5 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, PutCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import {
   withAuthOnly,
   parseBody,
@@ -148,10 +148,37 @@ export function createHandler(deps: BundleCreationDeps) {
     return ok(response);
   }
 
+  // GET /api/invitations/bundles — list bundles (Redemption Demo inbox / admin
+  // review). Site-admin sees ALL bundles (supervisory); otherwise the caller sees
+  // bundles they created. The INVITATIONS_TABLE holds both single invitations and
+  // bundles — bundles are the items carrying a `grants` array.
+  async function listBundles(auth: AuthClaims) {
+    const isSiteAdmin = auth.groups.includes('site-admin');
+    const res = await deps.ddb.send(new ScanCommand({ TableName: deps.invitationsTable }));
+    const items = (res.Items ?? []) as Array<InvitationBundle & { invitationId?: string; invitedBy?: string }>;
+    const bundles: InvitationBundle[] = items
+      .filter((it) => Array.isArray(it.grants))
+      .filter((it) => isSiteAdmin || it.invitedBy === auth.userId)
+      .map((it) => ({
+        bundleId: it.bundleId ?? it.invitationId ?? '',
+        email: it.email,
+        invitedBy: it.invitedBy ?? '',
+        createdAt: it.createdAt,
+        expiresAt: it.expiresAt,
+        status: it.status,
+        grants: it.grants,
+      }))
+      .sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''));
+    return ok({ bundles });
+  }
+
   return withAuthOnly(async ({ auth, event }) => {
     const resource = (event as APIGatewayProxyEvent).resource ?? '';
     if (resource === '/api/invitations/bundles' && event.httpMethod === 'POST') {
       return createBundle(auth, event as APIGatewayProxyEvent);
+    }
+    if (resource === '/api/invitations/bundles' && event.httpMethod === 'GET') {
+      return listBundles(auth);
     }
     throw badRequest(`Unrecognised route: ${event.httpMethod} ${resource}`);
   });

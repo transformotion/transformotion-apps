@@ -1,6 +1,8 @@
 import { HttpClient } from './http';
 import type {
   GetActiveAccountsResponse,
+  InvitationBundle,
+  InviteeSearchResponse,
   ListAccountMembersResponse,
   UserAccessSummary,
 } from '@transformotion/contracts/launchpad/invitations';
@@ -55,6 +57,24 @@ export class ControlPlaneClient {
   }
 
   /**
+   * GET /api/invitations/bundles — list invitation bundles (Redemption Demo
+   * inbox / admin review). Site-admin sees all; otherwise the caller's own.
+   */
+  listInvitationBundles(signal?: AbortSignal): Promise<{ bundles: InvitationBundle[] }> {
+    return this.http.get('api/invitations/bundles', signal);
+  }
+
+  /**
+   * POST /api/invitations/invitee-search — scoped invitee discovery for the
+   * Invite Composer (CHECK 1 only: who may the sender see/search/select). Returns
+   * the sender's search `scope` and `results` (each with display-safe `reasons`).
+   * Empty `query` returns the full scoped set.
+   */
+  searchInvitees(query: string, signal?: AbortSignal): Promise<InviteeSearchResponse> {
+    return this.http.post('api/invitations/invitee-search', { query }, signal);
+  }
+
+  /**
    * GET /api/admin/users/access — cross-app/cross-account access summary for
    * EVERY user (M16 Phase 6 / M11 Users & Access). Site-admin only; the server
    * fails closed (403) for non-site-admins. Returns one `UserAccessSummary` per
@@ -99,6 +119,26 @@ export class ControlPlaneClient {
     signal?: AbortSignal,
   ): Promise<{ account: { accountId: string; name: string; updatedAt: string } }> {
     return this.http.put(`accounts/${encodeURIComponent(accountId)}`, body, signal);
+  }
+
+  /**
+   * PUT /accounts/{accountId}/members/{userId}/role — change a member's role
+   * (owner-or-manager, role-scoped; site-admin supervisory authority does NOT
+   * include role management). The last-owner floor (409) and role-scope rules
+   * are enforced server-side. Returns the UPDATED member list so the caller
+   * refreshes from the response.
+   */
+  updateMemberRole(
+    accountId: string,
+    userId: string,
+    role: 'owner' | 'manager' | 'member' | 'viewer',
+    signal?: AbortSignal,
+  ): Promise<ListAccountMembersResponse> {
+    return this.http.put(
+      `accounts/${encodeURIComponent(accountId)}/members/${encodeURIComponent(userId)}/role`,
+      { role },
+      signal,
+    );
   }
 
   /**
