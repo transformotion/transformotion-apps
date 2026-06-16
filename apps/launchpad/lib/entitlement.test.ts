@@ -9,8 +9,15 @@ import {
   fallbackWarnings,
 } from './entitlement';
 
-const visibleSlugs = (entitled: string[]) =>
-  deriveAppTiles(LAUNCHPAD_APPS, new Set(entitled))
+/** A viewer who holds the access group AND an account for each `slugs` app. */
+const accessed = (slugs: string[]) => ({
+  siteAdmin: false,
+  appAdmin: new Set<string>(),
+  appAccess: new Set(slugs),
+  accounted: new Set(slugs),
+});
+const visibleSlugs = (slugs: string[]) =>
+  deriveAppTiles(LAUNCHPAD_APPS, accessed(slugs))
     .filter((t) => t.visible)
     .map((t) => t.slug);
 
@@ -23,22 +30,21 @@ describe('entitledSlugsFromSelections', () => {
     expect([...set].sort()).toEqual(['budget-tracker', 'stock-analyser']);
   });
 
-  it('returns an empty set for no selections (zero-membership user)', () => {
+  it('returns an empty set for no selections (zero-account user)', () => {
     expect(entitledSlugsFromSelections([]).size).toBe(0);
   });
 });
 
-describe('deriveAppTiles — three-state model (D11)', () => {
-  it('shows a deployed app ONLY when the user is entitled', () => {
+describe('deriveAppTiles — groups-authoritative gate (M11)', () => {
+  it('shows a deployed app ONLY when the viewer holds the access group', () => {
     expect(visibleSlugs(['stock-analyser'])).toEqual(['stock-analyser']);
   });
 
-  it('hides a deployed app when the user has no membership', () => {
-    // entitled to BT only → SA hidden, BT shown
+  it('hides a deployed app the viewer has no access group for', () => {
     expect(visibleSlugs(['budget-tracker'])).toEqual(['budget-tracker']);
   });
 
-  it('shows multiple entitled apps in registry order', () => {
+  it('shows multiple accessed apps in registry order', () => {
     expect(visibleSlugs(['budget-tracker', 'stock-analyser'])).toEqual([
       'stock-analyser',
       'budget-tracker',
@@ -46,22 +52,48 @@ describe('deriveAppTiles — three-state model (D11)', () => {
   });
 
   it('never shows the not-deployed marketing app (coming-soon stays hidden)', () => {
-    // even if a stray entitlement slug matched it, it is not entitlement-gated
     expect(visibleSlugs(['transformation-framework'])).toEqual([]);
   });
 
-  it('shows nothing for a zero-membership user (empty state)', () => {
-    const tiles = deriveAppTiles(LAUNCHPAD_APPS, new Set());
+  it('shows nothing for a viewer with no access groups (empty state)', () => {
+    const tiles = deriveAppTiles(LAUNCHPAD_APPS, accessed([]));
     expect(hasVisibleApps(tiles)).toBe(false);
     expect(visibleSlugs([])).toEqual([]);
   });
 
-  it('marks visible gated tiles launchable and tolerates unknown slugs', () => {
-    const tiles = deriveAppTiles(LAUNCHPAD_APPS, new Set(['stock-analyser', 'made-up-app']));
-    const sa = tiles.find((t) => t.slug === 'stock-analyser')!;
-    expect(sa.visible).toBe(true);
-    expect(sa.launchable).toBe(true);
-    expect(hasVisibleApps(tiles)).toBe(true);
+  it('access-group + an account → visible, launchable, NOT create-first-account', () => {
+    const sa = deriveAppTiles(LAUNCHPAD_APPS, accessed(['stock-analyser'])).find((t) => t.slug === 'stock-analyser')!;
+    expect(sa).toMatchObject({ visible: true, launchable: true, needsFirstAccount: false });
+  });
+
+  it('access-group + ZERO accounts → visible, needsFirstAccount, NOT launchable (the app-grant persona)', () => {
+    const viewer = { siteAdmin: false, appAdmin: new Set<string>(), appAccess: new Set(['stock-analyser']), accounted: new Set<string>() };
+    const sa = deriveAppTiles(LAUNCHPAD_APPS, viewer).find((t) => t.slug === 'stock-analyser')!;
+    expect(sa).toMatchObject({ visible: true, needsFirstAccount: true, launchable: false });
+  });
+
+  it('per-app mix: accounted SA beside access-no-account BT, independently', () => {
+    const viewer = { siteAdmin: false, appAdmin: new Set<string>(), appAccess: new Set(['stock-analyser', 'budget-tracker']), accounted: new Set(['stock-analyser']) };
+    const tiles = deriveAppTiles(LAUNCHPAD_APPS, viewer);
+    expect(tiles.find((t) => t.slug === 'stock-analyser')).toMatchObject({ launchable: true, needsFirstAccount: false });
+    expect(tiles.find((t) => t.slug === 'budget-tracker')).toMatchObject({ launchable: false, needsFirstAccount: true });
+  });
+
+  it('site-admin sees a deployed app even without the access group (normal launch tile, not create)', () => {
+    const viewer = { siteAdmin: true, appAdmin: new Set<string>(), appAccess: new Set<string>(), accounted: new Set<string>() };
+    const sa = deriveAppTiles(LAUNCHPAD_APPS, viewer).find((t) => t.slug === 'stock-analyser')!;
+    expect(sa).toMatchObject({ visible: true, launchable: true, needsFirstAccount: false });
+  });
+
+  it('app-admin (no access group) sees the app as a normal tile, not create-first-account', () => {
+    const viewer = { siteAdmin: false, appAdmin: new Set(['budget-tracker']), appAccess: new Set<string>(), accounted: new Set<string>() };
+    const bt = deriveAppTiles(LAUNCHPAD_APPS, viewer).find((t) => t.slug === 'budget-tracker')!;
+    expect(bt).toMatchObject({ visible: true, launchable: true, needsFirstAccount: false });
+  });
+
+  it('tolerates unknown slugs in the access set', () => {
+    const viewer = { siteAdmin: false, appAdmin: new Set<string>(), appAccess: new Set(['stock-analyser', 'made-up']), accounted: new Set(['stock-analyser']) };
+    expect(hasVisibleApps(deriveAppTiles(LAUNCHPAD_APPS, viewer))).toBe(true);
   });
 });
 

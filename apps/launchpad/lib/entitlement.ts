@@ -1,13 +1,15 @@
 /**
- * Pure entitlement + display helpers for the Launchpad home view (M16 Phase 3).
+ * Pure entitlement + display helpers for the Launchpad home view.
  *
- * Tiles derive from the user's per-app membership (the access projection), NOT
- * from a hard-coded list (ADR D11). Admin/control-plane surfaces gate on the
- * site-admin Cognito group / `app_admin` claim elsewhere — never on app
- * membership (the `site_admin` claim was removed in M16 Phase 6).
+ * Tile visibility is GROUPS-AUTHORITATIVE (M11): a tile shows when the viewer
+ * holds the app's `{app}-app-access` Cognito group (or is site-admin / app-admin
+ * for it) — NOT when they hold a membership. A viewer who holds the access group
+ * with ZERO accounts (the "access, no accounts" state produced by an app-grant
+ * invitation) sees a distinct "create your first account" tile. Each app's tile
+ * reflects its own state independently.
  *
  * Everything here is pure and framework-free so it can be unit-tested without a
- * DOM; the React component maps slugs to icons/launch handlers.
+ * DOM; the React component maps slugs to icons/launch/create handlers.
  */
 
 /** Static catalogue of apps the Launchpad knows how to present. */
@@ -30,12 +32,29 @@ export interface LaunchpadAppDef {
 
 /** One resolved tile for the current user. */
 export interface AppTile extends LaunchpadAppDef {
-  /** User holds at least one membership in this app. */
-  entitled: boolean;
-  /** Should the tile render at all. */
+  /** Should the tile render at all (viewer can see this app). */
   visible: boolean;
-  /** Tile is clickable (deployed AND entitled). */
+  /** Tile is a normal launch tile (deployed, visible, and the viewer has an account). */
   launchable: boolean;
+  /**
+   * Viewer holds the `{app}-app-access` group but has ZERO accounts in this app
+   * — the "access, no accounts" state. The tile renders a create-first-account
+   * CTA instead of a launch action. Site-admins / app-admins WITHOUT the access
+   * group are NOT first-account candidates (they see the app via their role).
+   */
+  needsFirstAccount: boolean;
+}
+
+/** The viewer's group-authoritative access, as the launchpad gate keys on it. */
+export interface ViewerEntitlement {
+  /** site-admin sees every deployed app. */
+  siteAdmin: boolean;
+  /** Apps the viewer admins (`{app}-app-admin` groups). */
+  appAdmin: ReadonlySet<string>;
+  /** Apps the viewer may ENTER (`{app}-app-access` groups) — the tile-visibility key. */
+  appAccess: ReadonlySet<string>;
+  /** Apps the viewer holds >=1 account in (active-account selections / accounts claim). */
+  accounted: ReadonlySet<string>;
 }
 
 /**
@@ -86,25 +105,29 @@ export function entitledSlugsFromSelections<T extends { appSlug: string }>(
 }
 
 /**
- * Resolve which tiles render for a user, given their entitled app slugs.
+ * Resolve which tiles render for a viewer, group-authoritatively (M11).
  *
- * Three-state model (D11):
- *  - entitlement-gated + deployed + entitled  → visible, launchable
- *  - entitlement-gated + deployed + NOT entitled → hidden (no membership, no tile)
- *  - not entitlement-gated (coming-soon/future) → hidden by default
+ *  - not entitlement-gated (coming-soon) OR not deployed → hidden.
+ *  - gated + deployed + (site-admin OR app-admin OR holds the access group) → visible.
+ *      · holds the access group but NO account → `needsFirstAccount` (create CTA).
+ *      · otherwise → `launchable` (normal open tile).
+ *  - gated + deployed + none of the above → hidden.
  *
- * Backfill tolerant: an unknown/empty entitlement set simply yields no visible
- * gated tiles (the empty state), never an error.
+ * Tolerant of unknown slugs and empty sets — simply yields no visible gated
+ * tiles (the empty state), never an error.
  */
 export function deriveAppTiles(
   apps: readonly LaunchpadAppDef[],
-  entitledSlugs: ReadonlySet<string>,
+  viewer: ViewerEntitlement,
 ): AppTile[] {
   return apps.map((app) => {
-    const entitled = entitledSlugs.has(app.slug);
-    const visible = app.entitlementGated ? app.deployed && entitled : false;
-    const launchable = visible && app.deployed && entitled;
-    return { ...app, entitled, visible, launchable };
+    if (!app.entitlementGated || !app.deployed) {
+      return { ...app, visible: false, launchable: false, needsFirstAccount: false };
+    }
+    const canSee = viewer.siteAdmin || viewer.appAdmin.has(app.slug) || viewer.appAccess.has(app.slug);
+    const needsFirstAccount = viewer.appAccess.has(app.slug) && !viewer.accounted.has(app.slug);
+    const launchable = canSee && !needsFirstAccount;
+    return { ...app, visible: canSee, launchable, needsFirstAccount };
   });
 }
 

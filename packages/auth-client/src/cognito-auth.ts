@@ -10,7 +10,7 @@ import {
   fetchAuthSession,
 } from 'aws-amplify/auth'
 import { parseCognitoGroups } from '@transformotion/contracts/cognito-groups'
-import { deriveAppAdmin, type CognitoGroup } from '@transformotion/contracts/_shared/auth'
+import { deriveAppAdmin, deriveAppAccess, type CognitoGroup } from '@transformotion/contracts/_shared/auth'
 import type { AuthService, AuthSession, AuthTokens, User, Account, SignInCredentials, SignUpCredentials } from './index'
 
 export class CognitoAuthService implements AuthService {
@@ -57,10 +57,13 @@ export class CognitoAuthService implements AuthService {
       // `siteAdmin`. The former table-derived `app_admin` token claim was struck
       // (it duplicated group state); the group in the token is the sole signal.
       const appAdmin   = deriveAppAdmin(groups as CognitoGroup[])
+      // M11 groups-authoritative: apps the user may ENTER come from the
+      // `{app}-app-access` groups (the launchpad gate keys on this, not membership).
+      const appAccess  = deriveAppAccess(groups as CognitoGroup[])
       const name       = (givenName && familyName)
         ? `${givenName} ${familyName}`
         : (givenName ?? email)
-      return { id: cognitoUser.userId, email, name, metadata: { siteAdmin, appAdmin } }
+      return { id: cognitoUser.userId, email, name, metadata: { siteAdmin, appAdmin, appAccess } }
     } catch {
       return null
     }

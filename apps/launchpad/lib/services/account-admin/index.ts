@@ -3,6 +3,7 @@ import { controlPlaneUrl } from '@/lib/services/control-plane';
 export interface AccountSummary {
   accountId: string;
   name: string;
+  appSlug?: string;
   ownerId?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -48,15 +49,26 @@ async function request<T>(
   return response.json() as Promise<T>;
 }
 
-export function createAccount(
+/**
+ * M11 A4 / m16.6.0 — create the caller's first account in `appSlug`. POST /accounts
+ * is `withAuthOnly` (no account context), so it carries NO `X-Account-Id`; the
+ * target app travels in the body. Authorization is the caller's `{appSlug}-app-access`
+ * group (the access group authorizes; the body only says which app).
+ */
+export async function createAccount(
   idToken: string,
-  activeAccountId: string,
+  appSlug: string,
   name: string,
 ): Promise<{ account: AccountSummary }> {
-  return request(idToken, activeAccountId, '/accounts', {
+  const response = await fetch(controlPlaneUrl('/accounts'), {
     method: 'POST',
-    body: JSON.stringify({ name }),
+    headers: { Authorization: `Bearer ${idToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, appSlug }),
   });
+  if (!response.ok) {
+    throw new Error(`POST /accounts failed: ${response.status}`);
+  }
+  return response.json() as Promise<{ account: AccountSummary }>;
 }
 
 export function getAccount(
