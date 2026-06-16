@@ -11,6 +11,7 @@ import {
   CognitoIdentityProviderClient,
   AdminUserGlobalSignOutCommand,
   AdminListGroupsForUserCommand,
+  AdminAddUserToGroupCommand,
 } from '@aws-sdk/client-cognito-identity-provider';
 import {
   withAuthOnly,
@@ -33,11 +34,12 @@ import {
   allOf,
   UNIFORM_DENY,
   type APIGatewayProxyEvent,
+  type AuthClaims,
   type MembershipLoader,
   type SiteAdminLoader,
 } from '@transformotion/lambda-middleware';
 import type { AccountMemberRow, ListAccountMembersResponse } from '@transformotion/contracts/launchpad/invitations';
-import type { AccountRole, UserStatus } from '@transformotion/contracts/_shared/auth';
+import { appAccessGroup, type AccountRole, type EntitledAppSlug, type UserStatus } from '@transformotion/contracts/_shared/auth';
 import { randomUUID } from 'crypto';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -122,57 +124,95 @@ async function loadAccountContext(accountId: string): Promise<{
 const MANAGER_WRITABLE_FIELDS = new Set(['name']);
 const OWNER_ONLY_FIELDS = new Set(['ownerId']);
 
-async function createAccount(event: APIGatewayProxyEvent, userId: string, email: string) {
+/** Injectable dependencies for the testable createAccount unit (M11 A4). */
+export interface CreateAccountDeps {
+  ddb: DynamoDBDocumentClient;
+  cognito: CognitoIdentityProviderClient;
+  accountsTable: string;
+  accountMembersTable: string;
+  userPoolId: string;
+}
+
+const createAccountDeps: CreateAccountDeps = {
+  ddb,
+  cognito,
+  accountsTable: ACCOUNTS_TABLE,
+  accountMembersTable: ACCOUNT_MEMBERS_TABLE,
+  userPoolId: USER_POOL_ID,
+};
+
+// M11 A4 — POST /accounts: self-service create-first-account. Mirrors the v0
+// `provisionAccountForUser`: creates the account, makes the CALLER the owner
+// (owner membership), and ensures the caller holds the `{app}-app-access` group.
+//
+// auth.md ("Create their own account"): requires the app-access group + an active
+// user; does NOT require a pre-existing membership; the creator becomes `owner`.
+// appSlug is resolved from the Cognito app-client (`aud`), per the contract's
+// `auth: 'account'` app context — never the request body.
+export async function createAccount(
+  event: APIGatewayProxyEvent,
+  auth: Pick<AuthClaims, 'userId' | 'email' | 'groups'>,
+  deps: CreateAccountDeps = createAccountDeps,
+) {
+  const { userId, email } = auth;
   const { name } = parseBody<{ name: string }>(event);
   if (!name?.trim()) throw badRequest('name is required');
 
   // M16 D3 / Refs #162: resolve appSlug from the Cognito app-client (aud claim).
+  // The create-first-account flow is app-scoped, so the app context is required.
   const claims = event.requestContext?.authorizer?.claims as Record<string, string> | undefined;
   const aud = claims?.aud;
-  const appSlug = aud ? (APP_CLIENT_TO_SLUG[aud] ?? null) : null;
+  const appSlug = (aud ? APP_CLIENT_TO_SLUG[aud] : undefined) as EntitledAppSlug | undefined;
+  if (!appSlug) throw badRequest('Could not resolve app context for account creation');
+
+  // auth.md: POST /accounts REQUIRES the `{app}-app-access` group (groups-
+  // authoritative). The creator must already hold access (granted via app-grant
+  // or a direct grant); self-service creation does NOT bootstrap access. The
+  // create-first-account surface only appears once the token carries this group.
+  const accessGroup = appAccessGroup(appSlug);
+  if (!auth.groups.includes(accessGroup)) {
+    throw forbidden(`Access to '${appSlug}' is required to create an account`);
+  }
 
   const accountId = randomUUID();
   const now = new Date().toISOString();
 
-  const accountItem: Record<string, unknown> = {
-    accountId,
-    name: name.trim(),
-    ownerId: userId,
-    plan: 'free',
-    createdAt: now,
-    updatedAt: now,
-  };
-  if (appSlug) accountItem['appSlug'] = appSlug;
-
-  const memberItem: Record<string, unknown> = {
-    accountId,
-    userId,
-    email,
-    role: 'owner',
-    joinedAt: now,
-  };
-  if (appSlug) memberItem['appSlug'] = appSlug;
-
-  await ddb.send(new TransactWriteCommand({
+  await deps.ddb.send(new TransactWriteCommand({
     TransactItems: [
       {
         Put: {
-          TableName: ACCOUNTS_TABLE,
-          Item: accountItem,
+          TableName: deps.accountsTable,
+          Item: { accountId, appSlug, name: name.trim(), ownerId: userId, plan: 'free', createdAt: now, updatedAt: now },
           ConditionExpression: 'attribute_not_exists(accountId)',
         },
       },
       {
         Put: {
-          TableName: ACCOUNT_MEMBERS_TABLE,
-          Item: memberItem,
+          TableName: deps.accountMembersTable,
+          Item: { accountId, userId, email, appSlug, role: 'owner', joinedAt: now },
         },
       },
     ],
   }));
 
+  // Ensure the `{app}-app-access` group (membership ⟹ access; idempotent — the
+  // caller already holds it per the gate, and the pre-token trigger reconciles it
+  // from the new owner membership). This is the runtime analog of the v0
+  // `ensureAppAccessGroup`; the group lands in the caller's NEXT token. Redundant
+  // given the gate, so best-effort: a transient Cognito blip must not fail an
+  // otherwise-successful creation.
+  try {
+    await deps.cognito.send(new AdminAddUserToGroupCommand({
+      UserPoolId: deps.userPoolId,
+      Username: userId,
+      GroupName: accessGroup,
+    }));
+  } catch (err) {
+    console.error('[accounts] ensureAppAccessGroup (AddUserToGroup) failed after account creation:', err);
+  }
+
   return created({
-    account: { accountId, appSlug: appSlug ?? undefined, name: name.trim(), ownerId: userId, createdAt: now },
+    account: { accountId, appSlug, name: name.trim(), ownerId: userId, plan: 'free', createdAt: now },
   });
 }
 
@@ -387,12 +427,13 @@ async function removeMember(accountId: string, requesterId: string, targetUserId
 // PATH accountId and auth.userId — it never reads the X-Account-Id header, so it
 // must NOT require one (withAuth/resolveAccountContext would 400 POST /accounts).
 export const handler = withAuthOnly(async ({ auth, event }) => {
-  const { userId, email } = auth;
+  const { userId } = auth;
   const resource = event.resource ?? '';
 
-  // R7: createAccount — no account context.
+  // R7: createAccount — no account context (appSlug from `aud`, gate on the
+  // app-access group). M11 A4.
   if (resource === '/accounts' && event.httpMethod === 'POST') {
-    return createAccount(event, userId, email);
+    return createAccount(event, auth);
   }
 
   const accountId = getPathParam(event, 'accountId');

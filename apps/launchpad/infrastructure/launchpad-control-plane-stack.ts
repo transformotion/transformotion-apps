@@ -277,11 +277,14 @@ export class LaunchpadControlPlaneStack extends cdk.Stack {
     accountMembersTable.grantReadWriteData(accountsFn);
     // M16 Phase 6 (PR-6B): member removal / account deletion terminate the target's
     // session (AdminUserGlobalSignOut, D8) and verify supervisory site-admin LIVE
-    // (AdminListGroupsForUser, D-3). Scoped to exactly these two actions on the pool.
+    // (AdminListGroupsForUser, D-3).
+    // M11 A4: POST /accounts ensures the creator's `{app}-app-access` group
+    // (AdminAddUserToGroup) — the runtime `ensureAppAccessGroup`. Scoped to the pool.
     accountsFn.addToRolePolicy(new iam.PolicyStatement({
       actions: [
         'cognito-idp:AdminUserGlobalSignOut',
         'cognito-idp:AdminListGroupsForUser',
+        'cognito-idp:AdminAddUserToGroup',
       ],
       resources: [userPoolArn],
     }));
@@ -345,6 +348,40 @@ export class LaunchpadControlPlaneStack extends cdk.Stack {
     accountsTable.grantReadData(invitationsFn);
     invitationsTable.grantReadWriteData(invitationsFn);
 
+    // M11 A5 — invitation-bundle redemption (POST /api/invitations/bundles/{bundleId}/redeem).
+    const invitationRedemptionFn = new lambdaNodejs.NodejsFunction(this, 'InvitationRedemptionFn', {
+      functionName: `launchpad-invitation-redemption-${stage}`,
+      entry: path.join(__dirname, '../functions/invitation-redemption/src/index.ts'),
+      handler: 'handler',
+      runtime: lambda.Runtime.NODEJS_20_X,
+      timeout: cdk.Duration.seconds(15),
+      memorySize: 256,
+      environment: {
+        INVITATIONS_TABLE: invitationsTable.tableName,
+        ACCOUNTS_TABLE: accountsTable.tableName,
+        ACCOUNT_MEMBERS_TABLE: accountMembersTable.tableName,
+        USERS_TABLE: usersTable.tableName,
+        USER_POOL_ID: userPoolId,
+        APP_REGISTRY: JSON.stringify(registry),
+      },
+      bundling: {
+        externalModules: ['@aws-sdk/*'],
+        minify: true,
+        sourceMap: false,
+      },
+    });
+
+    invitationsTable.grantReadWriteData(invitationRedemptionFn); // read bundle + mark accepted
+    accountsTable.grantReadData(invitationRedemptionFn);          // account-invite: resolve account/appSlug
+    accountMembersTable.grantReadWriteData(invitationRedemptionFn); // duplicate check + add membership
+    usersTable.grantReadData(invitationRedemptionFn);             // disabled-status check
+    // Ensure the `{app}-app-access` group on redemption (membership ⟹ access; the
+    // access-only app-grant). The runtime `ensureAppAccessGroup`. Scoped to the pool.
+    invitationRedemptionFn.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['cognito-idp:AdminAddUserToGroup'],
+      resources: [userPoolArn],
+    }));
+
     const accountsIntegration = new apigateway.LambdaIntegration(accountsFn, { proxy: true });
     const accountsResource = this.api.root.addResource('accounts');
     accountsResource.addMethod('POST', accountsIntegration, authOptions);
@@ -367,6 +404,14 @@ export class LaunchpadControlPlaneStack extends cdk.Stack {
     accountResource
       .addResource('invitations')
       .addMethod('POST', new apigateway.LambdaIntegration(invitationsFn, { proxy: true }), authOptions);
+
+    // M11 A5 — POST /api/invitations/bundles/{bundleId}/redeem (auth-only; invitee-only enforced in-handler).
+    apiResource
+      .addResource('invitations')
+      .addResource('bundles')
+      .addResource('{bundleId}')
+      .addResource('redeem')
+      .addMethod('POST', new apigateway.LambdaIntegration(invitationRedemptionFn, { proxy: true }), authOptions);
 
     const aiRuntimeConfigFn = new lambdaNodejs.NodejsFunction(this, 'AiRuntimeConfigFn', {
       functionName: `launchpad-ai-runtime-config-${stage}`,

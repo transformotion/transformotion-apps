@@ -560,6 +560,7 @@ The auth/control-plane Lambdas have explicit permission models. Each is document
 | `apps/launchpad/functions/account-provisioning` | `withAuthOnly` | None — profile-bootstrap; user has JWT but no account yet (M16 D11: no longer creates accounts) | `launchpad-users` RW + `launchpad-account-members` R + `AdminGetUser` on user pool ARN |
 | `apps/launchpad/functions/access-summary` | `withAuthOnly` | `requireSiteAdmin` — site-admin directory only | `launchpad-users` R + `launchpad-accounts` R + `launchpad-account-members` R + `launchpad-app-admin-grants` R + `ListUsersInGroup` on user pool ARN |
 | `apps/launchpad/functions/invitations` | `withAuth` | Inline owner check against `launchpad-accounts` | `launchpad-accounts` R + `launchpad-invitations` RW |
+| `apps/launchpad/functions/invitation-redemption` | `withAuthOnly` | **invitee-only** (caller email == bundle email); per-grant redemption of `account-invite` / `app-grant` (M11 A5) | `launchpad-invitations` RW + `launchpad-accounts` R + `launchpad-account-members` RW + `launchpad-users` R + `cognito-idp:AdminAddUserToGroup` on the user pool ARN |
 | `apps/launchpad/functions/forgot-provider` | None (raw handler - pre-authentication) | None | `launchpad-rate-limits` RW + `AdminGetUser` on user pool ARN + SES `SendEmail` |
 
 **Launchpad `accounts`, Launchpad `user`, Launchpad `account-provisioning`, and Launchpad `invitations`** are user-facing control-plane API endpoints. Each uses the appropriate middleware wrapper based on whether account context is required, and inline authorization based on what the operation needs to verify. The platform copies of `accounts`, `user`, `auth/account-provisioning`, and `auth/invitations` remain deployed only as decommission debt after #386 cutover.
@@ -806,7 +807,7 @@ Launchpad owns the live onboarding, user profile/preference, account administrat
 | `POST /auth/setup` | `launchpad-account-provisioning-{stage}` | First-login **profile** bootstrap (D11, contract m16.1.0): ensures the user item exists in `launchpad-users-{stage}`; never auto-creates an account. Returns `AccountSetupResponse { accountId?, userCreated, profileComplete }` — `accountId` omitted unless the user already holds one. |
 | `GET /api/user/profile` | `launchpad-user-{stage}` | Reads the caller's profile/preferences from `launchpad-users-{stage}`. |
 | `PUT /api/user/preferences` | `launchpad-user-{stage}` | Merges caller-owned preferences into `launchpad-users-{stage}`. |
-| `POST /accounts` | `launchpad-accounts-{stage}` | Creates a new account and owner membership in Launchpad-owned auth-domain tables. |
+| `POST /accounts` | `launchpad-accounts-{stage}` | M11 A4 — self-service create-first-account. **Requires the `{app}-app-access` group** (groups-authoritative) + active user; appSlug from the Cognito app-client (`aud`); creates the account + **owner** membership; ensures the access group (`AdminAddUserToGroup`, idempotent). No pre-existing membership required. |
 | `GET /accounts/{accountId}` | `launchpad-accounts-{stage}` | R1 — account + member list to any **active member** (`requireAccountMember`); uniform-deny. |
 | `GET /accounts/{accountId}/members/detail` | `launchpad-accounts-{stage}` | R2 — full `ListAccountMembersResponse` (members with `isLastOwner`; `pendingInvitations: []` until Phase 8) to any active member; the v0 account-management-view target. |
 | `PUT /accounts/{accountId}` | `launchpad-accounts-{stage}` | R3 — updates `name` for **owner-or-manager** + field-guard whitelist (`ownerId`/billing owner-only). |
@@ -814,6 +815,7 @@ Launchpad owns the live onboarding, user profile/preference, account administrat
 | `GET /accounts/{accountId}/members` | `launchpad-accounts-{stage}` | Legacy thin member list — retained, unwired-to-UI; superseded by `…/members/detail`. |
 | `DELETE /accounts/{accountId}/members/{userId}` | `launchpad-accounts-{stage}` | Removes a member after owner verification. |
 | `POST /accounts/{accountId}/invitations` | `launchpad-invitations-{stage}` | Creates an invitation after owner verification. |
+| `POST /api/invitations/bundles/{bundleId}/redeem` | `launchpad-invitation-redemption-{stage}` | M11 A5 — redeems a bundle's grants (auth-only; **invitee-only** in-handler: caller email must match the bundle). `account-invite` → membership at the grant role + ensure `{app}-app-access`; `app-grant` → ensure `{app}-app-access` only (zero accounts/memberships, the "access, no accounts" state). Idempotent (re-redeem yields `duplicate`). Email delivery is the separate SES seam. |
 
 Dev live traffic now uses `TransformotionDev-LaunchpadAuth` for Cognito,
 pre-token claims, app clients, Launchpad control-plane tables, and SA/BT

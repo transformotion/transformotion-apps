@@ -1,12 +1,12 @@
 {
-  "name": "@transformotion/fn-launchpad-accounts",
+  "name": "@transformotion/fn-launchpad-invitation-redemption",
   "version": "0.0.0",
   "private": true,
   "main": "./src/index.ts",
   "scripts": {
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
-    "lint": "echo \"lint: launchpad accounts\"",
+    "lint": "echo \"lint: launchpad invitation-redemption\"",
     "test": "vitest run"
   },
   "dependencies": {
