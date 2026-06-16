@@ -197,14 +197,14 @@ Cognito groups are authoritative for three things:
 |---|---|
 | `site-admin` | Platform-level **supervisory** authority. Sourced from the `site-admin` group (no claim). Does **not** grant private app data, account membership, or any account role. |
 | `stock-app-access` / `budget-app-access` | The user may enter that app's shell. App-access alone does **not** grant private data — account membership is still required. |
-| `stock-app-admin` / `budget-app-admin` | App-scoped control-plane authority (invitee discovery, app-provision grants, app-level config). Grants **no** private data, **no** account membership, and does **not** satisfy `account-member` / `account-owner-or-manager`. Created/removed only by site-admin. |
+| `stock-app-admin` / `budget-app-admin` | App-scoped control-plane authority (invitee discovery, app-grant invitations, app-level config). Grants **no** private data, **no** account membership, and does **not** satisfy `account-member` / `account-owner-or-manager`. Created/removed only by site-admin. |
 
 **Single-tier app access is deliberate.** Capability-level within an app (who can read, write, invite, delete) is expressed entirely by Dimension B (account roles). A user either has access to an app or they do not; *what they can do* within the app is determined by which accounts they belong to and in what role.
 
 **App-access is independently held — the invariant is one-directional.**
 
-- **Membership ⟹ app-access.** Any account grant (account-invite *or* app-provision, and self-service account creation) ensures the user holds the app's access group; the pre-token Lambda also adds the access group for any user who has ≥1 account in the app and lacks it. You can never be an account member of an app without app-access.
-- **App-access ⇏ membership.** "Has app-access, no accounts" is a **valid, designed state** (see [App-access with no accounts](#app-access-with-no-accounts-permitted-state)). App-access is granted independently (app-provision, or a direct site-admin grant) and is **NOT** removed when a user's account count for the app reaches zero. The previous biconditional — "a user is in `stock-app-access` *iff* they have ≥1 account", with the access group auto-removed at zero accounts — is **superseded**: the pre-token Lambda keeps only the add-on-membership direction, never the remove-on-zero direction.
+- **Membership ⟹ app-access.** Any account grant (account-invite, or self-service account creation) ensures the user holds the app's access group; the pre-token Lambda also adds the access group for any user who has ≥1 account in the app and lacks it. You can never be an account member of an app without app-access.
+- **App-access ⇏ membership.** "Has app-access, no accounts" is a **valid, designed state** (see [App-access with no accounts](#app-access-with-no-accounts-permitted-state)). App-access is granted independently (an **app-grant** invitation, or a direct site-admin grant) and is **NOT** removed when a user's account count for the app reaches zero. The previous biconditional — "a user is in `stock-app-access` *iff* they have ≥1 account", with the access group auto-removed at zero accounts — is **superseded**: the pre-token Lambda keeps only the add-on-membership direction, never the remove-on-zero direction.
 
 **App-admin is a Cognito group, not a claim — and the grants table is a projection.** App-admin authority is `cognito:groups` membership in `{app}-app-admin`; the policy guard `requireAppAdminForApp` resolves from the group, never from a table. The `launchpad-app-admin-grants-{stage}` table is a **non-authoritative read-projection** maintained from group membership; it exists only to populate admin/discovery UI efficiently (the site-admin directory, and Phase 7 "who admins app X" enumeration, which `ListUsersInGroup` serves poorly). Nothing reads it for an authorization decision.
 
@@ -259,7 +259,7 @@ Dimension A (app access) remains the ceiling for data operations as described ab
 
 ## App-access with no accounts (permitted state)
 
-A user who holds an app-access group but has **no account** in that app is a valid, designed state — not an error to reconcile away. It arises two ways: an **app-provision** invitation (an admin provisions access ahead of any account), and **self-service** bootstrap (a user granted app-access creates their own first account).
+A user who holds an app-access group but has **no account** in that app is a valid, designed state — not an error to reconcile away. It arises two ways: **(a)** an **app-grant** invitation — the invitee is granted app-access with **no account** and self-creates their first account on arrival, becoming its `owner`; and **(b)** a **direct app-access group grant** (e.g. a site-admin adds the user to the `{app}-app-access` group). The former `app-provision` invitation — where an inviter pre-created and **named** the account for the invitee — is **retired** from the model: invitees always create and name their own first account.
 
 What such a user can do, and only this:
 
@@ -278,7 +278,7 @@ Because groups are authoritative, granting and removing app-access or app-admin 
 - **Grant app-admin** — `AdminAddUserToGroup(<app>-admin)`, **site-admin only**. Confers app-scoped control-plane authority; confers no app-access (grant separately if the admin also needs the shell), no membership, no private data. The grants table projection is updated to match.
 - **Remove app-admin** — `AdminRemoveUserFromGroup(<app>-admin)`. App-access and memberships are untouched.
 
-**Account grant ⟹ app-access (implicit).** Granting account membership — whether via account-invite, app-provision, or self-service creation — **ensures the user holds the app-access group**. An account-invite to a user who does not yet have app-access grants it as part of redemption; a member can never lack the access group. This closes the gap where account membership and app-access could be granted independently: in this model, membership always implies access (the converse does not hold — see the one-directional invariant above).
+**Account grant ⟹ app-access (implicit).** Granting account membership — whether via account-invite or self-service creation — **ensures the user holds the app-access group**. An account-invite to a user who does not yet have app-access grants it as part of redemption; a member can never lack the access group. This closes the gap where account membership and app-access could be granted independently: in this model, membership always implies access (the converse does not hold — see the one-directional invariant above).
 
 <!-- mirror:end -->
 
