@@ -382,6 +382,30 @@ export class LaunchpadControlPlaneStack extends cdk.Stack {
       resources: [userPoolArn],
     }));
 
+    // M11 Chunk 3 — invitation-bundle CREATION (POST /api/invitations/bundles).
+    const invitationBundlesFn = new lambdaNodejs.NodejsFunction(this, 'InvitationBundlesFn', {
+      functionName: `launchpad-invitation-bundles-${stage}`,
+      entry: path.join(__dirname, '../functions/invitation-bundles/src/index.ts'),
+      handler: 'handler',
+      runtime: lambda.Runtime.NODEJS_20_X,
+      timeout: cdk.Duration.seconds(15),
+      memorySize: 256,
+      environment: {
+        INVITATIONS_TABLE: invitationsTable.tableName,
+        ACCOUNTS_TABLE: accountsTable.tableName,
+      },
+      bundling: {
+        externalModules: ['@aws-sdk/*'],
+        minify: true,
+        sourceMap: false,
+      },
+    });
+
+    invitationsTable.grantReadWriteData(invitationBundlesFn); // write the bundle
+    accountsTable.grantReadData(invitationBundlesFn);          // account-invite: validate account/app
+    // No Cognito grant: sender authorization (site-admin / app-admin) reads the
+    // token's cognito:groups — no AWS calls. Grants are CONFERRED at redemption (A5).
+
     const accountsIntegration = new apigateway.LambdaIntegration(accountsFn, { proxy: true });
     const accountsResource = this.api.root.addResource('accounts');
     accountsResource.addMethod('POST', accountsIntegration, authOptions);
@@ -405,10 +429,12 @@ export class LaunchpadControlPlaneStack extends cdk.Stack {
       .addResource('invitations')
       .addMethod('POST', new apigateway.LambdaIntegration(invitationsFn, { proxy: true }), authOptions);
 
-    // M11 A5 — POST /api/invitations/bundles/{bundleId}/redeem (auth-only; invitee-only enforced in-handler).
-    apiResource
-      .addResource('invitations')
-      .addResource('bundles')
+    // M11 invitation-bundle routes under /api/invitations/bundles.
+    const bundlesResource = apiResource.addResource('invitations').addResource('bundles');
+    // Chunk 3 — POST create (auth-only; per-grant sender authorization in-handler).
+    bundlesResource.addMethod('POST', new apigateway.LambdaIntegration(invitationBundlesFn, { proxy: true }), authOptions);
+    // A5 — POST {bundleId}/redeem (auth-only; invitee-only enforced in-handler).
+    bundlesResource
       .addResource('{bundleId}')
       .addResource('redeem')
       .addMethod('POST', new apigateway.LambdaIntegration(invitationRedemptionFn, { proxy: true }), authOptions);

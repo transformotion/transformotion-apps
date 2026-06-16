@@ -58,6 +58,7 @@ Source: `apps/launchpad/infrastructure/`.
 | `launchpad-user-{stage}` | `apps/launchpad/functions/user` | `GET /api/user/profile`, `PUT /api/user/preferences` |
 | `launchpad-accounts-{stage}` | `apps/launchpad/functions/accounts` | account and member administration routes |
 | `launchpad-invitations-{stage}` | `apps/launchpad/functions/invitations` | `POST /accounts/{accountId}/invitations` |
+| `launchpad-invitation-bundles-{stage}` | `apps/launchpad/functions/invitation-bundles` | `POST /api/invitations/bundles` (create) |
 | `launchpad-invitation-redemption-{stage}` | `apps/launchpad/functions/invitation-redemption` | `POST /api/invitations/bundles/{bundleId}/redeem` |
 | `launchpad-pre-token-generation-{stage}` | `apps/launchpad/functions/pre-token-generation` | Cognito pre-token trigger for `LaunchpadAuth` |
 
