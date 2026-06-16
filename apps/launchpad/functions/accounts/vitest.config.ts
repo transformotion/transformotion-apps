@@ -7,12 +7,10 @@ export default defineConfig({
     // (`include: ['lib/**']`), which silently skips these co-located src tests
     // (same class as the `user`/ai-config fn fixes). Pin to src.
     include: ['src/**/*.test.ts'],
-    // The handler reads these at module load (APP_CLIENT_TO_SLUG, table names).
-    // vitest applies test.env before loading test modules, so `aud`→appSlug resolves.
+    // Module-load env for the default deps (the tests inject their own deps, so
+    // these only need to be present). appSlug now comes from the request body
+    // (m16.6.0), not an app-client env, so no APP_CLIENT_* / APP_SLUGS needed.
     env: {
-      APP_SLUGS: 'stock-analyser,budget-tracker',
-      APP_CLIENT_STOCK_ANALYSER: 'client-sa',
-      APP_CLIENT_BUDGET_TRACKER: 'client-bt',
       USER_POOL_ID: 'pool-test',
       ACCOUNTS_TABLE: 'accounts-test',
       ACCOUNT_MEMBERS_TABLE: 'members-test',
