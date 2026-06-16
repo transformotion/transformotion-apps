@@ -97,8 +97,6 @@ function event(
           'cognito:groups': '',
           apps: JSON.stringify([]),
           accounts: JSON.stringify({}),
-          site_admin: 'false',
-          app_admin: JSON.stringify([]),
         },
       },
     },

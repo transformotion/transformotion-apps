@@ -230,11 +230,24 @@ describe('requireAccountMember / requireAccountOwnerOrManager', () => {
   });
 });
 
-describe('requireAppAdminForApp / requireSupervisorySiteAdmin (live checks)', () => {
-  it('app-admin: granted passes, not-granted uniform 403, loader throw 503', async () => {
-    expect(await statusOf(requireAppAdminForApp(vi.fn(async () => true), 'budget-tracker', 'u'))).toBe(200);
-    expect(await statusOf(requireAppAdminForApp(vi.fn(async () => false), 'budget-tracker', 'u'))).toBe(403);
-    expect(await statusOf(requireAppAdminForApp(vi.fn(async () => { throw new Error('x'); }), 'budget-tracker', 'u'))).toBe(503);
+describe('requireAppAdminForApp (token group) / requireSupervisorySiteAdmin (live)', () => {
+  it('app-admin: reads the {app}-app-admin group from the token; per-app; absent → uniform 403', () => {
+    const btAdmin = { ...claims(), groups: ['budget-app-admin'] };
+    const accessOnly = { ...claims(), groups: ['budget-app-access'] };
+    // In the group → passes for that app.
+    expect(() => requireAppAdminForApp(btAdmin, 'budget-tracker')).not.toThrow();
+    // Per-app scoping: a budget admin is NOT a stock admin.
+    expect(() => requireAppAdminForApp(btAdmin, 'stock-analyser')).toThrow(HttpError);
+    // App-access (or site-admin) alone does NOT confer app-admin (groups-authoritative).
+    expect(() => requireAppAdminForApp(accessOnly, 'budget-tracker')).toThrow(HttpError);
+    expect(() => requireAppAdminForApp({ ...claims(), groups: ['site-admin'] }, 'budget-tracker')).toThrow(HttpError);
+    // Uniform deny (no probing oracle).
+    try {
+      requireAppAdminForApp(accessOnly, 'budget-tracker');
+    } catch (err) {
+      expect((err as HttpError).statusCode).toBe(403);
+      expect((err as HttpError).message).toBe(UNIFORM_DENY);
+    }
   });
   it('supervisory site-admin verified LIVE (loader), not the token claim', async () => {
     expect(await statusOf(requireSupervisorySiteAdmin(vi.fn(async () => true), 'u'))).toBe(200);

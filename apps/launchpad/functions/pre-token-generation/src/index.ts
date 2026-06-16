@@ -12,7 +12,6 @@ const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
 const ACCOUNT_MEMBERS_TABLE = process.env.ACCOUNT_MEMBERS_TABLE!;
 const ACCOUNTS_TABLE = process.env.ACCOUNTS_TABLE!;
-const APP_ADMIN_GRANTS_TABLE = process.env.APP_ADMIN_GRANTS_TABLE!;
 
 interface AppEntry {
   slug: string;
@@ -35,11 +34,6 @@ interface AccountRow {
   appSlug: string;
 }
 
-interface AppAdminGrantRow {
-  appSlug: string;
-  userId: string;
-}
-
 async function queryMemberships(userId: string): Promise<MembershipRow[]> {
   const res = await ddb.send(new QueryCommand({
     TableName: ACCOUNT_MEMBERS_TABLE,
@@ -51,26 +45,6 @@ async function queryMemberships(userId: string): Promise<MembershipRow[]> {
   }));
 
   return (res.Items ?? []) as MembershipRow[];
-}
-
-async function queryAppAdminGrants(userId: string): Promise<AppAdminGrantRow[]> {
-  // M16: the app-admin-grants table is the newest read in this trigger. Isolate
-  // its failure so it degrades to an empty app_admin claim rather than rejecting
-  // the Promise.all below — which the outer handler would otherwise catch by
-  // dropping ALL claims. Core apps/accounts claims still get emitted.
-  try {
-    const res = await ddb.send(new QueryCommand({
-      TableName: APP_ADMIN_GRANTS_TABLE,
-      IndexName: 'userId-index',
-      KeyConditionExpression: 'userId = :uid',
-      ExpressionAttributeValues: { ':uid': userId },
-      ProjectionExpression: 'appSlug, userId',
-    }));
-    return (res.Items ?? []) as AppAdminGrantRow[];
-  } catch (err) {
-    console.error('[launchpad-pre-token] queryAppAdminGrants failed; app_admin will be empty:', err);
-    return [];
-  }
 }
 
 async function fetchAccountAppSlugs(accountIds: string[]): Promise<Map<string, string>> {
@@ -184,10 +158,7 @@ export const handler = async (
 
     console.log('[launchpad-pre-token] userId:', userId, 'groups:', currentGroups.join(','));
 
-    const [memberships, appAdminGrants] = await Promise.all([
-      queryMemberships(userId),
-      queryAppAdminGrants(userId),
-    ]);
+    const memberships = await queryMemberships(userId);
 
     // Resolve appSlug for legacy membership rows that predate D3 denormalization
     const missingAppSlugIds = memberships
@@ -204,21 +175,18 @@ export const handler = async (
       accountsByApp,
     );
 
-    // M16 D8: app_admin claim — array of appSlugs where user is app-admin
-    const appAdminSlugs = appAdminGrants
-      .map(g => g.appSlug)
-      .filter(slug => APP_SLUGS.includes(slug));
-
-    // M16 Phase 6 (D11): the `site_admin` claim is REMOVED. Platform admin status
-    // is sourced solely from the `site-admin` Cognito group (cognito:groups);
-    // consumers read the group, never a claim. Emitted claims are app/account scoped.
+    // M16 Phase 6 (D11) + M11 groups-authoritative: NO admin claims are emitted.
+    // Both `site_admin` and `app_admin` are struck — site-admin and app-admin
+    // status travel in `cognito:groups` (`site-admin` / `{app}-app-admin`) and are
+    // read group-side by consumers, never as a token claim. The app-admin-grants
+    // table is now a UI/discovery projection only; this trigger no longer reads it.
+    // Emitted claims are app/account scoped (membership-derived).
     const claims: Record<string, string> = {
       apps: JSON.stringify(buildAppsList(reconciledGroups)),
       accounts: JSON.stringify(accountsByApp),
-      app_admin: JSON.stringify(appAdminSlugs),
     };
 
-    console.log('[launchpad-pre-token] claims apps:', claims['apps'], 'app_admin:', claims['app_admin']);
+    console.log('[launchpad-pre-token] claims apps:', claims['apps']);
 
     event.response = {
       claimsOverrideDetails: {

@@ -7,9 +7,10 @@ const MOCK_USER: User = {
   email: 'user@example.com',
   name: 'Demo User',
   avatarUrl: undefined,
-  // Mirrors the Cognito provider's metadata shape (M16 Phase 6 / D11): `siteAdmin`
-  // from the `site-admin` Cognito group, `appAdmin` from the `app_admin` claim. The
-  // mock user is a site-admin, so `appAdmin` is empty (site-admin already gates admin UI).
+  // Mirrors the Cognito provider's metadata shape: `siteAdmin` from the
+  // `site-admin` Cognito group, `appAdmin` derived from the `{app}-app-admin`
+  // groups (M11 groups-authoritative — the `app_admin` claim was struck). The
+  // mock user is a site-admin in no app-admin group, so `appAdmin` is empty.
   metadata: { siteAdmin: true, appAdmin: [] as string[] },
 }
 

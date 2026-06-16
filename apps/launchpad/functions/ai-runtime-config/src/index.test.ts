@@ -46,7 +46,12 @@ function event(
   siteAdmin = true,
   appSlug?: string,
   accounts: Record<string, Array<{ accountId: string; role: string }>> = {},
+  groups?: string,
 ) {
+  // Admin authority is groups-authoritative (cognito:groups), never a token
+  // claim. `groups` overrides the site-admin default so app-admin callers
+  // (`{app}-app-admin`) can be simulated for the override routes.
+  const groupStr = groups !== undefined ? groups : (siteAdmin ? 'site-admin' : '');
   return {
     resource,
     httpMethod: method,
@@ -57,9 +62,7 @@ function event(
         claims: {
           sub: 'admin-user',
           email: 'admin@example.com',
-          // M16 Phase 6 (D11): platform admin status comes from the site-admin
-          // Cognito group, not a token claim.
-          'cognito:groups': siteAdmin ? 'site-admin' : '',
+          'cognito:groups': groupStr,
           apps: JSON.stringify([]),
           accounts: JSON.stringify(accounts),
         },
@@ -225,7 +228,7 @@ describe('ai-runtime-config handler', () => {
     });
   });
 
-  it('updates and resets app override', async () => {
+  it('lets an app-admin update and reset that app override', async () => {
     const { client, items } = makeClient();
     const handler = createHandler({
       client,
@@ -237,8 +240,10 @@ describe('ai-runtime-config handler', () => {
       '/api/admin/ai-runtime-config/apps/{appSlug}/override',
       'PUT',
       { provider: 'openai', model: 'gpt-5.4' },
-      true,
+      false,
       'budget-tracker',
+      {},
+      'budget-app-admin',
     )) as { statusCode: number; body: string };
 
     expect(putResponse.statusCode).toBe(200);
@@ -251,12 +256,47 @@ describe('ai-runtime-config handler', () => {
       '/api/admin/ai-runtime-config/apps/{appSlug}/override',
       'DELETE',
       undefined,
-      true,
+      false,
       'budget-tracker',
+      {},
+      'budget-app-admin',
     )) as { statusCode: number; body: string };
 
     expect(deleteResponse.statusCode).toBe(204);
     expect(items.has(appOverrideSk('budget-tracker'))).toBe(false);
+  });
+
+  it('denies app override writes that are not app-admin for that app (D9)', async () => {
+    const { client } = makeClient();
+    const handler = createHandler({
+      client,
+      tableName: 'launchpad-ai-runtime-config-dev',
+      now: () => new Date('2026-06-04T01:00:00.000Z'),
+    });
+
+    // Site-admin alone may NOT write a per-app override (the corrected D9 rule).
+    const siteAdminWrite = await handler(event(
+      '/api/admin/ai-runtime-config/apps/{appSlug}/override',
+      'PUT',
+      { provider: 'openai', model: 'gpt-5.4' },
+      false,
+      'budget-tracker',
+      {},
+      'site-admin',
+    )) as { statusCode: number; body: string };
+    expect(siteAdminWrite.statusCode).toBe(403);
+
+    // App-admin for a DIFFERENT app does not satisfy this app (per-app scoping).
+    const wrongAppAdmin = await handler(event(
+      '/api/admin/ai-runtime-config/apps/{appSlug}/override',
+      'PUT',
+      { provider: 'openai', model: 'gpt-5.4' },
+      false,
+      'budget-tracker',
+      {},
+      'stock-app-admin',
+    )) as { statusCode: number; body: string };
+    expect(wrongAppAdmin.statusCode).toBe(403);
   });
 
   it('rejects unsupported provider/model and secret-like fields', async () => {

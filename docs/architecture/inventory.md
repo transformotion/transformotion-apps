@@ -61,17 +61,20 @@ those stacks. They are not live ownership surfaces.
   - `launchpad-invitations-{stage}`
   - `launchpad-rate-limits-{stage}`
 
-The pre-token trigger emits the `apps`, `accounts`, and `app_admin` claims
-consumed by Launchpad, Stock Analyser, Budget Tracker, and migration utilities.
+The pre-token trigger emits the `apps` and `accounts` claims consumed by
+Launchpad, Stock Analyser, Budget Tracker, and migration utilities.
 Platform admin status is NOT a claim — it is read from the `site-admin` Cognito
 group (`cognito:groups`); the `site_admin` claim was removed in M16 Phase 6
 (v0 contract `m16.2.0` / D11).
 
-The `{app}-app-admin` groups (`stock-app-admin`, `budget-app-admin`) were
-deployed in M11 step A1 as the groups-authoritative app-admin foundation. They
-are additive and not yet consumed: the live app-admin signal remains the
-`app_admin` claim emitted by the pre-token trigger from the app-admin grants
-table, pending the A2 strike that moves authority to the group.
+The `{app}-app-admin` groups (`stock-app-admin`, `budget-app-admin`) are the
+groups-authoritative app-admin authority (deployed in M11 A1). App-admin status
+travels in `cognito:groups`: the backend `requireAppAdminForApp` guard reads the
+`{app}-app-admin` group from the token, and the frontend derives `appAdmin` from
+the same groups. The former table-derived `app_admin` claim was struck from the
+pre-token trigger (M11 A2) — the trigger no longer reads
+`launchpad-app-admin-grants-{stage}`, which remains a UI/discovery projection
+read only by the access-summary handler.
 
 ## Launchpad Control Plane
 

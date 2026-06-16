@@ -313,7 +313,6 @@ export class LaunchpadAuthStack extends cdk.Stack {
       environment: {
         ACCOUNT_MEMBERS_TABLE: this.accountMembersTable.tableName,
         ACCOUNTS_TABLE: this.accountsTable.tableName,
-        APP_ADMIN_GRANTS_TABLE: this.appAdminGrantsTable.tableName,
         APP_REGISTRY: appRegistryJson,
       },
       bundling: {
@@ -326,7 +325,10 @@ export class LaunchpadAuthStack extends cdk.Stack {
 
     this.accountMembersTable.grantReadData(preTokenFn);
     this.accountsTable.grantReadData(preTokenFn);
-    this.appAdminGrantsTable.grantReadData(preTokenFn);
+    // M11 groups-authoritative: the pre-token trigger no longer reads the
+    // app-admin-grants table — app-admin status travels in `cognito:groups`
+    // (`{app}-app-admin`), not the struck `app_admin` claim. The grants table
+    // remains a UI/discovery projection, read by the access-summary handler.
 
     // The pre-token trigger reconciles app-access Cognito group membership from
     // account memberships: it ADDs a user to an app's access group when they hold

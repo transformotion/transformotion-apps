@@ -26,6 +26,7 @@
 // deny). The framework below is what they slot into.
 
 import type { AuthClaims, AccountRole, AppName } from './types';
+import { appAdminGroup } from '@transformotion/contracts/_shared/auth';
 import { forbidden, HttpError } from './errors';
 import { ROLE_HIERARCHY } from './auth';
 import type { AccountMembershipRow, MembershipLoader } from './auth';
@@ -47,9 +48,6 @@ const deny = (reason: string): PolicyDecision => ({ allow: false, reason });
 
 /** Reuse the D8 write-path membership loader (account-members table GetItem). */
 export type { MembershipLoader } from './auth';
-
-/** Whether `userId` holds an app-admin grant for `appSlug` (D5 grants table GetItem). */
-export type AppAdminLoader = (appSlug: string, userId: string) => Promise<boolean>;
 
 /**
  * Live site-admin status for `userId` — a TABLE/group check, NOT the token claim.
@@ -273,14 +271,18 @@ export async function requireAccountOwnerRole(
   assertAllow(decideOwner(row));
 }
 
-/** App-admin for `appSlug` per the D5 grants table. Uniform deny when not granted. */
-export async function requireAppAdminForApp(
-  loadAppAdmin: AppAdminLoader,
-  appSlug: string,
-  userId: string,
-): Promise<void> {
-  const granted = await safeLoad('app-admin', () => loadAppAdmin(appSlug, userId));
-  if (!granted) throw forbidden(UNIFORM_DENY);
+/**
+ * App-admin authority for `appSlug`, read from the token's `cognito:groups`
+ * (the `{app}-app-admin` group). Groups-authoritative (M11): app-admin status
+ * travels in the token like site-admin — never a token claim, never a
+ * grants-table read (that table is now a UI/discovery projection, not an
+ * authority). Synchronous token-group check; uniform 403 when the group is
+ * absent. Per-app: holding `budget-app-admin` does not satisfy `stock-analyser`.
+ */
+export function requireAppAdminForApp(auth: AuthClaims, appSlug: AppName): void {
+  if (!auth.groups.includes(appAdminGroup(appSlug))) {
+    throw forbidden(UNIFORM_DENY);
+  }
 }
 
 /**

@@ -10,7 +10,9 @@ export interface User {
    * Admin status (M16 Phase 6 / D11):
    *  - `siteAdmin: boolean` — from the `site-admin` Cognito group (`cognito:groups`).
    *    The `site_admin` token claim was removed (m16.2.0); the group is the sole source.
-   *  - `appAdmin: string[]` — app slugs from the `app_admin` claim.
+   *  - `appAdmin: string[]` — app slugs derived from the `{app}-app-admin` Cognito
+   *    groups (`cognito:groups`). The `app_admin` token claim was struck (M11);
+   *    the groups are the sole source, mirroring `siteAdmin`.
    * UI gates admin surfaces on these.
    */
   metadata?: Record<string, unknown>
