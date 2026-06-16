@@ -20,6 +20,7 @@ import { useLaunchpadData } from '@/hooks/use-launchpad-data'
 import { authService } from '@/lib/services/auth'
 import { createAccount } from '@/lib/services/account-admin'
 import { InviteComposer } from '@/components/launchpad/invite-composer'
+import { devToolVisible } from '@/lib/dev-tools'
 
 const APP_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   'stock-analyser': TrendingUp,
@@ -352,6 +353,7 @@ function ProfileMenu({
   onOpenSettings,
   onOpenMembers,
   onOpenInvite,
+  onOpenDevDemo,
 }: {
   displayName: string
   email: string
@@ -362,6 +364,7 @@ function ProfileMenu({
   onOpenSettings?: () => void
   onOpenMembers?: () => void
   onOpenInvite?: () => void
+  onOpenDevDemo?: () => void
 }) {
   if (!isOpen) return null
 
@@ -442,6 +445,18 @@ function ProfileMenu({
             </button>
           ) : null}
         </div>
+
+        {onOpenDevDemo ? (
+          <div className="border-t border-border py-2">
+            <button
+              onClick={() => { onClose(); onOpenDevDemo() }}
+              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-signal-gold hover:bg-signal-gold/10 transition-colors"
+            >
+              <Sparkles className="size-4" />
+              Redemption demo (dev)
+            </button>
+          </div>
+        ) : null}
 
         <div className="border-t border-border py-2">
           <button
@@ -604,6 +619,7 @@ export function Launchpad({
         onOpenSettings={isSiteAdmin ? () => setSettingsOpen(true) : undefined}
         onOpenMembers={canManageMembers ? () => setMembersOpen(true) : undefined}
         onOpenInvite={canInvite ? () => setInviteOpen(true) : undefined}
+        onOpenDevDemo={devToolVisible() && isSiteAdmin ? () => { window.location.href = '/dev/redemption-demo' } : undefined}
       />
 
       {canInvite && (

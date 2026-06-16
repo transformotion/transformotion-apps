@@ -363,6 +363,10 @@ export class LaunchpadControlPlaneStack extends cdk.Stack {
         USERS_TABLE: usersTable.tableName,
         USER_POOL_ID: userPoolId,
         APP_REGISTRY: JSON.stringify(registry),
+        // SERVER-SIDE boundary for the demo BYPASS (redeem-as / impersonation): the
+        // deployed environment. The bypass is structurally refused unless STAGE !=
+        // 'prod' — this is the real guard, NOT the client dev-tools flag.
+        STAGE: stage,
       },
       bundling: {
         externalModules: ['@aws-sdk/*'],
@@ -376,9 +380,15 @@ export class LaunchpadControlPlaneStack extends cdk.Stack {
     accountMembersTable.grantReadWriteData(invitationRedemptionFn); // duplicate check + add membership
     usersTable.grantReadData(invitationRedemptionFn);             // disabled-status check
     // Ensure the `{app}-app-access` group on redemption (membership ⟹ access; the
-    // access-only app-grant). The runtime `ensureAppAccessGroup`. Scoped to the pool.
+    // access-only app-grant). AdminListGroupsForUser + ListUsers serve the DEV-ONLY
+    // redeem-as bypass (resolve + impersonate the invitee), which is refused in prod
+    // server-side by the STAGE guard. Scoped to the pool ARN.
     invitationRedemptionFn.addToRolePolicy(new iam.PolicyStatement({
-      actions: ['cognito-idp:AdminAddUserToGroup'],
+      actions: [
+        'cognito-idp:AdminAddUserToGroup',
+        'cognito-idp:AdminListGroupsForUser',
+        'cognito-idp:ListUsers',
+      ],
       resources: [userPoolArn],
     }));
 
@@ -433,11 +443,14 @@ export class LaunchpadControlPlaneStack extends cdk.Stack {
     const bundlesResource = apiResource.addResource('invitations').addResource('bundles');
     // Chunk 3 — POST create (auth-only; per-grant sender authorization in-handler).
     bundlesResource.addMethod('POST', new apigateway.LambdaIntegration(invitationBundlesFn, { proxy: true }), authOptions);
+    const bundleResource = bundlesResource.addResource('{bundleId}');
+    const redemptionIntegration = new apigateway.LambdaIntegration(invitationRedemptionFn, { proxy: true });
     // A5 — POST {bundleId}/redeem (auth-only; invitee-only enforced in-handler).
-    bundlesResource
-      .addResource('{bundleId}')
-      .addResource('redeem')
-      .addMethod('POST', new apigateway.LambdaIntegration(invitationRedemptionFn, { proxy: true }), authOptions);
+    bundleResource.addResource('redeem').addMethod('POST', redemptionIntegration, authOptions);
+    // Chunk 3 — POST {bundleId}/redeem-as: the DEV-ONLY demo bypass (impersonation).
+    // Refused in prod SERVER-SIDE by the handler's STAGE guard (the route exists in
+    // both stages; the prod handler returns 404 so it is structurally unreachable).
+    bundleResource.addResource('redeem-as').addMethod('POST', redemptionIntegration, authOptions);
 
     const aiRuntimeConfigFn = new lambdaNodejs.NodejsFunction(this, 'AiRuntimeConfigFn', {
       functionName: `launchpad-ai-runtime-config-${stage}`,

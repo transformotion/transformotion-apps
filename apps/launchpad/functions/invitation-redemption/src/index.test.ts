@@ -10,7 +10,7 @@ interface Seed {
   members?: Record<string, Record<string, unknown>>; // key `${accountId}|${userId}`
 }
 
-function makeHandler(seed: Seed) {
+function makeHandler(seed: Seed, opts: { stage?: string; cognitoUserId?: string; liveGroups?: string[] } = {}) {
   const memberPuts: Array<Record<string, unknown>> = [];
   const groupAdds: Array<Record<string, unknown>> = [];
   const statusUpdates: string[] = [];
@@ -34,12 +34,19 @@ function makeHandler(seed: Seed) {
   } as unknown as DynamoDBDocumentClient;
 
   const cognito = {
-    send: async (cmd: { input: Record<string, unknown> }) => { groupAdds.push(cmd.input); return {}; },
+    send: async (cmd: { constructor: { name: string }; input: Record<string, unknown> }) => {
+      const name = cmd.constructor.name;
+      if (name === 'AdminAddUserToGroupCommand') { groupAdds.push(cmd.input); return {}; }
+      if (name === 'ListUsersCommand') return { Users: opts.cognitoUserId ? [{ Username: opts.cognitoUserId }] : [] };
+      if (name === 'AdminListGroupsForUserCommand') return { Groups: (opts.liveGroups ?? []).map((g) => ({ GroupName: g })) };
+      throw new Error(`unexpected cognito command ${name}`);
+    },
   } as unknown as CognitoIdentityProviderClient;
 
   const handler = createHandler({
     ddb,
     cognito,
+    stage: opts.stage ?? 'dev',
     invitationsTable: 'invitations',
     accountsTable: 'accounts',
     accountMembersTable: 'members',
@@ -64,6 +71,22 @@ function event(bundleId: string, email = 'invitee@example.com', groups = '') {
     headers: {},
     requestContext: {
       authorizer: { claims: { sub: 'user-invitee', email, 'cognito:groups': groups, apps: '[]', accounts: '{}' } },
+    },
+    body: null,
+    isBase64Encoded: false,
+  } as never;
+}
+
+// The DEV-ONLY bypass (redeem-as). The CALLER (a site-admin running the demo) is
+// `sub: admin`; the impersonated invitee is resolved from the bundle email.
+function redeemAsEvent(bundleId: string, callerGroups = 'site-admin') {
+  return {
+    resource: '/api/invitations/bundles/{bundleId}/redeem-as',
+    httpMethod: 'POST',
+    pathParameters: { bundleId },
+    headers: {},
+    requestContext: {
+      authorizer: { claims: { sub: 'admin', email: 'admin@example.com', 'cognito:groups': callerGroups, apps: '[]', accounts: '{}' } },
     },
     body: null,
     isBase64Encoded: false,
@@ -174,5 +197,50 @@ describe('invitation redemption — M11 A5', () => {
     expect(memberPuts).toHaveLength(0);
     expect(groupAdds).toHaveLength(0);
     expect(statusUpdates).toHaveLength(0);
+  });
+});
+
+describe('redeem-as (DEV-ONLY impersonation bypass) — the SERVER-SIDE env guard', () => {
+  it('PROD: structurally refused (404) — no impersonation backend in prod, whatever the caller sends', async () => {
+    const { handler, groupAdds } = makeHandler(
+      { bundles: { 'b-2': appGrantBundle } },
+      { stage: 'prod', cognitoUserId: 'user-invitee', liveGroups: [] },
+    );
+    const res = (await handler(redeemAsEvent('b-2', 'site-admin'))) as { statusCode: number };
+    expect(res.statusCode).toBe(404);     // refused on the deployed ENV, not the client flag
+    expect(groupAdds).toHaveLength(0);    // nothing mutated
+  });
+
+  it('DEV but NOT site-admin: refused (403)', async () => {
+    const { handler } = makeHandler(
+      { bundles: { 'b-2': appGrantBundle } },
+      { stage: 'dev', cognitoUserId: 'user-invitee', liveGroups: [] },
+    );
+    const res = (await handler(redeemAsEvent('b-2', 'budget-app-access'))) as { statusCode: number };
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('DEV + site-admin: redeems FOR the impersonated invitee (resolved by bundle email)', async () => {
+    const { handler, groupAdds } = makeHandler(
+      { bundles: { 'b-2': appGrantBundle } },
+      { stage: 'dev', cognitoUserId: 'user-invitee', liveGroups: [] },
+    );
+    const res = (await handler(redeemAsEvent('b-2', 'site-admin'))) as { body: string };
+    const b = body(res);
+    // The result userId is the IMPERSONATED invitee (not the admin caller).
+    expect(b.userId).toBe('user-invitee');
+    expect(b.results[0]).toMatchObject({ kind: 'app-grant', outcome: 'accepted' });
+    // The access group is conferred on the INVITEE.
+    expect(groupAdds).toHaveLength(1);
+    expect(groupAdds[0]).toMatchObject({ Username: 'user-invitee', GroupName: 'budget-app-access' });
+  });
+
+  it('DEV + site-admin but the invitee has no Cognito user yet → 400 (cannot impersonate)', async () => {
+    const { handler } = makeHandler(
+      { bundles: { 'b-2': appGrantBundle } },
+      { stage: 'dev', cognitoUserId: undefined, liveGroups: [] },
+    );
+    const res = (await handler(redeemAsEvent('b-2', 'site-admin'))) as { statusCode: number };
+    expect(res.statusCode).toBe(400);
   });
 });

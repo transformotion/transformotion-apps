@@ -96,6 +96,7 @@ API and Lambdas:
 | `POST /accounts/{accountId}/invitations` | `launchpad-invitations-{stage}` |
 | `POST /api/invitations/bundles` | `launchpad-invitation-bundles-{stage}` |
 | `POST /api/invitations/bundles/{bundleId}/redeem` | `launchpad-invitation-redemption-{stage}` |
+| `POST /api/invitations/bundles/{bundleId}/redeem-as` (dev-only bypass) | `launchpad-invitation-redemption-{stage}` |
 | `GET /api/admin/ai-runtime-config` | `launchpad-ai-runtime-config-{stage}` |
 | `PUT /api/admin/ai-runtime-config/platform-default` | `launchpad-ai-runtime-config-{stage}` |
 | `PUT /api/admin/ai-runtime-config/apps/{appSlug}/override` | `launchpad-ai-runtime-config-{stage}` |

@@ -1,6 +1,8 @@
 import {
   CognitoIdentityProviderClient,
   AdminAddUserToGroupCommand,
+  AdminListGroupsForUserCommand,
+  ListUsersCommand,
 } from '@aws-sdk/client-cognito-identity-provider';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
@@ -70,8 +72,23 @@ export interface RedemptionDeps {
   accountMembersTable: string;
   usersTable: string;
   userPoolId: string;
+  /**
+   * Deployed environment ('dev' | 'prod'). The SERVER-SIDE boundary for the demo
+   * BYPASS path (redeem-as / impersonation): it is structurally refused unless this
+   * is a non-prod environment. This is the real guard — NOT the client dev-tools
+   * flag (which only hides UI and is not a security boundary).
+   */
+  stage: string;
   /** JSON app registry (for human-facing app labels); falls back to the slug. */
   appRegistryJson?: string;
+}
+
+/** The user a bundle is being redeemed FOR (the caller, or an impersonated invitee). */
+interface Redeemer {
+  userId: string;
+  email: string;
+  /** Current group set (token groups for the caller; live groups for impersonation). */
+  groups: string[];
 }
 
 export function createHandler(deps: RedemptionDeps) {
@@ -105,39 +122,33 @@ export function createHandler(deps: RedemptionDeps) {
     return !!res.Item;
   }
 
-  async function redeemBundle(bundleId: string, auth: AuthClaims) {
-    const bundleRes = await deps.ddb.send(new GetCommand({
-      TableName: deps.invitationsTable,
-      Key: { invitationId: bundleId },
-    }));
+  async function loadBundle(bundleId: string): Promise<StoredBundle> {
+    const bundleRes = await deps.ddb.send(new GetCommand({ TableName: deps.invitationsTable, Key: { invitationId: bundleId } }));
     const bundle = bundleRes.Item as StoredBundle | undefined;
-    if (!bundle || !Array.isArray(bundle.grants)) {
-      throw notFound('Invitation not found');
-    }
+    if (!bundle || !Array.isArray(bundle.grants)) throw notFound('Invitation not found');
+    return bundle;
+  }
 
-    // invitee-only (policy): the caller must be the bundle's intended invitee.
-    if ((bundle.email ?? '').toLowerCase() !== auth.email.toLowerCase()) {
-      throw forbidden('This invitation was sent to a different email address');
-    }
-
-    // Disabled users fail closed and cannot redeem (control-plane status). Absent
-    // record ⇒ treated as active (profile is bootstrapped at /auth/setup).
-    const userRes = await deps.ddb.send(new GetCommand({
-      TableName: deps.usersTable,
-      Key: { userId: auth.userId },
-    }));
+  // Disabled users fail closed and cannot redeem (control-plane status). Absent
+  // record ⇒ treated as active (profile is bootstrapped at /auth/setup).
+  async function assertNotDisabled(userId: string): Promise<void> {
+    const userRes = await deps.ddb.send(new GetCommand({ TableName: deps.usersTable, Key: { userId } }));
     if ((userRes.Item?.['status'] as string | undefined) === 'disabled') {
       throw forbidden('This account is disabled and cannot redeem invitations');
     }
+  }
 
+  // Apply a bundle's grants FOR `redeemer`. Shared by the NORMAL (caller redeems
+  // their own bundle) and the DEV-ONLY impersonation paths — the per-grant effect
+  // is identical; only WHO redeems and which guards run beforehand differ.
+  async function applyBundle(bundle: StoredBundle, bundleId: string, redeemer: Redeemer): Promise<GrantRedemptionResult[]> {
     const nowSec = Math.floor(Date.now() / 1000);
     const expired = bundle.status === 'expired'
       || (typeof bundle.expiresAt === 'number' && bundle.expiresAt < nowSec);
 
     // Evolving local view (mirrors the mock's live store WITHIN one bundle): a
-    // grant applied earlier in the loop is visible to later grants, so a second
-    // grant for the same app/account is correctly reported `duplicate`.
-    const heldGroups = new Set(auth.groups);
+    // grant applied earlier in the loop is visible to later grants.
+    const heldGroups = new Set(redeemer.groups);
     const memberOf = new Set<string>();
 
     const results: GrantRedemptionResult[] = [];
@@ -159,7 +170,7 @@ export function createHandler(deps: RedemptionDeps) {
         // appSlug from the account row is authoritative (defends a malformed grant).
         const effSlug = account.appSlug ?? grant.appSlug;
 
-        if (memberOf.has(accountId) || await isAccountMember(accountId, auth.userId)) {
+        if (memberOf.has(accountId) || await isAccountMember(accountId, redeemer.userId)) {
           results.push({ ...base, outcome: 'duplicate', resultingAccountId: accountId, reason: 'Already a member of this account — no change.' });
           continue;
         }
@@ -168,14 +179,14 @@ export function createHandler(deps: RedemptionDeps) {
           TableName: deps.accountMembersTable,
           Item: {
             accountId,
-            userId: auth.userId,
-            email: auth.email,
+            userId: redeemer.userId,
+            email: redeemer.email,
             appSlug: effSlug,
             role: grant.role,
             joinedAt: new Date().toISOString(),
           },
         }));
-        await ensureAccessGroup(auth.userId, effSlug);
+        await ensureAccessGroup(redeemer.userId, effSlug);
         memberOf.add(accountId);
         heldGroups.add(appAccessGroup(effSlug));
         results.push({ ...base, outcome: 'accepted', resultingAccountId: accountId, reason: `Joined ${target} as ${grant.role}.` });
@@ -196,7 +207,7 @@ export function createHandler(deps: RedemptionDeps) {
         results.push({ ...base, outcome: 'duplicate', reason: `Already has access to ${target} — no change.` });
         continue;
       }
-      await ensureAccessGroup(auth.userId, appSlug);
+      await ensureAccessGroup(redeemer.userId, appSlug);
       heldGroups.add(appAccessGroup(appSlug));
       results.push({ ...base, outcome: 'accepted', reason: `App access granted — create your first account in ${target} to get started.` });
     }
@@ -213,25 +224,80 @@ export function createHandler(deps: RedemptionDeps) {
       }));
     }
 
+    return results;
+  }
+
+  function response(bundleId: string, userId: string, results: GrantRedemptionResult[]) {
     // userCreated is false: runtime user records are created at sign-in/`/auth/setup`,
-    // not at redemption (the invitee is already authenticated here). State-equivalence
-    // is about groups/accounts/memberships, which the per-grant logic above produces.
-    const response: RedeemBundleResponse = {
-      bundleId,
-      userId: auth.userId,
-      userCreated: false,
-      results,
-    };
-    return ok(response);
+    // not at redemption. State-equivalence is about groups/accounts/memberships.
+    const body: RedeemBundleResponse = { bundleId, userId, userCreated: false, results };
+    return ok(body);
+  }
+
+  // NORMAL redemption — the caller redeems THEIR OWN bundle (invitee-only). A valid
+  // PROD path; the invitee arrives via their own auth (email link → sign-in → here).
+  async function redeemAsCaller(bundleId: string, auth: AuthClaims) {
+    const bundle = await loadBundle(bundleId);
+    if ((bundle.email ?? '').toLowerCase() !== auth.email.toLowerCase()) {
+      throw forbidden('This invitation was sent to a different email address');
+    }
+    await assertNotDisabled(auth.userId);
+    const results = await applyBundle(bundle, bundleId, { userId: auth.userId, email: auth.email, groups: auth.groups });
+    return response(bundleId, auth.userId, results);
+  }
+
+  async function liveGroups(userId: string): Promise<string[]> {
+    const res = await deps.cognito.send(new AdminListGroupsForUserCommand({ UserPoolId: deps.userPoolId, Username: userId }));
+    return (res.Groups ?? []).map((g) => g.GroupName).filter((n): n is string => !!n);
+  }
+
+  async function resolveUserIdByEmail(email: string): Promise<string | null> {
+    const res = await deps.cognito.send(new ListUsersCommand({
+      UserPoolId: deps.userPoolId,
+      Filter: `email = "${email.replace(/"/g, '')}"`,
+      Limit: 1,
+    }));
+    return res.Users?.[0]?.Username ?? null;
+  }
+
+  // DEV-ONLY BYPASS — the demo harness's privileged trigger. Impersonates the
+  // bundle's invitee and redeems on their behalf WITHOUT their email-link/auth, so
+  // the real A5 flow can be exercised in dev before SES.
+  //
+  // SERVER-SIDE BOUNDARY (the REAL guard): structurally refused unless this is a
+  // non-prod stage — `deps.stage` is the DEPLOYED environment, NOT the client
+  // dev-tools flag (which only hides UI and is not a security boundary). So the
+  // impersonation capability has NO real backend path in prod, whatever a client
+  // sends. Even in dev, only a site-admin caller may trigger it.
+  async function redeemAsInvitee(bundleId: string, auth: AuthClaims) {
+    if (deps.stage === 'prod') {
+      throw notFound('Not found'); // indistinguishable from a route that does not exist
+    }
+    if (!auth.groups.includes('site-admin')) {
+      throw forbidden('Only a site-admin may use the redemption demo');
+    }
+    const bundle = await loadBundle(bundleId);
+    const inviteeEmail = (bundle.email ?? '').toLowerCase();
+    const inviteeUserId = await resolveUserIdByEmail(inviteeEmail);
+    if (!inviteeUserId) {
+      throw badRequest(`No user exists for ${inviteeEmail}; the invitee must have signed in at least once before the demo can impersonate them.`);
+    }
+    await assertNotDisabled(inviteeUserId);
+    const groups = await liveGroups(inviteeUserId);
+    const results = await applyBundle(bundle, bundleId, { userId: inviteeUserId, email: inviteeEmail, groups });
+    return response(bundleId, inviteeUserId, results);
   }
 
   return withAuthOnly(async ({ auth, event }) => {
-    const resource = (event as APIGatewayProxyEvent).resource ?? '';
-    if (resource === '/api/invitations/bundles/{bundleId}/redeem' && event.httpMethod === 'POST') {
-      const bundleId = getPathParam(event as APIGatewayProxyEvent, 'bundleId');
-      return redeemBundle(bundleId, auth);
+    const e = event as APIGatewayProxyEvent;
+    const resource = e.resource ?? '';
+    if (resource === '/api/invitations/bundles/{bundleId}/redeem' && e.httpMethod === 'POST') {
+      return redeemAsCaller(getPathParam(e, 'bundleId'), auth);
     }
-    throw badRequest(`Unrecognised route: ${event.httpMethod} ${resource}`);
+    if (resource === '/api/invitations/bundles/{bundleId}/redeem-as' && e.httpMethod === 'POST') {
+      return redeemAsInvitee(getPathParam(e, 'bundleId'), auth);
+    }
+    throw badRequest(`Unrecognised route: ${e.httpMethod} ${resource}`);
   });
 }
 
@@ -243,5 +309,6 @@ export const handler = createHandler({
   accountMembersTable: process.env.ACCOUNT_MEMBERS_TABLE!,
   usersTable: process.env.USERS_TABLE!,
   userPoolId: process.env.USER_POOL_ID!,
+  stage: process.env.STAGE ?? 'dev',
   appRegistryJson: process.env.APP_REGISTRY,
 });

@@ -68,3 +68,13 @@ export function createInvitationBundle(
 export function redeemInvitationBundle(idToken: string, bundleId: string): Promise<RedeemBundleResult> {
   return authedJson(idToken, `/api/invitations/bundles/${encodeURIComponent(bundleId)}/redeem`, {});
 }
+
+/**
+ * DEV-ONLY demo bypass: redeem a bundle for its intended invitee WITHOUT that
+ * invitee's auth (impersonation). The privileged demo trigger — refused SERVER-SIDE
+ * in prod (the STAGE guard), regardless of this client call. Used by the redemption
+ * demo harness to exercise the real A5 flow in dev before SES.
+ */
+export function redeemBundleAsInvitee(idToken: string, bundleId: string): Promise<RedeemBundleResult> {
+  return authedJson(idToken, `/api/invitations/bundles/${encodeURIComponent(bundleId)}/redeem-as`, {});
+}
