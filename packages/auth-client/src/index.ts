@@ -13,7 +13,11 @@ export interface User {
    *  - `appAdmin: string[]` — app slugs derived from the `{app}-app-admin` Cognito
    *    groups (`cognito:groups`). The `app_admin` token claim was struck (M11);
    *    the groups are the sole source, mirroring `siteAdmin`.
-   * UI gates admin surfaces on these.
+   *  - `appAccess: string[]` — app slugs the user may ENTER, derived from the
+   *    `{app}-app-access` Cognito groups (`cognito:groups`). Groups-authoritative
+   *    (M11): the launchpad gate keys on this, NOT membership — a user holding the
+   *    access group with zero accounts is the valid "access, no accounts" state.
+   * UI gates admin surfaces on siteAdmin/appAdmin, and the app tiles on appAccess.
    */
   metadata?: Record<string, unknown>
 }

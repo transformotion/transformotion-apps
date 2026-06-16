@@ -340,7 +340,7 @@ accounts:   Record<appSlug, Array<{accountId, role}>>          — per-app lean 
 
 Plus the standard Cognito claims (`sub`, `email`, `cognito:groups`, token lifetime fields). `custom:accounts` is inert (see Custom attributes above).
 
-**Launchpad renders tiles from the user's per-app membership** (the access projection, read at runtime via `GET /api/user/active-accounts`), not by inspecting the `apps` claim directly — see [Three-state tile model](#three-state-tile-model) (M16 Phase 3, D11).
+**Launchpad renders tiles GROUPS-AUTHORITATIVELY** (M11): a tile shows when the user holds the app's `{app}-app-access` Cognito group (or is site-admin / app-admin for it), NOT from membership. A holder of the access group with **zero** accounts (the "access, no accounts" state) sees a *create-first-account* tile; membership only distinguishes that state from the normal-open tile — see [Three-state tile model](#three-state-tile-model).
 **API handlers enforce per-account authorization by inspecting `accounts`.**
 
 <!-- mirror:end -->
@@ -396,19 +396,19 @@ The Hosted UI session cookie is what enables SSO across the three app clients �
 
 ## Three-state tile model
 
-> **M16 Phase 3 (D11) — revised.** Tiles now derive from the user's **account membership** (the access projection), read at runtime via the active-account read API (`GET /api/user/active-accounts`): the set of apps in which the user holds at least one account is the entitlement set. The previous rule — *"tiles from the `apps` claim plus a hardcoded deployed list"* — is **Stale-by-decision**. The `apps` claim survives as a coarse projection, but Launchpad reads entitlement from membership, and **admin/control-plane surfaces gate on the `site-admin` Cognito group / `{app}-app-admin` group, never on app membership.**
+> **M11 — groups-authoritative.** Tile VISIBILITY derives from the `{app}-app-access` Cognito group (`cognito:groups`, surfaced client-side as `User.metadata.appAccess`), plus site-admin / `{app}-app-admin`. NOT from membership. Membership (apps with ≥1 account, read via `GET /api/user/active-accounts`) only distinguishes the *create-first-account* state from the normal-open state. The earlier "tiles from membership" and "tiles from the `apps` claim + hardcoded list" rules are both **Stale-by-decision**. **Admin/control-plane surfaces gate on the `site-admin` / `{app}-app-admin` groups, never on app membership.**
 
-The launchpad resolves each app tile from two conditions — entitlement (membership) and deployment:
+The launchpad resolves each app tile group-authoritatively (gated, deployed apps):
 
-| User holds a membership in the app | App is deployed | Tile state |
+| Viewer (for the app) | Has ≥1 account | Tile state |
 |---|---|---|
-| Yes | Yes | Active — clickable, launches the app |
-| Yes | No | Visible, greyed out, "Coming Soon" label |
-| No | Any | Not rendered |
+| Holds the access group | Yes | Active — clickable, launches the app |
+| Holds the access group | No | **Create-first-account** — "Access granted, create your first account" CTA → `POST /accounts` (A4) |
+| site-admin / app-admin only (no access group) | Any | Active — normal launch tile (not create-first-account) |
+| None of the above | Any | Not rendered |
+| Any of the above, app NOT deployed | Any | Not rendered |
 
-A user with **zero** memberships sees an explicit empty state ("No apps yet — access arrives by invitation") — by design a real first-login state, never a blank page or an error. Backfill tolerance: missing or legacy entitlement data resolves to "not entitled" (no tile), never a crash.
-
-App deployment state is statically known to the launchpad (a catalogue of app slugs each carrying a `deployed` flag). Membership controls **visibility**; deployment controls **interactivity**. Not-deployed catalogue entries (coming-soon/marketing) stay hidden by default, preserving the pre-M16 deployed/coming-soon handling. Admin surfaces (e.g. AI runtime settings, and a future Users & Access view) are shown from the `site-admin` Cognito group / `{app}-app-admin` group independently of any app tile.
+Each app's tile reflects its OWN state independently (a viewer can have an account in one app beside an access-no-account tile in another). A viewer with **no** access groups (and not admin) sees the explicit empty state ("No apps yet — access arrives by invitation"). Backfill tolerant: missing/legacy data resolves to "not visible", never a crash. Coming-soon/not-deployed catalogue entries stay hidden. Admin surfaces (AI runtime settings, Users & Access) show from the `site-admin` / `{app}-app-admin` groups independently of any tile.
 
 ---
 

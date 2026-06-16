@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils'
 import { Wordmark } from '@/components/brand/wordmark'
 import { AiEngineSettings } from '@/components/launchpad/ai-engine-settings'
 import { AccountMembersModal, useCanManageMembers } from '@/components/launchpad/account-members'
-import { TrendingUp, Wallet, Layers, LogOut, Settings, User as UserIcon, Users, Inbox } from 'lucide-react'
+import { TrendingUp, Wallet, Layers, LogOut, Settings, User as UserIcon, Users, Inbox, Plus, Sparkles, X } from 'lucide-react'
 import type { User } from '@transformotion/auth-client'
 import {
   LAUNCHPAD_APPS,
@@ -14,8 +14,11 @@ import {
   resolveDisplayName,
   firstNameOf,
   type AppTile as AppTileModel,
+  type ViewerEntitlement,
 } from '@/lib/entitlement'
 import { useLaunchpadData } from '@/hooks/use-launchpad-data'
+import { authService } from '@/lib/services/auth'
+import { createAccount } from '@/lib/services/account-admin'
 
 const APP_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   'stock-analyser': TrendingUp,
@@ -103,12 +106,54 @@ function AppTile({
   app,
   index,
   onLaunch,
+  onCreateAccount,
 }: {
   app: AppTileModel
   index: number
   onLaunch?: () => void
+  onCreateAccount?: () => void
 }) {
   const Icon = APP_ICONS[app.slug] ?? Layers
+
+  // DISTINCT STATE (M11): the viewer holds the access group but has no account
+  // yet — render an actionable "create your first account" card (v0 #49 design),
+  // set apart from the normal "open" tile with a primary-accent treatment.
+  if (app.needsFirstAccount) {
+    return (
+      <div
+        className={cn(
+          'relative overflow-hidden p-6 rounded-2xl border text-left flex flex-col',
+          'border-primary/40 bg-primary/5 ring-1 ring-primary/10',
+          'animate-in fade-in slide-in-from-bottom-4',
+        )}
+        style={{ animationDelay: `${index * 100}ms` }}
+      >
+        <div className={cn('absolute inset-0 bg-gradient-to-br opacity-40', app.bgGradient)} />
+        <div className="relative flex flex-col flex-1">
+          <div className="flex items-start justify-between gap-2 mb-4">
+            <div className="size-14 rounded-xl flex items-center justify-center bg-surface2">
+              <Icon className={cn('size-7', app.color)} />
+            </div>
+            <span className="inline-flex items-center gap-1 rounded-full bg-primary/15 px-2.5 py-1 text-xs font-medium text-primary">
+              <Sparkles className="size-3" aria-hidden="true" />
+              Access granted
+            </span>
+          </div>
+          <h3 className="text-lg font-semibold text-foreground mb-1">{app.name}</h3>
+          <p className="text-sm leading-relaxed text-muted-foreground">
+            You have access — create your first account to get started.
+          </p>
+          <button
+            onClick={onCreateAccount}
+            className="mt-4 inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 active:scale-[0.98] self-start"
+          >
+            <Plus className="size-4" aria-hidden="true" />
+            Create account
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <button
@@ -188,9 +233,11 @@ function AppGridSkeleton() {
 function AppGrid({
   tiles,
   getLaunchHandler,
+  onCreateAccount,
 }: {
   tiles: AppTileModel[]
   getLaunchHandler: (slug: string) => (() => void) | undefined
+  onCreateAccount: (slug: string) => void
 }) {
   const visible = tiles.filter((t) => t.visible)
   if (visible.length === 0) return <EmptyApps />
@@ -198,9 +245,99 @@ function AppGrid({
   return (
     <div className="grid gap-4 md:gap-6 sm:grid-cols-2 lg:grid-cols-3">
       {visible.map((app, index) => (
-        <AppTile key={app.slug} app={app} index={index} onLaunch={getLaunchHandler(app.slug)} />
+        <AppTile
+          key={app.slug}
+          app={app}
+          index={index}
+          onLaunch={getLaunchHandler(app.slug)}
+          onCreateAccount={() => onCreateAccount(app.slug)}
+        />
       ))}
     </div>
+  )
+}
+
+/** Create-first-account modal (v0 #49). Owner-on-create; calls the real POST /accounts. */
+function CreateAccountModal({
+  app,
+  busy,
+  error,
+  onSubmit,
+  onClose,
+}: {
+  app: AppTileModel
+  busy: boolean
+  error: string | null
+  onSubmit: (name: string) => void
+  onClose: () => void
+}) {
+  const [name, setName] = useState('')
+  const Icon = APP_ICONS[app.slug] ?? Layers
+  const canSubmit = name.trim().length > 0 && !busy
+  const submit = () => { if (canSubmit) onSubmit(name.trim()) }
+
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/50 z-50" onClick={busy ? undefined : onClose} />
+      <div className="fixed left-1/2 top-1/2 z-50 w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-border bg-card shadow-2xl">
+        <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
+          <div className="flex items-center gap-3">
+            <div className="size-10 rounded-lg flex items-center justify-center bg-surface2">
+              <Icon className={cn('size-5', app.color)} />
+            </div>
+            <div>
+              <h2 className="text-sm font-semibold text-foreground">Create your {app.name} account</h2>
+              <p className="text-xs text-muted-foreground">You&apos;ll be the owner of this account</p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            disabled={busy}
+            className="size-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-surface2 disabled:opacity-50"
+            aria-label="Close"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+
+        <div className="p-4">
+          <label htmlFor="new-account-name" className="block text-xs font-medium text-muted-foreground mb-1.5">
+            Account name
+          </label>
+          <input
+            id="new-account-name"
+            autoFocus
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') submit() }}
+            placeholder={`e.g. ${app.name} workspace`}
+            className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground/70 focus:outline-none focus:ring-2 focus:ring-primary/40"
+          />
+          <p className="mt-2 text-xs text-muted-foreground leading-relaxed">
+            This creates your first {app.name} account and makes you its owner. You can rename or add more later.
+          </p>
+          {error ? <p className="mt-2 text-xs text-signal-red">{error}</p> : null}
+
+          <div className="mt-4 flex items-center justify-end gap-2">
+            <button
+              onClick={onClose}
+              disabled={busy}
+              className="rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-surface2 transition-colors disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={submit}
+              disabled={!canSubmit}
+              className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Plus className="size-4" aria-hidden="true" />
+              {busy ? 'Creating…' : 'Create account'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
   )
 }
 
@@ -335,6 +472,13 @@ export function Launchpad({
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [membersOpen, setMembersOpen] = useState(false)
+  // Create-first-account flow: the app whose modal is open, plus an OPTIMISTIC set
+  // of slugs just created (so the tile flips to normal-open immediately — the next
+  // token refresh confirms it via the accounts claim).
+  const [createAccountSlug, setCreateAccountSlug] = useState<string | null>(null)
+  const [createdSlugs, setCreatedSlugs] = useState<ReadonlySet<string>>(new Set())
+  const [creating, setCreating] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
 
   // Admin/control-plane surfaces gate on the site-admin Cognito group (via
   // metadata.siteAdmin), NOT app membership (D11; no site_admin claim).
@@ -355,8 +499,19 @@ export function Launchpad({
     email,
   })
 
-  // Tiles derive from entitlement (memberships per app), not a hard-coded list.
-  const tiles = deriveAppTiles(LAUNCHPAD_APPS, data.entitledSlugs)
+  // Tile visibility is GROUPS-AUTHORITATIVE (M11): the access/admin GROUPS from the
+  // token (metadata.appAccess / appAdmin / siteAdmin) decide what's visible — NOT
+  // membership. `accounted` (apps with >=1 account, from active-accounts) only
+  // distinguishes the create-first-account state from the normal-open state.
+  const meta = authUser?.metadata as { appAccess?: string[]; appAdmin?: string[] } | undefined
+  const viewer: ViewerEntitlement = {
+    siteAdmin: isSiteAdmin,
+    appAdmin: new Set(meta?.appAdmin ?? []),
+    appAccess: new Set(meta?.appAccess ?? []),
+    accounted: new Set([...data.entitledSlugs, ...createdSlugs]),
+  }
+  const tiles = deriveAppTiles(LAUNCHPAD_APPS, viewer)
+  const createAccountTile = createAccountSlug ? tiles.find((t) => t.slug === createAccountSlug) ?? null : null
 
   const accounts: AccountRow[] = data.selections.map((s) => ({
     appSlug: s.appSlug,
@@ -371,6 +526,30 @@ export function Launchpad({
     return undefined
   }
 
+  // Create the viewer's FIRST account in an app they already hold access to. Calls
+  // the real POST /accounts (A4) with { name, appSlug }; authorization is the
+  // caller's {appSlug}-app-access group. On success: optimistically mark the app
+  // accounted (tile flips to normal-open) and refresh the token so the new account
+  // + membership land in the next token's claims.
+  const handleCreateAccount = async (name: string) => {
+    if (!createAccountSlug) return
+    setCreating(true)
+    setCreateError(null)
+    try {
+      const idToken = await authService.getIdToken()
+      if (!idToken) throw new Error('Not signed in')
+      await createAccount(idToken, createAccountSlug, name)
+      setCreatedSlugs((prev) => new Set(prev).add(createAccountSlug))
+      setCreateAccountSlug(null)
+      authService.refreshTokens().catch(() => { /* next natural load reconciles */ })
+    } catch (err) {
+      console.error('[launchpad] create account failed:', err)
+      setCreateError('Could not create the account. Please try again.')
+    } finally {
+      setCreating(false)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <Header displayName={displayName} onOpenProfile={() => setProfileMenuOpen(true)} />
@@ -381,7 +560,11 @@ export function Launchpad({
           {data.loading ? (
             <AppGridSkeleton />
           ) : hasVisibleApps(tiles) ? (
-            <AppGrid tiles={tiles} getLaunchHandler={getLaunchHandler} />
+            <AppGrid
+              tiles={tiles}
+              getLaunchHandler={getLaunchHandler}
+              onCreateAccount={(slug) => { setCreateError(null); setCreateAccountSlug(slug) }}
+            />
           ) : (
             <EmptyApps />
           )}
@@ -398,6 +581,16 @@ export function Launchpad({
         onOpenSettings={isSiteAdmin ? () => setSettingsOpen(true) : undefined}
         onOpenMembers={canManageMembers ? () => setMembersOpen(true) : undefined}
       />
+
+      {createAccountTile && (
+        <CreateAccountModal
+          app={createAccountTile}
+          busy={creating}
+          error={createError}
+          onSubmit={handleCreateAccount}
+          onClose={() => { if (!creating) { setCreateAccountSlug(null); setCreateError(null) } }}
+        />
+      )}
 
       <AiEngineSettings isOpen={settingsOpen && isSiteAdmin} onClose={() => setSettingsOpen(false)} />
 

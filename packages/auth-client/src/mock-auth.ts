@@ -8,10 +8,11 @@ const MOCK_USER: User = {
   name: 'Demo User',
   avatarUrl: undefined,
   // Mirrors the Cognito provider's metadata shape: `siteAdmin` from the
-  // `site-admin` Cognito group, `appAdmin` derived from the `{app}-app-admin`
-  // groups (M11 groups-authoritative — the `app_admin` claim was struck). The
-  // mock user is a site-admin in no app-admin group, so `appAdmin` is empty.
-  metadata: { siteAdmin: true, appAdmin: [] as string[] },
+  // `site-admin` Cognito group, `appAdmin`/`appAccess` derived from the
+  // `{app}-app-admin`/`{app}-app-access` groups (M11 groups-authoritative — the
+  // `app_admin` claim was struck). The mock user is a site-admin in no app group,
+  // so both are empty (the launchpad shows all tiles via the site-admin path).
+  metadata: { siteAdmin: true, appAdmin: [] as string[], appAccess: [] as string[] },
 }
 
 const MOCK_ACCOUNTS: Account[] = [
