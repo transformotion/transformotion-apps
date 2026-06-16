@@ -10,22 +10,8 @@ import {
   fetchAuthSession,
 } from 'aws-amplify/auth'
 import { parseCognitoGroups } from '@transformotion/contracts/cognito-groups'
+import { deriveAppAdmin, type CognitoGroup } from '@transformotion/contracts/_shared/auth'
 import type { AuthService, AuthSession, AuthTokens, User, Account, SignInCredentials, SignUpCredentials } from './index'
-
-/**
- * Parse a Cognito custom claim that the pre-token Lambda emits as a JSON string
- * array of app slugs (e.g. `'["budget-tracker"]'`). Returns `[]` for an absent
- * or malformed claim — fail safe, never throw during session hydration.
- */
-function parseSlugArrayClaim(raw: unknown): string[] {
-  if (typeof raw !== 'string') return []
-  try {
-    const parsed = JSON.parse(raw)
-    return Array.isArray(parsed) ? parsed.filter((s): s is string => typeof s === 'string') : []
-  } catch {
-    return []
-  }
-}
 
 export class CognitoAuthService implements AuthService {
   constructor(private readonly appSlug?: string) {
@@ -66,9 +52,11 @@ export class CognitoAuthService implements AuthService {
       // artifact removal, not a behaviour change: the group is unchanged.
       const groups = parseCognitoGroups(claims['cognito:groups'] as string[] | string | undefined)
       const siteAdmin  = groups.includes('site-admin')
-      // Surface the `app_admin` claim (emitted by the pre-token Lambda; D5) so the
-      // client can gate app-admin surfaces by claim. JSON array of appSlugs.
-      const appAdmin   = parseSlugArrayClaim(claims['app_admin'])
+      // M11 groups-authoritative: app-admin status is derived from the
+      // `{app}-app-admin` Cognito groups (`cognito:groups`), exactly like
+      // `siteAdmin`. The former table-derived `app_admin` token claim was struck
+      // (it duplicated group state); the group in the token is the sole signal.
+      const appAdmin   = deriveAppAdmin(groups as CognitoGroup[])
       const name       = (givenName && familyName)
         ? `${givenName} ${familyName}`
         : (givenName ?? email)

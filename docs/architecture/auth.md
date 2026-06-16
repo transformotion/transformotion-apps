@@ -181,11 +181,11 @@ For setup instructions see `docs/social-idp-setup.md`.
 > app-access, app-admin), projected into the token; the **`accounts` claim** is
 > the sole authority for account membership and role. There are **no
 > `site_admin` / `app_admin` claims** — group membership in the token *is* the
-> signal. Two parts of this are **not yet true in runtime** and are tracked for
-> the v0/contract-then-runtime correction: (1) the `app_admin` claim is still
-> emitted and must be struck in favour of `{app}-app-admin` groups, and (2) the
-> `{app}-app-admin` Cognito groups do not yet exist and must be created.
-> Everything else here is current.
+> signal. This is now fully realized in runtime: the `{app}-app-admin` Cognito
+> groups exist (M11 A1) and the `app_admin` claim has been struck from the
+> pre-token Lambda in favour of those groups (M11 A2); the `requireAppAdminForApp`
+> guard reads the `{app}-app-admin` group from `cognito:groups`. Everything here
+> is current.
 
 The two dimensions are: **Dimension 1 — Cognito groups** (authority for site-admin, app-access, app-admin) and **Dimension 2 — the `accounts` claim** (authority for account memberships and roles). No custom token claim may duplicate a group-controlled permission.
 
@@ -210,7 +210,7 @@ Cognito groups are authoritative for three things:
 
 **`site-admin` is first-class and explicit.** It is not derived from any other state; it is an explicit Cognito group grant and represents platform-level supervisory authority. It does not, by itself, grant app data, account membership, or app-access.
 
-> **Migration note:** Currently deployed groups are `site-admin`, `stock-app-access`, `budget-app-access`, plus legacy `admin`, `stock-app`, `budget-app`, `transformotion`, `family`. The `{app}-app-admin` groups (`stock-app-admin`, `budget-app-admin`) **do not yet exist** and are created as part of the groups-authoritative correction; existing table-derived app-admins are migrated into real group membership at that time. Legacy groups are removed at 7e-cleanup.
+> **Migration note:** Deployed groups are `site-admin`, `stock-app-access`, `stock-app-admin`, `budget-app-access`, `budget-app-admin`, plus legacy `admin`, `stock-app`, `budget-app`, `transformotion`, `family`. The `{app}-app-admin` groups (`stock-app-admin`, `budget-app-admin`) were created in M11 A1 as part of the groups-authoritative correction; any table-derived app-admins are migrated into real group membership by granting the group. Legacy groups are removed at 7e-cleanup.
 
 ### Dimension B: Account membership (DynamoDB)
 

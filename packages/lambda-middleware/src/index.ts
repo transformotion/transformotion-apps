@@ -93,7 +93,6 @@ export {
 export type {
   PolicyDecision,
   PolicyGuard,
-  AppAdminLoader,
   SiteAdminLoader,
   AccountMembersLoader,
   InviteeSearchScope,

@@ -11,6 +11,7 @@ import {
   noContent,
   ok,
   parseBody,
+  requireAppAdminForApp,
   requireSiteAdmin,
   withAuthOnly,
   type APIGatewayProxyEvent,
@@ -237,11 +238,17 @@ async function updatePlatformDefault(deps: Dependencies, event: APIGatewayProxyE
 
 // Deprecated M15.1 transition route: app-owned override writes now belong to
 // each app's Settings API. Keep this route temporarily for rollback/old clients.
-async function updateAppOverride(deps: Dependencies, event: APIGatewayProxyEvent) {
+//
+// D9 / M11 groups-authoritative: per-app config is an APP-ADMIN operation, not a
+// site-admin one (site-admin override-write contradicted D9). Gate on the
+// caller's `{app}-app-admin` group for THIS appSlug, resolved after the slug is
+// validated. See route-classification-m16.md ("operational-config → app-admin").
+async function updateAppOverride(deps: Dependencies, event: APIGatewayProxyEvent, auth: AuthClaims) {
   const appSlug = getPathParam(event, 'appSlug');
   if (!isAppSlug(appSlug)) {
     throw badRequest(`Unsupported appSlug: ${appSlug}`);
   }
+  requireAppAdminForApp(auth, appSlug);
   const { provider, model } = parseUpdateBody(event);
   const record = await putRecord(deps, appOverrideSk(appSlug), provider, model);
   return ok({ appSlug, ...record });
@@ -249,11 +256,13 @@ async function updateAppOverride(deps: Dependencies, event: APIGatewayProxyEvent
 
 // Deprecated M15.1 transition route: app-owned override resets now belong to
 // each app's Settings API. Keep this route temporarily for rollback/old clients.
-async function resetAppOverride(deps: Dependencies, event: APIGatewayProxyEvent) {
+// App-admin-gated for the same D9 reason as updateAppOverride.
+async function resetAppOverride(deps: Dependencies, event: APIGatewayProxyEvent, auth: AuthClaims) {
   const appSlug = getPathParam(event, 'appSlug');
   if (!isAppSlug(appSlug)) {
     throw badRequest(`Unsupported appSlug: ${appSlug}`);
   }
+  requireAppAdminForApp(auth, appSlug);
   await deps.client.send(new DeleteCommand({
     TableName: deps.tableName,
     Key: { pk: AI_CONFIG_PK, sk: appOverrideSk(appSlug) },
@@ -263,20 +272,25 @@ async function resetAppOverride(deps: Dependencies, event: APIGatewayProxyEvent)
 
 export function createHandler(deps: Dependencies = defaultDependencies) {
   return withAuthOnly(async ({ auth, event }) => {
-    requireSiteAdmin(auth);
     const resource = event.resource ?? '';
 
+    // Per-route authorization (D9 / M11 groups-authoritative): the platform-scoped
+    // read + default are SITE-ADMIN (supervisory); the per-app overrides are
+    // APP-ADMIN for the target app (the override handlers gate themselves once the
+    // appSlug is validated). See route-classification-m16.md.
     if (resource === '/api/admin/ai-runtime-config' && event.httpMethod === 'GET') {
+      requireSiteAdmin(auth);
       return readConfig(deps, auth);
     }
     if (resource === '/api/admin/ai-runtime-config/platform-default' && event.httpMethod === 'PUT') {
+      requireSiteAdmin(auth);
       return updatePlatformDefault(deps, event);
     }
     if (resource === '/api/admin/ai-runtime-config/apps/{appSlug}/override' && event.httpMethod === 'PUT') {
-      return updateAppOverride(deps, event);
+      return updateAppOverride(deps, event, auth);
     }
     if (resource === '/api/admin/ai-runtime-config/apps/{appSlug}/override' && event.httpMethod === 'DELETE') {
-      return resetAppOverride(deps, event);
+      return resetAppOverride(deps, event, auth);
     }
 
     throw badRequest(`Unrecognised route: ${event.httpMethod} ${resource}`);
