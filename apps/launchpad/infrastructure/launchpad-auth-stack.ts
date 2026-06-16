@@ -186,11 +186,25 @@ export class LaunchpadAuthStack extends cdk.Stack {
 
     const groups: Array<{ name: string; description: string; precedence: number }> = [
       { name: 'site-admin', description: 'Platform administrator', precedence: 1 },
-      ...registry.apps.map((app, idx) => ({
-        name: app.cognitoGroup,
-        description: app.groupDescription,
-        precedence: 50 + idx * 10,
-      })),
+      ...registry.apps.flatMap((app, idx) => {
+        const base = 50 + idx * 10;
+        return [
+          // {app}-app-access — registry-driven; already deployed.
+          {
+            name: app.cognitoGroup,
+            description: app.groupDescription,
+            precedence: base,
+          },
+          // {app}-app-admin — M11 A1: the groups-authoritative app-admin signal.
+          // Derived from the access group's shared prefix so the names track
+          // (contract appAdminGroup() = `${prefix}-admin`); see auth.md.
+          {
+            name: app.cognitoGroup.replace(/-access$/, '-admin'),
+            description: `User administers ${app.displayName}`,
+            precedence: base + 5,
+          },
+        ];
+      }),
       { name: 'admin', description: 'Legacy platform administrators - full access to all apps', precedence: 2 },
       { name: 'stock-app', description: 'Legacy Stock Signal Analyser access', precedence: 10 },
       { name: 'budget-app', description: 'Legacy Budget Tracker access', precedence: 20 },

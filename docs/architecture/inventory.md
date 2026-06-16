@@ -49,7 +49,8 @@ those stacks. They are not live ownership surfaces.
 - Cognito User Pool: `launchpad-auth-{stage}`
 - Hosted UI domain
 - Launchpad, Stock Analyser, and Budget Tracker app clients
-- Cognito groups: `site-admin`, `stock-app-access`, `budget-app-access`
+- Cognito groups: `site-admin`, `stock-app-access`, `stock-app-admin`,
+  `budget-app-access`, `budget-app-admin`
 - Social IdP configuration and secret placeholders
 - Hosted UI customization
 - Pre-token trigger: `launchpad-pre-token-generation-{stage}`
@@ -65,6 +66,12 @@ consumed by Launchpad, Stock Analyser, Budget Tracker, and migration utilities.
 Platform admin status is NOT a claim — it is read from the `site-admin` Cognito
 group (`cognito:groups`); the `site_admin` claim was removed in M16 Phase 6
 (v0 contract `m16.2.0` / D11).
+
+The `{app}-app-admin` groups (`stock-app-admin`, `budget-app-admin`) were
+deployed in M11 step A1 as the groups-authoritative app-admin foundation. They
+are additive and not yet consumed: the live app-admin signal remains the
+`app_admin` claim emitted by the pre-token trigger from the app-admin grants
+table, pending the A2 strike that moves authority to the group.
 
 ## Launchpad Control Plane
 
