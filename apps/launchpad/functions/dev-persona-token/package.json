@@ -1,0 +1,18 @@
+{
+  "name": "@transformotion/fn-launchpad-dev-persona-token",
+  "version": "0.0.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "lint": "echo \"lint: launchpad dev-persona-token\""
+  },
+  "devDependencies": {
+    "@aws-sdk/client-cognito-identity-provider": "^3",
+    "@aws-sdk/client-secrets-manager": "^3",
+    "@types/aws-lambda": "^8",
+    "@types/node": "^22",
+    "typescript": "*"
+  }
+}
