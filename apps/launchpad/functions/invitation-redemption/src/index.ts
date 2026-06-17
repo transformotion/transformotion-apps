@@ -238,9 +238,14 @@ export function createHandler(deps: RedemptionDeps) {
   // PROD path; the invitee arrives via their own auth (email link → sign-in → here).
   async function redeemAsCaller(bundleId: string, auth: AuthClaims) {
     const bundle = await loadBundle(bundleId);
-    if ((bundle.email ?? '').toLowerCase() !== auth.email.toLowerCase()) {
-      throw forbidden('This invitation was sent to a different email address');
-    }
+    // Option D (m16.7.0 — link-as-bearer): the LINK is the bearer (bundleId is an
+    // unguessable UUID) and the signed-in identity is who the grants bind to. The
+    // authenticated email is CONFIRMATION, not a gate — a mismatch with the invited
+    // email does NOT block (the invitee confirms continue-and-bind client-side via
+    // the redemption machine). So redemption binds to auth.userId/auth.email
+    // regardless of bundle.email. Disabled-user fail-closed + per-grant idempotency
+    // (duplicate guards in applyBundle) are UNCHANGED; the strict same-email match
+    // was REMOVED to conform to the m16.7.0 redemption-experience contract.
     await assertNotDisabled(auth.userId);
     const results = await applyBundle(bundle, bundleId, { userId: auth.userId, email: auth.email, groups: auth.groups });
     return response(bundleId, auth.userId, results);

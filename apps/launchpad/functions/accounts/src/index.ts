@@ -30,6 +30,7 @@ import {
   requireAccountOwnerRole,
   requireSupervisorySiteAdmin,
   decideRemoval,
+  decideRoleChange,
   decideLastOwnerGuard,
   allOf,
   UNIFORM_DENY,
@@ -420,6 +421,80 @@ async function removeMember(accountId: string, requesterId: string, targetUserId
   return noContent();
 }
 
+// R6 — PUT /accounts/{accountId}/members/{userId}/role: owner-or-manager with
+// role-scoped assignment legality (decideRoleChange). Site-admin supervisory
+// authority does NOT include role management (account-data management is
+// owner/manager only). Last-owner FLOOR blocks demoting the sole owner. Returns
+// the updated ListAccountMembersResponse (contract) so the v0 account-management
+// view refreshes from the response with no extra read.
+async function updateMemberRole(
+  event: APIGatewayProxyEvent,
+  accountId: string,
+  requesterId: string,
+  targetUserId: string,
+) {
+  const { account, members, callerLoader } = await loadAccountContext(accountId);
+  if (!account) throw forbidden(UNIFORM_DENY);
+
+  const targetRow = members.find(m => m.userId === targetUserId);
+  if (!targetRow) throw forbidden(UNIFORM_DENY); // non-member target → uniform deny
+
+  const { role } = parseBody<{ role?: string }>(event);
+  const VALID_ROLES: AccountRole[] = ['owner', 'manager', 'member', 'viewer'];
+  if (!role || !VALID_ROLES.includes(role as AccountRole)) {
+    throw badRequest('role is required and must be one of: owner, manager, member, viewer');
+  }
+  const newRole = role as AccountRole;
+  const callerRow = members.find(m => m.userId === requesterId);
+
+  // Owner/manager AND the role change is legal for the caller's role. No
+  // supervisory-site-admin branch by design (role mgmt is not supervisory).
+  await requireAccountAdmin(() => allOf(
+    () => requireAccountOwnerOrManager(callerLoader, accountId, requesterId),
+    async () => {
+      if (!decideRoleChange(callerRow?.role, targetRow.role, newRole).allow) {
+        throw forbidden(UNIFORM_DENY);
+      }
+    },
+  ));
+
+  // Last-owner FLOOR — never demote the sole owner and orphan the account.
+  if (
+    targetRow.role === 'owner' &&
+    newRole !== 'owner' &&
+    !decideLastOwnerGuard(members, targetUserId).allow
+  ) {
+    throw conflict('Cannot change the role of the last owner — assign another owner first.');
+  }
+
+  if (targetRow.role !== newRole) {
+    await ddb.send(new UpdateCommand({
+      TableName: ACCOUNT_MEMBERS_TABLE,
+      Key: { accountId, userId: targetUserId },
+      UpdateExpression: 'SET #r = :role',
+      ExpressionAttributeNames: { '#r': 'role' },
+      ExpressionAttributeValues: { ':role': newRole },
+      ConditionExpression: 'attribute_exists(userId)',
+    }));
+    targetRow.role = newRole; // reflect in the returned member list
+  }
+
+  const ownerCount = members.filter(m => m.role === 'owner').length;
+  const response: ListAccountMembersResponse = {
+    accountId,
+    members: members.map(m => ({
+      userId: m.userId,
+      email: m.email ?? '',
+      status: (m.status as UserStatus | undefined) ?? 'active',
+      role: m.role as AccountRole,
+      joinedAt: m.joinedAt,
+      isLastOwner: m.role === 'owner' && ownerCount === 1,
+    })),
+    pendingInvitations: [], // EMPTY until Phase 8 (bundles) — shape present, no data
+  };
+  return ok(response);
+}
+
 // withAuthOnly (M16 Phase 6, ruling #4): this control-plane handler keys off the
 // PATH accountId and auth.userId — it never reads the X-Account-Id header, so it
 // must NOT require one (withAuth/resolveAccountContext would 400 POST /accounts).
@@ -443,6 +518,12 @@ export const handler = withAuthOnly(async ({ auth, event }) => {
   // Legacy GET /members (thin shape) — retained, unwired-to-UI (see §7 retirement map).
   if (resource === '/accounts/{accountId}/members' && event.httpMethod === 'GET') {
     return listMembers(accountId, userId);
+  }
+
+  // R6: member role change (owner/manager; role-scoped).
+  if (resource === '/accounts/{accountId}/members/{userId}/role' && event.httpMethod === 'PUT') {
+    const targetUserId = getPathParam(event, 'userId');
+    return updateMemberRole(event, accountId, userId, targetUserId);
   }
 
   // PR-6B (R5): member removal.

@@ -27,6 +27,14 @@
 #   apps/launchpad/functions/accounts/             control-plane accounts API: inline DynamoDB membership checks
 #   apps/launchpad/functions/forgot-provider/      auth-infrastructure: public endpoint
 #   apps/launchpad/functions/invitations/          control-plane invitation API: inline owner check
+#   apps/launchpad/functions/invitation-bundles/   control-plane invitation API: withAuthOnly + PER-GRANT sender authz
+#                                                  (senderCanGrant: site-admin OR {app}-app-admin, enforced per grant,
+#                                                  unauthorized grants dropped + fail-closed); getBundle is the DESIGNED
+#                                                  link-as-bearer resolve (Option D / m16.7.0 — crypto-UUID is the boundary,
+#                                                  single-use + expiry enforced at redeem)
+#   apps/launchpad/functions/invitee-search/       control-plane discovery: withAuthOnly + results SCOPED to caller authority
+#                                                  (site-admin → full directory; app-admin → administered apps only;
+#                                                  account-manager → own managed accounts only; zero authority → empty)
 #   apps/launchpad/functions/pre-token-generation/ Cognito trigger: no request-time API caller
 #   apps/launchpad/functions/user/                 auth-infrastructure: withAuthOnly user-owned profile data
 #
@@ -46,6 +54,12 @@ EXEMPT_PATH_PREFIXES=(
   "$REPO_ROOT/apps/launchpad/functions/accounts/"
   "$REPO_ROOT/apps/launchpad/functions/forgot-provider/"
   "$REPO_ROOT/apps/launchpad/functions/invitations/"
+  # Per-grant sender authz (site-admin OR {app}-app-admin, enforced per grant +
+  # fail-closed) + designed Option-D link-as-bearer getBundle. See header note.
+  "$REPO_ROOT/apps/launchpad/functions/invitation-bundles/"
+  # Results scoped to caller authority (site-admin / app-admin apps / own managed
+  # accounts; zero authority → empty). See header note.
+  "$REPO_ROOT/apps/launchpad/functions/invitee-search/"
   "$REPO_ROOT/apps/launchpad/functions/pre-token-generation/"
   "$REPO_ROOT/apps/launchpad/functions/user/"
 )

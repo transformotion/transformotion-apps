@@ -3,6 +3,25 @@
 import { useEffect, useState } from 'react'
 import { Hub } from 'aws-amplify/utils'
 import { authService } from '@/lib/services/auth'
+import { REDEEM_RETURN_KEY } from '@/lib/redemption/seam'
+
+/**
+ * Where to go after a successful callback. A redemption sign-in (A4) stashes the
+ * bundleId so the reused callback returns to /redeem?bundle=<id> instead of `/`
+ * (consumed once). Everything else lands on the Launchpad home.
+ */
+function postCallbackTarget(): string {
+  try {
+    const bundleId = sessionStorage.getItem(REDEEM_RETURN_KEY)
+    if (bundleId) {
+      sessionStorage.removeItem(REDEEM_RETURN_KEY)
+      return `/redeem?bundle=${encodeURIComponent(bundleId)}`
+    }
+  } catch {
+    /* no sessionStorage — fall through to home */
+  }
+  return '/'
+}
 
 function sanitizeAmplifyOAuthState() {
   const keysToFix: string[] = []
@@ -22,7 +41,7 @@ export default function CallbackPage() {
     const unsubscribe = Hub.listen('auth', ({ payload }) => {
       if (payload.event === 'signInWithRedirect') {
         sanitizeAmplifyOAuthState()
-        window.location.replace('/')
+        window.location.replace(postCallbackTarget())
       }
       if (payload.event === 'signInWithRedirect_failure') {
         setError('Sign in failed. Please try again.')
@@ -32,7 +51,7 @@ export default function CallbackPage() {
     // If the Hub event already fired before the listener was set up, check
     // whether Amplify already has an authenticated user.
     authService.getCurrentUser().then((user) => {
-      if (user) window.location.replace('/')
+      if (user) window.location.replace(postCallbackTarget())
     }).catch(() => {})
 
     return unsubscribe

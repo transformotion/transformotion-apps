@@ -1,11 +1,11 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { Wordmark } from '@/components/brand/wordmark'
 import { AiEngineSettings } from '@/components/launchpad/ai-engine-settings'
-import { AccountMembersModal, useCanManageMembers } from '@/components/launchpad/account-members'
-import { TrendingUp, Wallet, Layers, LogOut, Settings, User as UserIcon, Users, Inbox, Plus, Sparkles, X, Send } from 'lucide-react'
+import { TrendingUp, Wallet, Layers, LogOut, Settings, User as UserIcon, ShieldCheck, Inbox, Plus, Sparkles, X } from 'lucide-react'
 import type { User } from '@transformotion/auth-client'
 import {
   LAUNCHPAD_APPS,
@@ -19,8 +19,6 @@ import {
 import { useLaunchpadData } from '@/hooks/use-launchpad-data'
 import { authService } from '@/lib/services/auth'
 import { createAccount } from '@/lib/services/account-admin'
-import { InviteComposer } from '@/components/launchpad/invite-composer'
-import { devToolVisible } from '@/lib/dev-tools'
 
 const APP_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   'stock-analyser': TrendingUp,
@@ -351,9 +349,7 @@ function ProfileMenu({
   onClose,
   onLogout,
   onOpenSettings,
-  onOpenMembers,
-  onOpenInvite,
-  onOpenDevDemo,
+  onOpenAdmin,
 }: {
   displayName: string
   email: string
@@ -362,9 +358,7 @@ function ProfileMenu({
   onClose: () => void
   onLogout: () => void
   onOpenSettings?: () => void
-  onOpenMembers?: () => void
-  onOpenInvite?: () => void
-  onOpenDevDemo?: () => void
+  onOpenAdmin?: () => void
 }) {
   if (!isOpen) return null
 
@@ -408,28 +402,16 @@ function ProfileMenu({
             <UserIcon className="size-4 text-muted-foreground" />
             Profile
           </button>
-          {onOpenInvite ? (
+          {onOpenAdmin ? (
             <button
               onClick={() => {
                 onClose()
-                onOpenInvite()
+                onOpenAdmin()
               }}
               className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-surface2 transition-colors"
             >
-              <Send className="size-4 text-muted-foreground" />
-              Invite people
-            </button>
-          ) : null}
-          {onOpenMembers ? (
-            <button
-              onClick={() => {
-                onClose()
-                onOpenMembers()
-              }}
-              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-surface2 transition-colors"
-            >
-              <Users className="size-4 text-muted-foreground" />
-              Account members
+              <ShieldCheck className="size-4 text-muted-foreground" />
+              Admin
             </button>
           ) : null}
           {onOpenSettings ? (
@@ -445,18 +427,6 @@ function ProfileMenu({
             </button>
           ) : null}
         </div>
-
-        {onOpenDevDemo ? (
-          <div className="border-t border-border py-2">
-            <button
-              onClick={() => { onClose(); onOpenDevDemo() }}
-              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-signal-gold hover:bg-signal-gold/10 transition-colors"
-            >
-              <Sparkles className="size-4" />
-              Redemption demo (dev)
-            </button>
-          </div>
-        ) : null}
 
         <div className="border-t border-border py-2">
           <button
@@ -499,10 +469,9 @@ export function Launchpad({
   onLaunchBudgetTracker?: () => void
   onSignOut?: () => void
 }) {
+  const router = useRouter()
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [membersOpen, setMembersOpen] = useState(false)
-  const [inviteOpen, setInviteOpen] = useState(false)
   // Create-first-account flow: the app whose modal is open, plus an OPTIMISTIC set
   // of slugs just created (so the tile flips to normal-open immediately — the next
   // token refresh confirms it via the accounts claim).
@@ -514,9 +483,6 @@ export function Launchpad({
   // Admin/control-plane surfaces gate on the site-admin Cognito group (via
   // metadata.siteAdmin), NOT app membership (D11; no site_admin claim).
   const isSiteAdmin = authUser?.metadata?.siteAdmin === true
-
-  // "Account members" is shown to a site-admin OR an owner/manager of ≥1 account.
-  const canManageMembers = useCanManageMembers(isSiteAdmin, authUser?.id)
 
   const data = useLaunchpadData(authUser)
 
@@ -543,13 +509,6 @@ export function Launchpad({
   }
   const tiles = deriveAppTiles(LAUNCHPAD_APPS, viewer)
   const createAccountTile = createAccountSlug ? tiles.find((t) => t.slug === createAccountSlug) ?? null : null
-
-  // Invitation composer: shown to anyone who can grant — site-admin (all apps) or
-  // an app-admin (their apps). grantableApps scopes which apps they may grant.
-  const grantableApps = isSiteAdmin
-    ? LAUNCHPAD_APPS.filter((a) => a.entitlementGated && a.deployed).map((a) => a.slug)
-    : [...viewer.appAdmin]
-  const canInvite = grantableApps.length > 0
 
   const accounts: AccountRow[] = data.selections.map((s) => ({
     appSlug: s.appSlug,
@@ -617,18 +576,8 @@ export function Launchpad({
         onClose={() => setProfileMenuOpen(false)}
         onLogout={onSignOut || (() => {})}
         onOpenSettings={isSiteAdmin ? () => setSettingsOpen(true) : undefined}
-        onOpenMembers={canManageMembers ? () => setMembersOpen(true) : undefined}
-        onOpenInvite={canInvite ? () => setInviteOpen(true) : undefined}
-        onOpenDevDemo={devToolVisible() && isSiteAdmin ? () => { window.location.href = '/dev/redemption-demo' } : undefined}
+        onOpenAdmin={isSiteAdmin ? () => router.push('/launchpad/admin/users') : undefined}
       />
-
-      {canInvite && (
-        <InviteComposer
-          grantableApps={grantableApps}
-          isOpen={inviteOpen}
-          onClose={() => setInviteOpen(false)}
-        />
-      )}
 
       {createAccountTile && (
         <CreateAccountModal
@@ -641,14 +590,6 @@ export function Launchpad({
       )}
 
       <AiEngineSettings isOpen={settingsOpen && isSiteAdmin} onClose={() => setSettingsOpen(false)} />
-
-      {canManageMembers && (
-        <AccountMembersModal
-          isOpen={membersOpen}
-          onClose={() => setMembersOpen(false)}
-          viewerUserId={authUser?.id ?? ''}
-        />
-      )}
 
       <Footer />
     </div>

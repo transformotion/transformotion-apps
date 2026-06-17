@@ -138,8 +138,86 @@ export class LaunchpadAuthStack extends cdk.Stack {
       },
     ];
 
-    // Social provider secrets are staged in this foundation stack, but the
-    // providers themselves are configured in a later #386 cutover PR.
+    // Federated social identity providers (#386 cutover) — Google / Facebook /
+    // Microsoft on the Launchpad pool. Credentials are read from the
+    // owner-populated secrets above; no value ever appears in source or in the
+    // synthesised template. `secret.secretValue.unsafeUnwrap()` yields a
+    // CloudFormation dynamic reference ({{resolve:secretsmanager:…}}) that CFN
+    // resolves at deploy time — "unsafe" only means "I assert the consuming
+    // property resolves dynamic references", which Cognito providerDetails does.
+    //
+    // ProviderName values are chosen so the redemption seam's
+    // providerFromClaims() resolves the identities claim: it lowercases and
+    // substring-matches 'google' | 'facebook' | 'microsoft' (apps/launchpad/lib/
+    // redemption/seam.ts). 'Google'/'Facebook' are also Cognito's required names
+    // for those provider types.
+    const secretById = Object.fromEntries(
+      socialSecrets.map((s) => [s.id, s.secret]),
+    ) as Record<string, secretsmanager.Secret>;
+    const secretRef = (id: string) => secretById[id].secretValue.unsafeUnwrap();
+
+    const googleIdp = new cognito.CfnUserPoolIdentityProvider(this, 'IdpGoogle', {
+      userPoolId: this.userPool.userPoolId,
+      providerName: 'Google',
+      providerType: 'Google',
+      providerDetails: {
+        client_id: secretRef('GoogleClientIdSecretName'),
+        client_secret: secretRef('GoogleClientSecretSecretName'),
+        authorize_scopes: 'openid email profile',
+      },
+      // email/email_verified/name feed AuthenticatedIdentity; given/family for completeness.
+      attributeMapping: {
+        email: 'email',
+        email_verified: 'email_verified',
+        name: 'name',
+        given_name: 'given_name',
+        family_name: 'family_name',
+      },
+    });
+
+    const facebookIdp = new cognito.CfnUserPoolIdentityProvider(this, 'IdpFacebook', {
+      userPoolId: this.userPool.userPoolId,
+      providerName: 'Facebook',
+      providerType: 'Facebook',
+      providerDetails: {
+        client_id: secretRef('FacebookAppIdSecretName'),
+        client_secret: secretRef('FacebookAppSecretSecretName'),
+        authorize_scopes: 'public_profile,email',
+        api_version: 'v17.0',
+      },
+      // Facebook does not return a reliable email_verified; Option D defaults
+      // requireVerifiedEmail=false, so email + name are sufficient.
+      attributeMapping: {
+        email: 'email',
+        name: 'name',
+      },
+    });
+
+    const microsoftIdp = new cognito.CfnUserPoolIdentityProvider(this, 'IdpMicrosoft', {
+      userPoolId: this.userPool.userPoolId,
+      providerName: 'Microsoft',
+      providerType: 'OIDC',
+      providerDetails: {
+        client_id: secretRef('MicrosoftClientIdSecretName'),
+        client_secret: secretRef('MicrosoftClientSecretSecretName'),
+        attributes_request_method: 'GET',
+        // Multi-tenant + personal-account issuer; Cognito discovers endpoints
+        // from its .well-known/openid-configuration. Owner: narrow to a tenant
+        // (…/{tenantId}/v2.0) or /organizations if the Azure app requires it.
+        oidc_issuer: 'https://login.microsoftonline.com/common/v2.0',
+        authorize_scopes: 'openid email profile',
+      },
+      attributeMapping: {
+        email: 'email',
+        email_verified: 'email_verified',
+        name: 'name',
+      },
+    });
+
+    const socialIdps = [googleIdp, facebookIdp, microsoftIdp];
+
+    // Only the Launchpad client offers the social providers in its Hosted-UI
+    // chooser; Stock Analyser and Budget Tracker stay COGNITO-only.
     this.launchpadAppClient = this.createAppClient('LaunchpadAppClient', {
       callbackUrls: isProd
         ? [
@@ -155,8 +233,19 @@ export class LaunchpadAuthStack extends cdk.Stack {
       logoutUrls: isProd
         ? ['https://apps.transformotion.com.au/signed-out/']
         : ['https://dev.apps.transformotion.com.au/signed-out/', 'http://localhost:3001/signed-out/'],
-      supportedIdentityProviders: [cognito.UserPoolClientIdentityProvider.COGNITO],
+      supportedIdentityProviders: [
+        cognito.UserPoolClientIdentityProvider.COGNITO,
+        cognito.UserPoolClientIdentityProvider.GOOGLE,
+        cognito.UserPoolClientIdentityProvider.FACEBOOK,
+        cognito.UserPoolClientIdentityProvider.custom('Microsoft'),
+      ],
     });
+
+    // The client names the social providers in supportedIdentityProviders, so
+    // CFN must create those providers first.
+    for (const idp of socialIdps) {
+      this.launchpadAppClient.node.addDependency(idp);
+    }
 
     this.stockAnalyserAppClient = this.createAppClient('StockAnalyserAppClient', {
       callbackUrls: isProd
