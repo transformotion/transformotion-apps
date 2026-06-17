@@ -13,6 +13,7 @@ export interface LaunchpadControlPlaneStackProps extends cdk.StackProps {
   stage: 'dev' | 'prod';
   userPoolId: string;
   userPoolArn: string;
+  launchpadAppClientId: string;
   stockAnalyserAppClientId: string;
   budgetTrackerAppClientId: string;
   usersTableName: string;
@@ -41,6 +42,7 @@ export class LaunchpadControlPlaneStack extends cdk.Stack {
       stage,
       userPoolId,
       userPoolArn,
+      launchpadAppClientId,
       stockAnalyserAppClientId,
       budgetTrackerAppClientId,
       usersTableName,
@@ -597,6 +599,54 @@ export class LaunchpadControlPlaneStack extends cdk.Stack {
         responseHeaders: corsHeaders,
       });
     });
+
+    // B2 — Dev persona token-mint endpoint (POST /api/dev/persona-token).
+    // GUARD 1 (stack-level): the Lambda + route are ONLY synthesized in dev, so
+    // this auth-bypass primitive DOES NOT EXIST in the prod stack at all. The
+    // handler adds GUARD 2 (runtime STAGE==='dev' → 404) and GUARD 3 (allow-list
+    // of mintable personas; leo excluded). It mints a real persona session via
+    // AdminInitiateAuth using the per-persona password from Secrets Manager (B1).
+    if (stage === 'dev') {
+      const devPersonaTokenFn = new lambdaNodejs.NodejsFunction(this, 'DevPersonaTokenFn', {
+        functionName: `launchpad-dev-persona-token-${stage}`,
+        entry: path.join(__dirname, '../functions/dev-persona-token/src/index.ts'),
+        handler: 'handler',
+        runtime: lambda.Runtime.NODEJS_20_X,
+        timeout: cdk.Duration.seconds(10),
+        memorySize: 256,
+        environment: {
+          STAGE: stage,
+          USER_POOL_ID: userPoolId,
+          LAUNCHPAD_CLIENT_ID: launchpadAppClientId,
+        },
+        bundling: { externalModules: ['@aws-sdk/*'], minify: true, sourceMap: false, forceDockerBundling: false },
+      });
+      // AdminInitiateAuth has NO per-user resource ARN in Cognito, so this grant is
+      // necessarily pool-scoped. Its safety is COMPOSITIONAL, not from this ARN alone:
+      // the Lambda can only mint a token for a user whose password it can read, and
+      // GetSecretValue below is scoped to /launchpad/${stage}/personas/* — so it can
+      // obtain ONLY the seeded persona passwords. Combined with the handler's
+      // allow-list (the fixed PERSONA_EMAIL set), there is no path to a non-persona
+      // password and therefore no path to mint a non-persona token.
+      // ⚠ Do NOT broaden the secret scope below, and do NOT place any non-persona
+      // secret under /personas/, without re-evaluating this — either breaks the
+      // compositional bound and turns this into a pool-wide mint primitive.
+      devPersonaTokenFn.addToRolePolicy(new iam.PolicyStatement({
+        actions: ['cognito-idp:AdminInitiateAuth'],
+        resources: [`arn:aws:cognito-idp:${this.region}:${this.account}:userpool/${userPoolId}`],
+      }));
+      devPersonaTokenFn.addToRolePolicy(new iam.PolicyStatement({
+        actions: ['secretsmanager:GetSecretValue'],
+        resources: [`arn:aws:secretsmanager:${this.region}:${this.account}:secret:/launchpad/${stage}/personas/*`],
+      }));
+      // No Cognito authorizer: this dev tool mints a session and must work without
+      // one. GUARDS 1–3 (not synthesized in prod, runtime stage check, allow-list)
+      // are the security model.
+      apiResource
+        .addResource('dev')
+        .addResource('persona-token')
+        .addMethod('POST', new apigateway.LambdaIntegration(devPersonaTokenFn, { proxy: true }));
+    }
 
     new cdk.CfnOutput(this, 'ControlPlaneApiUrl', {
       value: this.api.url,
