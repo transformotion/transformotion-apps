@@ -1,13 +1,18 @@
 export type { PortfolioHolding } from '@transformotion/contracts/stock-analyser/types'
 import type { PortfolioHolding } from '@transformotion/contracts/stock-analyser/types'
 
-/** Shape returned by the Claude stock analysis prompt (shared with Analyser tab). */
+/**
+ * Shape returned by the Claude stock analysis prompt (shared with Analyser tab).
+ * `price`/`change` are NULLABLE: they are sourced from real market data (OHLCV),
+ * not the AI — and may be null when a live quote is unavailable. The AI's own
+ * price/change (it has no real-time data) are NOT trusted.
+ */
 export interface StockAnalysisResult {
   ticker:        string
   company:       string
   sector:        string
-  price:         number
-  change:        number
+  price:         number | null
+  change:        number | null
   verdict:       'BUY' | 'SELL' | 'HOLD' | 'NEUTRAL'
   cyclePosition: number
   cycleStage:    'early' | 'mid' | 'late' | 'peak'

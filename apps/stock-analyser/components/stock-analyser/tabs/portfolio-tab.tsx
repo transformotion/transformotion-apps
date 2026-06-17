@@ -356,7 +356,7 @@ export function PortfolioTab() {
                       <>
                         <VerdictBadge verdict={a.verdict as Verdict} size="sm" />
                         <p className="text-xl font-bold text-foreground mt-1">
-                          A${a.price.toFixed(2)}
+                          {a.price !== null ? `A$${a.price.toFixed(2)}` : "—"}
                         </p>
                         {pl !== null && (
                           <p className={cn("text-xs font-semibold", pl >= 0 ? "text-signal-green" : "text-signal-red")}>

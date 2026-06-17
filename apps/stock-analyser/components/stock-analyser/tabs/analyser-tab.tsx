@@ -30,6 +30,7 @@ import { cn } from "@/lib/utils"
 import { useClaude } from "@/lib/hooks"
 import { useCycleData } from "@/lib/hooks/use-cycle-data"
 import { useOhlcvData } from "@/lib/hooks/use-ohlcv-data"
+import { latestPriceFromOhlcv } from "@/lib/market-data"
 import type { OhlcvRange } from "@transformotion/api-client"
 import { PriceChart } from "@/components/price-chart/price-chart"
 
@@ -44,8 +45,10 @@ interface AnalysisResult {
   ticker: string
   company: string
   sector: string
-  price: number
-  change: number
+  // Sourced from real market data (OHLCV), not the AI — nullable when no live
+  // quote is available. The AI's own price/change are not trusted.
+  price: number | null
+  change: number | null
   verdict: Verdict
   cyclePosition: number
   cycleStage: CycleStage
@@ -159,6 +162,10 @@ Return ONLY valid JSON.`,
 
   const onWatchlist = result ? isOnWatchlist(result.ticker) : false
 
+  // Real current price/change from market data (the OHLCV chart's latest close),
+  // NOT the AI — which has no live prices. Null until OHLCV loads / if it fails.
+  const livePrice = latestPriceFromOhlcv(ohlcvData)
+
   return (
     <div className="p-4 space-y-4">
       {/* Back link if came from another tab */}
@@ -271,8 +278,19 @@ Return ONLY valid JSON.`,
               <div>
                 <h2 className="text-2xl font-bold text-foreground">{result.company}</h2>
                 <div className="flex items-baseline gap-3 mt-2">
-                  <span className="text-3xl font-bold text-foreground">A${result.price.toFixed(3)}</span>
-                  <span className="text-sm font-semibold text-signal-green">+{result.change.toFixed(2)}%</span>
+                  <span className="text-3xl font-bold text-foreground">
+                    {livePrice.price !== null ? `A$${livePrice.price.toFixed(3)}` : "—"}
+                  </span>
+                  {livePrice.change !== null && (
+                    <span
+                      className={cn(
+                        "text-sm font-semibold",
+                        livePrice.change >= 0 ? "text-signal-green" : "text-signal-red",
+                      )}
+                    >
+                      {livePrice.change >= 0 ? "+" : ""}{livePrice.change.toFixed(2)}%
+                    </span>
+                  )}
                 </div>
               </div>
               <VerdictBadge verdict={result.verdict} size="md" />
