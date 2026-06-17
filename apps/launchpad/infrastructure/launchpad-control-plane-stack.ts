@@ -512,6 +512,9 @@ export class LaunchpadControlPlaneStack extends cdk.Stack {
     // GET list — Redemption Demo inbox / admin review (site-admin all; else own).
     bundlesResource.addMethod('GET', invitationBundlesIntegration, authOptions);
     const bundleResource = bundlesResource.addResource('{bundleId}');
+    // A1 — GET {bundleId}: redemption link resolve (link-as-bearer; any authed
+    // holder of the unguessable id). Served by the bundles fn (read-only).
+    bundleResource.addMethod('GET', invitationBundlesIntegration, authOptions);
     const redemptionIntegration = new apigateway.LambdaIntegration(invitationRedemptionFn, { proxy: true });
     // A5 — POST {bundleId}/redeem (auth-only; invitee-only enforced in-handler).
     bundleResource.addResource('redeem').addMethod('POST', redemptionIntegration, authOptions);

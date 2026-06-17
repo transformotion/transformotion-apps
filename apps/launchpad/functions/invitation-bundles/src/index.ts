@@ -3,8 +3,10 @@ import { DynamoDBDocumentClient, GetCommand, PutCommand, ScanCommand } from '@aw
 import {
   withAuthOnly,
   parseBody,
+  getPathParam,
   ok,
   badRequest,
+  notFound,
   type APIGatewayProxyEvent,
   type AuthClaims,
 } from '@transformotion/lambda-middleware';
@@ -172,13 +174,48 @@ export function createHandler(deps: BundleCreationDeps) {
     return ok({ bundles });
   }
 
+  // A1 — GET /api/invitations/bundles/{bundleId}: resolve ONE bundle by id for
+  // the REDEMPTION flow. LINK-AS-BEARER (Option D / m16.7.0): any authenticated
+  // holder of the unguessable bundleId resolves it, so an Option-D email-mismatch
+  // invitee can still reach the mismatch-confirm screen (strict email-match is
+  // NOT a gate). bundleId is a crypto-random UUID — the link's unguessability is
+  // the security boundary; single-use (already-redeemed) + expiry are enforced at
+  // redeem. Admin review uses the GET LIST (sender/site-admin scoped); this is the
+  // redemption resolve only.
+  async function getBundle(bundleId: string) {
+    const res = await deps.ddb.send(new GetCommand({
+      TableName: deps.invitationsTable,
+      Key: { invitationId: bundleId },
+    }));
+    const item = res.Item as (InvitationBundle & { invitationId?: string; invitedBy?: string }) | undefined;
+    // Only bundle rows (carry a grants[]); an unknown id or a non-bundle single-
+    // invitation row is a true not-found (→ RedemptionLinkState 'not-found').
+    if (!item || !Array.isArray(item.grants)) {
+      throw notFound('Invitation not found');
+    }
+    const bundle: InvitationBundle = {
+      bundleId: item.bundleId ?? item.invitationId ?? bundleId,
+      email: item.email,
+      invitedBy: item.invitedBy ?? '',
+      createdAt: item.createdAt,
+      expiresAt: item.expiresAt,
+      status: item.status,
+      grants: item.grants,
+    };
+    return ok({ bundle });
+  }
+
   return withAuthOnly(async ({ auth, event }) => {
-    const resource = (event as APIGatewayProxyEvent).resource ?? '';
+    const e = event as APIGatewayProxyEvent;
+    const resource = e.resource ?? '';
     if (resource === '/api/invitations/bundles' && event.httpMethod === 'POST') {
-      return createBundle(auth, event as APIGatewayProxyEvent);
+      return createBundle(auth, e);
     }
     if (resource === '/api/invitations/bundles' && event.httpMethod === 'GET') {
       return listBundles(auth);
+    }
+    if (resource === '/api/invitations/bundles/{bundleId}' && event.httpMethod === 'GET') {
+      return getBundle(getPathParam(e, 'bundleId'));
     }
     throw badRequest(`Unrecognised route: ${event.httpMethod} ${resource}`);
   });

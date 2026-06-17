@@ -4,6 +4,7 @@ import type {
   InvitationBundle,
   InviteeSearchResponse,
   ListAccountMembersResponse,
+  RedeemBundleResponse,
   UserAccessSummary,
 } from '@transformotion/contracts/launchpad/invitations';
 
@@ -62,6 +63,27 @@ export class ControlPlaneClient {
    */
   listInvitationBundles(signal?: AbortSignal): Promise<{ bundles: InvitationBundle[] }> {
     return this.http.get('api/invitations/bundles', signal);
+  }
+
+  /**
+   * GET /api/invitations/bundles/{bundleId} — resolve ONE bundle by id for the
+   * redemption flow. LINK-AS-BEARER (Option D / m16.7.0): any authenticated
+   * holder of the unguessable id resolves it; the redemption state-machine
+   * derives link-state + preview from it. A missing/unknown id is 404 (→
+   * RedemptionLinkState 'not-found'), surfaced as ApiError.
+   */
+  getInvitationBundle(bundleId: string, signal?: AbortSignal): Promise<{ bundle: InvitationBundle }> {
+    return this.http.get(`api/invitations/bundles/${encodeURIComponent(bundleId)}`, signal);
+  }
+
+  /**
+   * POST /api/invitations/bundles/{bundleId}/redeem — redeem the bundle as the
+   * AUTHENTICATED caller (A5; Option D / link-as-bearer: binds to the signed-in
+   * identity regardless of the invited email). Returns per-grant results. The
+   * redemption state-machine's apply step calls this.
+   */
+  redeemBundle(bundleId: string, signal?: AbortSignal): Promise<RedeemBundleResponse> {
+    return this.http.post(`api/invitations/bundles/${encodeURIComponent(bundleId)}/redeem`, {}, signal);
   }
 
   /**
