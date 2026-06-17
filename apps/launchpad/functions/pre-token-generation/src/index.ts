@@ -1,7 +1,6 @@
 import type { PreTokenGenerationTriggerEvent } from 'aws-lambda';
 import {
   AdminAddUserToGroupCommand,
-  AdminRemoveUserFromGroupCommand,
   CognitoIdentityProviderClient,
 } from '@aws-sdk/client-cognito-identity-provider';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
@@ -91,49 +90,76 @@ function groupByApp(
   return result;
 }
 
+/** The reconcile decision: the group list to claim on, and the access groups to add. */
+export interface ReconcilePlan {
+  /** Groups after the add-only reconcile (drives the apps claim). */
+  resultingGroups: string[];
+  /** Access groups to AdminAddUserToGroup (a user holds ≥1 account but lacks the group). */
+  toAdd: string[];
+}
+
+/**
+ * Pure, ADD-ONLY reconcile of the app-access invariant.
+ *
+ * The app-access invariant is ONE-DIRECTIONAL (auth.md §"App-access is
+ * independently held"): membership ⟹ app-access, but app-access ⇏ membership.
+ * So this only ADDs the access group for a user who holds ≥1 account for the app
+ * and lacks it. It MUST NEVER strip the access group when the user has zero
+ * accounts — "access, no accounts" is a VALID designed state (the app-grant
+ * landing that drives create-first-account), and it must SURVIVE every token
+ * refresh. App-access is removed ONLY by explicit grant-removal / app-removal
+ * cascade operations, never by this reconcile.
+ *
+ * #473: the former `else if (!hasAccounts && inGroup)` remove-on-zero branch
+ * enforced a bidirectional ⇔ and stripped app-access on the next token refresh,
+ * locking real app-grant invitees out of the create-first-account flow.
+ */
+export function planReconcile(
+  currentGroups: string[],
+  accountsByApp: Record<string, Array<{ accountId: string; role: string }>>,
+  appSlugs: string[],
+  accessGroupOf: Record<string, string>,
+): ReconcilePlan {
+  const resultingGroups = [...currentGroups];
+  const toAdd: string[] = [];
+
+  for (const slug of appSlugs) {
+    const accessGroup = accessGroupOf[slug];
+    const hasAccounts = (accountsByApp[slug]?.length ?? 0) > 0;
+    const inGroup = resultingGroups.includes(accessGroup);
+
+    if (hasAccounts && !inGroup) {
+      toAdd.push(accessGroup);
+      resultingGroups.push(accessGroup);
+    }
+    // No removal branch — the invariant is one-directional (see doc above, #473).
+  }
+
+  return { resultingGroups, toAdd };
+}
+
 async function reconcileInvariant(
   userId: string,
   userPoolId: string,
   currentGroups: string[],
   accountsByApp: Record<string, Array<{ accountId: string; role: string }>>,
 ): Promise<string[]> {
-  const groups = [...currentGroups];
+  const { resultingGroups, toAdd } = planReconcile(currentGroups, accountsByApp, APP_SLUGS, ACCESS_GROUP);
+  const groups = [...resultingGroups];
 
-  for (const slug of APP_SLUGS) {
-    const accessGroup = ACCESS_GROUP[slug];
-    const hasAccounts = (accountsByApp[slug]?.length ?? 0) > 0;
-    const inGroup = groups.includes(accessGroup);
-
-    // D11 item 1 (Phase 5): the site-admin override is REMOVED — the invariant
-    // (group membership ⇔ ≥1 account for the app) applies uniformly. A site-admin
-    // with no accounts for an app is removed from its access group like anyone
-    // else; site-admin's supervisory power rides the site-admin Cognito group
-    // (read from cognito:groups), not app-access groups.
-    if (hasAccounts && !inGroup) {
-      console.log(`[launchpad-pre-token] reconcile: adding ${userId} to ${accessGroup}`);
-      try {
-        await cognito.send(new AdminAddUserToGroupCommand({
-          UserPoolId: userPoolId,
-          Username: userId,
-          GroupName: accessGroup,
-        }));
-        groups.push(accessGroup);
-      } catch (err) {
-        console.error(`[launchpad-pre-token] reconcile: failed to add ${userId} to ${accessGroup}:`, err);
-      }
-    } else if (!hasAccounts && inGroup) {
-      console.log(`[launchpad-pre-token] reconcile: removing ${userId} from ${accessGroup}`);
-      try {
-        await cognito.send(new AdminRemoveUserFromGroupCommand({
-          UserPoolId: userPoolId,
-          Username: userId,
-          GroupName: accessGroup,
-        }));
-        const idx = groups.indexOf(accessGroup);
-        if (idx !== -1) groups.splice(idx, 1);
-      } catch (err) {
-        console.error(`[launchpad-pre-token] reconcile: failed to remove ${userId} from ${accessGroup}:`, err);
-      }
+  for (const accessGroup of toAdd) {
+    console.log(`[launchpad-pre-token] reconcile: adding ${userId} to ${accessGroup}`);
+    try {
+      await cognito.send(new AdminAddUserToGroupCommand({
+        UserPoolId: userPoolId,
+        Username: userId,
+        GroupName: accessGroup,
+      }));
+    } catch (err) {
+      console.error(`[launchpad-pre-token] reconcile: failed to add ${userId} to ${accessGroup}:`, err);
+      // The add failed — do not claim a group the user is not actually in.
+      const idx = groups.indexOf(accessGroup);
+      if (idx !== -1) groups.splice(idx, 1);
     }
   }
 
