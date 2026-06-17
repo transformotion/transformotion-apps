@@ -621,6 +621,16 @@ export class LaunchpadControlPlaneStack extends cdk.Stack {
         },
         bundling: { externalModules: ['@aws-sdk/*'], minify: true, sourceMap: false, forceDockerBundling: false },
       });
+      // AdminInitiateAuth has NO per-user resource ARN in Cognito, so this grant is
+      // necessarily pool-scoped. Its safety is COMPOSITIONAL, not from this ARN alone:
+      // the Lambda can only mint a token for a user whose password it can read, and
+      // GetSecretValue below is scoped to /launchpad/${stage}/personas/* — so it can
+      // obtain ONLY the seeded persona passwords. Combined with the handler's
+      // allow-list (the fixed PERSONA_EMAIL set), there is no path to a non-persona
+      // password and therefore no path to mint a non-persona token.
+      // ⚠ Do NOT broaden the secret scope below, and do NOT place any non-persona
+      // secret under /personas/, without re-evaluating this — either breaks the
+      // compositional bound and turns this into a pool-wide mint primitive.
       devPersonaTokenFn.addToRolePolicy(new iam.PolicyStatement({
         actions: ['cognito-idp:AdminInitiateAuth'],
         resources: [`arn:aws:cognito-idp:${this.region}:${this.account}:userpool/${userPoolId}`],
