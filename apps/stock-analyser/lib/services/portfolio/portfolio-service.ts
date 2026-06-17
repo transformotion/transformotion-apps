@@ -9,7 +9,30 @@ import { getStockAnalyserClient } from '@/lib/api'
 import { getConfig } from '@/lib/config'
 import { dynamoCache } from '@/lib/services/cache/dynamo-ttl-cache'
 import { callClaudeAPI } from '@/lib/hooks/use-claude'
+import { getMockOhlcvData } from '@/lib/services/ai/fixtures/ohlcv-data'
+import { latestPriceFromOhlcv } from '@/lib/market-data'
 import type { PortfolioHolding, StockAnalysisResult } from './types'
+
+/**
+ * Overlay the REAL current price/change (from market data / OHLCV) onto an
+ * analysis. The AI cannot supply live prices, so its `price`/`change` are
+ * discarded here and replaced with the latest close. Best-effort: a failed
+ * quote leaves them null (the UI degrades gracefully).
+ */
+async function overlayLivePrice(
+  ticker: string,
+  analysis: StockAnalysisResult,
+): Promise<StockAnalysisResult> {
+  try {
+    const ohlcv = getConfig().ai.provider === 'mock'
+      ? getMockOhlcvData(ticker, '1mo', '1d')
+      : await getStockAnalyserClient().getOhlcvData(ticker, '1mo', '1d')
+    const { price, change } = latestPriceFromOhlcv(ohlcv)
+    return { ...analysis, price, change }
+  } catch {
+    return { ...analysis, price: null, change: null }
+  }
+}
 
 // ── Mock holdings ─────────────────────────────────────────────────────────────
 
@@ -91,9 +114,9 @@ export const portfolioService = {
       }))
     )
 
-    // 2. Deliver cache hits immediately
+    // 2. Deliver cache hits — overlaying the real (market-data) price/change.
     for (const { ticker, cached } of cacheChecks) {
-      if (cached) onResult(ticker, cached)
+      if (cached) onResult(ticker, await overlayLivePrice(ticker, cached))
     }
 
     // 3. Call Claude sequentially for cache misses
@@ -109,7 +132,7 @@ export const portfolioService = {
         dynamoCache.set(`ANALYSIS#${ticker}`, result).catch(err =>
           console.warn('[portfolio] cache write failed for', ticker, err)
         )
-        onResult(ticker, result)
+        onResult(ticker, await overlayLivePrice(ticker, result))
       } catch (err) {
         if (signal?.aborted) break
         console.warn('[portfolio] enrichment failed for', ticker, err)
