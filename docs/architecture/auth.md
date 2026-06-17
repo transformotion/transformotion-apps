@@ -305,7 +305,7 @@ Because groups are authoritative, granting and removing app-access or app-admin 
 
 **On failure:** Return the event unchanged. Cognito issues tokens without custom claims. Consumers (launchpad, API handlers) fail closed — empty or missing `apps`/`accounts` means the user has no access.
 
-**Latency budget:** One DynamoDB query per token issuance plus zero-to-two `AdminAddUserToGroup` / `AdminRemoveUserFromGroup` calls in the reconciliation step. Invoked only on sign-in and token refresh (roughly every hour per active user, not every API call). Cost and latency are negligible at family-platform scale.
+**Latency budget:** One DynamoDB query per token issuance plus zero-to-N `AdminAddUserToGroup` calls in the reconciliation step (**add-only** — the reconcile never removes a group; #473). Invoked only on sign-in and token refresh (roughly every hour per active user, not every API call). Cost and latency are negligible at family-platform scale.
 
 ---
 
@@ -722,7 +722,7 @@ Steps (fail-closed ordering):
 3. Delete the row in `launchpad-account-members-{stage}` for `(accountId, userId)` — the authoritative control-plane removal. From this instant the removed user's app-data **writes** fail closed via the live row-check (D8), and their next token refresh drops the account.
 4. Call `AdminUserGlobalSignOut` on the target — invalidates refresh tokens immediately. A sign-out failure is **surfaced as 502, never a silent success**; the row-delete is idempotent on retry. (No `custom:accounts` write — D11.)
 
-After this: the target's existing access token remains valid until expiry (≤1h), but writes already fail closed. On next refresh the pre-token Lambda issues a token without the account; if it was the user's last account in an app, the invariant reconciliation removes them from that app's `-access` group.
+After this: the target's existing access token remains valid until expiry (≤1h), but writes already fail closed. On next refresh the pre-token Lambda issues a token without the account. If it was the user's last account in an app, the access group is **retained** — the reconcile is one-directional (membership ⟹ app-access, never the reverse, see Pre-token generation Lambda above), so the user lands in the valid "access, no accounts" state (a create-first-account tile), **not** removed from the app. Dropping app-access entirely is only the explicit app-removal cascade (§ below), never the pre-token reconcile (#473).
 
 ### Scenario B: Disabling a user
 

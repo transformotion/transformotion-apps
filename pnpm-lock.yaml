@@ -856,6 +856,9 @@ importers:
       typescript:
         specifier: '*'
         version: 5.7.3
+      vitest:
+        specifier: ^1
+        version: 1.6.1(@types/node@22.19.17)(jsdom@29.1.1)(lightningcss@1.32.0)
 
   apps/launchpad/functions/user:
     dependencies:
