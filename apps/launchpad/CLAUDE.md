@@ -43,7 +43,7 @@ foundation.
 
 | Stack | Contents |
 |---|---|
-| `Transformotion{Stage}-LaunchpadAuth` | Launchpad-owned Cognito User Pool, Hosted UI domain, app clients, groups, Hosted UI customisation, social credential secret placeholders, auth-domain tables, and pre-token trigger |
+| `Transformotion{Stage}-LaunchpadAuth` | Launchpad-owned Cognito User Pool, Hosted UI domain, app clients, groups, Hosted UI customisation, Google/Facebook/Microsoft federated IdPs (credentials read from `/launchpad/{stage}/cognito/*` secrets via CFN dynamic reference), auth-domain tables, and pre-token trigger |
 | `Transformotion{Stage}-LaunchpadControlPlane` | Launchpad-owned REST API, Cognito authoriser, and control-plane Lambdas |
 | Future `Transformotion{Stage}-Launchpad*` stacks | Additional #386 auth-domain infrastructure, deployed through the Launchpad lane |
 

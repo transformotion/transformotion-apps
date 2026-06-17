@@ -137,13 +137,38 @@ The Hosted UI domain provides the OAuth 2.0 / PKCE flow endpoint for all three a
 
 ## Social identity providers
 
-Google, Facebook, and Microsoft IDPs are registered through the Launchpad-owned
-Cognito configuration where configured.
+Google, Facebook, and Microsoft IdPs are registered on the Launchpad-owned pool
+as `CfnUserPoolIdentityProvider` resources in `LaunchpadAuthStack`, and added to
+the `LaunchpadAppClient`'s `SupportedIdentityProviders` (so they appear in the
+Hosted-UI chooser). Stock Analyser and Budget Tracker clients stay COGNITO-only.
+
+| Provider | `ProviderName` | `ProviderType` | Scopes | Notable detail |
+|---|---|---|---|---|
+| Google | `Google` | `Google` | `openid email profile` | — |
+| Facebook | `Facebook` | `Facebook` | `public_profile,email` | `api_version` `v17.0`; no reliable `email_verified` |
+| Microsoft | `Microsoft` | `OIDC` | `openid email profile` | `oidc_issuer` `https://login.microsoftonline.com/common/v2.0` (multi-tenant; narrow to `/{tenantId}/v2.0` if the Azure app is single-tenant) |
+
+Attribute mappings send `email`→`email`, `name`→`name`, and `email_verified`→
+`email_verified` (Google/Microsoft; Facebook omits `email_verified`); Google also
+maps `given_name`/`family_name`. The `ProviderName` values are deliberately
+`Google`/`Facebook`/`Microsoft` so the redemption seam's `providerFromClaims()`
+(`apps/launchpad/lib/redemption/seam.ts`) resolves the `identities` claim to the
+contract `IdpProvider`.
 
 `LaunchpadAuthStack` creates Launchpad-owned secret paths under
-`/launchpad/{stage}/cognito/*` for the Launchpad-owned auth domain. The stack
-outputs each secret name so provider credentials can be managed without
-Platform ownership.
+`/launchpad/{stage}/cognito/*`; each IdP reads its client-id/secret from these via
+a CloudFormation **dynamic reference** (`{{resolve:secretsmanager:…}}`) — no
+credential value appears in source or in the synthesised template. The stack also
+outputs each secret name so provider credentials can be managed without Platform
+ownership.
+
+> **Provider-console redirect URI (owner-side).** Each provider's app
+> registration (Google/Facebook/Azure console) must allow-list the pool's
+> Hosted-UI callback `https://{cognito-domain}/oauth2/idpresponse`. This is
+> outside the IaC. A provider appears in the chooser after deploy but completes a
+> real login only once its console redirect URI is in place.
+
+Dev rollout: providers wired in the `m11`/`#386` social-IdP cutover.
 
 ### Launchpad-owned auth tables
 
