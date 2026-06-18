@@ -134,6 +134,13 @@ function writePersonaSession(mint: MintResult): void {
     ''
   const prefix = amplifyPrefix()
   const base = `${prefix}.${username}`
+  // ⚠ COUPLING: this writes Amplify v6's localStorage token-store format directly
+  // (`CognitoIdentityServiceProvider.<clientId>.<user>.{idToken,accessToken,
+  // refreshToken,clockDrift}` + `.LastAuthUser`) so the swap is a CONSISTENT
+  // same-tab replace — every surface that reads Amplify (not just authService)
+  // sees the persona. It BREAKS if Amplify changes this storage format on upgrade;
+  // if so, update the key shape HERE. Dev-only — blast radius is the persona
+  // switcher only, never prod or real auth.
   clearAmplifyKeys()
   localStorage.setItem(`${prefix}.LastAuthUser`, username)
   localStorage.setItem(`${base}.idToken`, mint.idToken)
