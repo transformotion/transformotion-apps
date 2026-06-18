@@ -19,6 +19,27 @@ export async function getUserProfile(idToken: string): Promise<UserProfile> {
   return response.json() as Promise<UserProfile>;
 }
 
+/**
+ * Update the caller's own profile display name via the existing
+ * PUT /api/user/preferences capability (the handler accepts a top-level
+ * `displayName`). Runtime-only client call to an existing server route — no
+ * contract change. Used by the dev persona switcher's inline name edit.
+ */
+export async function updateDisplayName(idToken: string, displayName: string): Promise<void> {
+  const response = await fetch(controlPlaneUrl('/api/user/preferences'), {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${idToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ displayName }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`PUT /api/user/preferences (displayName) failed: ${response.status}`);
+  }
+}
+
 export async function updateUserPreferences(
   idToken: string,
   preferences: Partial<UserPreferences>,
