@@ -618,6 +618,11 @@ export class LaunchpadControlPlaneStack extends cdk.Stack {
           STAGE: stage,
           USER_POOL_ID: userPoolId,
           LAUNCHPAD_CLIENT_ID: launchpadAppClientId,
+          // Cross-app persona (#479): mint a session per app-client so a switch
+          // carries into Stock Analyser / Budget Tracker. AdminInitiateAuth is
+          // already pool-scoped in the IAM grant below — covers all three clients.
+          STOCK_CLIENT_ID: stockAnalyserAppClientId,
+          BUDGET_CLIENT_ID: budgetTrackerAppClientId,
         },
         bundling: { externalModules: ['@aws-sdk/*'], minify: true, sourceMap: false, forceDockerBundling: false },
       });
