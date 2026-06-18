@@ -41,8 +41,24 @@ const PERSONA_EMAIL: Record<string, string> = {
   jordan: 'jordan.diaz@example.com',
 };
 
+// CORS: this is a Lambda-proxy integration, so the API Gateway
+// `defaultCorsPreflightOptions` only covers the OPTIONS preflight — the actual
+// response must carry `Access-Control-Allow-Origin` itself or the browser blocks
+// the body (a 200 reads as a CORS failure, surfacing as the seam's "could not
+// reach" error). Mirror @transformotion/lambda-middleware's CORS_HEADERS (the
+// shared wildcard the other control-plane handlers use) so the in-browser mint
+// works. #477.
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'Content-Type,Authorization,X-Account-Id',
+};
+
 function resp(statusCode: number, body: unknown): APIGatewayProxyResult {
-  return { statusCode, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) };
+  return {
+    statusCode,
+    headers: { 'content-type': 'application/json', ...CORS_HEADERS },
+    body: JSON.stringify(body),
+  };
 }
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
