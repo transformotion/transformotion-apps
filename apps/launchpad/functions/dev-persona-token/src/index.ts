@@ -27,6 +27,16 @@ const STAGE = process.env.STAGE ?? '';
 const USER_POOL_ID = process.env.USER_POOL_ID ?? '';
 const CLIENT_ID = process.env.LAUNCHPAD_CLIENT_ID ?? '';
 
+// Cross-app personas (#479): a switch must carry into Stock Analyser / Budget
+// Tracker too, each of which authenticates against its OWN app-client in the
+// same pool. We mint a session per app-client so the switcher can swap every
+// app's token store. All three clients have ADMIN_USER_PASSWORD_AUTH enabled.
+const APP_CLIENTS: Array<{ app: string; clientId: string }> = [
+  { app: 'launchpad', clientId: CLIENT_ID },
+  { app: 'stock-analyser', clientId: process.env.STOCK_CLIENT_ID ?? '' },
+  { app: 'budget-tracker', clientId: process.env.BUDGET_CLIENT_ID ?? '' },
+].filter((c) => c.clientId !== '');
+
 const cognito = new CognitoIdentityProviderClient({});
 const secrets = new SecretsManagerClient({});
 
@@ -84,22 +94,29 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
   if (!password) return resp(500, { error: 'Empty persona password secret.' });
 
   try {
-    const auth = await cognito.send(new AdminInitiateAuthCommand({
-      UserPoolId: USER_POOL_ID,
-      ClientId: CLIENT_ID,
-      AuthFlow: 'ADMIN_USER_PASSWORD_AUTH',
-      AuthParameters: { USERNAME: email, PASSWORD: password },
-    }));
-    const r = auth.AuthenticationResult;
-    if (!r) return resp(502, { error: 'No authentication result (unexpected challenge).' });
-    return resp(200, {
-      personaId,
-      email,
-      idToken: r.IdToken,
-      accessToken: r.AccessToken,
-      refreshToken: r.RefreshToken,
-      expiresIn: r.ExpiresIn,
-    });
+    // Mint one session per app-client so the switcher can swap every app's token
+    // store (cross-app persona, #479). Each client lives in the same pool; the
+    // persona's per-app entitlement still gates what they can do in each app.
+    const sessions = [];
+    for (const { app, clientId } of APP_CLIENTS) {
+      const auth = await cognito.send(new AdminInitiateAuthCommand({
+        UserPoolId: USER_POOL_ID,
+        ClientId: clientId,
+        AuthFlow: 'ADMIN_USER_PASSWORD_AUTH',
+        AuthParameters: { USERNAME: email, PASSWORD: password },
+      }));
+      const r = auth.AuthenticationResult;
+      if (!r) return resp(502, { error: `No authentication result for ${app} (unexpected challenge).` });
+      sessions.push({
+        app,
+        clientId,
+        idToken: r.IdToken,
+        accessToken: r.AccessToken,
+        refreshToken: r.RefreshToken,
+        expiresIn: r.ExpiresIn,
+      });
+    }
+    return resp(200, { personaId, email, sessions });
   } catch (err) {
     return resp(502, { error: `Mint failed: ${(err as { name?: string }).name ?? 'error'}` });
   }

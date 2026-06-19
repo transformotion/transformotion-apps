@@ -43,7 +43,10 @@ interface Snapshot {
   identity: ImpersonatorIdentity
 }
 
-interface MintResult {
+/** One minted app-client session from the B2 endpoint (cross-app, #479). */
+interface MintSession {
+  app: string
+  clientId: string
   idToken: string
   accessToken: string
   refreshToken: string
@@ -51,18 +54,14 @@ interface MintResult {
 
 export type ImpersonationOutcome = { ok: true } | { ok: false; error: string }
 
+// Root of EVERY Amplify v6 Cognito token-store key, across all app-clients
+// (Launchpad, Stock Analyser, Budget Tracker) — they share this origin's
+// localStorage, namespaced per clientId. Cross-app impersonation (#479) swaps
+// and snapshots ALL of them, so a persona carries into SA/BT, not just LP.
+const COGNITO_ROOT = 'CognitoIdentityServiceProvider.'
+
 function hasWindow(): boolean {
   return typeof window !== 'undefined'
-}
-
-function cognitoClientId(): string {
-  // Same client id the CognitoAuthService configures Amplify with.
-  return process.env.NEXT_PUBLIC_COGNITO_CLIENT_ID ?? ''
-}
-
-/** Prefix of every Amplify v6 Cognito token-store key for this app client. */
-function amplifyPrefix(): string {
-  return `CognitoIdentityServiceProvider.${cognitoClientId()}`
 }
 
 /** Decode a JWT payload (browser-safe base64url). Returns {} on any failure. */
@@ -82,13 +81,12 @@ function decodeJwt(token: string): Record<string, unknown> {
   }
 }
 
-/** Read all Amplify token-store entries for this client (the live session). */
+/** Read ALL Amplify token-store entries across every app-client (the live sessions). */
 function readAmplifyKeys(): Record<string, string> {
-  const prefix = amplifyPrefix()
   const out: Record<string, string> = {}
   for (let i = 0; i < localStorage.length; i++) {
     const k = localStorage.key(i)
-    if (k && k.startsWith(prefix)) {
+    if (k && k.startsWith(COGNITO_ROOT)) {
       const v = localStorage.getItem(k)
       if (v !== null) out[k] = v
     }
@@ -96,12 +94,16 @@ function readAmplifyKeys(): Record<string, string> {
   return out
 }
 
-/** Remove all Amplify token-store entries for this client. */
+/** Remove ALL Amplify token-store entries across every app-client. */
 function clearAmplifyKeys(): void {
-  const prefix = amplifyPrefix()
-  Object.keys(localStorage)
-    .filter((k) => k.startsWith(prefix))
-    .forEach((k) => localStorage.removeItem(k))
+  // Collect first (removing during the index walk would shift indices). Uses the
+  // canonical indexed Storage API, matching readAmplifyKeys.
+  const toRemove: string[] = []
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i)
+    if (k && k.startsWith(COGNITO_ROOT)) toRemove.push(k)
+  }
+  toRemove.forEach((k) => localStorage.removeItem(k))
 }
 
 /** Write a verbatim Amplify key set back into the token store. */
@@ -120,33 +122,45 @@ function identityFromIdToken(idToken: string): ImpersonatorIdentity {
 }
 
 /**
- * Replace the Amplify token store with a minted persona session. Cognito (this
- * pool) uses an email alias, so the access token's `username` equals the sub;
- * Amplify keys are namespaced by that username with `LastAuthUser` pointing at it.
+ * Write one minted app-client session into its Amplify token-store namespace.
+ * Cognito (this pool) uses an email alias, so the access token's `username`
+ * equals the sub; Amplify keys are namespaced by clientId then username, with
+ * `LastAuthUser` pointing at it.
+ *
+ * ⚠ COUPLING: this writes Amplify v6's localStorage token-store format directly
+ * (`CognitoIdentityServiceProvider.<clientId>.<user>.{idToken,accessToken,
+ * refreshToken,clockDrift}` + `.LastAuthUser`) so the swap is a CONSISTENT
+ * same-tab replace — every surface that reads Amplify (not just authService)
+ * sees the persona. It BREAKS if Amplify changes this storage format on upgrade;
+ * if so, update the key shape HERE. Dev-only — blast radius is the persona
+ * switcher only, never prod or real auth.
  */
-function writePersonaSession(mint: MintResult): void {
-  const access = decodeJwt(mint.accessToken)
+function writeSession(session: MintSession): void {
+  const access = decodeJwt(session.accessToken)
   const username =
     (access['username'] as string) ??
     (access['sub'] as string) ??
-    (decodeJwt(mint.idToken)['cognito:username'] as string) ??
-    (decodeJwt(mint.idToken)['sub'] as string) ??
+    (decodeJwt(session.idToken)['cognito:username'] as string) ??
+    (decodeJwt(session.idToken)['sub'] as string) ??
     ''
-  const prefix = amplifyPrefix()
+  const prefix = `${COGNITO_ROOT}${session.clientId}`
   const base = `${prefix}.${username}`
-  // ⚠ COUPLING: this writes Amplify v6's localStorage token-store format directly
-  // (`CognitoIdentityServiceProvider.<clientId>.<user>.{idToken,accessToken,
-  // refreshToken,clockDrift}` + `.LastAuthUser`) so the swap is a CONSISTENT
-  // same-tab replace — every surface that reads Amplify (not just authService)
-  // sees the persona. It BREAKS if Amplify changes this storage format on upgrade;
-  // if so, update the key shape HERE. Dev-only — blast radius is the persona
-  // switcher only, never prod or real auth.
-  clearAmplifyKeys()
   localStorage.setItem(`${prefix}.LastAuthUser`, username)
-  localStorage.setItem(`${base}.idToken`, mint.idToken)
-  localStorage.setItem(`${base}.accessToken`, mint.accessToken)
-  localStorage.setItem(`${base}.refreshToken`, mint.refreshToken)
+  localStorage.setItem(`${base}.idToken`, session.idToken)
+  localStorage.setItem(`${base}.accessToken`, session.accessToken)
+  localStorage.setItem(`${base}.refreshToken`, session.refreshToken)
   localStorage.setItem(`${base}.clockDrift`, '0')
+}
+
+/**
+ * Replace EVERY app-client's token store with the minted persona sessions, so
+ * the persona is active in Launchpad AND Stock Analyser / Budget Tracker on the
+ * next navigation (#479). Clears all namespaces first (the snapshot already holds
+ * the tester's originals) so no stale tester session lingers in any app.
+ */
+function writePersonaSessions(sessions: MintSession[]): void {
+  clearAmplifyKeys()
+  for (const session of sessions) writeSession(session)
 }
 
 function readSnapshot(): Snapshot | null {
@@ -183,7 +197,7 @@ export function getImpersonator(): ImpersonatorIdentity | null {
 export async function startImpersonation(personaId: string): Promise<ImpersonationOutcome> {
   if (!hasWindow()) return { ok: false, error: 'Unavailable.' }
 
-  let mint: MintResult
+  let sessions: MintSession[]
   try {
     const res = await fetch(controlPlaneUrl('/api/dev/persona-token'), {
       method: 'POST',
@@ -200,16 +214,19 @@ export async function startImpersonation(personaId: string): Promise<Impersonati
             : `Mint failed (${res.status}).`
       return { ok: false, error: msg }
     }
-    const body = (await res.json()) as Partial<MintResult>
-    if (!body.idToken || !body.accessToken || !body.refreshToken) {
-      return { ok: false, error: 'Mint returned an incomplete session.' }
+    const body = (await res.json()) as { sessions?: MintSession[] }
+    sessions = (body.sessions ?? []).filter(
+      (s) => s && s.clientId && s.idToken && s.accessToken && s.refreshToken,
+    )
+    if (sessions.length === 0) {
+      return { ok: false, error: 'Mint returned no usable sessions.' }
     }
-    mint = { idToken: body.idToken, accessToken: body.accessToken, refreshToken: body.refreshToken }
   } catch {
     return { ok: false, error: 'Could not reach the persona mint endpoint.' }
   }
 
-  // Capture the tester's ORIGINAL session ONCE — never overwrite across hops.
+  // Capture the tester's ORIGINAL sessions (all app-clients) ONCE — never
+  // overwrite across hops, so "switch back" returns to the FIRST tester.
   if (!isImpersonating()) {
     const amplifyKeys = readAmplifyKeys()
     const idTokenEntry = Object.entries(amplifyKeys).find(([k]) => k.endsWith('.idToken'))
@@ -218,7 +235,7 @@ export async function startImpersonation(personaId: string): Promise<Impersonati
     localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(snapshot))
   }
 
-  writePersonaSession(mint)
+  writePersonaSessions(sessions)
   window.location.reload()
   return { ok: true }
 }
