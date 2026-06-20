@@ -35,7 +35,6 @@ new LaunchpadControlPlaneStack(app, 'TransformotionDev-LaunchpadControlPlane', {
   invitationsTableName:     devAuth.invitationsTableName,
   rateLimitsTableName:      devAuth.rateLimitsTableName,
   appAdminGrantsTableName:  devAuth.appAdminGrantsTableName,
-  fromEmail:                'noreply@transformotion.com.au',
   appUrl:                   'https://dev.apps.transformotion.com.au',
   description:              'Transformotion Apps - Dev Launchpad control plane',
 });
@@ -62,7 +61,6 @@ new LaunchpadControlPlaneStack(app, 'TransformotionProd-LaunchpadControlPlane', 
   invitationsTableName:     prodAuth.invitationsTableName,
   rateLimitsTableName:      prodAuth.rateLimitsTableName,
   appAdminGrantsTableName:  prodAuth.appAdminGrantsTableName,
-  fromEmail:                'noreply@transformotion.com.au',
   appUrl:                   'https://apps.transformotion.com.au',
   description:              'Transformotion Apps - Prod Launchpad control plane',
 });
