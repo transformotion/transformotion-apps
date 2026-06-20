@@ -22,6 +22,8 @@ import type {
   InvitationBundle,
   InvitationGrant,
 } from '@transformotion/contracts/launchpad/invitations';
+import { SESv2Client, SendEmailCommand } from '@aws-sdk/client-sesv2';
+import { buildRedemptionEmail, appLabel, type EmailGrant } from './email';
 import { randomUUID } from 'crypto';
 
 // M11 Chunk 3 — invitation-bundle CREATION (POST /api/invitations/bundles).
@@ -45,6 +47,15 @@ export interface BundleCreationDeps {
   ddb: DynamoDBDocumentClient;
   invitationsTable: string;
   accountsTable: string;
+  // ── Redemption-email send seam (4b / #471) — all OPTIONAL ────────────────
+  // When configured, bundle creation also sends the invitee the redemption email
+  // carrying the grants preview + bearer link. Absent (e.g. in unit tests) → the
+  // send is skipped; bundle creation is unaffected either way.
+  ses?: SESv2Client | null;
+  /** Verified SES from-address (stage-derived: noreply-dev@ in dev, noreply@ in prod). */
+  fromEmail?: string;
+  /** App origin for the bearer link, e.g. https://dev.apps.transformotion.com.au. */
+  appUrl?: string;
 }
 
 export function createHandler(deps: BundleCreationDeps) {
@@ -76,6 +87,9 @@ export function createHandler(deps: BundleCreationDeps) {
 
     const decisions: GrantAuthorizationDecision[] = [];
     const authorized: InvitationGrant[] = [];
+    // Parallel preview of the authorized grants for the redemption email (#471):
+    // account-invite → the account name; app-grant → the app label.
+    const emailGrants: EmailGrant[] = [];
 
     for (let index = 0; index < grants.length; index++) {
       const g = grants[index];
@@ -100,7 +114,7 @@ export function createHandler(deps: BundleCreationDeps) {
           continue;
         }
         const acct = await deps.ddb.send(new GetCommand({ TableName: deps.accountsTable, Key: { accountId: g.accountId } }));
-        const account = acct.Item as { appSlug?: string } | undefined;
+        const account = acct.Item as { appSlug?: string; name?: string } | undefined;
         if (!account) {
           decisions.push({ index, allowed: false, reason: 'That account no longer exists.' });
           continue;
@@ -110,10 +124,12 @@ export function createHandler(deps: BundleCreationDeps) {
           continue;
         }
         authorized.push({ grantId: randomUUID(), kind: 'account-invite', appSlug: appSlug as EntitledAppSlug, accountId: g.accountId, role: g.role as AccountRole });
+        emailGrants.push({ kind: 'account-invite', target: account.name ?? 'an existing account' });
         decisions.push({ index, allowed: true, reason: 'Authorized.' });
       } else if (g.kind === 'app-grant') {
         // Roleless, account-less: person + app only.
         authorized.push({ grantId: randomUUID(), kind: 'app-grant', appSlug: appSlug as EntitledAppSlug });
+        emailGrants.push({ kind: 'app-grant', target: appLabel(appSlug) });
         decisions.push({ index, allowed: true, reason: 'Authorized.' });
       } else {
         decisions.push({ index, allowed: false, reason: `Unsupported grant kind '${g.kind ?? ''}'.` });
@@ -146,8 +162,41 @@ export function createHandler(deps: BundleCreationDeps) {
       Item: { invitationId: bundleId, ...bundle },
     }));
 
+    // Send seam (4b / #471): email the invitee the grants preview + bearer link.
+    // The persisted bundle is the source of truth — a failed send NEVER fails
+    // creation (the link still works; resend is a separate concern, not built now).
+    await sendRedemptionEmail(inviteeEmail, bundleId, emailGrants);
+
     const response: CreateInvitationBundleResponse = { bundle, decisions };
     return ok(response);
+  }
+
+  // The redemption-email send seam. No-op unless SES + from-address + app URL are
+  // wired (so unit tests that omit them skip the send). Sandbox SES only delivers
+  // to verified recipients; arbitrary-invitee delivery needs prod access (M17).
+  async function sendRedemptionEmail(toEmail: string, bundleId: string, grants: EmailGrant[]) {
+    if (!deps.ses || !deps.fromEmail || !deps.appUrl || grants.length === 0) return;
+    try {
+      const redeemUrl = `${deps.appUrl.replace(/\/+$/, '')}/redeem?bundle=${encodeURIComponent(bundleId)}`;
+      const { subject, html, text } = buildRedemptionEmail({ grants, redeemUrl });
+      await deps.ses.send(new SendEmailCommand({
+        FromEmailAddress: deps.fromEmail,
+        Destination: { ToAddresses: [toEmail] },
+        Content: {
+          Simple: {
+            Subject: { Data: subject, Charset: 'UTF-8' },
+            Body: {
+              Html: { Data: html, Charset: 'UTF-8' },
+              Text: { Data: text, Charset: 'UTF-8' },
+            },
+          },
+        },
+      }));
+    } catch (err) {
+      // Swallow: the bundle exists and the link works. In sandbox an unverified
+      // recipient throws here — expected until prod SES access (M17).
+      console.error('redemption-email-send-error', { bundleId, name: (err as { name?: string }).name });
+    }
   }
 
   // GET /api/invitations/bundles — list bundles (Redemption Demo inbox / admin
@@ -225,4 +274,9 @@ export const handler = createHandler({
   ddb: DynamoDBDocumentClient.from(new DynamoDBClient({})),
   invitationsTable: process.env.INVITATIONS_TABLE!,
   accountsTable: process.env.ACCOUNTS_TABLE!,
+  // Redemption-email send seam (4b / #471). FROM_EMAIL is stage-derived in the
+  // stack; APP_URL builds the /redeem?bundle=<id> bearer link.
+  ses: new SESv2Client({}),
+  fromEmail: process.env.FROM_EMAIL,
+  appUrl: process.env.APP_URL,
 });

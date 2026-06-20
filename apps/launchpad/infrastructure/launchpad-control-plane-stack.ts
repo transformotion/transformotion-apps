@@ -22,7 +22,6 @@ export interface LaunchpadControlPlaneStackProps extends cdk.StackProps {
   invitationsTableName: string;
   rateLimitsTableName: string;
   appAdminGrantsTableName: string;
-  fromEmail: string;
   appUrl: string;
 }
 
@@ -51,12 +50,19 @@ export class LaunchpadControlPlaneStack extends cdk.Stack {
       invitationsTableName,
       rateLimitsTableName,
       appAdminGrantsTableName,
-      fromEmail,
       appUrl,
     } = props;
     const registry = loadAppRegistry();
     const appSlugs = registry.apps.map(a => a.slug);
     const corsAllowOrigin = appUrl.replace(/\/*$/, '');
+
+    // Stage-derived sender so dev and prod can NEVER be confused (owner
+    // foolproofing): dev → noreply-dev@, prod → noreply@. Derived from the same
+    // `stage` that gates everything else — there is no separate literal to drift.
+    // Both forms are covered by the verified transformotion.com.au SES domain
+    // identity (it covers every @transformotion.com.au address). Prod sends
+    // through prod SES, which is its own setup at M17 (#454).
+    const redemptionFromAddress = `noreply${stage === 'prod' ? '' : `-${stage}`}@transformotion.com.au`;
     const corsAllowHeaders = ['Content-Type', 'Authorization', 'X-Account-Id'];
     const corsAllowMethods = ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'];
 
@@ -128,7 +134,7 @@ export class LaunchpadControlPlaneStack extends cdk.Stack {
       environment: {
         RATE_LIMIT_TABLE: rateLimitTable.tableName,
         USER_POOL_ID: userPoolId,
-        FROM_EMAIL: fromEmail,
+        FROM_EMAIL: redemptionFromAddress,
         APP_URL: appUrl,
       },
       bundling: {
@@ -438,6 +444,10 @@ export class LaunchpadControlPlaneStack extends cdk.Stack {
       environment: {
         INVITATIONS_TABLE: invitationsTable.tableName,
         ACCOUNTS_TABLE: accountsTable.tableName,
+        // Redemption-email send seam (4b / #471): the invitee gets the grants
+        // preview + /redeem?bundle=<id> bearer link on bundle creation.
+        FROM_EMAIL: redemptionFromAddress,
+        APP_URL: appUrl,
       },
       bundling: {
         externalModules: ['@aws-sdk/*'],
@@ -448,6 +458,12 @@ export class LaunchpadControlPlaneStack extends cdk.Stack {
 
     invitationsTable.grantReadWriteData(invitationBundlesFn); // write the bundle
     accountsTable.grantReadData(invitationBundlesFn);          // account-invite: validate account/app
+    // Send the redemption email (4b / #471). SES SendEmail can't be ARN-scoped to
+    // a from-identity without conditions; mirror forgot-provider's grant.
+    invitationBundlesFn.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['ses:SendEmail', 'sesv2:SendEmail'],
+      resources: ['*'],
+    }));
     // No Cognito grant: sender authorization (site-admin / app-admin) reads the
     // token's cognito:groups — no AWS calls. Grants are CONFERRED at redemption (A5).
 

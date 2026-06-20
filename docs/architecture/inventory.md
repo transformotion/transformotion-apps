@@ -108,6 +108,25 @@ read-only access plus env fallback values; provider secrets and execution remain
 app-owned. The Launchpad Settings UI exposes this provider/model configuration
 to site-admin users only.
 
+### Transactional email (SES)
+
+`launchpad-forgot-provider-{stage}` and `launchpad-invitation-bundles-{stage}`
+send transactional email via SES v2 (`ses:SendEmail`). The redemption invitation
+(`POST /api/invitations/bundles`, M11 4b / #471) carries the grants preview +
+`/redeem?bundle=<id>` bearer link, because the auth-first flow has no pre-auth
+in-app preview; a failed send never fails bundle creation.
+
+- **From-address is stage-derived** in `LaunchpadControlPlaneStack`
+  (`noreply${stage==='prod' ? '' : '-'+stage}@transformotion.com.au`) → dev sends
+  as `noreply-dev@`, prod as `noreply@`. Derived from the stack `stage`, so dev
+  and prod cannot be confused and there is no separate literal to drift.
+- **The SES domain identity `transformotion.com.au` is verified in the dev
+  account but is NOT in CDK/IaC** — it was created out-of-band (EasyDKIM, 3 CNAMEs
+  live; DkimStatus SUCCESS). This is known drift (cf. #263); a deliberate choice
+  to leave it unmanaged rather than risk a conflicting CFN create. Prod SES is a
+  separate setup at M17 (#454). The dev account is in the **SES sandbox**, so
+  sends only reach verified recipients until production access (M17).
+
 ## Stock Analyser
 
 Stock Analyser owns:
