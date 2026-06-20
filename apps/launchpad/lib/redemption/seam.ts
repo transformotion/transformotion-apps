@@ -21,6 +21,28 @@ import type { AuthenticatedIdentity, IdpProvider } from '@transformotion/contrac
 /** Key the callback reads to know it should return to a redemption, not `/`. */
 export const REDEEM_RETURN_KEY = 'launchpad.redeem-return.v1'
 
+/**
+ * Consume the stashed redeem-return after the Hosted-UI round-trip: returns
+ * `/redeem?bundle=<id>` when a redemption sign-in is in flight (clearing the key
+ * so it is used once), else `/` (normal sign-in → Launchpad home).
+ *
+ * ⚠ DESTRUCTIVE — it removeItem's the key, so it must be invoked exactly once per
+ * callback. The callback guards its two completion triggers (Hub event +
+ * getCurrentUser fallback) so the key cannot be double-consumed (#483).
+ */
+export function takeRedeemReturnTarget(): string {
+  try {
+    const bundleId = window.sessionStorage.getItem(REDEEM_RETURN_KEY)
+    if (bundleId) {
+      window.sessionStorage.removeItem(REDEEM_RETURN_KEY)
+      return `/redeem?bundle=${encodeURIComponent(bundleId)}`
+    }
+  } catch {
+    /* no sessionStorage — fall through to home */
+  }
+  return '/'
+}
+
 /** Decode a JWT payload (no verification — claims are read for display only). */
 function parseJwtPayload(token: string): Record<string, unknown> {
   try {
