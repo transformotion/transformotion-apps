@@ -3,25 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Hub } from 'aws-amplify/utils'
 import { authService } from '@/lib/services/auth'
-import { REDEEM_RETURN_KEY } from '@/lib/redemption/seam'
-
-/**
- * Where to go after a successful callback. A redemption sign-in (A4) stashes the
- * bundleId so the reused callback returns to /redeem?bundle=<id> instead of `/`
- * (consumed once). Everything else lands on the Launchpad home.
- */
-function postCallbackTarget(): string {
-  try {
-    const bundleId = sessionStorage.getItem(REDEEM_RETURN_KEY)
-    if (bundleId) {
-      sessionStorage.removeItem(REDEEM_RETURN_KEY)
-      return `/redeem?bundle=${encodeURIComponent(bundleId)}`
-    }
-  } catch {
-    /* no sessionStorage — fall through to home */
-  }
-  return '/'
-}
+import { takeRedeemReturnTarget } from '@/lib/redemption/seam'
 
 function sanitizeAmplifyOAuthState() {
   const keysToFix: string[] = []
@@ -38,10 +20,23 @@ export default function CallbackPage() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    // OAuth completion can surface via TWO triggers — the Hub 'signInWithRedirect'
+    // event AND the getCurrentUser() fallback (for when the Hub event fired before
+    // this listener attached). Navigate EXACTLY ONCE: takePostCallbackTarget()
+    // destructively consumes the redeem-return key, so a double-invoke would let
+    // the second read see an empty key and override the redemption return with `/`.
+    // The guard makes the post-callback navigation idempotent. (#483)
+    let navigated = false
+    const go = () => {
+      if (navigated) return
+      navigated = true
+      sanitizeAmplifyOAuthState()
+      window.location.replace(takeRedeemReturnTarget())
+    }
+
     const unsubscribe = Hub.listen('auth', ({ payload }) => {
       if (payload.event === 'signInWithRedirect') {
-        sanitizeAmplifyOAuthState()
-        window.location.replace(postCallbackTarget())
+        go()
       }
       if (payload.event === 'signInWithRedirect_failure') {
         setError('Sign in failed. Please try again.')
@@ -49,9 +44,9 @@ export default function CallbackPage() {
     })
 
     // If the Hub event already fired before the listener was set up, check
-    // whether Amplify already has an authenticated user.
+    // whether Amplify already has an authenticated user — same single navigation.
     authService.getCurrentUser().then((user) => {
-      if (user) window.location.replace(postCallbackTarget())
+      if (user) go()
     }).catch(() => {})
 
     return unsubscribe
