@@ -10,6 +10,7 @@ import { RulesTab } from "./tabs/rules-tab"
 import { ReviewTab } from "./tabs/review-tab"
 import { SettingsTab } from "./tabs/settings-tab"
 import { useBudgetStore } from "@/stores/budget-tracker/use-budget-store"
+import { idpHintToProvider } from "@transformotion/auth-client"
 import { useAuthStore } from "@/stores/auth/use-auth-store"
 import { authService } from "@/lib/services/auth"
 import { AccountGate } from "@/components/providers/account-gate"
@@ -117,7 +118,16 @@ export function BudgetTrackerApp({
 
   useEffect(() => {
     if (authIsInitialized && !isAuthenticated) {
-      authService.signInWithRedirect()
+      // Cross-app SSO hint (#490): the launchpad appends ?idp=<provider> when it
+      // launches this app for a FEDERATED user. Passing it as the Hosted-UI
+      // `provider` re-federates silently instead of showing the chooser. A native
+      // user arrives with no hint → undefined → normal silent local-session SSO.
+      // Unknown hint → undefined → chooser (fail-open).
+      const hint = typeof window !== 'undefined'
+        ? new URLSearchParams(window.location.search).get('idp')
+        : null
+      const provider = idpHintToProvider(hint)
+      authService.signInWithRedirect(provider ? { provider } : undefined)
     }
   }, [isAuthenticated, authIsInitialized])
 

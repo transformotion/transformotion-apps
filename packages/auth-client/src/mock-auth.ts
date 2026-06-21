@@ -1,4 +1,4 @@
-import type { AuthService, User, Account, AuthSession, AuthTokens, SignInCredentials, SignUpCredentials } from './index'
+import type { AuthService, User, Account, AuthSession, AuthTokens, SignInCredentials, SignUpCredentials, FederatedProvider } from './index'
 
 const STORAGE_KEY = 'transformotion-auth-session'
 
@@ -109,7 +109,7 @@ export class MockAuthService implements AuthService {
     this.notifyListeners()
   }
 
-  async signInWithRedirect(_options?: { provider?: string }): Promise<void> {
+  async signInWithRedirect(_options?: { provider?: FederatedProvider }): Promise<void> {
     // Mirrors Cognito's full-page-navigation UX: seed session then reload so
     // the calling page (sign-in) re-mounts as authenticated.
     this.session = {

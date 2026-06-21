@@ -6,7 +6,7 @@ The platform uses AWS Cognito as the single source of identity. Authentication i
 
 A pre-token generation Lambda injects structured claims into every issued token. API handlers and the launchpad consume these claims rather than raw group strings. This means authorization logic is centralised in the token, not duplicated across handlers.
 
-Social identity providers (Google, Facebook, Microsoft) are wired at the Cognito layer and offered by ALL three app-clients (launchpad, Stock Analyser, Budget Tracker). Each app authenticates via its own client; the shared Hosted-UI domain SSO cookie then federates a social-IdP user seamlessly from app to app. All clients must offer the social IdPs for that cross-app SSO to work for federated users (#488).
+Social identity providers (Google, Facebook, Microsoft) are wired at the Cognito layer and offered by ALL three app-clients (launchpad, Stock Analyser, Budget Tracker). Each app authenticates via its own client. Native users cross between apps silently via the reusable Cognito session; federated users need a per-app re-federation, which the Launchpad triggers by passing a provider hint (#490). See [App clients](#app-clients) → "Federated cross-app SSO".
 
 See [cdk.md](./cdk.md) for CDK stack names. See [data.md](./data.md) for account and membership table schemas.
 
@@ -86,7 +86,7 @@ claims. There is no `site_admin` claim and no `app_admin` claim.)
 
 ## App clients
 
-Three distinct Cognito app clients, one per deployable app. All share the same user pool; SSO works via the shared Hosted UI domain session cookie.
+Three distinct Cognito app clients, one per deployable app. All share the same user pool. Cross-app SSO differs by sign-in type: a **native** (Cognito directory) user has a reusable Hosted-UI session, so crossing from one app-client to another issues tokens silently. A **federated** (Google/Facebook/Microsoft) user does NOT — Cognito's login-session cookie is keyed to the (client, provider) it was set with, and a different app-client's `/authorize` shows the chooser unless the request names the IdP (`identity_provider=<X>`, which "redirects silently to your IdP"). See [Federated cross-app SSO](#federated-cross-app-sso-provider-hint) (#490).
 
 | Client | Callback URLs | Logout URLs | Identity providers | CDK logical ID |
 |---|---|---|---|---|
@@ -94,7 +94,35 @@ Three distinct Cognito app clients, one per deployable app. All share the same u
 | `StockAnalyserAppClient` | `{host}/stock-analyser/callback` | `{host}/signed-out/` | Cognito, Google, Facebook, Microsoft where configured | `StockAnalyserAppClient` in `LaunchpadAuthStack` |
 | `BudgetTrackerAppClient` | `{host}/budget-tracker/callback` | `{host}/signed-out/` | Cognito, Google, Facebook, Microsoft where configured | `BudgetTrackerAppClient` in `LaunchpadAuthStack` |
 
-Social sign-in is enabled on ALL THREE app-clients. The social identity session established at one client propagates to the others via the shared Hosted-UI domain SSO cookie — but each client must list the social IdPs in its `SupportedIdentityProviders`, or the Hosted UI cannot issue that client's tokens for a federated user (#488). The earlier launchpad-only configuration left SA/BT unable to admit federated users.
+Social sign-in is enabled on ALL THREE app-clients (#488): each client must list the
+social IdPs in its `SupportedIdentityProviders`, or the Hosted UI cannot issue that
+client's tokens for a federated user at all (the earlier launchpad-only config left
+SA/BT unable to admit federated users). Listing the IdPs is necessary but **not
+sufficient** for *silent* cross-app entry — see below.
+
+### Federated cross-app SSO (provider hint)
+
+For a **native** user, crossing Launchpad → app SSOs silently: the user pool holds a
+reusable Cognito session and the app's `/authorize` mints tokens directly, no IdP hop.
+
+For a **federated** user there is no reusable local session — the authentication is the
+IdP federation. Cognito's login-session cookie is scoped to the (client, provider) it
+was set with, so a *different* app-client's `/authorize` does not reuse it, and because
+the app's `signInWithRedirect` names no IdP, Cognito falls back to the managed-login
+chooser (per the [AWS docs](https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-user-pools-identity-federation.html):
+"if you provide an `identity_provider` parameter… it redirects silently to your IdP…
+otherwise, it redirects to the managed login Login endpoint").
+
+So the Launchpad passes a **provider hint** on cross-app launch (#490): it reads which
+IdP the user federated with from the idToken `identities` claim and appends
+`?idp=<google|facebook|microsoft>` to the app URL. The app maps the hint to the Amplify
+`signInWithRedirect` provider (`identity_provider=<X>`) and re-federates silently — the
+IdP already has a session, so there is no prompt. The mapping is shared in
+`@transformotion/auth-client` (`providerHintFromIdToken`, `idpHintToProvider`) so all
+three apps agree. **Native users carry no hint** (no `identities` claim) and keep their
+silent local-session SSO; an unknown/absent hint maps to no provider and falls back to
+the chooser (fail-open). Microsoft is a **custom** OIDC provider, so the hint maps to
+`{ custom: 'Microsoft' }` (a bare string would not emit `identity_provider=Microsoft`).
 
 `LaunchpadAuthStack` creates Launchpad, Stock Analyser, and Budget Tracker app
 clients and emits `LaunchpadAppClientId`, `StockAnalyserAppClientId`, and
