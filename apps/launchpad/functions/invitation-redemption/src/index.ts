@@ -138,6 +138,37 @@ export function createHandler(deps: RedemptionDeps) {
     }
   }
 
+  // #496 — make the redeeming invitee a first-class directory entity. Redemption
+  // historically created groups + memberships but NO launchpad-users row, so a
+  // federated redeemer who never edited a preference was invisible in admin Users &
+  // Access. This is the SAFETY NET for the /auth/setup first-auth bootstrap (B): it
+  // writes the IDENTICAL canonical bootstrap row to account-provisioning, MINUS
+  // displayName (resolved from the token / set explicitly later, per #494). Keep the
+  // shape in lockstep with account-provisioning's handleSetup. Idempotent: an existing
+  // row trips attribute_not_exists and is a no-op.
+  async function ensureUserRow(userId: string, email: string): Promise<void> {
+    const now = new Date().toISOString();
+    try {
+      await deps.ddb.send(new PutCommand({
+        TableName: deps.usersTable,
+        Item: {
+          userId,
+          email,
+          emailLower: email.toLowerCase(),
+          status: 'active',
+          preferences: { notificationsEnabled: false },
+          profileComplete: false,
+          activeAccounts: {},
+          createdAt: now,
+          updatedAt: now,
+        },
+        ConditionExpression: 'attribute_not_exists(userId)',
+      }));
+    } catch (err) {
+      if ((err as { name?: string }).name !== 'ConditionalCheckFailedException') throw err;
+    }
+  }
+
   // Apply a bundle's grants FOR `redeemer`. Shared by the NORMAL (caller redeems
   // their own bundle) and the DEV-ONLY impersonation paths — the per-grant effect
   // is identical; only WHO redeems and which guards run beforehand differ.
@@ -247,6 +278,7 @@ export function createHandler(deps: RedemptionDeps) {
     // (duplicate guards in applyBundle) are UNCHANGED; the strict same-email match
     // was REMOVED to conform to the m16.7.0 redemption-experience contract.
     await assertNotDisabled(auth.userId);
+    await ensureUserRow(auth.userId, auth.email); // #496 — first-class directory entity
     const results = await applyBundle(bundle, bundleId, { userId: auth.userId, email: auth.email, groups: auth.groups });
     return response(bundleId, auth.userId, results);
   }
@@ -288,6 +320,7 @@ export function createHandler(deps: RedemptionDeps) {
       throw badRequest(`No user exists for ${inviteeEmail}; the invitee must have signed in at least once before the demo can impersonate them.`);
     }
     await assertNotDisabled(inviteeUserId);
+    await ensureUserRow(inviteeUserId, inviteeEmail); // #496 — first-class directory entity
     const groups = await liveGroups(inviteeUserId);
     const results = await applyBundle(bundle, bundleId, { userId: inviteeUserId, email: inviteeEmail, groups });
     return response(bundleId, inviteeUserId, results);

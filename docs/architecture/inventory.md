@@ -61,6 +61,16 @@ those stacks. They are not live ownership surfaces.
   - `launchpad-invitations-{stage}`
   - `launchpad-rate-limits-{stage}`
 
+The `launchpad-users-{stage}` row — the entity the admin **Users & Access**
+directory lists (`access-summary` scans it as the authoritative universe) — is
+created on a user's first authenticated app load via `POST /auth/setup`
+(idempotent), and upserted as a backup by invitation redemption for the redeeming
+invitee (#496). Both write the canonical bootstrap shape and omit `displayName`
+unless a real given/family name is available (#494 — no email fallback). Before
+#496 the `/auth/setup` client call was unwired (dead code), so federated redeemers
+held memberships + groups but had no user row and were invisible in the directory;
+a one-off `scripts/ops/backfill-user-rows-496.mjs` addresses the pre-#496 orphans.
+
 The pre-token trigger emits the `apps` and `accounts` claims consumed by
 Launchpad, Stock Analyser, Budget Tracker, and migration utilities.
 Platform admin status is NOT a claim — it is read from the `site-admin` Cognito

@@ -441,6 +441,20 @@ The `state` parameter is arbitrary data the app preserves through the auth flow;
 - Enters email + password → Cognito verifies credentials, or
 - Clicks a federated IDP button → redirects to Google / Facebook / Microsoft → returns with user attributes → Cognito creates or updates the federated user record
 
+> **User-record lifecycle (#496).** Step 2 creates/updates the user's **Cognito**
+> record. The control-plane **`launchpad-users-{stage}`** row — the entity the admin
+> Users & Access directory lists (`access-summary` scans this table as its universe) —
+> is created separately, on the **first authenticated app load**: the launchpad calls
+> `POST /auth/setup` (idempotent, `attribute_not_exists`) once the session is
+> established. **Invitation redemption also upserts the row** as a backup, so a
+> redeemer is a first-class directory entity even if the bootstrap is skipped or races.
+> Neither path writes an email-derived `displayName` — it is stored only when the IdP
+> supplies a real given/family name or the user sets one explicitly (see *Display name
+> from claims*), so the directory and greeting resolve the name from the token. Prior
+> to #496 the `/auth/setup` client wiring was absent (dead code), so federated
+> redeemers had groups + memberships but no `launchpad-users` row and were **invisible**
+> in the directory.
+
 **Step 3 — Pre-token Lambda fires.** Cognito invokes the pre-token-generation Lambda synchronously. The Lambda runs the reconciliation and claim-building logic described above and returns the enriched event.
 
 **Step 4 — Cognito issues tokens.** Cognito constructs three JWTs signed with its RSA key:
@@ -878,7 +892,7 @@ Launchpad owns the live onboarding, user profile/preference, account administrat
 
 | Route | Live Lambda | Notes |
 |---|---|---|
-| `POST /auth/setup` | `launchpad-account-provisioning-{stage}` | First-login **profile** bootstrap (D11, contract m16.1.0): ensures the user item exists in `launchpad-users-{stage}`; never auto-creates an account. Returns `AccountSetupResponse { accountId?, userCreated, profileComplete }` — `accountId` omitted unless the user already holds one. |
+| `POST /auth/setup` | `launchpad-account-provisioning-{stage}` | First-login **profile** bootstrap (D11, contract m16.1.0). **Invoked on first authenticated app load** by the launchpad (#496 — the client call was previously unwired); idempotent (`attribute_not_exists`). Ensures the user item exists in `launchpad-users-{stage}` with the canonical bootstrap shape; **omits `displayName` unless the IdP supplies a real given/family name** (#494 — no email fallback); never auto-creates an account. Returns `AccountSetupResponse { accountId?, userCreated, profileComplete }` — `accountId` omitted unless the user already holds one. Invitation redemption upserts the same row as a backup. |
 | `GET /api/user/profile` | `launchpad-user-{stage}` | Reads the caller's profile/preferences from `launchpad-users-{stage}`. |
 | `PUT /api/user/preferences` | `launchpad-user-{stage}` | Merges caller-owned preferences into `launchpad-users-{stage}`. |
 | `POST /accounts` | `launchpad-accounts-{stage}` | M11 A4 — self-service create-first-account. Request `{ name, appSlug }` (m16.6.0: `appSlug` in the body — the multi-app launchpad token can't say which app the user clicked). **Requires the `{appSlug}-app-access` group** (groups-authoritative) + active user — the body says WHICH app, the access group AUTHORIZES it (a caller without it → 403, whatever appSlug is sent; unknown appSlug → 400). Creates the account + **owner** membership; ensures the access group (`AdminAddUserToGroup`, idempotent). No pre-existing membership required. |

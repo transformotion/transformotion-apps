@@ -37,7 +37,16 @@ interface HandlerDeps {
 export function createHandler(deps: HandlerDeps) {
   const { ddb, cognito, usersTable, accountMembersTable, userPoolId } = deps;
 
-  async function resolveDisplayNameFromCognito(userId: string, email: string): Promise<string> {
+  /**
+   * The user's real name from Cognito (`given_name`/`family_name`), or `undefined`
+   * when the IdP supplied neither (#494/#496). It deliberately does NOT fall back to
+   * the email local part: storing an email-derived displayName at bootstrap would
+   * make `displayName` a non-null email-shaped value that beats the token name in the
+   * display chain — the exact #494 bug. When this returns undefined the row is written
+   * WITHOUT a displayName, so reads resolve the name from the token (or the user sets
+   * one explicitly via PUT /api/user/preferences).
+   */
+  async function resolveDisplayNameFromCognito(userId: string): Promise<string | undefined> {
     try {
       const res = await cognito.send(new AdminGetUserCommand({
         UserPoolId: userPoolId,
@@ -47,10 +56,9 @@ export function createHandler(deps: HandlerDeps) {
       const family = res.UserAttributes?.find(a => a.Name === 'family_name')?.Value?.trim();
       if (given || family) return [given, family].filter(Boolean).join(' ');
     } catch {
-      // Fall through to email fallback
+      // Fall through — no usable name; the row is written without displayName.
     }
-    // Fallback: email local part
-    return email.split('@')[0] ?? email;
+    return undefined;
   }
 
   async function handleSetup(auth: { userId: string; email: string }) {
@@ -61,17 +69,19 @@ export function createHandler(deps: HandlerDeps) {
     const existing = await ddb.send(new GetCommand({ TableName: usersTable, Key: { userId } }));
 
     if (!existing.Item) {
-      // Fetch display name from Cognito given_name/family_name attributes
-      const displayName = await resolveDisplayNameFromCognito(userId, email);
-      const emailLower = email.toLowerCase();
+      // Real name from Cognito if present; otherwise omitted (no email fallback — #494).
+      const displayName = await resolveDisplayNameFromCognito(userId);
 
       await ddb.send(new PutCommand({
         TableName: usersTable,
+        // CANONICAL bootstrap user row (#496). The invitation-redemption upsert
+        // writes the IDENTICAL shape (minus displayName) so a user created via
+        // first-auth vs redemption is indistinguishable — keep the two in lockstep.
         Item: {
           userId,
           email,
-          emailLower,
-          displayName,
+          emailLower: email.toLowerCase(),
+          ...(displayName ? { displayName } : {}),
           status: 'active',
           preferences: { notificationsEnabled: false },
           profileComplete: false,
