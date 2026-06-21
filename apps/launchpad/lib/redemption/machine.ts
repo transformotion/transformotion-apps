@@ -28,6 +28,7 @@ import {
 } from '@transformotion/contracts/launchpad/redemption'
 import type { GrantRedemptionResult, InvitationBundle } from '@transformotion/contracts/launchpad/invitations'
 import { getControlPlaneClient } from '@/lib/services/control-plane-client'
+import { authService } from '@/lib/services/auth'
 
 const APP_LABELS: Record<string, string> = {
   'stock-analyser': 'Stock Analyser',
@@ -147,6 +148,15 @@ export async function applyRedemption(
 ): Promise<RedemptionEvaluation> {
   try {
     const response = await getControlPlaneClient().redeemBundle(bundleId)
+
+    // Redemption just added the invitee's Cognito access groups + account
+    // memberships SERVER-SIDE. The current token predates them (it was minted at
+    // sign-in), so force a fresh token NOW — the pre-token trigger re-issues the
+    // `apps`/`accounts` claims on refresh — BEFORE the Launchpad hand-off. Without
+    // this the invitee lands on the Launchpad with apps=[] (#485). Best-effort: a
+    // failed refresh degrades to a manual refresh / re-login, not a hard failure.
+    await authService.refreshTokens().catch(() => {})
+
     const results = response.results
     return {
       status: 'applied',

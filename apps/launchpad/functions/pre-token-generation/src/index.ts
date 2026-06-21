@@ -28,6 +28,25 @@ interface MembershipRow {
   appSlug?: string;
 }
 
+/**
+ * The stable user id for control-plane TABLE keys (account-members, users): the
+ * Cognito `sub`. This is what `@transformotion/lambda-middleware` derives
+ * (`claims['sub']`) and what the redemption handler writes, so the membership
+ * table is keyed on the sub.
+ *
+ * It is NOT `event.userName`: for FEDERATED users (Google/Facebook/Microsoft) the
+ * Cognito Username is provider-shaped (e.g. `Google_…`) and DIVERGES from the sub,
+ * so keying a table query on userName silently returns no rows — federated
+ * account-invitees would never get their memberships in the token (#486). Native
+ * users have Username == sub (email-alias pool), which is why this stayed hidden
+ * until the first social-IdP redemption. Cognito GROUP ops still use the Username.
+ */
+export function membershipUserId(
+  event: { userName: string; request: { userAttributes?: Record<string, string> } },
+): string {
+  return event.request.userAttributes?.['sub'] ?? event.userName;
+}
+
 interface AccountRow {
   accountId: string;
   appSlug: string;
@@ -178,13 +197,19 @@ export const handler = async (
   event: PreTokenGenerationTriggerEvent,
 ): Promise<PreTokenGenerationTriggerEvent> => {
   try {
-    const userId = event.userName;
+    // Cognito Username — used for GROUP ops (AdminAddUserToGroup). For federated
+    // users this is provider-shaped (e.g. Google_…).
+    const cognitoUsername = event.userName;
+    // Stable id for control-plane TABLE keys — the sub (#486). Diverges from the
+    // Username for federated users; keying table queries on the Username silently
+    // misses every row.
+    const subject = membershipUserId(event);
     const userPoolId = event.userPoolId;
     const currentGroups = event.request.groupConfiguration.groupsToOverride ?? [];
 
-    console.log('[launchpad-pre-token] userId:', userId, 'groups:', currentGroups.join(','));
+    console.log('[launchpad-pre-token] username:', cognitoUsername, 'sub:', subject, 'groups:', currentGroups.join(','));
 
-    const memberships = await queryMemberships(userId);
+    const memberships = await queryMemberships(subject);
 
     // Resolve appSlug for legacy membership rows that predate D3 denormalization
     const missingAppSlugIds = memberships
@@ -194,8 +219,10 @@ export const handler = async (
 
     const accountsByApp = groupByApp(memberships, appSlugByAccount);
 
+    // Group ops key on the Cognito Username (NOT the sub) — for federated users
+    // AdminAddUserToGroup needs the provider-shaped Username.
     const reconciledGroups = await reconcileInvariant(
-      userId,
+      cognitoUsername,
       userPoolId,
       currentGroups,
       accountsByApp,
