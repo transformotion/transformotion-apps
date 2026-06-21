@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { planReconcile } from './index';
+import { planReconcile, membershipUserId } from './index';
 
 // ---------------------------------------------------------------------------
 // Pre-token reconcile is ADD-ONLY (one-directional invariant, #473).
@@ -72,5 +72,34 @@ describe('planReconcile — add-only app-access invariant (#473)', () => {
     const result = plan(['site-admin', 'stock-app-access', 'budget-app-access'], {});
     expect(result.toAdd).toEqual([]);
     expect(result.resultingGroups).toEqual(['site-admin', 'stock-app-access', 'budget-app-access']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Membership-table key resolution (#486). The membership table is keyed on the
+// Cognito `sub`. The trigger MUST key its membership query on the sub, NOT
+// `event.userName` — which is provider-shaped for federated users and diverges
+// from the sub, silently returning no rows. The prior tests never caught this
+// because they only exercised planReconcile with native-shaped ids (userName==sub).
+// ---------------------------------------------------------------------------
+describe('membershipUserId — table key is the sub, not the Username (#486)', () => {
+  it('returns the SUB for a FEDERATED user (Username Google_… diverges from sub)', () => {
+    const event = {
+      userName: 'Google_111439223304386966737',
+      request: { userAttributes: { sub: '492ed4a8-0061-7018-5fc3-0dc6d59c80f4', email: 'x@y.com' } },
+    };
+    // The bug was keying on userName here → the BT membership (row keyed on the
+    // sub) was never found → accounts claim empty for every federated invitee.
+    expect(membershipUserId(event)).toBe('492ed4a8-0061-7018-5fc3-0dc6d59c80f4');
+    expect(membershipUserId(event)).not.toBe(event.userName);
+  });
+
+  it('returns the sub for a native user (Username == sub — unchanged behaviour)', () => {
+    const sub = 'c98e14a8-50f1-70a6-d099-7eb0cab0cacf';
+    expect(membershipUserId({ userName: sub, request: { userAttributes: { sub } } })).toBe(sub);
+  });
+
+  it('falls back to userName when sub is somehow absent (defensive)', () => {
+    expect(membershipUserId({ userName: 'u-1', request: { userAttributes: {} } })).toBe('u-1');
   });
 });
