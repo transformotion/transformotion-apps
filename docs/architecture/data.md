@@ -63,7 +63,7 @@ User profile and preferences keyed by Cognito `sub`.
 | `userId` (PK) | String | Cognito `sub` |
 | `email` | String | User email (original case) |
 | `emailLower` | String | Lowercase email — used by `email-index` GSI for redemption lookup (M16 D4) |
-| `displayName` | String | Human-friendly name. Source of truth; never denormalized onto membership rows (D6). |
+| `displayName` | String (optional) | Human-friendly name. Present only when the IdP supplied a real given/family name **or** the user set one explicitly (#494/#496); **omitted at bootstrap** (no email fallback at write time). Source of truth; never denormalized onto membership rows (D6). |
 | `profileComplete` | Boolean | False until user completes first-time profile setup |
 | `status` | String | `active \| disabled`. Absent means `active` (backwards compatibility). |
 | `preferences` | Map | `{ notificationsEnabled: boolean }` |
@@ -75,8 +75,10 @@ User profile and preferences keyed by Cognito `sub`.
 **Display name fallback chain (M16, applies at read time — never write-time):**
 1. `displayName` (if set and non-empty)
 2. Email local part (`email.split('@')[0]`)
-3. Full email
-This fallback is computed at read time. Do not write a derived display name back to the row.
+
+Computed at read time; **never** the full email (#494) and never written back to the row. The auth client applies the same rule to the token name (`composeDisplayName`), and the launchpad greeting prefers an explicitly-set `displayName` then the token name — so an unset name resolves to the token's given name, not an email-derived value.
+
+**Row population (#496).** A `launchpad-users` row is created by `POST /auth/setup` (`account-provisioning`) on the user's **first authenticated app load**, and upserted as a backup by **invitation redemption** for the redeeming invitee. Both write the **canonical bootstrap shape** — `userId, email, emailLower, status:'active', preferences:{notificationsEnabled:false}, profileComplete:false, activeAccounts:{}, createdAt, updatedAt` — and **omit `displayName`** unless a real name is available (account-provisioning may add it from Cognito `given_name`/`family_name`). Both are idempotent (`attribute_not_exists(userId)`). The row may also be created incidentally by the first `PUT /api/user/preferences` / `PUT /api/user/active-accounts` upsert. The admin Users & Access directory (`access-summary`) treats this table as its authoritative universe, so a missing row makes a user invisible despite holding memberships/groups.
 
 **No display name denormalization (M16 D6 standing rule).** `displayName` lives only on the user item. Member lists, grant rows, access summaries, and discovery results are enriched at read time via `BatchGetItem` on the users table. Do not copy display names onto membership or grant items.
 

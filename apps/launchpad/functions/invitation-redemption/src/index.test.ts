@@ -12,6 +12,7 @@ interface Seed {
 
 function makeHandler(seed: Seed, opts: { stage?: string; cognitoUserId?: string; liveGroups?: string[] } = {}) {
   const memberPuts: Array<Record<string, unknown>> = [];
+  const userPuts: Array<Record<string, unknown>> = [];
   const groupAdds: Array<Record<string, unknown>> = [];
   const statusUpdates: string[] = [];
 
@@ -28,6 +29,18 @@ function makeHandler(seed: Seed, opts: { stage?: string; cognitoUserId?: string;
         if (t === 'members') return { Item: seed.members?.[`${key.accountId}|${key.userId}`] };
       }
       if (name === 'PutCommand' && t === 'members') { memberPuts.push(input.Item ?? {}); return {}; }
+      if (name === 'PutCommand' && t === 'users') {
+        // Mirror DynamoDB's attribute_not_exists conditional Put: an existing row
+        // throws ConditionalCheckFailedException (ensureUserRow swallows it). #496
+        const uid = (input.Item as { userId?: string })?.userId;
+        if (uid && seed.users?.[uid]) {
+          const e = new Error('The conditional request failed') as Error & { name: string };
+          e.name = 'ConditionalCheckFailedException';
+          throw e;
+        }
+        userPuts.push(input.Item ?? {});
+        return {};
+      }
       if (name === 'UpdateCommand' && t === 'invitations') { statusUpdates.push(key.invitationId); return {}; }
       throw new Error(`unexpected ddb command ${name} on ${t}`);
     },
@@ -60,7 +73,7 @@ function makeHandler(seed: Seed, opts: { stage?: string; cognitoUserId?: string;
     }),
   });
 
-  return { handler, memberPuts, groupAdds, statusUpdates };
+  return { handler, memberPuts, userPuts, groupAdds, statusUpdates };
 }
 
 function event(bundleId: string, email = 'invitee@example.com', groups = '') {
@@ -140,6 +153,44 @@ describe('invitation redemption — M11 A5', () => {
     expect(statusUpdates).toEqual(['b-1']);
   });
 
+  it('#496: writes the canonical launchpad-users bootstrap row for the redeemer (no displayName)', async () => {
+    const { handler, userPuts } = makeHandler({
+      bundles: { 'b-1': accountInviteBundle },
+      accounts: { 'acct-1': account1 },
+    });
+
+    await handler(event('b-1', 'invitee@example.com'));
+
+    expect(userPuts).toHaveLength(1);
+    // IDENTICAL bootstrap defaults to account-provisioning /auth/setup, MINUS displayName.
+    expect(userPuts[0]).toMatchObject({
+      userId: 'user-invitee',
+      email: 'invitee@example.com',
+      emailLower: 'invitee@example.com',
+      status: 'active',
+      preferences: { notificationsEnabled: false },
+      profileComplete: false,
+      activeAccounts: {},
+    });
+    expect(userPuts[0]).not.toHaveProperty('displayName');
+  });
+
+  it('#496: user-row upsert is idempotent — an existing row is a no-op, redemption still succeeds', async () => {
+    const { handler, userPuts, memberPuts } = makeHandler({
+      bundles: { 'b-1': accountInviteBundle },
+      accounts: { 'acct-1': account1 },
+      users: { 'user-invitee': { userId: 'user-invitee', email: 'invitee@example.com', status: 'active' } },
+    });
+
+    const res = (await handler(event('b-1'))) as { statusCode: number; body: string };
+
+    // ConditionalCheckFailedException is swallowed → no crash, redemption proceeds.
+    expect(res.statusCode).toBe(200);
+    expect(body(res).results[0]).toMatchObject({ outcome: 'accepted' });
+    expect(userPuts).toHaveLength(0); // attribute_not_exists tripped → nothing written
+    expect(memberPuts).toHaveLength(1); // membership still applied
+  });
+
   it('account-invite: idempotent — already a member yields duplicate, no write', async () => {
     const { handler, memberPuts, groupAdds } = makeHandler({
       bundles: { 'b-1': accountInviteBundle },
@@ -176,10 +227,14 @@ describe('invitation redemption — M11 A5', () => {
     expect(groupAdds).toHaveLength(0);
   });
 
-  it('invitee-only: a caller whose email differs from the bundle is rejected (403)', async () => {
+  it('m16.7.0 link-as-bearer: a caller whose email differs from the bundle still redeems (binds to the caller)', async () => {
+    // The LINK is the bearer (the bundleId is an unguessable UUID); grants bind to the
+    // AUTHENTICATED identity, not bundle.email — the strict same-email 403 was removed in
+    // m16.7.0. (Stale pre-existing test corrected during #496 — it still asserted 403.)
     const { handler } = makeHandler({ bundles: { 'b-2': appGrantBundle } });
-    const res = (await handler(event('b-2', 'someone-else@example.com'))) as { statusCode: number };
-    expect(res.statusCode).toBe(403);
+    const res = (await handler(event('b-2', 'someone-else@example.com'))) as { statusCode: number; body: string };
+    expect(res.statusCode).toBe(200);
+    expect(body(res).userId).toBe('user-invitee'); // bound to the caller's sub, not the invited email
   });
 
   it('missing bundle → 404', async () => {

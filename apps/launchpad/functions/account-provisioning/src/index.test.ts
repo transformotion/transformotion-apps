@@ -101,14 +101,27 @@ describe('account-provisioning /auth/setup — m16.1.0 D11 profile bootstrap', (
     });
   });
 
-  it('first login with no Cognito name: falls back to email local part', async () => {
+  it('first login with no Cognito name: OMITS displayName (no email fallback — #494/#496)', async () => {
     const { handler, puts } = makeHandler({ user: undefined }, { cognitoThrows: true });
 
     const res = (await handler(event('/auth/setup', 'user-2', 'carol@example.com'))) as { statusCode: number; body: string };
 
     expect(res.statusCode).toBe(200);
     expect(body(res)).toEqual({ userCreated: true, profileComplete: false });
-    expect(puts[0]).toMatchObject({ displayName: 'carol' });
+    // No given/family from the IdP → the row stores NO displayName, so reads resolve
+    // the name from the token rather than an email-derived value (which would beat it).
+    expect(puts[0]).not.toHaveProperty('displayName');
+    // …but the canonical bootstrap defaults are still written, so the row is a
+    // first-class directory entity identical to the redemption-upsert shape.
+    expect(puts[0]).toMatchObject({
+      userId: 'user-2',
+      email: 'carol@example.com',
+      emailLower: 'carol@example.com',
+      status: 'active',
+      preferences: { notificationsEnabled: false },
+      profileComplete: false,
+      activeAccounts: {},
+    });
   });
 
   it('existing user with an account: { userCreated:false, profileComplete, accountId } and no write', async () => {
