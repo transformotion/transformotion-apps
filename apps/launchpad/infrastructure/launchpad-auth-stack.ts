@@ -187,9 +187,13 @@ export class LaunchpadAuthStack extends cdk.Stack {
       },
       // Facebook does not return a reliable email_verified; Option D defaults
       // requireVerifiedEmail=false, so email + name are sufficient.
+      // given/family come from Facebook's `first_name`/`last_name` fields (not OIDC
+      // `given_name`/`family_name`) so the apps can show a true first name (#494).
       attributeMapping: {
         email: 'email',
         name: 'name',
+        given_name: 'first_name',
+        family_name: 'last_name',
       },
     });
 
@@ -214,10 +218,17 @@ export class LaunchpadAuthStack extends cdk.Stack {
         oidc_issuer: 'https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0',
         authorize_scopes: 'openid email profile',
       },
+      // Microsoft v2.0 id_tokens carry OIDC `given_name`/`family_name` (the `profile`
+      // scope) — map them so the apps can show a true first name rather than the full
+      // `name` (#494). Mappings apply at each federation, so already-provisioned MS
+      // users populate these on their next sign-in; until then the auth client's
+      // `name`-claim fallback already yields a correct first name.
       attributeMapping: {
         email: 'email',
         email_verified: 'email_verified',
         name: 'name',
+        given_name: 'given_name',
+        family_name: 'family_name',
       },
     });
 

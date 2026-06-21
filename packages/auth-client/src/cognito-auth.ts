@@ -11,6 +11,7 @@ import {
 } from 'aws-amplify/auth'
 import { parseCognitoGroups } from '@transformotion/contracts/cognito-groups'
 import { deriveAppAdmin, deriveAppAccess, type CognitoGroup } from '@transformotion/contracts/_shared/auth'
+import { composeDisplayName } from './display'
 import type { AuthService, AuthSession, AuthTokens, User, Account, SignInCredentials, SignUpCredentials, FederatedProvider } from './index'
 
 export class CognitoAuthService implements AuthService {
@@ -43,8 +44,13 @@ export class CognitoAuthService implements AuthService {
       if (!session.tokens?.idToken) return null
       const claims     = session.tokens.idToken.payload
       const email      = claims['email'] as string
-      const givenName  = claims['given_name'] as string | undefined
-      const familyName = claims['family_name'] as string | undefined
+      const givenName  = (claims['given_name'] as string | undefined)?.trim() || undefined
+      const familyName = (claims['family_name'] as string | undefined)?.trim() || undefined
+      // The OIDC `name` claim — a full display name some IdPs send when they do NOT
+      // also map given/family (Microsoft + Facebook map only `name`; #494). Used as
+      // the next-best full name so federated users without given/family still show a
+      // real name (and a correct first name once split) rather than the email.
+      const nameClaim  = (claims['name'] as string | undefined)?.trim() || undefined
       // M16 Phase 6 (D11): platform admin status comes from the `site-admin`
       // Cognito group. The earlier `site_admin` token claim was an unintended
       // projection of the same group and has been removed — the frontend now
@@ -60,9 +66,8 @@ export class CognitoAuthService implements AuthService {
       // M11 groups-authoritative: apps the user may ENTER come from the
       // `{app}-app-access` groups (the launchpad gate keys on this, not membership).
       const appAccess  = deriveAppAccess(groups as CognitoGroup[])
-      const name       = (givenName && familyName)
-        ? `${givenName} ${familyName}`
-        : (givenName ?? email)
+      // Name source order (#494) — NEVER the full email; see composeDisplayName.
+      const name       = composeDisplayName({ givenName, familyName, nameClaim, email })
       return { id: cognitoUser.userId, email, name, metadata: { siteAdmin, appAdmin, appAccess } }
     } catch {
       return null

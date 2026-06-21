@@ -105,6 +105,7 @@ export interface AuthService {
 
 export { MockAuthService, createMockAuthService } from './mock-auth'
 export { CognitoAuthService } from './cognito-auth'
+export { userFirstName, userInitials, composeDisplayName } from './display'
 
 export function createAuthService(
   appSlug?: string,

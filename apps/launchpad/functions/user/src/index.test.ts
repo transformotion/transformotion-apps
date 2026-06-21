@@ -113,7 +113,7 @@ function body(res: { body: string }) {
 // Test area 3: Display name fallback chain
 // ---------------------------------------------------------------------------
 
-describe('resolveDisplayName', () => {
+describe('resolveDisplayName (#494: explicit-name-or-undefined)', () => {
   it('returns displayName when set and non-empty', () => {
     expect(resolveDisplayName({ displayName: 'Alice', email: 'alice@example.com' })).toBe('Alice');
   });
@@ -122,16 +122,12 @@ describe('resolveDisplayName', () => {
     expect(resolveDisplayName({ displayName: '  Bob  ', email: 'bob@example.com' })).toBe('Bob');
   });
 
-  it('falls back to email local part when displayName is absent', () => {
-    expect(resolveDisplayName({ email: 'carol@example.com' })).toBe('carol');
+  it('returns undefined (NOT the email) when displayName is absent — client falls to the token name', () => {
+    expect(resolveDisplayName({ email: 'carol@example.com' })).toBeUndefined();
   });
 
-  it('falls back to email local part when displayName is whitespace-only', () => {
-    expect(resolveDisplayName({ displayName: '   ', email: 'dave@example.com' })).toBe('dave');
-  });
-
-  it('falls back to full email when local part is empty', () => {
-    expect(resolveDisplayName({ email: '@example.com' })).toBe('@example.com');
+  it('returns undefined when displayName is whitespace-only', () => {
+    expect(resolveDisplayName({ displayName: '   ', email: 'dave@example.com' })).toBeUndefined();
   });
 });
 
@@ -384,13 +380,13 @@ describe('GET /api/user/profile field completeness', () => {
     const parsed = body(res);
     expect(parsed.userId).toBe('new-user');
     expect(parsed.email).toBe('new@example.com');
-    expect(parsed.displayName).toBe('new'); // email local part fallback
+    expect(parsed.displayName).toBeUndefined(); // #494: omitted when unset, not the email
     expect(parsed.status).toBe('active');
     expect(parsed.profileComplete).toBe(false);
     expect(parsed.preferences).toEqual({ notificationsEnabled: false });
   });
 
-  it('uses email local part when displayName is absent from user item', async () => {
+  it('omits displayName when absent from the user item (#494) — never the email', async () => {
     const handler = makeHandler({
       users: {
         'user-2': { userId: 'user-2', email: 'carol@example.com', status: 'active' },
@@ -402,6 +398,6 @@ describe('GET /api/user/profile field completeness', () => {
     })) as { statusCode: number; body: string };
 
     expect(res.statusCode).toBe(200);
-    expect(body(res).displayName).toBe('carol');
+    expect(body(res)).not.toHaveProperty('displayName');
   });
 });

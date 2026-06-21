@@ -487,9 +487,11 @@ export function Launchpad({
   const data = useLaunchpadData(authUser)
 
   const email = authUser?.email ?? ''
-  // Canonical chain (#423): profile displayName → Cognito name → email local part.
-  // authUser.name can be the raw email (no given/family name) — passed as cognitoName
-  // so resolveDisplayName skips it rather than rendering the full address.
+  // Canonical chain (#423/#494): EXPLICIT profile displayName → Cognito name → email
+  // local part. The user Lambda now omits displayName unless the user explicitly set
+  // one (#494), so a federated user with no stored name falls through to the token
+  // name (`authUser.name`), which the auth client guarantees is a real name or the
+  // email local part — never the full address.
   const displayName = resolveDisplayName({
     displayName: data.profile?.displayName,
     cognitoName: authUser?.name,
