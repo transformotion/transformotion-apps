@@ -11,7 +11,7 @@ import {
 } from 'aws-amplify/auth'
 import { parseCognitoGroups } from '@transformotion/contracts/cognito-groups'
 import { deriveAppAdmin, deriveAppAccess, type CognitoGroup } from '@transformotion/contracts/_shared/auth'
-import type { AuthService, AuthSession, AuthTokens, User, Account, SignInCredentials, SignUpCredentials } from './index'
+import type { AuthService, AuthSession, AuthTokens, User, Account, SignInCredentials, SignUpCredentials, FederatedProvider } from './index'
 
 export class CognitoAuthService implements AuthService {
   constructor(private readonly appSlug?: string) {
@@ -141,7 +141,9 @@ export class CognitoAuthService implements AuthService {
     await amplifySignOut({ global: true })
   }
 
-  async signInWithRedirect(options?: { provider?: string }): Promise<void> {
+  async signInWithRedirect(options?: { provider?: FederatedProvider }): Promise<void> {
+    // `provider` (built-in string OR `{ custom }`) becomes `identity_provider=<X>` on
+    // /authorize → Cognito redirects silently to that IdP, skipping the chooser (#490).
     const args = options?.provider ? { provider: options.provider as never } : {}
     try {
       await amplifySignInWithRedirect(args)
