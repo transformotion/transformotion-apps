@@ -598,7 +598,7 @@ export function Launchpad({
       {userProfileOpen && authUser && (
         <>
           <div className="fixed inset-0 bg-black/50 z-50" onClick={() => setUserProfileOpen(false)} />
-          <div className="fixed left-1/2 top-1/2 z-50 w-[calc(100vw-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-xl border border-border bg-card shadow-2xl">
+          <div className="fixed left-1/2 top-1/2 z-50 flex max-h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-2xl">
             <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
               <div>
                 <h2 className="text-sm font-semibold text-foreground">Your profile</h2>
@@ -612,7 +612,7 @@ export function Launchpad({
                 <X className="size-4" />
               </button>
             </div>
-            <div className="max-h-[calc(100vh-8rem)] overflow-y-auto p-4 flex flex-col gap-4">
+            <div className="scrollbar-subtle flex flex-col gap-4 overflow-y-auto p-4">
               <ProfileForm
                 email={email}
                 initialDisplayName={displayName}
