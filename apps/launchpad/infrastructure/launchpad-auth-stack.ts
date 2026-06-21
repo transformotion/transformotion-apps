@@ -216,8 +216,15 @@ export class LaunchpadAuthStack extends cdk.Stack {
 
     const socialIdps = [googleIdp, facebookIdp, microsoftIdp];
 
-    // Only the Launchpad client offers the social providers in its Hosted-UI
-    // chooser; Stock Analyser and Budget Tracker stay COGNITO-only.
+    // All three app-clients offer the social providers in their Hosted-UI chooser.
+    // This COMPLETES the per-app-auth + platform-SSO model (#488): each app
+    // authenticates via its own client, and the shared Cognito-domain SSO cookie
+    // federates a social-IdP user seamlessly into every app. The earlier
+    // "Launchpad-only social IdPs" (#472) predated real federated users and left
+    // SA/BT unable to admit them — a federated user could sign into the Launchpad
+    // but not enter SA/BT. The IdPs are pool-attached and the Hosted-UI domain is
+    // shared, so this is a client-config change only (no provider-side redirect-URI
+    // change). PROD: the same three-client config must apply at cutover (#454).
     this.launchpadAppClient = this.createAppClient('LaunchpadAppClient', {
       callbackUrls: isProd
         ? [
@@ -257,7 +264,12 @@ export class LaunchpadAuthStack extends cdk.Stack {
       logoutUrls: isProd
         ? ['https://apps.transformotion.com.au/signed-out/']
         : ['https://dev.apps.transformotion.com.au/signed-out/', 'http://localhost:3000/signed-out/'],
-      supportedIdentityProviders: [cognito.UserPoolClientIdentityProvider.COGNITO],
+      supportedIdentityProviders: [
+        cognito.UserPoolClientIdentityProvider.COGNITO,
+        cognito.UserPoolClientIdentityProvider.GOOGLE,
+        cognito.UserPoolClientIdentityProvider.FACEBOOK,
+        cognito.UserPoolClientIdentityProvider.custom('Microsoft'),
+      ],
     });
 
     this.budgetTrackerAppClient = this.createAppClient('BudgetTrackerAppClient', {
@@ -270,8 +282,20 @@ export class LaunchpadAuthStack extends cdk.Stack {
       logoutUrls: isProd
         ? ['https://apps.transformotion.com.au/signed-out/']
         : ['https://dev.apps.transformotion.com.au/signed-out/', 'http://localhost:3002/signed-out/'],
-      supportedIdentityProviders: [cognito.UserPoolClientIdentityProvider.COGNITO],
+      supportedIdentityProviders: [
+        cognito.UserPoolClientIdentityProvider.COGNITO,
+        cognito.UserPoolClientIdentityProvider.GOOGLE,
+        cognito.UserPoolClientIdentityProvider.FACEBOOK,
+        cognito.UserPoolClientIdentityProvider.custom('Microsoft'),
+      ],
     });
+
+    // Every client names the social providers, so CFN must create those providers
+    // before each client (mirrors the Launchpad dependency below).
+    for (const idp of socialIdps) {
+      this.stockAnalyserAppClient.node.addDependency(idp);
+      this.budgetTrackerAppClient.node.addDependency(idp);
+    }
 
     const groups: Array<{ name: string; description: string; precedence: number }> = [
       { name: 'site-admin', description: 'Platform administrator', precedence: 1 },
