@@ -1,9 +1,37 @@
 import type { UserProfile, UserPreferences } from '@transformotion/contracts/_shared/auth';
+import type { UpdateUserPreferencesRequest } from '@transformotion/contracts/launchpad/api';
 import { controlPlaneUrl } from '@/lib/services/control-plane';
 
 // Canonical shapes (contract m16.1.0). UserProfile carries the M16 fields:
 // userId, email, displayName, status, preferences, profileComplete, updatedAt.
-export type { UserProfile, UserPreferences };
+export type { UserProfile, UserPreferences, UpdateUserPreferencesRequest };
+
+/**
+ * Save the caller's own profile via the contracted `UpdateUserPreferencesRequest`
+ * (m16.8.0 typed `displayName` + `notificationsEnabled`) → PUT /api/user/preferences.
+ * The Profile surface saves display name and the notifications preference TOGETHER in
+ * one request; the handler returns the updated `UserProfile`. `displayName` is now a
+ * typed field on the request (previously sent untyped — see `updateDisplayName`).
+ */
+export async function saveUserProfile(
+  idToken: string,
+  req: UpdateUserPreferencesRequest,
+): Promise<UserProfile> {
+  const response = await fetch(controlPlaneUrl('/api/user/preferences'), {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${idToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(req),
+  });
+
+  if (!response.ok) {
+    throw new Error(`PUT /api/user/preferences (profile) failed: ${response.status}`);
+  }
+
+  return response.json() as Promise<UserProfile>;
+}
 
 export async function getUserProfile(idToken: string): Promise<UserProfile> {
   const response = await fetch(controlPlaneUrl('/api/user/profile'), {
