@@ -175,7 +175,7 @@ SSO to work for federated users (#488).
 |---|---|---|---|---|
 | Google | `Google` | `Google` | `openid email profile` | — |
 | Facebook | `Facebook` | `Facebook` | `public_profile,email` | `api_version` `v17.0`; no reliable `email_verified` |
-| Microsoft | `Microsoft` | `OIDC` | `openid email profile` | `oidc_issuer` `https://login.microsoftonline.com/common/v2.0` (multi-tenant; narrow to `/{tenantId}/v2.0` if the Azure app is single-tenant) |
+| Microsoft | `Microsoft` | `OIDC` | `openid email profile` | `oidc_issuer` `https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0` — the **consumers** tenant (PERSONAL Microsoft accounts only). Cognito exact-matches the token `iss`; `/common`'s discovery `issuer` is the `…/{tenantid}/v2.0` placeholder, so it was rejected as "Bad id_token issuer". Work/school accounts carry their org tenant issuer and would need a separate provider/tenant. The Azure app registration must also list the pool's `…/oauth2/idpresponse` as a redirect URI (provider-side). |
 
 Attribute mappings send `email`→`email`, `name`→`name`, and `email_verified`→
 `email_verified` (Google/Microsoft; Facebook omits `email_verified`); Google also
