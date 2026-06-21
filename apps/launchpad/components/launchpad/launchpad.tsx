@@ -17,8 +17,11 @@ import {
   type ViewerEntitlement,
 } from '@/lib/entitlement'
 import { useLaunchpadData } from '@/hooks/use-launchpad-data'
+import { useSelfAccess } from '@/hooks/use-self-access'
 import { authService } from '@/lib/services/auth'
 import { createAccount } from '@/lib/services/account-admin'
+import { ProfileForm } from '@/components/launchpad/profile-form'
+import { YourAccountsAccess } from '@/components/launchpad/your-accounts-access'
 
 const APP_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   'stock-analyser': TrendingUp,
@@ -350,6 +353,7 @@ function ProfileMenu({
   onLogout,
   onOpenSettings,
   onOpenAdmin,
+  onOpenUserProfile,
 }: {
   displayName: string
   email: string
@@ -359,6 +363,7 @@ function ProfileMenu({
   onLogout: () => void
   onOpenSettings?: () => void
   onOpenAdmin?: () => void
+  onOpenUserProfile: () => void
 }) {
   if (!isOpen) return null
 
@@ -398,7 +403,13 @@ function ProfileMenu({
         )}
 
         <div className="py-2">
-          <button className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-surface2 transition-colors">
+          <button
+            onClick={() => {
+              onClose()
+              onOpenUserProfile()
+            }}
+            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-surface2 transition-colors"
+          >
             <UserIcon className="size-4 text-muted-foreground" />
             Profile
           </button>
@@ -471,6 +482,7 @@ export function Launchpad({
 }) {
   const router = useRouter()
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
+  const [userProfileOpen, setUserProfileOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   // Create-first-account flow: the app whose modal is open, plus an OPTIMISTIC set
   // of slugs just created (so the tile flips to normal-open immediately — the next
@@ -485,6 +497,7 @@ export function Launchpad({
   const isSiteAdmin = authUser?.metadata?.siteAdmin === true
 
   const data = useLaunchpadData(authUser)
+  const selfAccess = useSelfAccess(authUser)
 
   const email = authUser?.email ?? ''
   // Canonical chain (#423/#494): EXPLICIT profile displayName → Cognito name → email
@@ -579,7 +592,39 @@ export function Launchpad({
         onLogout={onSignOut || (() => {})}
         onOpenSettings={isSiteAdmin ? () => setSettingsOpen(true) : undefined}
         onOpenAdmin={isSiteAdmin ? () => router.push('/launchpad/admin/users') : undefined}
+        onOpenUserProfile={() => setUserProfileOpen(true)}
       />
+
+      {userProfileOpen && authUser && (
+        <>
+          <div className="fixed inset-0 bg-black/50 z-50" onClick={() => setUserProfileOpen(false)} />
+          <div className="fixed left-1/2 top-1/2 z-50 w-[calc(100vw-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-xl border border-border bg-card shadow-2xl">
+            <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
+              <div>
+                <h2 className="text-sm font-semibold text-foreground">Your profile</h2>
+                <p className="text-xs text-muted-foreground">Shown across all Transformotion apps</p>
+              </div>
+              <button
+                onClick={() => setUserProfileOpen(false)}
+                className="size-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-surface2"
+                aria-label="Close profile"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+            <div className="max-h-[calc(100vh-8rem)] overflow-y-auto p-4 flex flex-col gap-4">
+              <ProfileForm
+                email={email}
+                initialDisplayName={displayName}
+                initialNotificationsEnabled={data.profile?.preferences?.notificationsEnabled ?? false}
+                heading={displayName}
+                description="Update how your name appears and whether we send you notifications."
+              />
+              <YourAccountsAccess summary={selfAccess.summary} loading={selfAccess.loading} />
+            </div>
+          </div>
+        </>
+      )}
 
       {createAccountTile && (
         <CreateAccountModal
