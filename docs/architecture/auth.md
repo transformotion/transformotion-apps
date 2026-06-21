@@ -6,7 +6,7 @@ The platform uses AWS Cognito as the single source of identity. Authentication i
 
 A pre-token generation Lambda injects structured claims into every issued token. API handlers and the launchpad consume these claims rather than raw group strings. This means authorization logic is centralised in the token, not duplicated across handlers.
 
-Social identity providers (Google, Facebook, Microsoft) are wired at the Cognito layer. Social sign-in happens only at the launchpad; subsequent app access uses the shared Hosted UI domain session cookie.
+Social identity providers (Google, Facebook, Microsoft) are wired at the Cognito layer and offered by ALL three app-clients (launchpad, Stock Analyser, Budget Tracker). Each app authenticates via its own client; the shared Hosted-UI domain SSO cookie then federates a social-IdP user seamlessly from app to app. All clients must offer the social IdPs for that cross-app SSO to work for federated users (#488).
 
 See [cdk.md](./cdk.md) for CDK stack names. See [data.md](./data.md) for account and membership table schemas.
 
@@ -91,10 +91,10 @@ Three distinct Cognito app clients, one per deployable app. All share the same u
 | Client | Callback URLs | Logout URLs | Identity providers | CDK logical ID |
 |---|---|---|---|---|
 | `LaunchpadAppClient` | `{host}/launchpad/callback`, `{host}/sign-in/callback` | `{host}/signed-out/` | Cognito, Google, Facebook, Microsoft where configured | `LaunchpadAppClient` in `LaunchpadAuthStack` |
-| `StockAnalyserAppClient` | `{host}/stock-analyser/callback` | `{host}/signed-out/` | Cognito only | `StockAnalyserAppClient` in `LaunchpadAuthStack` |
-| `BudgetTrackerAppClient` | `{host}/budget-tracker/callback` | `{host}/signed-out/` | Cognito only | `BudgetTrackerAppClient` in `LaunchpadAuthStack` |
+| `StockAnalyserAppClient` | `{host}/stock-analyser/callback` | `{host}/signed-out/` | Cognito, Google, Facebook, Microsoft where configured | `StockAnalyserAppClient` in `LaunchpadAuthStack` |
+| `BudgetTrackerAppClient` | `{host}/budget-tracker/callback` | `{host}/signed-out/` | Cognito, Google, Facebook, Microsoft where configured | `BudgetTrackerAppClient` in `LaunchpadAuthStack` |
 
-Social sign-in is enabled on the launchpad client only. Per-app clients are Cognito-only because social identity sessions established at the launchpad propagate via SSO.
+Social sign-in is enabled on ALL THREE app-clients. The social identity session established at one client propagates to the others via the shared Hosted-UI domain SSO cookie — but each client must list the social IdPs in its `SupportedIdentityProviders`, or the Hosted UI cannot issue that client's tokens for a federated user (#488). The earlier launchpad-only configuration left SA/BT unable to admit federated users.
 
 `LaunchpadAuthStack` creates Launchpad, Stock Analyser, and Budget Tracker app
 clients and emits `LaunchpadAppClientId`, `StockAnalyserAppClientId`, and
@@ -139,8 +139,9 @@ The Hosted UI domain provides the OAuth 2.0 / PKCE flow endpoint for all three a
 
 Google, Facebook, and Microsoft IdPs are registered on the Launchpad-owned pool
 as `CfnUserPoolIdentityProvider` resources in `LaunchpadAuthStack`, and added to
-the `LaunchpadAppClient`'s `SupportedIdentityProviders` (so they appear in the
-Hosted-UI chooser). Stock Analyser and Budget Tracker clients stay COGNITO-only.
+ALL THREE app-clients' `SupportedIdentityProviders` (launchpad, Stock Analyser,
+Budget Tracker) so they appear in each Hosted-UI chooser — required for cross-app
+SSO to work for federated users (#488).
 
 | Provider | `ProviderName` | `ProviderType` | Scopes | Notable detail |
 |---|---|---|---|---|
