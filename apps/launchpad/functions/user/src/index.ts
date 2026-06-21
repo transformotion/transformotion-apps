@@ -47,11 +47,20 @@ interface AccountRow {
   createdAt?: string;
 }
 
-/** Compute display name per fallback chain: displayName → email local part → email. */
-export function resolveDisplayName(item: { displayName?: string; email: string }): string {
-  if (item.displayName?.trim()) return item.displayName.trim();
-  const localPart = item.email.split('@')[0];
-  return localPart || item.email;
+/**
+ * The user's EXPLICITLY-set display name, or `undefined` when they have not set
+ * one (#494).
+ *
+ * Previously this fell back to the email local part so the field was always a
+ * string — but that email-derived value then beat the token's real name in the
+ * client's display chain (a federated user with `given_name:"Steve"` showed
+ * "stevemoodie70"). The contract field is optional (`UserProfile.displayName?`),
+ * so omitting it when unset is contract-compatible and lets the client fall
+ * through to the token name. A name the user set via `PUT /api/user/preferences`
+ * is still stored and returned, so the name-edit feature is unaffected.
+ */
+export function resolveDisplayName(item: { displayName?: string; email: string }): string | undefined {
+  return item.displayName?.trim() || undefined;
 }
 
 /**

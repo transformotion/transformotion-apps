@@ -178,11 +178,30 @@ SSO to work for federated users (#488).
 | Microsoft | `Microsoft` | `OIDC` | `openid email profile` | `oidc_issuer` `https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0` — the **consumers** tenant (PERSONAL Microsoft accounts only). Cognito exact-matches the token `iss`; `/common`'s discovery `issuer` is the `…/{tenantid}/v2.0` placeholder, so it was rejected as "Bad id_token issuer". Work/school accounts carry their org tenant issuer and would need a separate provider/tenant. The Azure app registration must also list the pool's `…/oauth2/idpresponse` as a redirect URI (provider-side). |
 
 Attribute mappings send `email`→`email`, `name`→`name`, and `email_verified`→
-`email_verified` (Google/Microsoft; Facebook omits `email_verified`); Google also
-maps `given_name`/`family_name`. The `ProviderName` values are deliberately
+`email_verified` (Google/Microsoft; Facebook omits `email_verified`). All three
+providers map `given_name`/`family_name` (#494): Google and Microsoft from the
+OIDC `given_name`/`family_name` claims, Facebook from its `first_name`/`last_name`
+fields. This lets the apps show a true first name. Mappings apply at each
+federation, so an already-provisioned user populates given/family on their next
+sign-in; until then the auth client's `name`-claim fallback (below) still yields a
+correct first name. The `ProviderName` values are deliberately
 `Google`/`Facebook`/`Microsoft` so the redemption seam's `providerFromClaims()`
 (`apps/launchpad/lib/redemption/seam.ts`) resolves the `identities` claim to the
 contract `IdpProvider`.
+
+**Display name from claims (#494).** The auth client composes `User.name` from the
+ID-token claims as `given + family → OIDC name claim → given alone → email LOCAL
+part` — **never the full email** (`composeDisplayName`,
+`packages/auth-client/src/display.ts`). The earlier composition fell back to the
+full email, which the app sidebars then rendered whole (they take
+`name.split(' ')[0]`, and an email has no space). Apps derive the first name and
+initials via the shared `userFirstName`/`userInitials` helpers. The Launchpad home
+view additionally prefers an **explicitly user-set** control-plane `displayName`:
+the `user` Lambda (`GET /api/user/profile`) now omits `displayName` unless the user
+set one (the contract field is optional), so an unset name falls through to the
+token name rather than the email-derived value. A name set via
+`PUT /api/user/preferences` is still stored and wins. Per-app duplication of the
+first-name/initials derivation is unified under #491.
 
 `LaunchpadAuthStack` creates Launchpad-owned secret paths under
 `/launchpad/{stage}/cognito/*`; each IdP reads its client-id/secret from these via

@@ -23,6 +23,7 @@ import {
   FileText,
 } from "lucide-react"
 import { ConfirmationModal } from "@transformotion/ui-primitives"
+import { userFirstName, userInitials } from "@transformotion/auth-client"
 import { useActiveAccountStore } from "@/stores/active-account/use-active-account-store"
 
 // ============================================================================
@@ -379,8 +380,8 @@ export function UserHeader() {
   const [signOutConfirm, setSignOutConfirm] = useState(false)
   
   const activeAccount = user.accounts.find(a => a.id === user.activeAccountId)
-  const initials = user.name.split(' ').map(n => n[0]).join('')
-  const firstName = user.name.split(' ')[0]
+  const initials = userInitials(user)   // first name from given_name, never the email (#494)
+  const firstName = userFirstName(user)
 
   return (
     <div className="flex items-center justify-between py-3 px-4 bg-card border-b border-border md:hidden">
@@ -504,8 +505,8 @@ export function DesktopSidebar() {
   const [signOutConfirm, setSignOutConfirm] = useState(false)
   
   const activeAccount = user.accounts.find(a => a.id === user.activeAccountId)
-  const initials = user.name.split(' ').map(n => n[0]).join('')
-  const firstName = user.name.split(' ')[0]
+  const initials = userInitials(user)   // first name from given_name, never the email (#494)
+  const firstName = userFirstName(user)
 
   return (
     <aside className="hidden md:flex flex-col w-56 h-screen bg-card border-r border-border fixed left-0 top-0">

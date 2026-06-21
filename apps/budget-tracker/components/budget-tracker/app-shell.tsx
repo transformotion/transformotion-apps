@@ -21,6 +21,7 @@ import {
 import { ConfirmationModal } from "@transformotion/ui-primitives"
 import { useBudgetStore, type BudgetTabId } from "@/stores/budget-tracker/use-budget-store"
 import { useAuthStore } from "@/stores/auth/use-auth-store"
+import { userFirstName, userInitials } from "@transformotion/auth-client"
 import { useActiveAccountStore } from "@/stores/active-account/use-active-account-store"
 
 // Account switcher backed by the control-plane active-account store (D7).
@@ -111,8 +112,8 @@ export function BudgetUserHeader({
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
   const [signOutConfirm, setSignOutConfirm] = useState(false)
 
-  const initials = (user?.name ?? '').split(' ').map(n => n[0]).join('')
-  const firstName = (user?.name ?? '').split(' ')[0]
+  const initials = userInitials(user)   // first name from given_name, never the email (#494)
+  const firstName = userFirstName(user)
 
   function handleSignOut() {
     onSignOut?.()
@@ -231,8 +232,8 @@ export function BudgetDesktopSidebar({
   const [accountMenuOpen, setAccountMenuOpen] = useState(false)
   const [signOutConfirm, setSignOutConfirm] = useState(false)
 
-  const initials = (user?.name ?? '').split(' ').map(n => n[0]).join('')
-  const firstName = (user?.name ?? '').split(' ')[0]
+  const initials = userInitials(user)   // first name from given_name, never the email (#494)
+  const firstName = userFirstName(user)
 
   function handleSignOut() {
     onSignOut?.()

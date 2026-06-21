@@ -138,13 +138,14 @@ export function hasVisibleApps(tiles: readonly AppTile[]): boolean {
 
 /**
  * Canonical display-name fallback chain (M16 D6):
- *   profile displayName → Cognito name → email local part → full email.
+ *   EXPLICIT profile displayName → Cognito name → email local part.
  *
- * The Cognito-provided name is only honoured when it is a real name: the auth
- * client falls back to the raw email when the user has no given/family name, so
- * a `cognitoName` equal to the email is skipped (otherwise the greeting shows
- * the full address instead of the local part — issue #423). The full email is a
- * last resort only when there is no usable local part.
+ * `displayName` is now only present when the user explicitly set one (#494): the
+ * user Lambda omits it otherwise, so an unset name no longer beats the token name.
+ * The auth client guarantees `cognitoName` (the token name) is a real name or the
+ * email local part — never the full address — so the `cognito !== email` guard is
+ * defensive belt-and-suspenders. The full email is returned only if there is no
+ * usable local part (a malformed address).
  */
 export function resolveDisplayName(input: {
   displayName?: string | null;
