@@ -484,6 +484,9 @@ export function Launchpad({
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
   const [userProfileOpen, setUserProfileOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  // Optimistic display-name after a profile save, so the greeting/menu update WITHOUT a
+  // reload (the live profile read is keyed on identity and won't refetch on a mutation).
+  const [displayNameOverride, setDisplayNameOverride] = useState<string | null>(null)
   // Create-first-account flow: the app whose modal is open, plus an OPTIMISTIC set
   // of slugs just created (so the tile flips to normal-open immediately — the next
   // token refresh confirms it via the accounts claim).
@@ -506,7 +509,7 @@ export function Launchpad({
   // name (`authUser.name`), which the auth client guarantees is a real name or the
   // email local part — never the full address.
   const displayName = resolveDisplayName({
-    displayName: data.profile?.displayName,
+    displayName: displayNameOverride ?? data.profile?.displayName,
     cognitoName: authUser?.name,
     email,
   })
@@ -619,6 +622,12 @@ export function Launchpad({
                 initialNotificationsEnabled={data.profile?.preferences?.notificationsEnabled ?? false}
                 heading={displayName}
                 description="Update how your name appears and whether we send you notifications."
+                onSaved={(profile) => {
+                  // Instant: the greeting/menu reflect the new name immediately.
+                  setDisplayNameOverride(profile.displayName ?? null)
+                  // Reconcile: re-read the live profile so state matches the server.
+                  data.refresh()
+                }}
               />
               <YourAccountsAccess summary={selfAccess.summary} loading={selfAccess.loading} />
             </div>
