@@ -201,10 +201,17 @@ export class LaunchpadAuthStack extends cdk.Stack {
         client_id: secretRef('MicrosoftClientIdSecretName'),
         client_secret: secretRef('MicrosoftClientSecretSecretName'),
         attributes_request_method: 'GET',
-        // Multi-tenant + personal-account issuer; Cognito discovers endpoints
-        // from its .well-known/openid-configuration. Owner: narrow to a tenant
-        // (…/{tenantId}/v2.0) or /organizations if the Azure app requires it.
-        oidc_issuer: 'https://login.microsoftonline.com/common/v2.0',
+        // The CONSUMERS (personal Microsoft account — hotmail/outlook/live) tenant.
+        // Cognito EXACT-MATCHES the id_token `iss` against the discovery doc's
+        // `issuer`. The `/common` endpoint's discovery `issuer` is the placeholder
+        // `…/{tenantid}/v2.0`, which never appears in a real token — a personal
+        // account's token is issued by this consumers tenant
+        // (9188040d-6c67-4c5b-b112-36a304b66dad), so `/common` was rejected as
+        // "Bad id_token issuer". This tenant's discovery `issuer` equals the token
+        // `iss` verbatim, so validation passes. NOTE: this admits PERSONAL accounts
+        // only; work/school (Azure AD org) accounts carry their org tenant issuer
+        // and would need a separate provider / tenant decision.
+        oidc_issuer: 'https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0',
         authorize_scopes: 'openid email profile',
       },
       attributeMapping: {
