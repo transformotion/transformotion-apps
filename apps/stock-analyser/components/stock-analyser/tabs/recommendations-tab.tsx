@@ -228,6 +228,7 @@ Return 6 stocks. Return ONLY valid JSON.`,
       <PageHeader
         title={sectorFilter ? `${sectorFilter} Stocks` : "Recommendations"}
         subtitle={sectorFilter ? `Filtered by sector` : "AI-curated stock picks"}
+        titleClassName="font-display uppercase tracking-wide"
         action={
           <TextToggle
             visible={textVisible}

@@ -198,7 +198,11 @@ export function PortfolioTab() {
   if (loadError) {
     return (
       <div className="p-4 space-y-4">
-        <PageHeader title="Portfolio" subtitle="Import and track your holdings" />
+        <PageHeader
+          title="Portfolio"
+          subtitle="Import and track your holdings"
+          titleClassName="font-display uppercase tracking-wide"
+        />
         <div className="p-3 rounded-lg bg-signal-red/10 border border-signal-red/20 flex items-start gap-2">
           <AlertCircle className="size-4 text-signal-red mt-0.5 shrink-0" />
           <span className="text-sm text-signal-red">{loadError}</span>
@@ -211,7 +215,11 @@ export function PortfolioTab() {
   if (holdings.length === 0) {
     return (
       <div className="p-4 space-y-4">
-        <PageHeader title="Portfolio" subtitle="Import and track your holdings" />
+        <PageHeader
+          title="Portfolio"
+          subtitle="Import and track your holdings"
+          titleClassName="font-display uppercase tracking-wide"
+        />
         {importStatus && (
           <div className={cn(
             "p-3 rounded-lg flex items-start gap-2 text-sm",
@@ -224,6 +232,7 @@ export function PortfolioTab() {
         <EmptyState
           icon={Briefcase}
           title="No holdings imported"
+          titleClassName="font-display"
           description="Import your CMC Markets Profit & Loss CSV to see AI-powered analysis and signals on your positions."
           action={
             <PrimaryButton icon={Upload} onClick={() => fileInputRef.current?.click()}>
@@ -243,6 +252,7 @@ export function PortfolioTab() {
       <PageHeader
         title="Portfolio"
         subtitle={`${holdings.length} holdings${enrichedCount < holdings.length ? ` · ${holdings.length - enrichedCount} not yet analysed` : ''}`}
+        titleClassName="font-display uppercase tracking-wide"
         action={<TextToggle visible={textVisible} onToggle={toggleText} isOverride={isTextOverride} />}
       />
 

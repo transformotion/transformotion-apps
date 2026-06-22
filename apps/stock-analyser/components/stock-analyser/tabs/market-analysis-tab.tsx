@@ -230,6 +230,7 @@ IMPORTANT: Your entire response must be a single valid JSON object. Begin your r
       <PageHeader
         title="Market Analysis"
         subtitle="AI-powered sector rotation signals"
+        titleClassName="font-display uppercase tracking-wide"
         action={
           <TextToggle
             visible={textVisible}
@@ -518,6 +519,7 @@ IMPORTANT: Your entire response must be a single valid JSON object. Begin your r
         <EmptyState
           icon={BarChart3}
           title="No analysis yet"
+          titleClassName="font-display"
           description="Select a geography and tap Run Analysis to see AI-powered sector rotation signals."
         />
       )}

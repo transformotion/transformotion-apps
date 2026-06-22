@@ -173,15 +173,17 @@ export function PageHeader({
   title, 
   subtitle,
   action,
+  titleClassName,
 }: { 
   title: string
   subtitle: string
   action?: ReactNode
+  titleClassName?: string
 }) {
   return (
     <div className="flex items-start justify-between">
       <div>
-        <h1 className="text-lg font-semibold text-foreground">{title}</h1>
+        <h1 className={cn("text-lg font-semibold text-foreground", titleClassName)}>{title}</h1>
         <p className="text-xs text-muted-foreground">{subtitle}</p>
       </div>
       {action}
@@ -533,18 +535,20 @@ export function EmptyState({
   title,
   description,
   action,
+  titleClassName,
 }: { 
   icon: ComponentType<{ className?: string }>
   title: string
   description: string
   action?: ReactNode
+  titleClassName?: string
 }) {
   return (
     <div className="flex flex-col items-center justify-center py-20 px-6">
       <div className="size-16 rounded-2xl bg-card border border-border flex items-center justify-center mb-4">
         <Icon className="size-7 text-muted-foreground" />
       </div>
-      <h3 className="text-base font-medium text-foreground mb-1">{title}</h3>
+      <h3 className={cn("text-base font-medium text-foreground mb-1", titleClassName)}>{title}</h3>
       <p className="text-sm text-muted-foreground text-center max-w-[280px] mb-4">
         {description}
       </p>

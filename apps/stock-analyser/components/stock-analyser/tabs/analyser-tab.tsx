@@ -180,6 +180,7 @@ Return ONLY valid JSON.`,
       <PageHeader
         title="Analyser"
         subtitle="Deep-dive technical analysis"
+        titleClassName="font-display uppercase tracking-wide"
       />
 
       {/* Search */}
@@ -426,6 +427,7 @@ Return ONLY valid JSON.`,
         <EmptyState
           icon={Search}
           title="Search for a stock"
+          titleClassName="font-display"
           description="Enter a ticker symbol or company name to get AI-powered technical analysis."
         />
       )}

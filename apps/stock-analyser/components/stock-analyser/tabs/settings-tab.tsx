@@ -263,7 +263,11 @@ function AiEngineCard() {
 export function SettingsTab() {
   return (
     <div className="p-4 space-y-6 max-w-2xl">
-      <PageHeader title="Settings" subtitle="Display preferences and AI engine configuration" />
+      <PageHeader
+        title="Settings"
+        subtitle="Display preferences and AI engine configuration"
+        titleClassName="font-display uppercase tracking-wide"
+      />
       <AnalysisTextCard />
       <AiEngineCard />
     </div>
