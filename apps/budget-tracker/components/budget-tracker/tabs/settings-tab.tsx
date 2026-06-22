@@ -271,6 +271,7 @@ export function SettingsTab() {
       <PageHeader
         title="Settings"
         subtitle="Configure Budget Tracker preferences"
+        titleClassName="font-display text-xl uppercase tracking-wide"
       />
 
       <Card>

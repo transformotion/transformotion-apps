@@ -7,7 +7,7 @@ import type { ReviewResult } from "@/stores/budget-tracker/use-review-store"
 import { useAuthStore, selectCurrentAccount } from "@/stores/auth/use-auth-store"
 import { PageHeader, Card, PrimaryButton, EmptyState } from "@transformotion/ui-primitives"
 import { Sparkles, Check, X, ChevronRight, Pencil, AlertCircle, RefreshCw } from "lucide-react"
-import { getCategoryBadgeClasses } from "../data/category-colors"
+import { getCategoryBadgeStyle } from "../data/category-colors"
 import { getActiveCategories, getActiveSubcategories, getCategoryName, getSubcategoryName } from "@/lib/categories"
 import { cn } from "@/lib/utils"
 import { getAIService } from "@/lib/services/ai"
@@ -212,6 +212,7 @@ export function ReviewTab() {
       <PageHeader
         title="Review"
         subtitle="AI-powered transaction categorization"
+        titleClassName="font-display text-xl uppercase tracking-wide"
       />
 
       <Card>
@@ -325,7 +326,7 @@ export function ReviewTab() {
       {pendingResults.length > 0 && (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-foreground">
+            <h3 className="font-display text-base font-semibold tracking-wide text-foreground">
               AI Suggestions
               <span className="ml-2 text-xs font-normal text-muted-foreground">({pendingResults.length})</span>
             </h3>
@@ -416,7 +417,10 @@ export function ReviewTab() {
                       <>
                         <div className="flex items-center gap-2 mb-1">
                           <ChevronRight className="size-3 text-primary" />
-                          <span className={cn("px-2 py-0.5 rounded text-[10px] font-medium", getCategoryBadgeClasses(result.suggestedCategoryName))}>
+                          <span
+                            className="px-2 py-0.5 rounded text-[10px] font-medium"
+                            style={getCategoryBadgeStyle(result.suggestedCategoryName)}
+                          >
                             {result.suggestedSubcategoryName || result.suggestedCategoryName}
                           </span>
                           <ConfidenceBadge confidence={result.confidence} />

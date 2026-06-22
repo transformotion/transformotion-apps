@@ -2,6 +2,7 @@
 
 import { useAuthStore } from "@/stores/auth/use-auth-store"
 import { BudgetTrackerApp } from "@/components/budget-tracker/budget-tracker-app"
+import { BudgetTrackerThemeScope } from "@/components/budget-tracker/budget-tracker-theme-scope"
 import { getConfig } from "@/lib/config"
 
 export default function Page() {
@@ -17,9 +18,11 @@ export default function Page() {
   }
 
   return (
-    <BudgetTrackerApp
-      onSignOut={handleSignOut}
-      onGoToLaunchpad={handleGoToLaunchpad}
-    />
+    <BudgetTrackerThemeScope>
+      <BudgetTrackerApp
+        onSignOut={handleSignOut}
+        onGoToLaunchpad={handleGoToLaunchpad}
+      />
+    </BudgetTrackerThemeScope>
   )
 }

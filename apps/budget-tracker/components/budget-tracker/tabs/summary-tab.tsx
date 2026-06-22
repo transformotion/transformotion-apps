@@ -221,7 +221,11 @@ export function SummaryTab() {
 
   return (
     <div className="p-4 space-y-4">
-      <PageHeader title="Summary" subtitle="Monthly income and expenses" />
+      <PageHeader
+        title="Summary"
+        subtitle="Monthly income and expenses"
+        titleClassName="font-display text-xl uppercase tracking-wide"
+      />
 
       <div className="flex items-center justify-between">
         <button onClick={goToPrevMonth} className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-surface2 transition-colors">

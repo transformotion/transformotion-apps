@@ -317,6 +317,7 @@ export function CashflowTab() {
       <PageHeader
         title="Cashflow"
         subtitle="Visualize your income and spending trends"
+        titleClassName="font-display text-xl uppercase tracking-wide"
       />
 
       <PillSelector

@@ -245,6 +245,7 @@ export function RulesTab() {
       <PageHeader
         title="Rules"
         subtitle="Auto-categorization rules engine"
+        titleClassName="font-display text-xl uppercase tracking-wide"
       />
 
       {/* Rule Tester */}
@@ -343,7 +344,7 @@ export function RulesTab() {
       {addingRule && (
         <Card>
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-foreground">New Rule</h3>
+            <h3 className="font-display text-base font-semibold tracking-wide text-foreground">New Rule</h3>
             <button onClick={() => setAddingRule(false)} className="p-1 text-muted-foreground hover:text-foreground">
               <X className="size-4" />
             </button>
