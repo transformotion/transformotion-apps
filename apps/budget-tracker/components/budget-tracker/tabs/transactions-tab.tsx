@@ -336,6 +336,7 @@ export function TransactionsTab() {
           ? `${transactions.length} transactions${uncategorizedCount > 0 ? ` • ${uncategorizedCount} uncategorised` : ""}`
           : "Import and manage your transactions"
         }
+        titleClassName="font-display text-xl uppercase tracking-wide"
       />
 
       {learnError && (
@@ -1196,7 +1197,7 @@ function CSVImportModal({
       <Card className="w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
         <div className="flex items-center justify-between pb-4 border-b border-border">
           <div>
-            <h3 className="text-lg font-semibold text-foreground">Import CSV</h3>
+            <h3 className="font-display text-lg font-semibold tracking-wide text-foreground">Import CSV</h3>
             <p className="text-xs text-muted-foreground">
               {step === "upload" && "Select a CSV file from your bank"}
               {step === "preview" && "Preview and configure column mapping"}

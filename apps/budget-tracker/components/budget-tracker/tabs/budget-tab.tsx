@@ -576,7 +576,11 @@ export function BudgetTab() {
 
   return (
     <div className="p-4 space-y-4">
-      <PageHeader title="Budget" subtitle="Set your monthly spending targets" />
+      <PageHeader
+        title="Budget"
+        subtitle="Set your monthly spending targets"
+        titleClassName="font-display text-xl uppercase tracking-wide"
+      />
 
       <div className="flex items-center gap-2">
         <PrimaryButton onClick={updateFromActuals} className="flex-1">
@@ -630,7 +634,7 @@ export function BudgetTab() {
 
       {/* Monthly Recurring */}
       <div className="space-y-2">
-        <h3 className="text-sm font-semibold text-foreground">Monthly Recurring</h3>
+        <h3 className="font-display text-base font-semibold tracking-wide text-foreground">Monthly Recurring</h3>
         {renderCategorySection(regularCategories, "regular")}
         {addingCategory === "regular" ? (
           <div className="flex items-center gap-2 pt-1">
@@ -666,7 +670,7 @@ export function BudgetTab() {
 
       {/* Capital Expenditure */}
       <div className="space-y-2">
-        <h3 className="text-sm font-semibold text-signal-amber">Capital Expenditure</h3>
+        <h3 className="font-display text-base font-semibold tracking-wide text-signal-amber">Capital Expenditure</h3>
         <p className="text-xs text-muted-foreground">Excluded from regular P&amp;L cashflow calculations.</p>
         {renderCategorySection(capitalCategories, "capital")}
         {addingCategory === "capital" ? (
@@ -753,7 +757,7 @@ export function BudgetTab() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
           <Card className="w-full max-w-md">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-foreground">
+              <h3 className="font-display text-lg font-semibold tracking-wide text-foreground">
                 {deleteModal.kind === "category" ? "Delete Category" : "Delete Subcategory"}
               </h3>
               <button onClick={() => setDeleteModal(null)} className="p-1 text-muted-foreground hover:text-foreground">
