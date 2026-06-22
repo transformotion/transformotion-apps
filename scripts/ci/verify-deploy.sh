@@ -270,9 +270,12 @@ const payload = token.split('.')[1] ?? '';
 try {
   const claims = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
   const accounts = claims.accounts ? JSON.parse(claims.accounts) : {};
-  const accountId = accounts?.[app]?.[0]?.accountId
-    ?? (claims.site_admin === 'true' ? claims.sub : '')
-    ?? '';
+  // Account-scoped routes require a REAL account membership: there is no
+  // site-admin data bypass (D9), so X-Account-Id MUST come from the caller's
+  // own `accounts` claim. The former `site_admin` fallback was removed — the
+  // `site_admin` token claim was struck in m16.2.0, and even if present, using
+  // `sub` as X-Account-Id would be denied by `requireAccountData`. (#470)
+  const accountId = accounts?.[app]?.[0]?.accountId ?? '';
   process.stdout.write(accountId);
 } catch {
   process.stdout.write('');
@@ -284,9 +287,10 @@ NODE
 
 FAIL: could not derive X-Account-Id for app '$EXPECTED_APP' from the smoke-test token.
 
-The authenticated smoke check calls an account-scoped API route. The CI user
-must have either an accounts claim containing an account for '$EXPECTED_APP',
-or the site_admin claim.
+The authenticated smoke check calls an account-scoped API route, which requires a
+real account membership (there is no site-admin data bypass — D9). The CI user
+must hold an account for '$EXPECTED_APP' (its 'accounts' claim must contain one).
+Provision a smoke account + membership for the CI user in that app.
 
 EOF
       exit 1
