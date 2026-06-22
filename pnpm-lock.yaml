@@ -149,6 +149,9 @@ importers:
       '@transformotion/auth-client':
         specifier: workspace:*
         version: link:../../packages/auth-client
+      '@transformotion/brand-tokens':
+        specifier: workspace:*
+        version: link:../../packages/brand-tokens
       '@transformotion/budget-domain':
         specifier: workspace:*
         version: link:../../packages/budget-domain
@@ -548,6 +551,9 @@ importers:
       '@transformotion/auth-client':
         specifier: workspace:*
         version: link:../../packages/auth-client
+      '@transformotion/brand-tokens':
+        specifier: workspace:*
+        version: link:../../packages/brand-tokens
       '@transformotion/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
@@ -1057,6 +1063,9 @@ importers:
       '@transformotion/auth-client':
         specifier: workspace:*
         version: link:../../packages/auth-client
+      '@transformotion/brand-tokens':
+        specifier: workspace:*
+        version: link:../../packages/brand-tokens
       '@transformotion/cache':
         specifier: workspace:*
         version: link:../../packages/cache
