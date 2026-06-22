@@ -25,6 +25,7 @@ import {
 import { ConfirmationModal } from "@transformotion/ui-primitives"
 import { userFirstName, userInitials } from "@transformotion/auth-client"
 import { useActiveAccountStore } from "@/stores/active-account/use-active-account-store"
+import { useAuthStore, selectUser } from "@/stores/auth/use-auth-store"
 
 // ============================================================================
 // TYPES
@@ -166,6 +167,10 @@ export function NavigationProvider({
   // and active selection come from the store, not hard-coded placeholders.
   const storeAccounts = useActiveAccountStore(s => s.accounts)
   const storeActiveId = useActiveAccountStore(s => s.activeAccountId)
+  // The authenticated identity — its `name` is the auth client's resolved display
+  // name (control-plane displayName projected into the token, #501/#494), so the
+  // sidebar shows the user's real/chosen name instead of the DEFAULT_USER placeholder.
+  const authUser = useAuthStore(selectUser)
   const storeSwitchTo = useActiveAccountStore(s => s.switchTo)
 
   const navigateTo = useCallback((tab: TabId) => {
@@ -303,10 +308,14 @@ export function NavigationProvider({
     return state.tabCache[tab] ?? null
   }, [state.tabCache])
 
-  // Override the placeholder user accounts with the live control-plane set.
-  // (Display name/email enrichment is a follow-up; the selector shows account ids.)
+  // Override the placeholder user with the live identity + control-plane account set.
+  // name/email come from the authenticated user (auth client's resolved display name
+  // — control-plane displayName via the token, #501); DEFAULT_USER is only a
+  // pre-hydration fallback. accounts/activeAccountId come from the active-account store.
   const user: User = {
     ...state.user,
+    name: authUser?.name ?? state.user.name,
+    email: authUser?.email ?? state.user.email,
     accounts: storeAccounts.map(a => ({ id: a.accountId, name: a.name ?? a.accountId, type: 'Personal' as const })),
     activeAccountId: storeActiveId ?? '',
   }
