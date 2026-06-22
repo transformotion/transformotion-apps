@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
-import { Inter, Geist_Mono } from 'next/font/google'
+import { Inter, Geist_Mono, Oswald } from 'next/font/google'
 import { BUILD_COMMIT_HASH, APP_IDENTITY } from '@/lib/build-info'
+import { ThemeProvider } from '@/components/theme-provider'
 import './globals.css'
 
 const inter = Inter({
@@ -10,6 +11,10 @@ const inter = Inter({
 const geistMono = Geist_Mono({
   subsets: ["latin"],
   variable: '--font-geist-mono',
+})
+const oswald = Oswald({
+  subsets: ["latin"],
+  variable: '--font-oswald',
 })
 
 export const metadata: Metadata = {
@@ -37,9 +42,17 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" data-commit={BUILD_COMMIT_HASH} data-app={APP_IDENTITY} className={`${inter.variable} ${geistMono.variable} bg-background`}>
+    <html lang="en" data-commit={BUILD_COMMIT_HASH} data-app={APP_IDENTITY} className={`${inter.variable} ${geistMono.variable} ${oswald.variable} bg-background`} suppressHydrationWarning>
       <body className="font-sans antialiased min-h-screen bg-background text-foreground">
-        {children}
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="light"
+          enableSystem={false}
+          disableTransitionOnChange
+          storageKey="transformotion-theme"
+        >
+          {children}
+        </ThemeProvider>
       </body>
     </html>
   )

@@ -1,8 +1,9 @@
 import type { Metadata, Viewport } from 'next'
-import { Inter, Geist_Mono, Bebas_Neue } from 'next/font/google'
+import { Inter, Geist_Mono, Bebas_Neue, Oswald } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { BUILD_COMMIT_HASH, APP_IDENTITY } from '@/lib/build-info'
 import { PersonaSwitcher } from '@/components/launchpad/dev/persona-switcher'
+import { ThemeProvider } from '@/components/theme-provider'
 import { devToolsEnabled } from '@/lib/dev-tools'
 import './globals.css'
 
@@ -18,6 +19,10 @@ const bebasNeue = Bebas_Neue({
   weight: '400',
   subsets: ['latin'],
   variable: '--font-bebas-neue',
+})
+const oswald = Oswald({
+  subsets: ['latin'],
+  variable: '--font-oswald',
 })
 
 export const metadata: Metadata = {
@@ -43,13 +48,22 @@ export default function RootLayout({
       lang="en"
       data-commit={BUILD_COMMIT_HASH}
       data-app={APP_IDENTITY}
-      className={`${inter.variable} ${geistMono.variable} ${bebasNeue.variable} bg-background`}
+      className={`${inter.variable} ${geistMono.variable} ${bebasNeue.variable} ${oswald.variable} bg-background`}
+      suppressHydrationWarning
     >
       <body className="font-sans antialiased min-h-screen bg-background text-foreground">
-        {children}
-        {/* Dev-only persona switcher (gated mount + the component self-gates via
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="light"
+          enableSystem={false}
+          disableTransitionOnChange
+          storageKey="transformotion-theme"
+        >
+          {children}
+          {/* Dev-only persona switcher (gated mount + the component self-gates via
             devToolsEnabled()). Absent from production builds. */}
-        {devToolsEnabled() && <PersonaSwitcher />}
+          {devToolsEnabled() && <PersonaSwitcher />}
+        </ThemeProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>
