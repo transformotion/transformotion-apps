@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { User } from '@transformotion/auth-client'
 import { authService } from '@/lib/services/auth'
 import { getConfig } from '@/lib/config'
@@ -24,9 +24,14 @@ export interface LaunchpadData {
   accountNames: Record<string, string>
   /** True when the live read failed and entitlement came from a claims fallback. */
   degraded: boolean
+  /** Re-run the live profile/entitlement read (e.g. after the user edits their profile). */
+  refresh: () => void
 }
 
-const EMPTY: LaunchpadData = {
+/** Internal state — the data without the `refresh` action (which the hook supplies). */
+type LaunchpadDataState = Omit<LaunchpadData, 'refresh'>
+
+const EMPTY: LaunchpadDataState = {
   loading: false,
   profile: null,
   entitledSlugs: new Set(),
@@ -45,7 +50,11 @@ const EMPTY: LaunchpadData = {
  * claims-based entitlement probe — never crashes, never blank-crashes a tile.
  */
 export function useLaunchpadData(user: User | null): LaunchpadData {
-  const [state, setState] = useState<LaunchpadData>({ ...EMPTY, loading: true })
+  const [state, setState] = useState<LaunchpadDataState>({ ...EMPTY, loading: true })
+  // Bumped to force a re-read (e.g. after the user saves their profile) — the live
+  // read is otherwise keyed on the stable identity and won't refetch on a mutation.
+  const [refreshNonce, setRefreshNonce] = useState(0)
+  const refresh = useCallback(() => setRefreshNonce((n) => n + 1), [])
 
   useEffect(() => {
     let cancelled = false
@@ -138,12 +147,13 @@ export function useLaunchpadData(user: User | null): LaunchpadData {
     return () => {
       cancelled = true
     }
-    // Re-run only when the authenticated identity changes, not on every store
-    // update (the persisted user object changes identity on each set()).
+    // Re-run when the authenticated identity changes, or when `refresh()` is called
+    // (e.g. after a profile save) — NOT on every store update (the persisted user
+    // object changes identity on each set()).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id])
+  }, [user?.id, refreshNonce])
 
-  return state
+  return { ...state, refresh }
 }
 
 /**
