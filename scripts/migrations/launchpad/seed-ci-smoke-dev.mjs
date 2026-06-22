@@ -54,12 +54,23 @@ const T = {
   members: 'launchpad-account-members-dev',
 };
 
-// The EXACT live SA smoke account (the historical cutover UUID — reproduced verbatim so a
-// rebuild matches current live state, not an invented stable id).
-const SA_ACCOUNT_ID = '03d2eb72-88f6-4f5e-b14a-e805c11870e3';
-const SA_ACCOUNT_NAME = 'CI Smoke - Stock Analyser';
-const SA_APP = 'stock-analyser';
-const GROUPS = ['stock-app-access']; // the access group the SA membership implies
+// The CI user's smoke accounts — reproduced VERBATIM from current live (real ids, real
+// names), so a rebuild == current live state and a re-run against live is an all-no-op.
+//
+//  • SA (03d2eb72): a CLEAN ORPHAN (only the CI user) that was BROKEN (missing appSlug) +
+//    non-reproduced. Repaired + renamed "CI Smoke - Stock Analyser" by the #470 live fix;
+//    reproduced here in the corrected shape.
+//  • BT (aed9dcdf "Steve's Budget"): a HEALTHY (appSlug=budget-tracker) but SHARED real
+//    account — the CI user is one of 4 members (incl. real users). We reproduce ONLY the
+//    CI user's SLICE: the account row + the CI user's own owner membership (the other
+//    members are real users / separate fixtures, out of this CI-smoke seed's scope). No
+//    repair — the account is already valid; the membership appSlug is denormalized to the
+//    current convention (live happens to be null, but resolves via the account fallback).
+const SMOKE_ACCOUNTS = [
+  { accountId: '03d2eb72-88f6-4f5e-b14a-e805c11870e3', appSlug: 'stock-analyser', name: 'CI Smoke - Stock Analyser', role: 'owner' },
+  { accountId: 'aed9dcdf-81b5-47a1-a0d5-5afbae940e93', appSlug: 'budget-tracker', name: "Steve's Budget", role: 'owner' },
+];
+const GROUPS = ['stock-app-access', 'budget-app-access']; // access groups the memberships imply
 
 const now = new Date().toISOString();
 
@@ -95,20 +106,19 @@ async function main() {
     status: 'active', createdAt: now, updatedAt: now,
   });
 
-  // Write 1 + 2: SA account row with appSlug + the renamed name.
-  putIfAbsent(T.accounts, 'accountId', {
-    accountId: SA_ACCOUNT_ID, appSlug: SA_APP, name: SA_ACCOUNT_NAME, createdAt: now,
-  });
-
-  // Write 3: membership row with the DENORMALIZED appSlug the pre-token reads.
-  putIfAbsent(T.members, 'accountId', {
-    accountId: SA_ACCOUNT_ID, userId: sub, email, appSlug: SA_APP, role: 'owner', joinedAt: now,
-  });
+  // Per app: the account row (appSlug + name) AND the membership row with the
+  // DENORMALIZED appSlug the pre-token reads — so each lane's account-scoped smoke
+  // resolves an X-Account-Id from the CI user's claim.
+  for (const a of SMOKE_ACCOUNTS) {
+    putIfAbsent(T.accounts, 'accountId', { accountId: a.accountId, appSlug: a.appSlug, name: a.name, createdAt: now });
+    putIfAbsent(T.members, 'accountId', { accountId: a.accountId, userId: sub, email, appSlug: a.appSlug, role: a.role, joinedAt: now });
+  }
 
   console.log('\n=== CI SMOKE SEED SUMMARY ===');
-  console.log(`user=${email} sub=${sub} account=${SA_ACCOUNT_ID} (${SA_APP}, "${SA_ACCOUNT_NAME}") membership=owner`);
-  console.log('Verify: acquire a token for the CI user → accounts claim contains '
-    + `"${SA_APP}":[{accountId:"${SA_ACCOUNT_ID}", role:"owner"}] → SA smoke derives X-Account-Id → /portfolio 2xx.`);
+  console.log(`user=${email} sub=${sub}`);
+  for (const a of SMOKE_ACCOUNTS) console.log(`  ${a.appSlug.padEnd(14)} ${a.accountId}  "${a.name}"  (${a.role})`);
+  console.log('Verify: a CI-user token carries both apps in `accounts` → SA /portfolio and '
+    + 'BT /api/budget/v1/settings each derive X-Account-Id → 2xx.');
 }
 
 // ---------------------------------------------------------------------------
