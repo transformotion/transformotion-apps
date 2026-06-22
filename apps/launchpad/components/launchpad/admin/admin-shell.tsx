@@ -1,6 +1,8 @@
 'use client'
 
 import type { ReactNode } from 'react'
+import { useEffect, useState } from 'react'
+import { useTheme } from 'next-themes'
 import { usePathname, useRouter } from 'next/navigation'
 import {
   Users,
@@ -149,6 +151,12 @@ export function AdminShell({
   const router = useRouter()
   const pathname = usePathname()
   const viewer = useAdminViewer()
+  const { resolvedTheme } = useTheme()
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => setMounted(true), [])
+
+  const isDark = mounted && resolvedTheme === 'dark'
 
   // Pre-resolution / SSR: render a neutral frame, never privileged content.
   if (!viewer) {
@@ -168,11 +176,63 @@ export function AdminShell({
     (canUseInviteSurfaces(viewer) &&
       INVITE_SURFACE_ROUTES.some((route) => pathname.startsWith(route)))
   const navItems = ADMIN_NAV.filter((item) => item.visible(viewer))
+  const railBg = isDark ? 'bg-card border-r border-border' : 'bg-brand-navy'
+  const railMuted = isDark ? 'text-muted-foreground' : 'text-brand-navy-foreground/60'
+  const railPanel = isDark ? 'bg-surface2 ring-border' : 'bg-white/5 ring-white/10'
+  const railIdle = isDark
+    ? 'text-muted-foreground hover:bg-surface2 hover:text-foreground'
+    : 'text-brand-navy-foreground/80 hover:bg-white/10 hover:text-brand-navy-foreground'
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="min-h-screen bg-background flex">
+      {allowed && (
+        <nav
+          className={cn('hidden md:flex md:w-64 md:shrink-0 md:flex-col', railBg)}
+          aria-label="Admin sections"
+        >
+          <div className="sticky top-0 flex max-h-screen flex-col gap-4 overflow-y-auto p-4">
+            <div className="px-1 pt-1">
+              <BrandLogo
+                surface="navy"
+                className="flex w-full"
+                imgClassName="h-auto w-full max-w-none"
+              />
+            </div>
+
+            <div className={cn('rounded-xl p-3 ring-1', railPanel)}>
+              <p className={cn('mb-2 text-[10px] font-semibold uppercase tracking-wider', railMuted)}>
+                Signed in as
+              </p>
+              <RoleBadges viewer={viewer} />
+            </div>
+
+            <ul className="flex flex-col gap-1">
+              {navItems.map((item) => {
+                const Icon = item.icon
+                const active = pathname === item.href
+                return (
+                  <li key={item.href} className="min-w-0">
+                    <button
+                      onClick={() => router.push(preserveQuery(item.href))}
+                      className={cn(
+                        'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                        active ? 'bg-brand-teal text-brand-teal-foreground' : railIdle,
+                      )}
+                    >
+                      <Icon className="size-4 shrink-0" />
+                      <span className="truncate">{item.label}</span>
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+        </nav>
+      )}
+
+      <div className="flex min-w-0 flex-1 flex-col">
       <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur-sm">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 md:px-6">
+        <div className="flex items-center justify-between gap-3 px-4 py-3 md:px-6">
           <div className="flex items-center gap-2 min-w-0 sm:gap-3">
             <button
               onClick={() => router.push(preserveQuery('/launchpad'))}
@@ -182,9 +242,6 @@ export function AdminShell({
               <ArrowLeft className="size-4 shrink-0" />
               <span>Launchpad</span>
             </button>
-            <div className="hidden md:flex md:items-center">
-              <BrandLogo surface="page" imgClassName="h-6 w-auto" />
-            </div>
             <span className="rounded-md bg-surface2 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
               Admin
             </span>
@@ -225,46 +282,15 @@ export function AdminShell({
           />
         </main>
       ) : (
-        <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-6 md:flex-row md:px-6">
-          {/* Sidebar nav */}
-          <nav className="md:w-56 md:shrink-0" aria-label="Admin sections">
-            <div className="mb-4 rounded-xl border border-border bg-card p-3">
-              <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Signed in as
-              </p>
-              <RoleBadges viewer={viewer} />
-            </div>
-            <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:flex md:flex-col md:gap-0.5">
-              {navItems.map((item) => {
-                const Icon = item.icon
-                const active = pathname === item.href
-                return (
-                  <li key={item.href} className="min-w-0">
-                    <button
-                      onClick={() => router.push(preserveQuery(item.href))}
-                      className={cn(
-                        'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-                        active
-                          ? 'bg-primary/10 text-primary'
-                          : 'text-muted-foreground hover:bg-surface2 hover:text-foreground',
-                      )}
-                    >
-                      <Icon className="size-4 shrink-0" />
-                      <span className="truncate">{item.label}</span>
-                      {!item.ready && (
-                        <span className="ml-auto hidden rounded bg-surface2 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-muted-foreground md:inline">
-                          Soon
-                        </span>
-                      )}
-                    </button>
-                  </li>
-                )
-              })}
-            </ul>
-          </nav>
+        <main className="flex-1 px-4 py-6 pb-24 md:px-6 md:pb-6">
+          <div className="mb-6 flex flex-wrap items-center gap-2 md:hidden">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Signed in as
+            </span>
+            <RoleBadges viewer={viewer} />
+          </div>
 
-          {/* Content */}
-          <section className="min-w-0 flex-1">
+          <section className="min-w-0">
             <div className="mb-5">
               <h1 className="font-display text-xl font-semibold uppercase tracking-wide text-foreground">{title}</h1>
               <p className="text-xs text-muted-foreground">{subtitle}</p>
@@ -273,6 +299,42 @@ export function AdminShell({
           </section>
         </main>
       )}
+      {allowed && (
+        <nav
+          className={cn(
+            'fixed inset-x-0 bottom-0 z-50 md:hidden',
+            isDark
+              ? 'bg-slate-50 text-brand-navy border-t border-border'
+              : 'bg-brand-navy text-brand-navy-foreground',
+          )}
+          aria-label="Admin sections"
+        >
+          <div className="flex items-stretch justify-around">
+            {navItems.map((item) => {
+              const Icon = item.icon
+              const active = pathname === item.href
+              return (
+                <button
+                  key={item.href}
+                  onClick={() => router.push(preserveQuery(item.href))}
+                  className={cn(
+                    'flex flex-1 flex-col items-center justify-center gap-0.5 py-2.5 transition-colors',
+                    active
+                      ? 'text-brand-teal'
+                      : isDark
+                        ? 'text-brand-navy/60'
+                        : 'text-brand-navy-foreground/70',
+                  )}
+                >
+                  <Icon className="size-5" />
+                  <span className="text-[10px] font-medium leading-tight text-center">{item.label}</span>
+                </button>
+              )
+            })}
+          </div>
+        </nav>
+      )}
+      </div>
     </div>
   )
 }
