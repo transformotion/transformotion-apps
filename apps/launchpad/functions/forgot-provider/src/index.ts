@@ -156,27 +156,29 @@ export async function handler(event: APIEvent): Promise<typeof GENERIC_OK> {
 }
 
 function buildHtml(hintText: string, ctaLabel: string, appUrl: string): string {
+  const logoUrl = `${appUrl}/images/brand/transformotion-logo-transparent.png`;
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#0D1B2A">
-<table width="100%" cellpadding="0" cellspacing="0" style="background:#0D1B2A;min-height:100vh">
+<body style="margin:0;padding:0;background:#23476B">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#23476B;min-height:100vh">
   <tr><td align="center" style="padding:48px 16px">
     <table cellpadding="0" cellspacing="0" style="max-width:480px;width:100%">
       <tr><td style="padding-bottom:28px;text-align:center">
-        <span style="font-family:'Helvetica Neue',sans-serif;font-size:26px;font-weight:900;letter-spacing:4px;color:#fff">T</span><span style="font-family:'Helvetica Neue',sans-serif;font-size:21px;font-weight:900;letter-spacing:4px;color:#fff">RANSFOR</span><span style="font-family:'Helvetica Neue',sans-serif;font-size:21px;font-weight:900;letter-spacing:4px;color:#00C4B3">M</span><span style="font-family:'Helvetica Neue',sans-serif;font-size:21px;font-weight:900;letter-spacing:4px;color:#E8A838">O</span><span style="font-family:'Helvetica Neue',sans-serif;font-size:21px;font-weight:900;letter-spacing:4px;color:#00C4B3">TION</span>
+        <img src="${logoUrl}" alt="Transformotion" width="220" style="display:inline-block;width:220px;max-width:80%;height:auto;border:0">
       </td></tr>
-      <tr><td style="background:#112538;border:1px solid #1A3550;border-radius:16px;padding:32px">
+      <tr><td style="background:#0E2339;border:1px solid #587494;border-radius:16px;padding:32px">
         <p style="margin:0 0 6px;font-size:18px;font-weight:700;color:#fff;font-family:sans-serif">Your sign-in method</p>
-        <p style="margin:0 0 24px;font-size:14px;color:#7BAAC8;font-family:sans-serif">You asked how you sign in to Transformotion Apps.</p>
-        <div style="background:#091523;border:1px solid #1A3550;border-radius:10px;padding:16px 20px;margin-bottom:28px">
-          <p style="margin:0 0 4px;font-size:12px;font-family:sans-serif;color:#7BAAC8;text-transform:uppercase;letter-spacing:1px">You signed in using</p>
-          <p style="margin:0;font-size:17px;font-weight:600;color:#00C4B3;font-family:sans-serif">${hintText}</p>
+        <p style="margin:0 0 24px;font-size:14px;color:#EBEFF2;font-family:sans-serif">You asked how you sign in to Transformotion Apps.</p>
+        <div style="background:#1D2F44;border:1px solid #587494;border-radius:10px;padding:16px 20px;margin-bottom:28px">
+          <p style="margin:0 0 4px;font-size:12px;font-family:sans-serif;color:#EBEFF2;text-transform:uppercase;letter-spacing:1px">You signed in using</p>
+          <p style="margin:0;font-size:17px;font-weight:600;color:#33C1C5;font-family:sans-serif">${hintText}</p>
         </div>
-        <a href="${appUrl}/auth" style="display:inline-block;background:#00C4B3;color:#0D1B2A;font-weight:700;font-size:14px;text-decoration:none;padding:12px 28px;border-radius:8px;font-family:sans-serif">${ctaLabel} &rarr;</a>
+        <a href="${appUrl}/auth" style="display:inline-block;background:#33C1C5;color:#0E2339;font-weight:700;font-size:14px;text-decoration:none;padding:12px 28px;border-radius:8px;font-family:sans-serif">${ctaLabel} &rarr;</a>
       </td></tr>
       <tr><td style="padding-top:20px;text-align:center">
-        <p style="margin:0;font-size:12px;color:#7BAAC8;font-family:sans-serif">If you didn't request this, you can safely ignore it.</p>
+        <p style="margin:0;font-size:12px;color:#EBEFF2;font-family:sans-serif">If you didn't request this, you can safely ignore it.</p>
       </td></tr>
     </table>
   </td></tr>

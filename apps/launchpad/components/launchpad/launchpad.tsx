@@ -2,10 +2,12 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { useTheme } from 'next-themes'
 import { cn } from '@/lib/utils'
-import { Wordmark } from '@/components/brand/wordmark'
+import { BrandLogo } from '@/components/brand/brand-logo'
+import { ThemeToggle } from '@/components/theme-toggle'
 import { AiEngineSettings } from '@/components/launchpad/ai-engine-settings'
-import { TrendingUp, Wallet, Layers, LogOut, Settings, User as UserIcon, ShieldCheck, Inbox, Plus, Sparkles, X } from 'lucide-react'
+import { TrendingUp, Wallet, Layers, LogOut, Settings, User as UserIcon, ShieldCheck, Inbox, Plus, Sparkles, X, ArrowRight } from 'lucide-react'
 import type { User } from '@transformotion/auth-client'
 import {
   LAUNCHPAD_APPS,
@@ -63,31 +65,45 @@ function Header({
   displayName: string
   onOpenProfile: () => void
 }) {
+  const { resolvedTheme } = useTheme()
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => setMounted(true), [])
+
+  const isDark = mounted && resolvedTheme === 'dark'
+
   return (
-    <header className="sticky top-0 z-50 bg-background/95 backdrop-blur-sm border-b border-border overflow-hidden">
-      <div className="max-w-5xl mx-auto px-4 py-4 md:px-6">
-        <div className="flex items-center justify-between gap-3">
-          <div className="shrink-0 min-w-0">
-            <div className="hidden sm:block">
-              <Wordmark size="lg" />
-            </div>
-            <div className="sm:hidden">
-              <Wordmark size="sm" />
-            </div>
-          </div>
+    <header
+      className={cn(
+        'transition-colors',
+        isDark ? 'bg-slate-50 text-brand-navy' : 'bg-brand-navy text-brand-navy-foreground',
+      )}
+    >
+      <div className="max-w-5xl mx-auto px-4 pt-4 pb-10 md:px-6 md:pt-5 md:pb-14">
+        <div className="flex items-center justify-end gap-2">
+          <ThemeToggle />
           <button
             onClick={onOpenProfile}
-            className="size-10 rounded-full bg-primary/15 flex items-center justify-center text-primary font-semibold text-sm hover:bg-primary/25 transition-colors"
+            className={cn(
+              'size-10 rounded-full flex items-center justify-center font-semibold text-sm transition-colors',
+              isDark
+                ? 'bg-brand-navy/10 text-brand-navy hover:bg-brand-navy/20'
+                : 'bg-white/15 text-brand-navy-foreground hover:bg-white/25',
+            )}
           >
             {initials(displayName)}
           </button>
         </div>
+        <div className="mt-1 flex justify-center">
+          <BrandLogo surface="contrast" priority imgClassName="h-16 w-auto sm:h-20" />
+        </div>
+        <Greeting name={firstNameOf(displayName)} dark={isDark} />
       </div>
     </header>
   )
 }
 
-function Greeting({ name }: { name: string }) {
+function Greeting({ name, dark }: { name: string; dark: boolean }) {
   const [mounted, setMounted] = useState(false)
   const greeting = mounted ? getGreeting() : 'Welcome'
 
@@ -96,11 +112,18 @@ function Greeting({ name }: { name: string }) {
   }, [])
 
   return (
-    <div className="mb-8">
-      <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-1">
+    <div className="mt-7 text-center md:mt-9">
+      <h1
+        className={cn(
+          'font-display text-3xl md:text-4xl font-semibold uppercase tracking-wide mb-1.5 text-balance',
+          dark ? 'text-brand-navy' : 'text-brand-navy-foreground',
+        )}
+      >
         {greeting}, {name}
       </h1>
-      <p className="text-muted-foreground">Welcome to your Transformotion workspace</p>
+      <p className={cn('text-pretty', dark ? 'text-brand-navy/70' : 'text-brand-navy-foreground/70')}>
+        Welcome to your Transformotion workspace
+      </p>
     </div>
   )
 }
@@ -142,7 +165,7 @@ function AppTile({
               Access granted
             </span>
           </div>
-          <h3 className="text-lg font-semibold text-foreground mb-1">{app.name}</h3>
+          <h3 className="font-display text-xl font-semibold uppercase tracking-wide text-foreground mb-1">{app.name}</h3>
           <p className="text-sm leading-relaxed text-muted-foreground">
             You have access — create your first account to get started.
           </p>
@@ -166,24 +189,24 @@ function AppTile({
         'relative overflow-hidden p-6 rounded-2xl border transition-all text-left',
         'animate-in fade-in slide-in-from-bottom-4',
         app.launchable
-          ? 'bg-card border-border hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5 active:scale-[0.98]'
+          ? 'group bg-card border-border shadow-sm hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-lg hover:shadow-primary/5 active:scale-[0.98]'
           : 'bg-card/50 border-border/50 cursor-not-allowed opacity-60',
       )}
       style={{ animationDelay: `${index * 100}ms` }}
     >
-      <div className={cn('absolute inset-0 bg-gradient-to-br opacity-60', app.bgGradient)} />
-      <div className="relative">
+      <div className={cn('absolute inset-0 bg-gradient-to-br opacity-20', app.bgGradient)} />
+      <div className="relative flex flex-col flex-1">
         <div
           className={cn(
-            'size-14 rounded-xl flex items-center justify-center mb-4',
-            app.launchable ? 'bg-surface2' : 'bg-surface2/50',
+            'size-12 rounded-xl flex items-center justify-center mb-4 ring-1',
+            app.launchable ? 'bg-surface2 ring-border' : 'bg-surface2/50 ring-border/50',
           )}
         >
-          <Icon className={cn('size-7', app.launchable ? app.color : 'text-muted-foreground')} />
+          <Icon className={cn('size-6', app.launchable ? app.color : 'text-muted-foreground')} />
         </div>
         <h3
           className={cn(
-            'text-lg font-semibold mb-1',
+            'font-display text-lg font-semibold mb-1.5 uppercase tracking-wide',
             app.launchable ? 'text-foreground' : 'text-muted-foreground',
           )}
         >
@@ -197,6 +220,12 @@ function AppTile({
         >
           {app.description}
         </p>
+        {app.launchable && (
+          <div className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-primary">
+            Open
+            <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+          </div>
+        )}
         {!app.launchable && (
           <div className="mt-4 inline-flex items-center px-3 py-1 bg-surface2 rounded-full text-xs font-medium text-muted-foreground">
             Coming Soon
@@ -569,9 +598,11 @@ export function Launchpad({
     <div className="min-h-screen bg-background flex flex-col">
       <Header displayName={displayName} onOpenProfile={() => setProfileMenuOpen(true)} />
 
-      <main className="flex-1 py-8 md:py-12">
+      <main className="flex-1 pt-8 pb-10 md:pt-10 md:pb-14">
         <div className="max-w-5xl mx-auto px-4 md:px-6">
-          <Greeting name={firstNameOf(displayName)} />
+          <h2 className="mb-4 font-display text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+            Your apps
+          </h2>
           {data.loading ? (
             <AppGridSkeleton />
           ) : hasVisibleApps(tiles) ? (
