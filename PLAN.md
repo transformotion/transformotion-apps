@@ -48,7 +48,7 @@ The full constraint statement is in `/CONTRIBUTING.md` Section 1.2.
 
 ## 2. How this plan is structured
 
-The plan is organised as 18 milestones (M0 through M17) plus a setup
+The plan is organised as 19 milestones (M0 through M18) plus a setup
 milestone (M-setup) for documentation and project-tracking infrastructure.
 Milestones are sequenced by dependency, not by priority. Each milestone
 has:
@@ -1389,15 +1389,104 @@ Can run in parallel with M7 once M2.1 lands. Migration depends on infrastructure
 
 ---
 
-## 21. M17 — Production cutover (go-live)
+## 21. M18 — Corporate rebrand and light/dark theming
+
+### Purpose
+
+Apply the real Transformotion corporate visual identity across the active
+platform apps before production cutover. This milestone replaces the
+early invented palette/logo with the owner's real corporate palette and
+logo, establishes light/dark mode, and creates a canonical shared
+brand-token source so future brand updates are made once and consumed
+consistently.
+
+### Outcome
+
+- Shared, compile-time-only Transformotion brand-token package created
+  for corporate palette, semantic light/dark tokens, typography tokens,
+  radius/shadow tokens where needed, and token maps for non-CSS
+  consumers.
+- Package exports no React components, layouts, navigation, tabs,
+  dashboards, app shells, or app-specific UI.
+- Launchpad, Stock Analyser, and Budget Tracker consume the shared brand
+  tokens through their app-owned styling integration points.
+- Real Transformotion logo/brand assets replace invented/code-rendered
+  runtime wordmarks where appropriate.
+- Light/dark mode is implemented across the active apps, using existing
+  `next-themes` infrastructure where suitable.
+- Cognito Hosted UI CSS, email templates, charts, favicons/icons, and
+  other non-CSS brand consumers are updated or explicitly dispositioned.
+- Existing app tabs/navigation are retained.
+- v0 freshness requirements are satisfied for UI-affecting work.
+- Dev deployment validates the rebrand across active apps.
+
+### Goals served
+
+Goal 3 primarily — platform cohesion / update once, reuse everywhere.
+Goal 1 secondarily — app-owned surfaces remain independent while
+consuming a shared token contract. Goal 2 indirectly — future apps can
+adopt the canonical brand-token package without reinventing the brand
+layer.
+
+### Gate to next
+
+M18 is complete when Launchpad, Stock Analyser, and Budget Tracker are
+deployed to dev with the real corporate palette/logo, light and dark
+modes verified, token duplication removed or explicitly dispositioned,
+non-CSS brand consumers updated or tracked, v0 freshness satisfied, and
+visual QA confirms existing app surfaces remain functionally unchanged
+apart from the approved rebrand/theming work.
+
+### Dependencies
+
+- **M15 complete or current v0 freshness workflow operational.** M18 is
+  UI-affecting work and must satisfy the v0 freshness discipline before
+  runtime PRs land.
+- **M16 complete or sequenced such that M18 can safely rebrand the
+  post-M16 surfaces before prod.**
+- **Production cutover depends on M18.** M17 must not begin until M18
+  reaches its gate.
+
+### Scope/provenance notes
+
+- Existing app surfaces: [prototyped]/existing runtime surfaces; M18 is
+  a visual rebrand of existing surfaces, not new product functionality.
+- Shared brand-token package: [net-new but owner-approved milestone
+  architecture].
+- Light/dark mode: [net-new but owner-approved milestone scope].
+- Real logo and corporate palette: [owner-provided brand input].
+- Existing tabs/navigation: keep.
+- Mockup left sidebar navigation: cut / out of scope.
+- Mockup dashboards: [net-new], deferred to later background-analysis
+  milestone.
+- Active apps in scope are Launchpad, Stock Analyser, and Budget
+  Tracker. Framework app is out of scope.
+- The owner's mockups are brand/style references only, not canonical
+  runtime surfaces.
+- "Live app" means the dev deployment for this milestone, not prod.
+
+### Out of scope
+
+- New dashboards.
+- Background market analysis.
+- Portfolio/watchlist scheduled refresh.
+- Buy/sell notification rules or delivery.
+- Framework app.
+- Shared React component library beyond existing governed UI primitives.
+- Production cutover.
+
+---
+
+## 22. M17 — Production cutover (go-live)
 
 ### Purpose
 
 Bring the platform from dev-only (develop is canonical, single user =
 owner) to a live prod environment on main with external users. This is
-the gate the owner set: prod go-live requires invitee onboarding (M11)
-to be complete first. Prod cutover is deliberate, milestone-scoped work
-— not plumbing to be done incrementally.
+the gate the owner set: prod go-live requires invitee onboarding and the
+corporate rebrand/theming work to be complete first. Prod cutover is
+deliberate, milestone-scoped work — not plumbing to be done
+incrementally.
 
 Throughout the build phase, main is intentionally **unborn** — reserved
 for prod and never touched; develop is canonical, and the default branch
@@ -1440,19 +1529,26 @@ multi-user / external-user operation.
 A live prod environment on main: develop promoted to main, branch
 protection in force, every workflow re-audited against the prod branch
 model, and prod environment/secrets verified — with external users able
-to onboard via the M11 invitation flow. (Terminal milestone: this is the
-go-live event, not a gate into further build-phase work.)
+to onboard via the M11 invitation flow, and the active apps already
+validated with the real Transformotion corporate brand and light/dark
+theming from M18. (Terminal milestone: this is the go-live event, not a
+gate into further build-phase work.)
 
 ### Dependencies
 
 - **M16 — Account lifecycle and invitation, complete (hard gate).** Prod
   go-live requires invitee onboarding (the M11 invitation flow) to be
-  complete first — the owner-set gate. Cutover does not begin until the
-  account-lifecycle and invitation work is done.
+  complete first — the owner-set gate for external users.
+- **M18 — Corporate rebrand and light/dark theming, complete (hard
+  gate).** Prod go-live requires the active apps to carry the real
+  Transformotion corporate visual identity and verified light/dark
+  theming before external users see production.
+
+Cutover does not begin until both M16 and M18 are done.
 
 ---
 
-## 22. Beyond M14
+## 23. Beyond M14
 
 The following items are scoped but not yet sequenced into milestones.
 They live in the "Backlog" GitHub milestone (a holding area, not a
@@ -1511,9 +1607,9 @@ out of the Backlog milestone.
 
 ---
 
-## 23. Discipline and update rules
+## 24. Discipline and update rules
 
-### 20.1 Updating this document
+### 24.1 Updating this document
 
 When a milestone's scope changes mid-execution, this document is updated
 in the same PR that lands the change. The plan does not get retrofitted
@@ -1524,7 +1620,7 @@ When a new milestone is added, sequencing it requires deciding which
 existing milestones it depends on and which depend on it. The dependency
 graph is what the GitHub Project's roadmap view renders.
 
-### 20.2 Milestone gates
+### 24.2 Milestone gates
 
 Each milestone has a "gate to next" condition. The gate is the specific
 observable that says the milestone is complete. Gates are not vibes —
@@ -1535,13 +1631,13 @@ When a milestone reaches its gate, the next dependent milestone is
 unblocked. The GitHub Project's blocked-by relationships make this
 visible at the issue level.
 
-### 20.3 Beyond-M14 promotion
+### 24.3 Beyond-M14 promotion
 
-Items in Section 19 are promoted to numbered milestones when they become
+Items in Section 23 are promoted to numbered milestones when they become
 actionable. Promotion is a PR that updates this document and creates the
 corresponding GitHub Milestone with issues.
 
-### 20.4 Operating principles apply
+### 24.4 Operating principles apply
 
 The operating principles in `CONTRIBUTING.md` Section 5 apply throughout:
 verify before acting, audit cheerful framings, evaluate against the
@@ -1551,7 +1647,7 @@ document in the same PR.
 
 ---
 
-## 24. Reference — milestone summary table
+## 25. Reference — milestone summary table
 
 For quick visual reference. The full text above is the canonical source.
 
@@ -1575,7 +1671,8 @@ For quick visual reference. The full text above is the canonical source.
 | M14 | Deployment verification | 2, 1, 3 | M13 |
 | M15 | v0-canonical transition | 2, 4 | M6 |
 | M16 | Account lifecycle and invitation | 3, 4 | M11, M15 |
-| M17 | Production cutover (go-live) | 2 | M16 |
+| M18 | Corporate rebrand and light/dark theming | 3, 1, 2 | M15, M16 |
+| M17 | Production cutover (go-live) | 2 | M16, M18 |
 
 M8, M9, M10 can run in parallel. M11 follows M10. M7 can run in parallel
 with M6 once M2 and M3 complete. M13 and M14 are sequenced strictly
