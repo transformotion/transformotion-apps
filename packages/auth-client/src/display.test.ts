@@ -36,6 +36,27 @@ describe('composeDisplayName — token claims → User.name (#494)', () => {
   })
 })
 
+describe('composeDisplayName — control-plane displayName projection (#501)', () => {
+  it('the projected displayName WINS over given+family (the name set in Profile)', () => {
+    expect(
+      composeDisplayName({ displayName: 'Hotty Mail', givenName: 'Steve', familyName: 'Moodie', email: 'x@y.com' }),
+    ).toBe('Hotty Mail')
+  })
+
+  it('wins over the OIDC `name` claim too (federated user who set a name)', () => {
+    expect(
+      composeDisplayName({ displayName: 'Hotty Mail', nameClaim: 'Steve Moodie', email: 'stevemoodie@hotmail.com' }),
+    ).toBe('Hotty Mail')
+  })
+
+  it('absent/whitespace displayName → the #494 chain is UNCHANGED', () => {
+    // The whole point: not setting a name leaves every other user exactly as before.
+    expect(composeDisplayName({ givenName: 'Steve', familyName: 'Moodie', email: 'x@y.com' })).toBe('Steve Moodie')
+    expect(composeDisplayName({ displayName: '   ', nameClaim: 'Steve Moodie', email: 'x@y.com' })).toBe('Steve Moodie')
+    expect(composeDisplayName({ displayName: undefined, email: 'stevemoodie70@gmail.com' })).toBe('stevemoodie70')
+  })
+})
+
 describe('userFirstName / userInitials (#494)', () => {
   it('first name is the first whitespace token', () => {
     expect(userFirstName({ name: 'Steve Moodie' })).toBe('Steve')

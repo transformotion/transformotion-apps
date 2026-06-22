@@ -51,6 +51,10 @@ export class CognitoAuthService implements AuthService {
       // the next-best full name so federated users without given/family still show a
       // real name (and a correct first name once split) rather than the email.
       const nameClaim  = (claims['name'] as string | undefined)?.trim() || undefined
+      // The user's EXPLICITLY-set display name, projected from the control-plane
+      // `launchpad-users.displayName` into this token claim by the pre-token trigger
+      // (#501). Authoritative — the name set in Profile shows in every app.
+      const displayName = (claims['display_name'] as string | undefined)?.trim() || undefined
       // M16 Phase 6 (D11): platform admin status comes from the `site-admin`
       // Cognito group. The earlier `site_admin` token claim was an unintended
       // projection of the same group and has been removed — the frontend now
@@ -66,8 +70,8 @@ export class CognitoAuthService implements AuthService {
       // M11 groups-authoritative: apps the user may ENTER come from the
       // `{app}-app-access` groups (the launchpad gate keys on this, not membership).
       const appAccess  = deriveAppAccess(groups as CognitoGroup[])
-      // Name source order (#494) — NEVER the full email; see composeDisplayName.
-      const name       = composeDisplayName({ givenName, familyName, nameClaim, email })
+      // Name source order (#494/#501) — NEVER the full email; see composeDisplayName.
+      const name       = composeDisplayName({ displayName, givenName, familyName, nameClaim, email })
       return { id: cognitoUser.userId, email, name, metadata: { siteAdmin, appAdmin, appAccess } }
     } catch {
       return null

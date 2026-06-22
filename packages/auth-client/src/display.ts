@@ -14,22 +14,31 @@
 type NamedUser = { name?: string | null }
 
 /**
- * Compose the `User.name` from ID-token claims (#494). The result is NEVER the full
- * email — a sidebar that renders `name.split(' ')[0]` on a full address showed the
+ * Compose the `User.name` from ID-token claims (#494, #501). The result is NEVER the
+ * full email — a sidebar that renders `name.split(' ')[0]` on a full address showed the
  * whole email; the email LOCAL part is the only email-derived fallback. Order:
  *
- *   given + family → OIDC `name` claim → given alone → email local part → email
+ *   control-plane displayName → given + family → OIDC `name` claim → given alone
+ *     → email local part → email
  *
- * The `name` claim sits above `given` alone because IdPs that map only `name`
- * (Microsoft, Facebook before #494's mapping change) still yield a real full name,
- * and splitting it gives a correct first name.
+ * `displayName` is the user's EXPLICITLY-set name, projected into the token's
+ * `display_name` claim by the pre-token-generation trigger from the control-plane
+ * `launchpad-users.displayName` (#501). It is the source of truth and wins, so the
+ * name a user sets in Profile appears in EVERY app (all read `user.name` from the
+ * token). When it is absent the rest of the chain is exactly the #494 order — so
+ * nothing changes for users who have not set a displayName. The `name` claim sits
+ * above `given` alone because IdPs that map only `name` (Microsoft, Facebook before
+ * #494's mapping change) still yield a real full name, split to a correct first name.
  */
 export function composeDisplayName(claims: {
+  displayName?: string | null
   givenName?: string | null
   familyName?: string | null
   nameClaim?: string | null
   email?: string | null
 }): string {
+  const displayName = claims.displayName?.trim() || undefined
+  if (displayName) return displayName // control-plane source of truth (#501)
   const given = claims.givenName?.trim() || undefined
   const family = claims.familyName?.trim() || undefined
   const nameClaim = claims.nameClaim?.trim() || undefined

@@ -63,7 +63,7 @@ User profile and preferences keyed by Cognito `sub`.
 | `userId` (PK) | String | Cognito `sub` |
 | `email` | String | User email (original case) |
 | `emailLower` | String | Lowercase email — used by `email-index` GSI for redemption lookup (M16 D4) |
-| `displayName` | String (optional) | Human-friendly name. Present only when the IdP supplied a real given/family name **or** the user set one explicitly (#494/#496); **omitted at bootstrap** (no email fallback at write time). Source of truth; never denormalized onto membership rows (D6). |
+| `displayName` | String (optional) | Human-friendly name. Present only when the IdP supplied a real given/family name **or** the user set one explicitly (#494/#496); **omitted at bootstrap** (no email fallback at write time). **Source of truth for the user's name — the pre-token-generation trigger projects it into the token's `display_name` claim (#501), keyed on the `sub`, so the name a user sets in Profile shows across every app.** Never denormalized onto membership rows (D6). |
 | `profileComplete` | Boolean | False until user completes first-time profile setup |
 | `status` | String | `active \| disabled`. Absent means `active` (backwards compatibility). |
 | `preferences` | Map | `{ notificationsEnabled: boolean }` |
