@@ -161,6 +161,7 @@ Return ONLY valid JSON.`,
       <PageHeader
         title="Precious Metals"
         subtitle="Spot prices and signals"
+        titleClassName="font-display uppercase tracking-wide"
         action={
           <TextToggle
             visible={textVisible}

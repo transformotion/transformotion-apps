@@ -98,6 +98,7 @@ Provide 6 ETFs. Return ONLY valid JSON.`,
       <PageHeader
         title="ETFs"
         subtitle="Exchange-traded funds with signals"
+        titleClassName="font-display uppercase tracking-wide"
         action={
           <TextToggle
             visible={textVisible}

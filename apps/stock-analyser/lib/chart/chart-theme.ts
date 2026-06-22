@@ -1,10 +1,11 @@
 import type { CandlestickSeriesOptions } from 'lightweight-charts';
+import { chartColorTokens, semanticThemeTokens, statusTokens } from '@transformotion/brand-tokens';
 
 export const CHART_THEME = {
-  text:        '#6b7280',
-  grid:        '#253244',
-  signalGreen: '#1D9E75',
-  signalRed:   '#D4537E',
+  text:        semanticThemeTokens.light.mutedForeground,
+  grid:        chartColorTokens.chart3.light,
+  signalGreen: statusTokens.success.light,
+  signalRed:   statusTokens.destructive.light,
 } as const;
 
 export const CANDLESTICK_COLORS: Partial<CandlestickSeriesOptions> = {

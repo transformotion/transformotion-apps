@@ -157,6 +157,7 @@ export function WatchlistTab() {
         <PageHeader
           title="Watchlist"
           subtitle="Stocks you are tracking with cycle alerts"
+          titleClassName="font-display uppercase tracking-wide"
           action={
             <TextToggle visible={textVisible} onToggle={toggleTextVisibility} isOverride={isTextOverride} />
           }
@@ -165,6 +166,7 @@ export function WatchlistTab() {
         <EmptyState
           icon={Eye}
           title="Watchlist empty"
+          titleClassName="font-display"
           description="Add stocks from the Analyser or Recommendations tabs, or use the form above."
         />
       </div>
@@ -176,6 +178,7 @@ export function WatchlistTab() {
       <PageHeader
         title="Watchlist"
         subtitle="Stocks you are tracking with cycle alerts"
+        titleClassName="font-display uppercase tracking-wide"
         action={
           <TextToggle visible={textVisible} onToggle={toggleTextVisibility} isOverride={isTextOverride} />
         }
