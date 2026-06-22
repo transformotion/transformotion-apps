@@ -102,4 +102,18 @@ describe('membershipUserId — table key is the sub, not the Username (#486)', (
   it('falls back to userName when sub is somehow absent (defensive)', () => {
     expect(membershipUserId({ userName: 'u-1', request: { userAttributes: {} } })).toBe('u-1');
   });
+
+  it('#501: the display_name projection reads launchpad-users by this SAME sub key', () => {
+    // The pre-token trigger reads the control-plane displayName via
+    // fetchDisplayName(membershipUserId(event)) — the same sub-keyed id as the
+    // membership query. So a FEDERATED user's projected name comes from THEIR row
+    // (keyed on the sub written at #496), not the provider-shaped Username. Guarding
+    // this here keeps the #486 federated-keying guarantee covering #501 too.
+    const federated = {
+      userName: 'Microsoft_AAAAAAAAAAAAAAAAAAAAACkKgT1UYwsZ9B8QTHWoWIk',
+      request: { userAttributes: { sub: '293ed468-4091-7006-b2e3-1f88cdc9df73', email: 'x@y.com' } },
+    };
+    expect(membershipUserId(federated)).toBe('293ed468-4091-7006-b2e3-1f88cdc9df73');
+    expect(membershipUserId(federated)).not.toBe(federated.userName);
+  });
 });

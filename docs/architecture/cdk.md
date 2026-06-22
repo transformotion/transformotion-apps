@@ -154,7 +154,7 @@ Launchpad control-plane and auth-domain variables:
 
 | Variable | Lambda | Value |
 |---|---|---|
-| `USERS_TABLE` | `launchpad-user-{stage}` | `launchpad-users-{stage}` |
+| `USERS_TABLE` | `launchpad-user-{stage}`, `launchpad-account-provisioning-{stage}`, `launchpad-invitation-redemption-{stage}`, `launchpad-pre-token-generation-{stage}` (#501, read-only) | `launchpad-users-{stage}` |
 | `ACCOUNTS_TABLE` | Launchpad account-provisioning, accounts, invitations, pre-token generation | `launchpad-accounts-{stage}` |
 | `ACCOUNT_MEMBERS_TABLE` | Launchpad account-provisioning, accounts, pre-token generation | `launchpad-account-members-{stage}` |
 | `INVITATIONS_TABLE` | `launchpad-invitations-{stage}` | `launchpad-invitations-{stage}` |

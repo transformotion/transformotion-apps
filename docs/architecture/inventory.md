@@ -72,7 +72,10 @@ held memberships + groups but had no user row and were invisible in the director
 a one-off `scripts/ops/backfill-user-rows-496.mjs` addresses the pre-#496 orphans.
 
 The pre-token trigger emits the `apps` and `accounts` claims consumed by
-Launchpad, Stock Analyser, Budget Tracker, and migration utilities.
+Launchpad, Stock Analyser, Budget Tracker, and migration utilities. It also
+projects the control-plane `launchpad-users.displayName` into the `display_name`
+claim (#501), so the name a user sets in Profile is the source of truth shown
+across every app (the auth client's `composeDisplayName` prefers it).
 Platform admin status is NOT a claim — it is read from the `site-admin` Cognito
 group (`cognito:groups`); the `site_admin` claim was removed in M16 Phase 6
 (v0 contract `m16.2.0` / D11).

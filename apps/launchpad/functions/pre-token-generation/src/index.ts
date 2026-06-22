@@ -4,13 +4,14 @@ import {
   CognitoIdentityProviderClient,
 } from '@aws-sdk/client-cognito-identity-provider';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { BatchGetCommand, DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import { BatchGetCommand, DynamoDBDocumentClient, GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 
 const cognito = new CognitoIdentityProviderClient({});
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
 const ACCOUNT_MEMBERS_TABLE = process.env.ACCOUNT_MEMBERS_TABLE!;
 const ACCOUNTS_TABLE = process.env.ACCOUNTS_TABLE!;
+const USERS_TABLE = process.env.USERS_TABLE!;
 
 interface AppEntry {
   slug: string;
@@ -50,6 +51,31 @@ export function membershipUserId(
 interface AccountRow {
   accountId: string;
   appSlug: string;
+}
+
+/**
+ * The user's EXPLICITLY-set control-plane display name, or `undefined` (#501).
+ *
+ * Projected into the token's `display_name` claim so a name set on the Profile screen
+ * is the source of truth shown across every app (all read `user.name` from the token
+ * via `composeDisplayName`). Keyed on the `sub` (`userId`) — correct for native AND
+ * federated users (the row is written keyed on the sub; #496). When absent, no claim
+ * is added and the auth client falls back to the IdP name (#494 chain) — so this
+ * never overrides a user who has not set a name. Read failures fail OPEN (no claim).
+ */
+async function fetchDisplayName(userId: string): Promise<string | undefined> {
+  try {
+    const res = await ddb.send(new GetCommand({
+      TableName: USERS_TABLE,
+      Key: { userId },
+      ProjectionExpression: 'displayName',
+    }));
+    const displayName = (res.Item?.['displayName'] as string | undefined)?.trim();
+    return displayName || undefined;
+  } catch (err) {
+    console.error('[launchpad-pre-token] displayName read failed (omitting claim):', err);
+    return undefined;
+  }
 }
 
 async function queryMemberships(userId: string): Promise<MembershipRow[]> {
@@ -209,7 +235,10 @@ export const handler = async (
 
     console.log('[launchpad-pre-token] username:', cognitoUsername, 'sub:', subject, 'groups:', currentGroups.join(','));
 
-    const memberships = await queryMemberships(subject);
+    const [memberships, displayName] = await Promise.all([
+      queryMemberships(subject),
+      fetchDisplayName(subject), // #501 — the control-plane display name, projected below
+    ]);
 
     // Resolve appSlug for legacy membership rows that predate D3 denormalization
     const missingAppSlugIds = memberships
@@ -237,6 +266,9 @@ export const handler = async (
     const claims: Record<string, string> = {
       apps: JSON.stringify(buildAppsList(reconciledGroups)),
       accounts: JSON.stringify(accountsByApp),
+      // #501 — project the control-plane display name as the authoritative token name.
+      // Omitted when unset, so the auth client falls back to the IdP name (#494 chain).
+      ...(displayName ? { display_name: displayName } : {}),
     };
 
     console.log('[launchpad-pre-token] claims apps:', claims['apps']);

@@ -444,6 +444,7 @@ export class LaunchpadAuthStack extends cdk.Stack {
       environment: {
         ACCOUNT_MEMBERS_TABLE: this.accountMembersTable.tableName,
         ACCOUNTS_TABLE: this.accountsTable.tableName,
+        USERS_TABLE: this.usersTable.tableName,
         APP_REGISTRY: appRegistryJson,
       },
       bundling: {
@@ -456,6 +457,9 @@ export class LaunchpadAuthStack extends cdk.Stack {
 
     this.accountMembersTable.grantReadData(preTokenFn);
     this.accountsTable.grantReadData(preTokenFn);
+    // #501 — project the control-plane display name into the token's `display_name`
+    // claim so a name set in Profile shows across every app. Read-only on the users table.
+    this.usersTable.grantReadData(preTokenFn);
     // M11 groups-authoritative: the pre-token trigger no longer reads the
     // app-admin-grants table — app-admin status travels in `cognito:groups`
     // (`{app}-app-admin`), not the struck `app_admin` claim. The grants table

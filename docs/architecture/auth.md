@@ -80,7 +80,7 @@ claims. There is no `site_admin` claim and no `app_admin` claim.)
 
 | Trigger | Function | Purpose |
 |---|---|---|
-| Pre-token generation | `launchpad-pre-token-generation-{stage}` | Injects `apps`, `accounts` custom claims - see below |
+| Pre-token generation | `launchpad-pre-token-generation-{stage}` | Injects `apps`, `accounts`, and `display_name` (#501) custom claims - see below |
 
 ---
 
@@ -189,19 +189,27 @@ correct first name. The `ProviderName` values are deliberately
 (`apps/launchpad/lib/redemption/seam.ts`) resolves the `identities` claim to the
 contract `IdpProvider`.
 
-**Display name from claims (#494).** The auth client composes `User.name` from the
-ID-token claims as `given + family → OIDC name claim → given alone → email LOCAL
-part` — **never the full email** (`composeDisplayName`,
+**Display name from claims (#494/#501).** The auth client composes `User.name` from the
+ID-token claims as `control-plane displayName → given + family → OIDC name claim →
+given alone → email LOCAL part` — **never the full email** (`composeDisplayName`,
 `packages/auth-client/src/display.ts`). The earlier composition fell back to the
 full email, which the app sidebars then rendered whole (they take
 `name.split(' ')[0]`, and an email has no space). Apps derive the first name and
-initials via the shared `userFirstName`/`userInitials` helpers. The Launchpad home
-view additionally prefers an **explicitly user-set** control-plane `displayName`:
-the `user` Lambda (`GET /api/user/profile`) now omits `displayName` unless the user
-set one (the contract field is optional), so an unset name falls through to the
-token name rather than the email-derived value. A name set via
-`PUT /api/user/preferences` is still stored and wins. Per-app duplication of the
-first-name/initials derivation is unified under #491.
+initials via the shared `userFirstName`/`userInitials` helpers.
+
+**Name projection (#501).** The user's explicitly-set name lives in the control plane
+(`launchpad-users.displayName`, edited via the Profile screen). The
+**pre-token-generation trigger projects it into the token's `display_name` claim** (read
+keyed on the `sub`, so it is correct for native *and* federated users), and
+`composeDisplayName` prefers it. This makes the control-plane displayName the single
+source of truth: the name a user sets in Profile appears in **every** app (all read
+`user.name` from the token), and it survives re-federation (projected fresh each token,
+never stored on the Cognito user). When no displayName is set the claim is omitted and the
+chain is exactly the #494 order — nothing changes for users who have not set a name.
+Cross-app it is **eventually consistent**: an app reflects a changed name on its next
+token refresh (Amplify caches ~1h); the launchpad (same session) updates immediately on
+save (#500). Per-app duplication of the first-name/initials derivation is unified under
+#491.
 
 `LaunchpadAuthStack` creates Launchpad-owned secret paths under
 `/launchpad/{stage}/cognito/*`; each IdP reads its client-id/secret from these via
