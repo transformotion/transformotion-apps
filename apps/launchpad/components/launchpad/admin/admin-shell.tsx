@@ -15,7 +15,8 @@ import {
   X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { Wordmark } from '@/components/brand/wordmark'
+import { BrandLogo } from '@/components/brand/brand-logo'
+import { ThemeToggle } from '@/components/theme-toggle'
 import { EmptyState } from '@/components/ui/design-system'
 import { useAdminViewer } from '@/lib/admin/use-admin-viewer'
 import {
@@ -181,8 +182,8 @@ export function AdminShell({
               <ArrowLeft className="size-4 shrink-0" />
               <span>Launchpad</span>
             </button>
-            <div className="hidden md:block">
-              <Wordmark size="sm" />
+            <div className="hidden md:flex md:items-center">
+              <BrandLogo surface="page" imgClassName="h-6 w-auto" />
             </div>
             <span className="rounded-md bg-surface2 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
               Admin
@@ -203,6 +204,7 @@ export function AdminShell({
                 .slice(0, 2)
                 .toUpperCase()}
             </div>
+            <ThemeToggle className="hidden sm:inline-flex" />
             <button
               onClick={() => router.push(preserveQuery('/launchpad'))}
               className="flex size-9 items-center justify-center rounded-lg bg-surface2 text-muted-foreground transition-colors hover:bg-surface3 hover:text-foreground"
@@ -264,7 +266,7 @@ export function AdminShell({
           {/* Content */}
           <section className="min-w-0 flex-1">
             <div className="mb-5">
-              <h1 className="text-lg font-semibold text-foreground">{title}</h1>
+              <h1 className="font-display text-xl font-semibold uppercase tracking-wide text-foreground">{title}</h1>
               <p className="text-xs text-muted-foreground">{subtitle}</p>
             </div>
             {children}

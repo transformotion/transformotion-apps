@@ -52,6 +52,14 @@ function grantLines(g: EmailGrant): { headline: string; sub: string } {
     : { headline: `Get ${g.target} access`, sub: "You'll create your first account on arrival" };
 }
 
+function brandLogoUrl(redeemUrl: string): string {
+  try {
+    return new URL('/images/brand/transformotion-logo-transparent.png', redeemUrl).toString();
+  } catch {
+    return '/images/brand/transformotion-logo-transparent.png';
+  }
+}
+
 /**
  * Render the redemption email (HTML + text) from a bundle's grants and its
  * bearer redeem link. `grants` must be non-empty (a bundle with no authorized
@@ -85,33 +93,34 @@ export function buildRedemptionEmail(input: { grants: EmailGrant[]; redeemUrl: s
       const { headline, sub } = grantLines(g);
       return `
         <tr><td style="padding:0 0 10px">
-          <div style="background:#091523;border:1px solid #1A3550;border-radius:10px;padding:14px 18px">
-            <p style="margin:0 0 2px;font-size:15px;font-weight:600;color:#00C4B3;font-family:sans-serif">${esc(headline)}</p>
-            <p style="margin:0;font-size:13px;color:#7BAAC8;font-family:sans-serif">${esc(sub)}</p>
+          <div style="background:#1D2F44;border:1px solid #587494;border-radius:10px;padding:14px 18px">
+            <p style="margin:0 0 2px;font-size:15px;font-weight:600;color:#33C1C5;font-family:sans-serif">${esc(headline)}</p>
+            <p style="margin:0;font-size:13px;color:#EBEFF2;font-family:sans-serif">${esc(sub)}</p>
           </div>
         </td></tr>`;
     })
     .join('');
+  const logoUrl = brandLogoUrl(redeemUrl);
 
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#0D1B2A">
-<table width="100%" cellpadding="0" cellspacing="0" style="background:#0D1B2A;min-height:100vh">
+<body style="margin:0;padding:0;background:#23476B">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#23476B;min-height:100vh">
   <tr><td align="center" style="padding:48px 16px">
     <table cellpadding="0" cellspacing="0" style="max-width:480px;width:100%">
       <tr><td style="padding-bottom:28px;text-align:center">
-        <span style="font-family:'Helvetica Neue',sans-serif;font-size:26px;font-weight:900;letter-spacing:4px;color:#fff">T</span><span style="font-family:'Helvetica Neue',sans-serif;font-size:21px;font-weight:900;letter-spacing:4px;color:#fff">RANSFOR</span><span style="font-family:'Helvetica Neue',sans-serif;font-size:21px;font-weight:900;letter-spacing:4px;color:#00C4B3">M</span><span style="font-family:'Helvetica Neue',sans-serif;font-size:21px;font-weight:900;letter-spacing:4px;color:#E8A838">O</span><span style="font-family:'Helvetica Neue',sans-serif;font-size:21px;font-weight:900;letter-spacing:4px;color:#00C4B3">TION</span>
+        <img src="${esc(logoUrl)}" alt="Transformotion" width="220" style="display:inline-block;width:220px;max-width:80%;height:auto;border:0">
       </td></tr>
-      <tr><td style="background:#112538;border:1px solid #1A3550;border-radius:16px;padding:32px">
+      <tr><td style="background:#0E2339;border:1px solid #587494;border-radius:16px;padding:32px">
         <p style="margin:0 0 6px;font-size:18px;font-weight:700;color:#fff;font-family:sans-serif">You're invited to Transformotion</p>
-        <p style="margin:0 0 22px;font-size:14px;color:#7BAAC8;font-family:sans-serif">Here's what you'll get when you accept:</p>
+        <p style="margin:0 0 22px;font-size:14px;color:#EBEFF2;font-family:sans-serif">Here's what you'll get when you accept:</p>
         <table width="100%" cellpadding="0" cellspacing="0">${grantRows}
         </table>
-        <a href="${esc(redeemUrl)}" style="display:inline-block;margin-top:22px;background:#00C4B3;color:#0D1B2A;font-weight:700;font-size:14px;text-decoration:none;padding:12px 28px;border-radius:8px;font-family:sans-serif">Accept invitation &rarr;</a>
+        <a href="${esc(redeemUrl)}" style="display:inline-block;margin-top:22px;background:#33C1C5;color:#0E2339;font-weight:700;font-size:14px;text-decoration:none;padding:12px 28px;border-radius:8px;font-family:sans-serif">Accept invitation &rarr;</a>
       </td></tr>
       <tr><td style="padding-top:20px;text-align:center">
-        <p style="margin:0;font-size:12px;color:#7BAAC8;font-family:sans-serif">This link is personal to you. If you weren't expecting it, you can safely ignore this email.</p>
+        <p style="margin:0;font-size:12px;color:#EBEFF2;font-family:sans-serif">This link is personal to you. If you weren't expecting it, you can safely ignore this email.</p>
       </td></tr>
     </table>
   </td></tr>

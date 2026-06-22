@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { cn } from '@/lib/utils'
-import { Wordmark } from '@/components/brand/wordmark'
+import { AuthHeroBand } from '@/components/auth/auth-hero-band'
 import { Spinner } from '@/components/ui/spinner'
 import { authService } from '@/lib/services/auth'
 
@@ -17,38 +17,39 @@ export function SignIn() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <div className="absolute top-0 left-0 right-0 h-64 bg-gradient-to-b from-primary/5 to-transparent pointer-events-none" />
+      <AuthHeroBand
+        title="Welcome back"
+        subtitle="Sign in to access your workspace"
+      />
 
-      <main className="flex-1 flex items-center justify-center p-4">
-        <div className="w-full max-w-md text-center">
-          <div className="flex justify-center mb-10">
-            <Wordmark size="xl" />
+      <main className="flex-1 flex justify-center px-4 pb-4">
+        <div className="w-full max-w-md sm:max-w-lg -mt-8">
+          <div className="rounded-2xl border border-border bg-card p-6 text-center shadow-xl shadow-black/5">
+            {error ? (
+              <div className="space-y-4">
+                <p className="text-sm text-destructive">{error}</p>
+                <button
+                  onClick={() => {
+                    setError(null)
+                    authService.signInWithRedirect().catch(err => {
+                      setError(err instanceof Error ? err.message : 'Sign in failed.')
+                    })
+                  }}
+                  className={cn(
+                    'px-6 h-10 rounded-xl font-medium text-sm transition-all',
+                    'bg-primary text-primary-foreground hover:bg-primary/90',
+                  )}
+                >
+                  Try again
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center gap-3 text-muted-foreground">
+                <Spinner className="size-5" />
+                <span className="text-sm">Signing in...</span>
+              </div>
+            )}
           </div>
-
-          {error ? (
-            <div className="space-y-4">
-              <p className="text-sm text-destructive">{error}</p>
-              <button
-                onClick={() => {
-                  setError(null)
-                  authService.signInWithRedirect().catch(err => {
-                    setError(err instanceof Error ? err.message : 'Sign in failed.')
-                  })
-                }}
-                className={cn(
-                  'px-6 h-10 rounded-xl font-medium text-sm transition-all',
-                  'bg-primary text-primary-foreground hover:bg-primary/90',
-                )}
-              >
-                Try again
-              </button>
-            </div>
-          ) : (
-            <div className="flex items-center justify-center gap-3 text-muted-foreground">
-              <Spinner className="size-5" />
-              <span className="text-sm">Signing in…</span>
-            </div>
-          )}
         </div>
       </main>
 

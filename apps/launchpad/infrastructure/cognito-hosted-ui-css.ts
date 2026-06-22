@@ -1,17 +1,17 @@
 /**
  * CSS for the Cognito Classic Hosted UI owned by the Launchpad auth domain.
  *
- * This mirrors the current Transformotion dark theme for the Launchpad-owned
- * Cognito User Pool.
+ * This mirrors the M18 Transformotion corporate palette for the
+ * Launchpad-owned Cognito User Pool.
  */
 export const cognitoHostedUiCss = `
 .background-customizable {
-  background-color: #0D1B2A;
+  background-color: #23476B;
 }
 
 .banner-customizable {
   padding: 24px 0 8px 0;
-  background-color: #0D1B2A;
+  background-color: #23476B;
 }
 
 .label-customizable {
@@ -28,31 +28,31 @@ export const cognitoHostedUiCss = `
 }
 
 .inputField-customizable {
-  color: #e8eaf0;
-  background-color: #1c2030;
+  color: #EBEFF2;
+  background-color: #0E2339;
   border: 1px solid rgba(255, 255, 255, 0.10);
   border-radius: 10px;
   font-size: 14px;
 }
 
 .inputField-customizable:focus {
-  border-color: #00C4B3;
+  border-color: #33C1C5;
   outline: none;
 }
 
 .submitButton-customizable {
-  background-color: #00C4B3;
-  border-color: #00C4B3;
+  background-color: #33C1C5;
+  border-color: #33C1C5;
   border-radius: 10px;
   font-size: 14px;
   font-weight: 600;
-  color: #ffffff;
+  color: #0E2339;
 }
 
 .submitButton-customizable:hover {
-  background-color: #00b0a0;
-  border-color: #00b0a0;
-  color: #ffffff;
+  background-color: #2fb1b5;
+  border-color: #2fb1b5;
+  color: #0E2339;
 }
 
 .errorMessage-customizable {
@@ -62,7 +62,7 @@ export const cognitoHostedUiCss = `
 }
 
 .idpButton-customizable {
-  background-color: #1c2030;
+  background-color: #0E2339;
   border: 1px solid rgba(255, 255, 255, 0.10);
   border-radius: 10px;
   color: #e8eaf0;
@@ -71,7 +71,7 @@ export const cognitoHostedUiCss = `
 }
 
 .idpButton-customizable:hover {
-  background-color: #252a3a;
+  background-color: #1D2F44;
 }
 
 `;
