@@ -272,6 +272,13 @@ Each package has a single, articulable responsibility describable in one
 sentence. Packages do not become "kitchen sinks"; concerns are split into
 separate packages rather than accumulating into omnibus packages.
 
+`packages/brand-tokens/` contains the compile-time/data-only Transformotion
+brand token source for M18. It may export brand palette constants, semantic
+theme maps, CSS custom-property maps, typography metadata, chart/category
+colour tokens, and canonical public logo paths. It must not export React
+components, layouts, navigation, app shells, dashboards, runtime persistence,
+auth/session behaviour, or app-specific UI.
+
 ```
 packages/
 ├── api-client/            # Typed HTTP client for the platform API gateway

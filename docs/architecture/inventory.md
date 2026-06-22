@@ -204,6 +204,11 @@ exports.
 | `deploy-budget-tracker.yml` | Budget Tracker | `apps/budget-tracker/**`, `infrastructure/bin/budget-tracker.ts`, Budget Tracker dependency paths |
 | `deploy-migration-utilities.yml` | Migration Utilities | `migration-utilities/**`, `infrastructure/bin/migration-utilities.ts` |
 
+Launchpad, Stock Analyser, and Budget Tracker dependency paths include
+`packages/brand-tokens/**` for the shared M18 Transformotion brand-token
+package. The package is compile-time/data-only and does not own runtime UI,
+theme providers, auth/session behaviour, routes, dashboards, or app shells.
+
 The manual `cd.yml` workflow remains the explicit full redeploy path.
 
 ## Decommission Matrix
