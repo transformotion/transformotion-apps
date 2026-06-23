@@ -109,7 +109,7 @@ function AiEngineCard() {
           <Cpu className="size-4 text-primary" />
         </div>
         <div>
-          <h3 className="text-sm font-semibold text-foreground">AI Engine</h3>
+          <h3 className="font-display text-sm font-semibold tracking-wide text-foreground">AI Engine</h3>
           <p className="text-xs text-muted-foreground">
             Choose the provider and model Budget Tracker uses for AI features.
           </p>
@@ -279,7 +279,7 @@ export function SettingsTab() {
           <div className="size-8 rounded-lg bg-primary/15 flex items-center justify-center">
             <Settings className="size-4 text-primary" />
           </div>
-          <h3 className="text-sm font-semibold text-foreground">AI Review Configuration</h3>
+          <h3 className="font-display text-sm font-semibold tracking-wide text-foreground">AI Review Configuration</h3>
         </div>
 
         <div className="space-y-5">

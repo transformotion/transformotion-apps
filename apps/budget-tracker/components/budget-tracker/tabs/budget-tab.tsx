@@ -595,7 +595,7 @@ export function BudgetTab() {
         budgetSummary.isSurplus ? "bg-signal-green/10 border-signal-green/25" : "bg-signal-red/10 border-signal-red/25"
       )}>
         <div className="min-w-0">
-          <p className={cn("text-sm font-bold", budgetSummary.isSurplus ? "text-signal-green" : "text-signal-red")}>
+          <p className={cn("font-display text-sm font-bold tracking-wide", budgetSummary.isSurplus ? "text-signal-green" : "text-signal-red")}>
             {budgetSummary.isSurplus ? "Budget in surplus" : "Budget in deficit"}
           </p>
           <p className="text-xs text-muted-foreground mt-0.5">

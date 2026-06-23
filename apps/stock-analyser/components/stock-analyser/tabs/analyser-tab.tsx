@@ -253,7 +253,7 @@ export function AnalyserTab({
             </div>
             <div className="flex items-start justify-between">
               <div>
-                <h2 className="text-2xl font-bold text-foreground">{result.company}</h2>
+                <h2 className="font-display text-2xl font-bold tracking-wide text-foreground">{result.company}</h2>
                 <div className="flex items-baseline gap-3 mt-2">
                   <span className="text-3xl font-bold text-foreground">
                     {livePrice.price !== null ? `A$${livePrice.price.toFixed(3)}` : "—"}

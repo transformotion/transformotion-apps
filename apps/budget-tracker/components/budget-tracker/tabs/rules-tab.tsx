@@ -250,7 +250,7 @@ export function RulesTab() {
 
       {/* Rule Tester */}
       <Card>
-        <h3 className="text-sm font-semibold text-foreground mb-3">Test a transaction</h3>
+        <h3 className="font-display text-sm font-semibold tracking-wide text-foreground mb-3">Test a transaction</h3>
         <div className="relative mb-3">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
           <input
@@ -472,7 +472,7 @@ export function RulesTab() {
           className="w-full flex items-center justify-between"
         >
           <div className="flex items-center gap-2">
-            <h3 className="text-sm font-semibold text-foreground">Matching Rules</h3>
+            <h3 className="font-display text-sm font-semibold tracking-wide text-foreground">Matching Rules</h3>
             <span className="px-1.5 py-0.5 rounded bg-primary/15 text-[10px] font-medium text-primary">
               {matchingRules.length}
             </span>

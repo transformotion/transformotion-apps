@@ -218,7 +218,7 @@ export function ReviewTab() {
       <Card>
         <div className="flex items-center justify-between mb-3">
           <div>
-            <p className="text-sm font-medium text-foreground">Uncategorised transactions</p>
+            <p className="font-display text-sm font-medium tracking-wide text-foreground">Uncategorised transactions</p>
             <p className="text-2xl font-bold text-signal-amber">{uncategorizedCount}</p>
           </div>
           <div className="size-12 rounded-full bg-signal-amber/15 flex items-center justify-center">

@@ -244,7 +244,7 @@ export function SummaryTab() {
           {/* P&L Overview */}
           <Card className="space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-medium text-muted-foreground">Personal Budget</h3>
+              <h3 className="font-display text-sm font-medium tracking-wide text-muted-foreground">Personal Budget</h3>
               <span className="text-[10px] text-muted-foreground">(excludes business &amp; capital)</span>
             </div>
 
@@ -283,7 +283,7 @@ export function SummaryTab() {
 
           {/* Category Breakdown */}
           <div className="space-y-2">
-            <h3 className="text-sm font-medium text-muted-foreground">By Category</h3>
+            <h3 className="font-display text-sm font-medium tracking-wide text-muted-foreground">By Category</h3>
 
             {getActiveCategories(categories).filter(c => c.type !== 'capital').map(cat => {
               const data = summary.byCategory[cat.name]
@@ -403,7 +403,7 @@ export function SummaryTab() {
           {(capitalSummary.totalCapitalSpend > 0) && (
             <div className="space-y-2">
               <div className="flex items-center gap-2">
-                <h3 className="text-sm font-medium text-signal-amber">Capital Expenditure</h3>
+                <h3 className="font-display text-sm font-medium tracking-wide text-signal-amber">Capital Expenditure</h3>
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-signal-amber/20 text-signal-amber">Not in budget</span>
               </div>
 
