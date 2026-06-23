@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef, useCallback } from "react"
 import { useNavigation } from "../app-shell"
-import { watchlistService, type WatchlistItem } from "@/lib/services/watchlist/watchlist-service"
 import { portfolioService, type StockAnalysisResult } from "@/lib/services/portfolio"
 import {
   PageHeader,
@@ -137,11 +136,11 @@ export function WatchlistTab() {
         onKeyDown={handleKeyDown}
         className="flex-[2] min-w-[160px] h-11 rounded-xl border border-border bg-surface2 px-4 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
       />
-      <PrimaryButton onClick={handleAdd} className="shrink-0">+ Add</PrimaryButton>
+      <SecondaryButton onClick={handleAdd} className="shrink-0">+ Add</SecondaryButton>
       <div onClick={e => e.stopPropagation()}>
         <SecondaryButton
           icon={RefreshCw}
-          className="shrink-0"
+          className="hidden"
           onClick={() => handleEnrich(watchlistEntries.map(e => e.ticker), true)}
           disabled={isAnalysing || watchlistEntries.length === 0}
         >
@@ -162,6 +161,14 @@ export function WatchlistTab() {
             <TextToggle visible={textVisible} onToggle={toggleTextVisibility} isOverride={isTextOverride} />
           }
         />
+        <PrimaryButton
+          icon={isAnalysing ? undefined : RefreshCw}
+          className="w-full"
+          onClick={() => handleEnrich(watchlistEntries.map(e => e.ticker), true)}
+          disabled={isAnalysing || watchlistEntries.length === 0}
+        >
+          {isAnalysing ? `Refreshing watchlist signals (${analysingLeft} left)` : "Refresh watchlist signals"}
+        </PrimaryButton>
         {addRow}
         <EmptyState
           icon={Eye}
@@ -183,6 +190,15 @@ export function WatchlistTab() {
           <TextToggle visible={textVisible} onToggle={toggleTextVisibility} isOverride={isTextOverride} />
         }
       />
+
+      <PrimaryButton
+        icon={isAnalysing ? undefined : RefreshCw}
+        className="w-full"
+        onClick={() => handleEnrich(watchlistEntries.map(e => e.ticker), true)}
+        disabled={isAnalysing}
+      >
+        {isAnalysing ? `Refreshing watchlist signals (${analysingLeft} left)` : "Refresh watchlist signals"}
+      </PrimaryButton>
 
       {addRow}
 

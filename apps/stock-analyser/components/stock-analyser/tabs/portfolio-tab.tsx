@@ -56,7 +56,8 @@ export function PortfolioTab() {
   const toggleCardExpand = (ticker: string) => {
     setExpandedCards(prev => {
       const next = new Set(prev)
-      next.has(ticker) ? next.delete(ticker) : next.add(ticker)
+      if (next.has(ticker)) next.delete(ticker)
+      else next.add(ticker)
       return next
     })
   }
@@ -256,16 +257,30 @@ export function PortfolioTab() {
         action={<TextToggle visible={textVisible} onToggle={toggleText} isOverride={isTextOverride} />}
       />
 
-      {/* Actions */}
+      {/* Primary CTA */}
+      <PrimaryButton
+        icon={isAnalysing ? undefined : RefreshCw}
+        onClick={() => handleRefreshAll(true)}
+        disabled={isAnalysing}
+        className="w-full"
+      >
+        {isAnalysing ? (
+          <><Loader2 className="size-4 animate-spin" /> Refreshing portfolio signals{analysingLeft > 0 ? ` (${analysingLeft} left)` : ''}...</>
+        ) : (
+          'Refresh portfolio signals'
+        )}
+      </PrimaryButton>
+
+      {/* Utility actions */}
       <div className="flex items-center gap-2 flex-wrap">
-        <PrimaryButton icon={Upload} onClick={() => fileInputRef.current?.click()} className="h-9 px-3 text-sm">
+        <SecondaryButton icon={Upload} onClick={() => fileInputRef.current?.click()} className="h-9 px-3 text-sm">
           Import CSV
-        </PrimaryButton>
+        </SecondaryButton>
         <SecondaryButton
           icon={isAnalysing ? undefined : RefreshCw}
           onClick={() => handleRefreshAll(true)}
           disabled={isAnalysing}
-          className="h-9 px-3 text-sm"
+          className="hidden"
         >
           {isAnalysing ? (
             <><Loader2 className="size-3.5 animate-spin" /> Analysing{analysingLeft > 0 ? ` (${analysingLeft} left)` : ''}…</>
