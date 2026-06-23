@@ -168,31 +168,30 @@ Return ONLY valid JSON.`,
         }
       />
 
-      {/* Controls */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <PrimaryButton
-          onClick={() => runAnalysis(metalResults.length > 0)}
-          disabled={isAnalyzing}
-        >
-          {isAnalyzing ? (
-            <>
-              <Spinner className="size-4" />
-              Loading...
-            </>
-          ) : (
-            <>
-              <RefreshCw className="size-4" />
-              Refresh
-            </>
-          )}
-        </PrimaryButton>
-        <ModeToggle 
-          isLive={isLive} 
-          onToggle={() => setIsLive(!isLive)} 
-          cacheAge="just now"
-          freshness="recent"
-        />
-      </div>
+      {/* Compact cached/live status */}
+      <ModeToggle
+        isLive={isLive}
+        onToggle={() => setIsLive(!isLive)}
+        cacheAge="just now"
+        freshness="recent"
+      />
+
+      {/* Primary CTA */}
+      <PrimaryButton
+        onClick={() => runAnalysis(metalResults.length > 0)}
+        disabled={isAnalyzing}
+        icon={isAnalyzing ? undefined : RefreshCw}
+        className="w-full"
+      >
+        {isAnalyzing ? (
+          <>
+            <Spinner className="size-4" />
+            Refreshing metals...
+          </>
+        ) : (
+          "Refresh metals"
+        )}
+      </PrimaryButton>
 
       {/* Date indicator */}
       <p className="text-xs text-muted-foreground">Spot prices · {new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })}</p>

@@ -36,6 +36,7 @@ import {
   resolveSectorUniverse,
 } from "../markets"
 import { createMarketSectorNavigationPayload } from "../recommendations-flow"
+import { stockSignalBadgeClassName } from "../status-badge"
 
 type Impact = "Supportive" | "Neutral" | "Headwind"
 type Valuation = "Cheap" | "Fair" | "Expensive" | "Extended"
@@ -423,12 +424,7 @@ IMPORTANT: Your entire response must be a single valid JSON object. Begin your r
                       {/* Header: Sector name + Signal badge */}
                       <div className="flex items-center justify-between">
                         <h4 className="font-display text-sm font-semibold tracking-wide text-foreground">{sector.sector}</h4>
-                        <span className={cn(
-                          "px-2 py-0.5 rounded text-[10px] font-semibold uppercase",
-                          sector.signal === "ENTER" ? "bg-signal-green text-white" :
-                          sector.signal === "EXIT" ? "bg-signal-red text-white" :
-                          "bg-signal-amber/80 text-background"
-                        )}>
+                        <span className={stockSignalBadgeClassName(sector.signal)}>
                           {sector.signal}
                         </span>
                       </div>

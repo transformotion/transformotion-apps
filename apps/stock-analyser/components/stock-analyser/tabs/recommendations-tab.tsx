@@ -30,6 +30,7 @@ import {
   isMarketOriginatedUniverseUnavailable,
   shouldDisableRecommendationsRun,
 } from "../recommendations-flow"
+import { stockSignalBadgeClassName } from "../status-badge"
 
 type Mode = "Top Picks" | "Bottom of Cycle"
 
@@ -375,13 +376,7 @@ Return 6 stocks. Return ONLY valid JSON.`,
                       <p className="text-xs text-muted-foreground leading-tight mt-0.5">{stock.company}</p>
                       <p className="text-[11px] text-muted-foreground mt-1">{stock.sector} · {stock.subcategory}</p>
                     </div>
-                    <span className={cn(
-                      "px-2 py-0.5 rounded text-[10px] font-semibold uppercase shrink-0 ml-2",
-                      stock.verdict === "BUY" ? "bg-signal-green text-white" :
-                      stock.verdict === "SELL" ? "bg-signal-red text-white" :
-                      stock.verdict === "HOLD" ? "bg-signal-amber/80 text-background" :
-                      "bg-muted/50 text-muted-foreground"
-                    )}>
+                    <span className={cn(stockSignalBadgeClassName(stock.verdict), "shrink-0 ml-2")}>
                       {stock.verdict}
                     </span>
                   </div>

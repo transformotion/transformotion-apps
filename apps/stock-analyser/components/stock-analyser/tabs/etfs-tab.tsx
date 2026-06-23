@@ -10,10 +10,11 @@ import {
   PrimaryButton,
   TextToggle,
 } from "@transformotion/ui-primitives"
-import { ChevronRight, ChevronDown, AlertCircle } from "lucide-react"
+import { ChevronRight, ChevronDown, AlertCircle, RefreshCw } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useClaude } from "@/lib/hooks"
 import { Spinner } from "@transformotion/ui-primitives"
+import { stockSignalBadgeClassName } from "../status-badge"
 
 type Market = "ASX" | "US" | "Global"
 type Category = "All" | "Index" | "Sector" | "Bond" | "Thematic" | "Property"
@@ -112,33 +113,37 @@ Provide 6 ETFs. Return ONLY valid JSON.`,
         }
       />
 
-      {/* Market selector + controls */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <SegmentedControl
-          options={["ASX", "US", "Global"] as Market[]}
-          value={market}
-          onChange={setMarket}
-        />
-        <PrimaryButton
-          onClick={() => runAnalysis(etfResults.length > 0)}
-          disabled={isAnalyzing}
-        >
-          {isAnalyzing ? (
-            <>
-              <Spinner className="size-4" />
-              Loading...
-            </>
-          ) : (
-            "Refresh"
-          )}
-        </PrimaryButton>
-        <ModeToggle 
-          isLive={isLive} 
-          onToggle={() => setIsLive(!isLive)} 
-          cacheAge="3m ago"
-          freshness="recent"
-        />
-      </div>
+      {/* Market selector (secondary filter) */}
+      <SegmentedControl
+        options={["ASX", "US", "Global"] as Market[]}
+        value={market}
+        onChange={setMarket}
+      />
+
+      {/* Compact cached/live status */}
+      <ModeToggle
+        isLive={isLive}
+        onToggle={() => setIsLive(!isLive)}
+        cacheAge="3m ago"
+        freshness="recent"
+      />
+
+      {/* Primary CTA */}
+      <PrimaryButton
+        onClick={() => runAnalysis(etfResults.length > 0)}
+        disabled={isAnalyzing}
+        icon={isAnalyzing ? undefined : RefreshCw}
+        className="w-full"
+      >
+        {isAnalyzing ? (
+          <>
+            <Spinner className="size-4" />
+            Refreshing ETF signals...
+          </>
+        ) : (
+          "Refresh ETF signals"
+        )}
+      </PrimaryButton>
 
       {/* Date indicator */}
       <p className="text-xs text-muted-foreground">{market} ETFs · {new Date().toLocaleDateString('en-AU', { month: 'long', year: 'numeric' })}</p>
@@ -168,13 +173,7 @@ Provide 6 ETFs. Return ONLY valid JSON.`,
                     <p className="mt-0.5 font-display text-xs font-medium leading-tight tracking-wide text-muted-foreground">{etf.name}</p>
                     <p className="text-[11px] text-muted-foreground mt-1">{etf.category}</p>
                   </div>
-                  <span className={cn(
-                    "px-2 py-0.5 rounded text-[10px] font-semibold uppercase shrink-0 ml-2",
-                    etf.signal === "BUY" ? "bg-signal-green text-white" :
-                    etf.signal === "HOLD" ? "bg-signal-amber/80 text-background" :
-                    etf.signal === "SELL" ? "bg-signal-red text-white" :
-                    "bg-muted/50 text-muted-foreground"
-                  )}>
+                  <span className={cn(stockSignalBadgeClassName(etf.signal), "shrink-0 ml-2")}>
                     {etf.signal}
                   </span>
                 </div>
