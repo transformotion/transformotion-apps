@@ -306,7 +306,7 @@ IMPORTANT: Your entire response must be a single valid JSON object. Begin your r
               return (
                 <div key={indicator.label} className="flex-shrink-0 w-[200px] md:w-auto p-4 bg-card border border-border rounded-xl space-y-2">
                   <span className="text-[10px] uppercase tracking-wider text-muted-foreground">{indicator.label}</span>
-                  <h4 className="text-sm font-semibold text-foreground">{indicator.title}</h4>
+                  <h4 className="font-display text-sm font-semibold tracking-wide text-foreground">{indicator.title}</h4>
                   
                   {/* Description - conditionally visible or expandable */}
                   {(textVisible || expandedCards.has(cardKey)) && (
@@ -394,7 +394,7 @@ IMPORTANT: Your entire response must be a single valid JSON object. Begin your r
                     <div className="space-y-3">
                       {/* Header: Sector name + Signal badge */}
                       <div className="flex items-center justify-between">
-                        <h4 className="text-sm font-semibold text-foreground">{sector.sector}</h4>
+                        <h4 className="font-display text-sm font-semibold tracking-wide text-foreground">{sector.sector}</h4>
                         <span className={cn(
                           "px-2 py-0.5 rounded text-[10px] font-semibold uppercase",
                           sector.signal === "ENTER" ? "bg-signal-green text-white" :
@@ -471,7 +471,7 @@ IMPORTANT: Your entire response must be a single valid JSON object. Begin your r
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {/* Enter / Overweight */}
               <Card className="border-l-2 border-l-signal-green">
-                <h4 className="text-sm font-semibold text-signal-green mb-3">Enter / Overweight</h4>
+                <h4 className="mb-3 font-display text-sm font-semibold tracking-wide text-signal-green">Enter / Overweight</h4>
                 <div className="space-y-3">
                   {result.actionSummary.enter.map((item, i) => (
                     <div key={item.sector} className="flex gap-3">
@@ -489,7 +489,7 @@ IMPORTANT: Your entire response must be a single valid JSON object. Begin your r
 
               {/* Exit / Reduce */}
               <Card className="border-l-2 border-l-signal-red">
-                <h4 className="text-sm font-semibold text-signal-red mb-3">Exit / Reduce</h4>
+                <h4 className="mb-3 font-display text-sm font-semibold tracking-wide text-signal-red">Exit / Reduce</h4>
                 <div className="space-y-3">
                   {result.actionSummary.exit.map((item, i) => (
                     <div key={item.sector} className="flex gap-3">

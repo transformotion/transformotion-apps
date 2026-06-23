@@ -136,7 +136,7 @@ export function LinkInvalidScreen({ evaluation }: { evaluation: RedemptionLinkIn
     <Card className="overflow-hidden p-0">
       <div className={cn('flex items-center gap-3 border-b px-5 py-4', copy.tone)}>
         <Icon className="size-6 shrink-0" />
-        <p className="text-sm font-semibold">{copy.title}</p>
+        <p className="font-display text-sm font-semibold tracking-wide">{copy.title}</p>
       </div>
       <div className="px-5 py-5">
         <p className="text-sm text-muted-foreground text-pretty">{copy.body}</p>
@@ -164,7 +164,7 @@ export function EmailMismatchScreen({
       <div className="flex items-center gap-3 border-b border-primary/30 bg-primary/10 px-5 py-4 text-primary">
         <ShieldAlert className="size-6 shrink-0" />
         <div>
-          <p className="text-sm font-semibold">This invitation was addressed to a different email</p>
+          <p className="font-display text-sm font-semibold tracking-wide">This invitation was addressed to a different email</p>
           <p className="text-xs opacity-90">You can still accept it with the account you&apos;re signed in as.</p>
         </div>
       </div>
@@ -215,7 +215,7 @@ export function NeedsVerificationScreen({
     <Card className="overflow-hidden p-0">
       <div className="flex items-center gap-3 border-b border-signal-gold/30 bg-signal-gold/10 px-5 py-4 text-signal-gold">
         <ShieldAlert className="size-6 shrink-0" />
-        <p className="text-sm font-semibold">Verify your email to continue</p>
+        <p className="font-display text-sm font-semibold tracking-wide">Verify your email to continue</p>
       </div>
       <div className="px-5 py-5">
         <IdentityChip identity={evaluation.identity} />
@@ -315,7 +315,7 @@ export function AppliedScreen({
       <div className={cn('flex items-center gap-3 border-b px-5 py-4', banner.tone)}>
         <BannerIcon className="size-6 shrink-0" />
         <div>
-          <p className="text-sm font-semibold">{headline}</p>
+          <p className="font-display text-sm font-semibold tracking-wide">{headline}</p>
           <p className="text-xs opacity-90">
             {added} of {total} {total === 1 ? 'item' : 'items'} added for {evaluation.identity.email}
           </p>

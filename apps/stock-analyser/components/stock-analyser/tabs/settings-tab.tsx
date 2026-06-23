@@ -64,7 +64,7 @@ function AnalysisTextCard() {
           <FileText className="size-5 text-primary" />
         </div>
         <div>
-          <h3 className="text-sm font-semibold text-foreground">Analysis text</h3>
+          <h3 className="font-display text-sm font-semibold tracking-wide text-foreground">Analysis text</h3>
           <p className="text-xs text-muted-foreground leading-relaxed">
             Show explanatory analysis text alongside signals and verdicts. This is saved as a user preference for the active account.
           </p>
@@ -167,7 +167,7 @@ function AiEngineCard() {
           <Cpu className="size-5 text-primary" />
         </div>
         <div>
-          <h3 className="text-sm font-semibold text-foreground">AI Engine</h3>
+          <h3 className="font-display text-sm font-semibold tracking-wide text-foreground">AI Engine</h3>
           <p className="text-xs text-muted-foreground leading-relaxed">
             Choose the provider and model Stock Analyser uses for AI analysis. Leaving the override unset inherits the Launchpad platform default.
           </p>

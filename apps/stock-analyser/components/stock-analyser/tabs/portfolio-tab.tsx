@@ -351,7 +351,7 @@ export function PortfolioTab() {
                 <div className="flex items-start justify-between">
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="text-base font-semibold text-foreground">{holding.ticker}</h3>
+                      <h3 className="font-display text-base font-semibold tracking-wide text-foreground">{holding.ticker}</h3>
                       {a?.company && <span className="text-sm text-muted-foreground">{a.company}</span>}
                       {a?.sector  && <span className="text-xs text-muted-foreground">{a.sector}</span>}
                     </div>

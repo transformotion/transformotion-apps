@@ -322,7 +322,7 @@ Return 6 stocks. Return ONLY valid JSON.`,
                   {/* Header: Ticker + Signal badge */}
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
-                      <h4 className="text-sm font-semibold text-foreground">{stock.ticker}</h4>
+                      <h4 className="font-display text-sm font-semibold tracking-wide text-foreground">{stock.ticker}</h4>
                       <p className="text-xs text-muted-foreground leading-tight mt-0.5">{stock.company}</p>
                       <p className="text-[11px] text-muted-foreground mt-1">{stock.sector} · {stock.subcategory}</p>
                     </div>
