@@ -11,6 +11,11 @@ import { dynamoCache } from '@/lib/services/cache/dynamo-ttl-cache'
 import { callClaudeAPI } from '@/lib/hooks/use-claude'
 import { getMockOhlcvData } from '@/lib/services/ai/fixtures/ohlcv-data'
 import { latestPriceFromOhlcv } from '@/lib/market-data'
+import {
+  createStockAnalysisPrompt,
+  normaliseStockAnalysisSignals,
+  STOCK_ANALYSIS_SYSTEM_PROMPT,
+} from '@/lib/analysis/stock-analysis-signals'
 import type { PortfolioHolding, StockAnalysisResult } from './types'
 
 /**
@@ -49,28 +54,7 @@ let mockHoldingsStore: PortfolioHolding[] = [...MOCK_HOLDINGS]
 
 // ── Analysis prompt (must match analyser-tab.tsx so cache keys are reused) ───
 
-const ANALYSIS_SYSTEM = 'You are a technical stock analyst. Provide realistic analysis with specific metrics, values, and interpretations. Respond with raw JSON only. Do not use markdown code fences.'
-
-const analysisPrompt = (ticker: string) => `Analyse the stock ${ticker} and provide comprehensive technical analysis.
-
-Return a JSON object with:
-- ticker: the ticker symbol
-- company: company name
-- sector: sector classification
-- price: current price (number)
-- change: daily change percentage (number)
-- verdict: one of "BUY", "SELL", "HOLD", "NEUTRAL"
-- cyclePosition: 0-100 representing position in market cycle
-- cycleStage: one of "early", "mid", "late", "peak"
-- signals: array of metrics with { name, value, signal: "Bull"|"Bear"|"Neutral", label }
-- summary: 1-2 sentence company overview
-- risks: array of 3 key risks as bullet points
-- rsiDivergence: "none", "bullish", or "bearish"
-- macdMomentum: "strengthening", "weakening", or "flat"
-- volumeTrend: "confirming", "diverging", or "neutral"
-- cycleSummary: brief cycle position explanation
-
-Return ONLY valid JSON.`
+// Portfolio enrichment shares the analyser prompt/cache shape.
 
 // ── Service ───────────────────────────────────────────────────────────────────
 
@@ -116,7 +100,7 @@ export const portfolioService = {
 
     // 2. Deliver cache hits — overlaying the real (market-data) price/change.
     for (const { ticker, cached } of cacheChecks) {
-      if (cached) onResult(ticker, await overlayLivePrice(ticker, cached))
+      if (cached) onResult(ticker, await overlayLivePrice(ticker, normaliseStockAnalysisSignals(cached)))
     }
 
     // 3. Call Claude sequentially for cache misses
@@ -126,13 +110,14 @@ export const portfolioService = {
       if (signal?.aborted) break
       try {
         const result = await callClaudeAPI<StockAnalysisResult>(
-          { prompt: analysisPrompt(ticker), systemPrompt: ANALYSIS_SYSTEM },
+          { prompt: createStockAnalysisPrompt(ticker), systemPrompt: STOCK_ANALYSIS_SYSTEM_PROMPT },
           { signal }
         )
-        dynamoCache.set(`ANALYSIS#${ticker}`, result).catch(err =>
+        const normalisedResult = normaliseStockAnalysisSignals(result)
+        dynamoCache.set(`ANALYSIS#${ticker}`, normalisedResult).catch(err =>
           console.warn('[portfolio] cache write failed for', ticker, err)
         )
-        onResult(ticker, await overlayLivePrice(ticker, result))
+        onResult(ticker, await overlayLivePrice(ticker, normalisedResult))
       } catch (err) {
         if (signal?.aborted) break
         console.warn('[portfolio] enrichment failed for', ticker, err)

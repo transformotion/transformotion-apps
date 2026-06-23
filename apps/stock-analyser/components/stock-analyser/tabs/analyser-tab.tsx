@@ -5,7 +5,6 @@ import { useNavigation, type TabId } from "../app-shell"
 import {
   PageHeader,
   Card,
-  StockIcon,
   VerdictBadge,
   BackLink,
   PrimaryButton,
@@ -13,7 +12,6 @@ import {
   EmptyState,
   CacheStatusBar,
   ModeToggle,
-  CycleGauge,
   FullCycleGauge,
   type Verdict,
   type CycleStage,
@@ -33,13 +31,12 @@ import { useOhlcvData } from "@/lib/hooks/use-ohlcv-data"
 import { latestPriceFromOhlcv } from "@/lib/market-data"
 import type { OhlcvRange } from "@transformotion/api-client"
 import { PriceChart } from "@/components/price-chart/price-chart"
-
-interface SignalMetric {
-  name: string
-  value: string
-  signal: "Bull" | "Bear" | "Neutral"
-  label: string
-}
+import {
+  createStockAnalysisPrompt,
+  normaliseStockAnalysisSignals,
+  STOCK_ANALYSIS_SYSTEM_PROMPT,
+  type StockSignalMetric,
+} from "@/lib/analysis/stock-analysis-signals"
 
 interface AnalysisResult {
   ticker: string
@@ -52,7 +49,7 @@ interface AnalysisResult {
   verdict: Verdict
   cyclePosition: number
   cycleStage: CycleStage
-  signals: SignalMetric[]
+  signals: StockSignalMetric[]
   summary: string
   risks: string[]
   rsiDivergence: "none" | "bullish" | "bearish"
@@ -123,33 +120,12 @@ export function AnalyserTab({
     const analysisResult = await callClaude({
       cacheKey: `ANALYSIS#${ticker}`,
       forceRefresh,
-      prompt: `Analyse the stock ${ticker} and provide comprehensive technical analysis.
-      
-Return a JSON object with:
-- ticker: the ticker symbol
-- company: company name
-- sector: sector classification
-- price: current price (number)
-- change: daily change percentage (number)
-- verdict: one of "BUY", "SELL", "HOLD", "NEUTRAL"
-- cyclePosition: 0-100 representing position in market cycle
-- cycleStage: one of "early", "mid", "late", "peak"
-- signals: array of metrics with { name, value, signal: "Bull"|"Bear"|"Neutral", label }
-  Examples: { name: "RSI", value: "80", signal: "Bear", label: "Extremely overbought" }
-           { name: "Volume", value: "Declining on advances", signal: "Bear", label: "Bearish divergence pattern" }
-- summary: 1-2 sentence company overview
-- risks: array of 3 key risks as bullet points
-- rsiDivergence: "none", "bullish", or "bearish"
-- macdMomentum: "strengthening", "weakening", or "flat"
-- volumeTrend: "confirming", "diverging", or "neutral"
-- cycleSummary: brief cycle position explanation
-
-Return ONLY valid JSON.`,
-      systemPrompt: "You are a technical stock analyst. Provide realistic analysis with specific metrics, values, and interpretations. Respond with raw JSON only. Do not use markdown code fences.",
+      prompt: createStockAnalysisPrompt(ticker),
+      systemPrompt: STOCK_ANALYSIS_SYSTEM_PROMPT,
     })
 
     if (analysisResult) {
-      setResult(analysisResult)
+      setResult(normaliseStockAnalysisSignals(analysisResult))
     }
   }
 
