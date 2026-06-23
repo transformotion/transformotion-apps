@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useNavigation } from "../app-shell"
 import {
   PageHeader,
@@ -9,7 +9,6 @@ import {
   ModeToggle,
   PrimaryButton,
   TextToggle,
-  type Signal,
 } from "@transformotion/ui-primitives"
 import { ChevronRight, ChevronDown, AlertCircle } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -40,8 +39,8 @@ const ETFS: ETF[] = [
 ]
 
 export function ETFsTab() {
-  const { navigateToAnalyser, getTabTextVisibility, setTabTextOverride, showExplanatoryText, setTabCache, getTabCache } = useNavigation()
-  const [isLive, setIsLive] = useState(false)
+  const { navigateToAnalyser, getTabTextVisibility, setTabTextOverride, showExplanatoryText, defaultSearchMode, setTabCache, getTabCache } = useNavigation()
+  const [isLive, setIsLive] = useState(defaultSearchMode === "live")
   const [market, setMarket] = useState<Market>("ASX")
   const cachedEtfs = getTabCache("etfs")?.etfs as ETF[] | null
   const [etfResults, setEtfResults] = useState<ETF[]>(cachedEtfs ?? [])
@@ -62,10 +61,15 @@ export function ETFsTab() {
 
   const { callClaude, isLoading: isAnalyzing, error } = useClaude<{ etfs: ETF[] }>()
 
+  useEffect(() => {
+    setIsLive(defaultSearchMode === "live")
+  }, [defaultSearchMode])
+
   const runAnalysis = async (forceRefresh = false) => {
     const result = await callClaude({
       cacheKey: `ETF#${market}`,
       forceRefresh,
+      webSearch: isLive,
       prompt: `Provide ETF recommendations for the ${market} market.
 
 Return a JSON object with "etfs" array, each containing:

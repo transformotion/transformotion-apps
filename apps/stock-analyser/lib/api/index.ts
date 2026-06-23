@@ -2,6 +2,7 @@ import { ApiClient, HttpClient } from '@transformotion/api-client'
 import type { PutCacheRequest, ClaudeProxyRequest } from '@transformotion/api-client'
 import type { AiRuntimeConfigUpdate, AppAiRuntimeConfigResponse } from '@transformotion/contracts/_shared/ai-runtime'
 import type { StockAnalyserSettings } from '@transformotion/contracts/stock-analyser/types'
+import type { PatchSettingsRequest } from '@transformotion/contracts/stock-analyser/api'
 import { authService } from '../services/auth'
 import { getConfig } from '../config'
 import { getActiveAccountId } from '@/stores/active-account/use-active-account-store'
@@ -44,7 +45,7 @@ export const stockAnalyserClient = {
   getSettings(): Promise<{ settings: StockAnalyserSettings }> {
     return http().get('settings')
   },
-  patchSettings(body: Partial<Pick<StockAnalyserSettings, 'explanatoryTextEnabled'>>): Promise<{ settings: StockAnalyserSettings }> {
+  patchSettings(body: PatchSettingsRequest): Promise<{ settings: StockAnalyserSettings }> {
     return http().patch('settings', body)
   },
   getAiConfig(): Promise<AppAiRuntimeConfigResponse> {

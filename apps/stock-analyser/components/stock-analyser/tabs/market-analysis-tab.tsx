@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useEffect, useState } from "react"
 import { useNavigation } from "../app-shell"
 import {
   PageHeader,
@@ -24,8 +24,19 @@ import {
 } from "lucide-react"
 import { useClaude } from "@/lib/hooks"
 import { cn } from "@/lib/utils"
+import type {
+  AnalysisRegion,
+  MarketAnalysisSectorResult,
+} from "@transformotion/contracts/stock-analyser/types"
+import {
+  ANALYSIS_REGIONS,
+  REGION_LABELS,
+  REGION_TO_RECOMMENDATION_UNIVERSES,
+  regionFromLabel,
+  resolveSectorUniverse,
+} from "../markets"
+import { createMarketSectorNavigationPayload } from "../recommendations-flow"
 
-type Geography = "Global" | "ASX" | "US" | "UK"
 type Impact = "Supportive" | "Neutral" | "Headwind"
 type Valuation = "Cheap" | "Fair" | "Expensive" | "Extended"
 type Opportunity = "Attractive" | "Neutral" | "Unattractive"
@@ -46,6 +57,8 @@ interface SectorSignal {
   change: number
   reason: string
   bestExchange: string
+  recommendationUniverse?: MarketAnalysisSectorResult["recommendationUniverse"]
+  sourceRegion?: AnalysisRegion
 }
 
 interface ActionItem {
@@ -141,9 +154,9 @@ function CycleBar({ position }: { position: number }) {
 }
 
 export function MarketAnalysisTab() {
-  const { navigateToRecsWithSector, getTabTextVisibility, setTabTextOverride, showExplanatoryText, setTabCache, getTabCache } = useNavigation()
-  const [isLive, setIsLive] = useState(false)
-  const [geography, setGeography] = useState<Geography>("ASX")
+  const { navigateToRecsWithSector, getTabTextVisibility, setTabTextOverride, showExplanatoryText, defaultSearchMode, setTabCache, getTabCache } = useNavigation()
+  const [isLive, setIsLive] = useState(defaultSearchMode === "live")
+  const [region, setRegion] = useState<AnalysisRegion>("australia")
   const cachedResult = getTabCache("market") as MarketAnalysisResult | null
   const [hasResults, setHasResults] = useState(!!cachedResult)
   const [result, setResult] = useState<MarketAnalysisResult | null>(cachedResult)
@@ -164,12 +177,17 @@ export function MarketAnalysisTab() {
 
   const { callClaude, isLoading: isAnalyzing, error } = useClaude<MarketAnalysisResult>()
 
+  useEffect(() => {
+    setIsLive(defaultSearchMode === "live")
+  }, [defaultSearchMode])
+
   const runAnalysis = async (forceRefresh = false) => {
+    const supportedUniverses = REGION_TO_RECOMMENDATION_UNIVERSES[region]
     const data = await callClaude({
-      cacheKey: `MARKET#${geography}`,
+      cacheKey: `MARKET#${region}`,
       forceRefresh,
       webSearch: isLive,
-      prompt: `Provide comprehensive market analysis for the ${geography} market.
+      prompt: `Provide comprehensive market analysis for the ${REGION_LABELS[region]} region.
 
 Return a JSON object with the following fields:
 
@@ -207,7 +225,7 @@ Return a JSON object with the following fields:
   - reason: 1-2 sentence explanation tying the three dimensions together.
     Example: "Late-cycle but still cheap on forward earnings; defensive qualities attractive as growth slows."
 
-  - bestExchange: which exchange is strongest for that sector right now
+  - bestExchange: the best listing universe for this sector. MUST be one of: ${supportedUniverses.join(", ")}
 
 "actionSummary" — top-3 trades:
   - enter: array of top 3 { sector, reason } to buy/overweight
@@ -218,8 +236,16 @@ IMPORTANT: Your entire response must be a single valid JSON object. Begin your r
     })
 
     if (data) {
-      setResult(data)
-      setTabCache("market", data)
+      const enriched: MarketAnalysisResult = {
+        ...data,
+        sectors: (data.sectors ?? []).map((sector) => ({
+          ...sector,
+          recommendationUniverse: resolveSectorUniverse(sector.bestExchange, region),
+          sourceRegion: region,
+        })),
+      }
+      setResult(enriched)
+      setTabCache("market", enriched)
       setHasResults(true)
     }
   }
@@ -240,11 +266,11 @@ IMPORTANT: Your entire response must be a single valid JSON object. Begin your r
         }
       />
 
-      {/* Geography Selector */}
+      {/* Region Selector */}
       <SegmentedControl
-        options={["Global", "ASX", "US", "UK"] as Geography[]}
-        value={geography}
-        onChange={setGeography}
+        options={ANALYSIS_REGIONS.map((option) => REGION_LABELS[option])}
+        value={REGION_LABELS[region]}
+        onChange={(label) => setRegion(regionFromLabel(label))}
       />
 
       {/* Cache Status / Mode Toggle - right above the action button */}
@@ -296,7 +322,7 @@ IMPORTANT: Your entire response must be a single valid JSON object. Begin your r
       {hasResults && result ? (
         <div className="space-y-6">
           {/* Date indicator */}
-          <p className="text-xs text-muted-foreground">{geography} · {new Date().toLocaleDateString('en-AU', { month: 'long', year: 'numeric' })}</p>
+          <p className="text-xs text-muted-foreground">{REGION_LABELS[region]} · {new Date().toLocaleDateString('en-AU', { month: 'long', year: 'numeric' })}</p>
 
           {/* Macro Indicator Cards */}
           <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 md:mx-0 md:px-0 md:grid md:grid-cols-2 lg:grid-cols-4 md:overflow-visible scrollbar-hide">
@@ -388,7 +414,9 @@ IMPORTANT: Your entire response must be a single valid JSON object. Begin your r
                   <Card
                     key={sector.sector}
                     interactive
-                    onClick={() => navigateToRecsWithSector(sector.sector)}
+                    onClick={() => {
+                      navigateToRecsWithSector(createMarketSectorNavigationPayload(sector, region))
+                    }}
                     animationDelay={i * 30}
                   >
                     <div className="space-y-3">
@@ -447,9 +475,14 @@ IMPORTANT: Your entire response must be a single valid JSON object. Begin your r
                         </button>
                       )}
 
-                      {/* Best exchange + View picks */}
+                      {/* Recommendation universe + View picks */}
                       <div className="flex items-center justify-between pt-2 border-t border-border">
-                        <span className="text-xs text-muted-foreground">Best: <span className="text-foreground font-medium">{sector.bestExchange}</span></span>
+                        <span className="text-xs text-muted-foreground">
+                          Universe:{" "}
+                          <span className="text-foreground font-medium">
+                            {sector.recommendationUniverse ?? resolveSectorUniverse(sector.bestExchange, sector.sourceRegion ?? region)}
+                          </span>
+                        </span>
                         <span className="text-xs text-primary flex items-center gap-1">
                           View picks <ChevronRight className="size-3" />
                         </span>
@@ -520,7 +553,7 @@ IMPORTANT: Your entire response must be a single valid JSON object. Begin your r
           icon={BarChart3}
           title="No analysis yet"
           titleClassName="font-display"
-          description="Select a geography and tap Run Analysis to see AI-powered sector rotation signals."
+          description="Select a region and tap Run Analysis to see AI-powered sector rotation signals."
         />
       )}
     </div>

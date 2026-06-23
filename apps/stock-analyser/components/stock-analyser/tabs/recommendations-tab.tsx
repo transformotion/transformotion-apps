@@ -7,9 +7,6 @@ import {
   SegmentedControl,
   PillSelector,
   Card,
-  StockIcon,
-  VerdictBadge,
-  CycleGauge,
   BackLink,
   PrimaryButton,
   CacheStatusBar,
@@ -18,11 +15,22 @@ import {
   type Verdict,
   type CycleStage,
 } from "@transformotion/ui-primitives"
-import { ChevronRight, ChevronDown, Sparkles, Search, Loader2, Stars, AlertCircle } from "lucide-react"
+import { ChevronRight, ChevronDown, Search, Loader2, Stars, AlertCircle } from "lucide-react"
 import { useClaude } from "@/lib/hooks"
 import { cn } from "@/lib/utils"
+import type { RecommendationUniverse } from "@transformotion/contracts/stock-analyser/types"
+import {
+  RECOMMENDATION_UNIVERSES,
+  REGION_LABELS,
+} from "../markets"
+import {
+  getIncomingRecommendationUniverse,
+  getInitialRecommendationUniverse,
+  isLiveSearchMode,
+  isMarketOriginatedUniverseUnavailable,
+  shouldDisableRecommendationsRun,
+} from "../recommendations-flow"
 
-type Market = "ASX" | "NASDAQ" | "Dow" | "FTSE"
 type Mode = "Top Picks" | "Bottom of Cycle"
 
 interface Stock {
@@ -107,9 +115,12 @@ const BOTTOM_OF_CYCLE: Stock[] = [
 ]
 
 export function RecommendationsTab() {
-  const { navigateToAnalyser, sectorFilter, recsSource, clearSectorFilter, navigateTo, getTabTextVisibility, setTabTextOverride, showExplanatoryText, setTabCache, getTabCache } = useNavigation()
-  const [isLive, setIsLive] = useState(false)
-  const [market, setMarket] = useState<Market>("ASX")
+  const { navigateToAnalyser, sectorFilter, recsUniverse, recsSourceRegion, recsSource, clearSectorFilter, navigateTo, getTabTextVisibility, setTabTextOverride, showExplanatoryText, defaultSearchMode, setTabCache, getTabCache } = useNavigation()
+  const [isLive, setIsLive] = useState(isLiveSearchMode(defaultSearchMode))
+  const incomingUniverse = getIncomingRecommendationUniverse(recsUniverse)
+  const universeUnavailable = isMarketOriginatedUniverseUnavailable(sectorFilter, incomingUniverse)
+  const [universe, setUniverse] = useState<RecommendationUniverse>(() => getInitialRecommendationUniverse(recsUniverse))
+  const [universeTouched, setUniverseTouched] = useState(false)
   const [mode, setMode] = useState<Mode>("Top Picks")
   const [hasRun, setHasRun] = useState(false)
   const cachedStocks = getTabCache("recs")?.stocks as Stock[] | null
@@ -132,13 +143,23 @@ export function RecommendationsTab() {
 
   const { callClaude, isLoading, error } = useClaude<{ stocks: Stock[] }>()
 
-  const runRecommendations = async (sectorOverride?: string, forceRefresh = false) => {
+  useEffect(() => {
+    setIsLive(isLiveSearchMode(defaultSearchMode))
+  }, [defaultSearchMode])
+
+  const runRecommendations = async (
+    sectorOverride?: string,
+    forceRefresh = false,
+    universeOverride?: RecommendationUniverse,
+  ) => {
     const sector = sectorOverride || sectorFilter
-    const cacheKey = `RECS#${market}#${mode}${sector ? `#${sector}` : ''}`
+    const activeUniverse = universeOverride ?? universe
+    const cacheKey = `RECS#${activeUniverse}#${mode}${sector ? `#${sector}` : ''}`
     const result = await callClaude({
       cacheKey,
       forceRefresh,
-      prompt: `Provide stock recommendations for ${market} market${sector ? ` in the ${sector} sector` : ''}.
+      webSearch: isLive,
+      prompt: `Provide stock recommendations for the ${activeUniverse} universe${sector ? ` in the ${sector} sector` : ''}.
 Mode: ${mode}
 
 Return a JSON object with "stocks" array, each containing:
@@ -172,14 +193,20 @@ Return 6 stocks. Return ONLY valid JSON.`,
   useEffect(() => {
     if (sectorFilter) {
       setMode("Top Picks")
-      // Auto-trigger the search when coming from Market Analysis (only once per sector)
-      if (autoRunTriggeredRef.current !== sectorFilter) {
-        autoRunTriggeredRef.current = sectorFilter
-        runRecommendations(sectorFilter)
+      if (incomingUniverse) {
+        setUniverseTouched(false)
+        setUniverse(incomingUniverse)
+        const autoRunKey = `${sectorFilter}:${incomingUniverse}`
+        if (autoRunTriggeredRef.current !== autoRunKey) {
+          autoRunTriggeredRef.current = autoRunKey
+          runRecommendations(sectorFilter, false, incomingUniverse)
+        }
+      } else {
+        setUniverseTouched(false)
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sectorFilter])
+  }, [sectorFilter, recsUniverse])
 
   // Use AI results if available, otherwise fall back to static mock data
   const stocks = stockResults.length > 0 ? stockResults : (mode === "Top Picks" ? TOP_PICKS : BOTTOM_OF_CYCLE)
@@ -217,7 +244,15 @@ Return 6 stocks. Return ONLY valid JSON.`,
         <div className="flex items-center justify-between p-3 bg-card border border-border rounded-lg">
           <div>
             <p className="text-xs text-muted-foreground">Picks for:</p>
-            <p className="text-sm font-semibold text-foreground">{sectorFilter} <span className="text-muted-foreground">· Recommended: {market === "ASX" ? "ASX" : market}</span></p>
+            <p className="text-sm font-semibold text-foreground">
+              {sectorFilter}
+              {!universeUnavailable && (
+                <span className="text-muted-foreground"> · Universe: {universe}</span>
+              )}
+              {recsSourceRegion && (
+                <span className="text-muted-foreground"> · from {REGION_LABELS[recsSourceRegion]}</span>
+              )}
+            </p>
           </div>
           <button onClick={() => { clearSectorFilter(); setHasRun(false); }} className="text-xs font-medium text-primary hover:text-primary/80">
             × Clear
@@ -238,11 +273,25 @@ Return 6 stocks. Return ONLY valid JSON.`,
         }
       />
 
-      {/* Market Selector */}
+      {universeUnavailable && !universeTouched && (
+        <div className="p-3 rounded-lg bg-signal-amber/10 border border-signal-amber/20 flex items-start gap-2">
+          <AlertCircle className="size-4 text-signal-amber mt-0.5 shrink-0" />
+          <div className="text-sm text-foreground">
+            We could not determine a recommendation universe for{" "}
+            <span className="font-medium">{sectorFilter}</span>
+            {recsSourceRegion ? ` in ${REGION_LABELS[recsSourceRegion]}` : ""}. Choose a universe below to continue.
+          </div>
+        </div>
+      )}
+
+      {/* Universe Selector */}
       <SegmentedControl
-        options={["ASX", "NASDAQ", "Dow", "FTSE"] as Market[]}
-        value={market}
-        onChange={setMarket}
+        options={[...RECOMMENDATION_UNIVERSES]}
+        value={universe}
+        onChange={(nextUniverse) => {
+          setUniverse(nextUniverse)
+          setUniverseTouched(true)
+        }}
       />
 
       {/* Mode Selector */}
@@ -275,7 +324,7 @@ Return 6 stocks. Return ONLY valid JSON.`,
       {/* Run Analysis Button */}
       <PrimaryButton
         onClick={() => handleRunAnalysis(hasRun)}
-        disabled={isLoading}
+        disabled={isLoading || shouldDisableRecommendationsRun(universeUnavailable, universeTouched)}
         className="w-full"
       >
         {isLoading ? (
@@ -286,7 +335,7 @@ Return 6 stocks. Return ONLY valid JSON.`,
         ) : hasRun ? (
           <>
             <Search className="size-4" />
-            Re-analyse {sectorFilter ? sectorFilter : market}
+            Re-analyse {sectorFilter ? sectorFilter : universe}
           </>
         ) : (
           <>
@@ -307,11 +356,11 @@ Return 6 stocks. Return ONLY valid JSON.`,
       {/* Stock List - Grid layout */}
       <div className="space-y-3">
         <p className="text-xs text-muted-foreground">
-          {sectorFilter ? sectorFilter : market} — {mode} · {new Date().toLocaleDateString('en-AU', { month: 'long', year: 'numeric' })}
+          {sectorFilter ? sectorFilter : universe} — {mode} · {new Date().toLocaleDateString('en-AU', { month: 'long', year: 'numeric' })}
           {!hasRun && <span className="ml-1 opacity-60">(cached)</span>}
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {stocks.map((stock, i) => (
+          {filteredStocks.map((stock, i) => (
               <Card
                 key={stock.ticker}
                 interactive
