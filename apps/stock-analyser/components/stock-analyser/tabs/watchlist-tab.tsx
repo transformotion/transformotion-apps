@@ -215,7 +215,7 @@ export function WatchlistTab() {
                 {/* Header row */}
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-bold text-foreground">{entry.ticker}</span>
+                    <span className="font-display font-bold tracking-wide text-foreground">{entry.ticker}</span>
                     <span className="text-sm text-muted-foreground">{company}</span>
                     {analysis?.sector && (
                       <span className="text-[11px] px-1.5 py-0.5 rounded border border-border text-muted-foreground">{analysis.sector}</span>

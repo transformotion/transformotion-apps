@@ -160,8 +160,8 @@ Provide 6 ETFs. Return ONLY valid JSON.`,
                 {/* Header: Ticker + Signal */}
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    <h4 className="text-sm font-semibold text-foreground">{etf.ticker}</h4>
-                    <p className="text-xs text-muted-foreground leading-tight mt-0.5">{etf.name}</p>
+                    <h4 className="font-display text-sm font-semibold tracking-wide text-foreground">{etf.ticker}</h4>
+                    <p className="mt-0.5 font-display text-xs font-medium leading-tight tracking-wide text-muted-foreground">{etf.name}</p>
                     <p className="text-[11px] text-muted-foreground mt-1">{etf.category}</p>
                   </div>
                   <span className={cn(

@@ -272,7 +272,7 @@ function GrantRow({
   return (
     <Card>
       <div className="mb-3 flex items-center justify-between gap-2">
-        <span className="inline-flex items-center gap-2 text-sm font-semibold text-foreground">
+        <span className="inline-flex items-center gap-2 font-display text-sm font-semibold tracking-wide text-foreground">
           <span className="flex size-6 items-center justify-center rounded-full bg-surface2 text-xs text-muted-foreground">
             {index + 1}
           </span>
@@ -688,7 +688,7 @@ export function InviteComposerView({ viewer }: { viewer: AdminUser }) {
         <Card>
           <div className="mb-3 flex items-center gap-2">
             <Link2 className="size-4 text-primary" />
-            <h3 className="text-sm font-semibold text-foreground">Bundle preview</h3>
+            <h3 className="font-display text-sm font-semibold tracking-wide text-foreground">Bundle preview</h3>
           </div>
 
           <dl className="space-y-1 text-xs">
@@ -747,7 +747,7 @@ export function InviteComposerView({ viewer }: { viewer: AdminUser }) {
         <Card className="bg-surface/40">
           <div className="mb-2 flex items-center gap-2">
             <Mail className="size-4 text-muted-foreground" />
-            <h3 className="text-sm font-semibold text-foreground">Email preview</h3>
+            <h3 className="font-display text-sm font-semibold tracking-wide text-foreground">Email preview</h3>
           </div>
           <div className="rounded-lg border border-border bg-card p-3 text-xs">
             <p className="text-muted-foreground">To: {emailValid ? email : '—'}</p>

@@ -224,7 +224,7 @@ Return ONLY valid JSON.`,
                   {/* Header: Name + Signal */}
                   <div className="flex items-start justify-between">
                     <div>
-                      <h3 className="text-base font-semibold text-foreground">{metal.name}</h3>
+                      <h3 className="font-display text-base font-semibold tracking-wide text-foreground">{metal.name}</h3>
                       <p className="text-xs text-muted-foreground">{metal.symbol}</p>
                     </div>
                     <TrendBadge trend={metal.signal} />
