@@ -31,9 +31,12 @@ import { userFirstName, userInitials } from "@transformotion/auth-client"
 import { useActiveAccountStore } from "@/stores/active-account/use-active-account-store"
 import { useAuthStore, selectUser } from "@/stores/auth/use-auth-store"
 import type {
-  RecommendationsNavigationPayload,
   StockAnalyserSearchMode,
 } from "@transformotion/contracts/stock-analyser/types"
+import {
+  createRecommendationsNavigationState,
+  type RecommendationsNavigationContext,
+} from "./recommendations-flow"
 
 // ============================================================================
 // TYPES
@@ -57,16 +60,13 @@ export interface User {
 
 export type WatchlistEntry = WatchlistItem
 export type SearchMode = StockAnalyserSearchMode
-type RecommendationsNavigationContext = Omit<RecommendationsNavigationPayload, "recommendationUniverse"> & {
-  recommendationUniverse: RecommendationsNavigationPayload["recommendationUniverse"] | null
-}
 
 export interface NavigationState {
   activeTab: TabId
   // Cross-screen navigation context
   sectorFilter: string | null
-  recsUniverse: RecommendationsNavigationPayload["recommendationUniverse"] | null
-  recsSourceRegion: RecommendationsNavigationPayload["sourceRegion"] | null
+  recsUniverse: RecommendationsNavigationContext["recommendationUniverse"]
+  recsSourceRegion: RecommendationsNavigationContext["sourceRegion"] | null
   recsSource: TabId | null
   analyserTicker: string | null
   analyserSource: TabId | null
@@ -199,11 +199,7 @@ export function NavigationProvider({
   const navigateToRecsWithSector = useCallback((payload: RecommendationsNavigationContext) => {
     setState(prev => ({
       ...prev,
-      activeTab: "recs",
-      sectorFilter: payload.sector,
-      recsUniverse: payload.recommendationUniverse,
-      recsSourceRegion: payload.sourceRegion,
-      recsSource: prev.activeTab,
+      ...createRecommendationsNavigationState(prev.activeTab, payload),
     }))
   }, [])
 

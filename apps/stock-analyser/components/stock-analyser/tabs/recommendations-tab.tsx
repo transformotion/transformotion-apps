@@ -22,8 +22,14 @@ import type { RecommendationUniverse } from "@transformotion/contracts/stock-ana
 import {
   RECOMMENDATION_UNIVERSES,
   REGION_LABELS,
-  isRecommendationUniverse,
 } from "../markets"
+import {
+  getIncomingRecommendationUniverse,
+  getInitialRecommendationUniverse,
+  isLiveSearchMode,
+  isMarketOriginatedUniverseUnavailable,
+  shouldDisableRecommendationsRun,
+} from "../recommendations-flow"
 
 type Mode = "Top Picks" | "Bottom of Cycle"
 
@@ -110,11 +116,10 @@ const BOTTOM_OF_CYCLE: Stock[] = [
 
 export function RecommendationsTab() {
   const { navigateToAnalyser, sectorFilter, recsUniverse, recsSourceRegion, recsSource, clearSectorFilter, navigateTo, getTabTextVisibility, setTabTextOverride, showExplanatoryText, defaultSearchMode, setTabCache, getTabCache } = useNavigation()
-  const [isLive, setIsLive] = useState(defaultSearchMode === "live")
-  const marketOriginated = !!sectorFilter
-  const incomingUniverse = isRecommendationUniverse(recsUniverse) ? recsUniverse : null
-  const universeUnavailable = marketOriginated && !incomingUniverse
-  const [universe, setUniverse] = useState<RecommendationUniverse>(() => incomingUniverse ?? "ASX")
+  const [isLive, setIsLive] = useState(isLiveSearchMode(defaultSearchMode))
+  const incomingUniverse = getIncomingRecommendationUniverse(recsUniverse)
+  const universeUnavailable = isMarketOriginatedUniverseUnavailable(sectorFilter, incomingUniverse)
+  const [universe, setUniverse] = useState<RecommendationUniverse>(() => getInitialRecommendationUniverse(recsUniverse))
   const [universeTouched, setUniverseTouched] = useState(false)
   const [mode, setMode] = useState<Mode>("Top Picks")
   const [hasRun, setHasRun] = useState(false)
@@ -139,7 +144,7 @@ export function RecommendationsTab() {
   const { callClaude, isLoading, error } = useClaude<{ stocks: Stock[] }>()
 
   useEffect(() => {
-    setIsLive(defaultSearchMode === "live")
+    setIsLive(isLiveSearchMode(defaultSearchMode))
   }, [defaultSearchMode])
 
   const runRecommendations = async (
@@ -319,7 +324,7 @@ Return 6 stocks. Return ONLY valid JSON.`,
       {/* Run Analysis Button */}
       <PrimaryButton
         onClick={() => handleRunAnalysis(hasRun)}
-        disabled={isLoading || (universeUnavailable && !universeTouched)}
+        disabled={isLoading || shouldDisableRecommendationsRun(universeUnavailable, universeTouched)}
         className="w-full"
       >
         {isLoading ? (

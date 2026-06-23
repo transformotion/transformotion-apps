@@ -35,6 +35,7 @@ import {
   regionFromLabel,
   resolveSectorUniverse,
 } from "../markets"
+import { createMarketSectorNavigationPayload } from "../recommendations-flow"
 
 type Impact = "Supportive" | "Neutral" | "Headwind"
 type Valuation = "Cheap" | "Fair" | "Expensive" | "Extended"
@@ -414,14 +415,7 @@ IMPORTANT: Your entire response must be a single valid JSON object. Begin your r
                     key={sector.sector}
                     interactive
                     onClick={() => {
-                      const sourceRegion = sector.sourceRegion ?? region
-                      const recommendationUniverse = sector.recommendationUniverse
-                        ?? resolveSectorUniverse(sector.bestExchange, sourceRegion)
-                      navigateToRecsWithSector({
-                        sector: sector.sector,
-                        recommendationUniverse,
-                        sourceRegion,
-                      })
+                      navigateToRecsWithSector(createMarketSectorNavigationPayload(sector, region))
                     }}
                     animationDelay={i * 30}
                   >
