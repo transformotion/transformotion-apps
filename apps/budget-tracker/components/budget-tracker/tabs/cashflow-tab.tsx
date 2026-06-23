@@ -337,22 +337,22 @@ export function CashflowTab() {
           {stats && (
             <div className="grid grid-cols-2 gap-3">
               <Card>
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Avg Monthly Income</p>
+                <p className="font-display text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Avg Monthly Income</p>
                 <p className="text-lg font-bold text-signal-green">{formatCurrencyFull(stats.avgIncome)}</p>
               </Card>
               <Card>
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Avg Monthly Expenses</p>
+                <p className="font-display text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Avg Monthly Expenses</p>
                 <p className="text-lg font-bold text-signal-red">{formatCurrencyFull(stats.avgExpenses)}</p>
               </Card>
               <Card>
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Best Savings</p>
+                <p className="font-display text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Best Savings</p>
                 <p className="text-sm font-medium text-foreground">{formatMonthFull(stats.bestMonth)}</p>
                 <p className={cn("text-xs", stats.bestNet >= 0 ? "text-signal-green" : "text-signal-red")}>
                   {stats.bestNet >= 0 ? "+" : ""}{formatCurrencyFull(stats.bestNet)}
                 </p>
               </Card>
               <Card>
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Lowest Savings</p>
+                <p className="font-display text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Lowest Savings</p>
                 <p className="text-sm font-medium text-foreground">{formatMonthFull(stats.worstMonth)}</p>
                 <p className={cn("text-xs", stats.worstNet >= 0 ? "text-signal-green" : "text-signal-red")}>
                   {stats.worstNet >= 0 ? "+" : ""}{formatCurrencyFull(stats.worstNet)}
@@ -363,7 +363,7 @@ export function CashflowTab() {
 
           {sankeyData.hasData && (
             <Card>
-              <h3 className="text-sm font-semibold text-foreground mb-4">Money Flow</h3>
+              <h3 className="font-display text-sm font-semibold tracking-wide text-foreground mb-4">Money Flow</h3>
               <p className="text-xs text-muted-foreground mb-4">
                 How your income flows through expense categories
               </p>
@@ -412,7 +412,7 @@ export function CashflowTab() {
           )}
 
           <Card>
-            <h3 className="text-sm font-semibold text-foreground mb-4">Income vs Expenses Trend</h3>
+            <h3 className="font-display text-sm font-semibold tracking-wide text-foreground mb-4">Income vs Expenses Trend</h3>
             <div className="h-56">
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart data={trendData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
@@ -464,7 +464,7 @@ export function CashflowTab() {
 
           {activeCategories.length > 0 && (
             <Card>
-              <h3 className="text-sm font-semibold text-foreground mb-4">Monthly Expenses by Category</h3>
+              <h3 className="font-display text-sm font-semibold tracking-wide text-foreground mb-4">Monthly Expenses by Category</h3>
               <div className="h-56">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={categoryData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
@@ -570,7 +570,7 @@ export function CashflowTab() {
           )}
 
           <Card>
-            <h3 className="text-sm font-semibold text-foreground mb-4">Savings Rate Trend</h3>
+            <h3 className="font-display text-sm font-semibold tracking-wide text-foreground mb-4">Savings Rate Trend</h3>
             <div className="h-40">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart
