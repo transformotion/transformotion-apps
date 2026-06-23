@@ -30,6 +30,10 @@ import { ConfirmationModal } from "@transformotion/ui-primitives"
 import { userFirstName, userInitials } from "@transformotion/auth-client"
 import { useActiveAccountStore } from "@/stores/active-account/use-active-account-store"
 import { useAuthStore, selectUser } from "@/stores/auth/use-auth-store"
+import type {
+  RecommendationsNavigationPayload,
+  StockAnalyserSearchMode,
+} from "@transformotion/contracts/stock-analyser/types"
 
 // ============================================================================
 // TYPES
@@ -52,11 +56,17 @@ export interface User {
 }
 
 export type WatchlistEntry = WatchlistItem
+export type SearchMode = StockAnalyserSearchMode
+type RecommendationsNavigationContext = Omit<RecommendationsNavigationPayload, "recommendationUniverse"> & {
+  recommendationUniverse: RecommendationsNavigationPayload["recommendationUniverse"] | null
+}
 
 export interface NavigationState {
   activeTab: TabId
   // Cross-screen navigation context
   sectorFilter: string | null
+  recsUniverse: RecommendationsNavigationPayload["recommendationUniverse"] | null
+  recsSourceRegion: RecommendationsNavigationPayload["sourceRegion"] | null
   recsSource: TabId | null
   analyserTicker: string | null
   analyserSource: TabId | null
@@ -67,6 +77,7 @@ export interface NavigationState {
   // Explanatory text visibility settings
   showExplanatoryText: boolean // global user setting (default: true)
   tabTextOverrides: Partial<Record<TabId, boolean>> // per-tab manual overrides
+  defaultSearchMode: SearchMode
   // Cached API results per tab (persists between tab switches)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   tabCache: Partial<Record<TabId, any>>
@@ -74,7 +85,7 @@ export interface NavigationState {
 
 export interface NavigationActions {
   navigateTo: (tab: TabId) => void
-  navigateToRecsWithSector: (sector: string) => void
+  navigateToRecsWithSector: (payload: RecommendationsNavigationContext) => void
   navigateToAnalyser: (ticker: string, source: TabId) => void
   clearSectorFilter: () => void
   clearAnalyserContext: () => void
@@ -90,6 +101,7 @@ export interface NavigationActions {
   setShowExplanatoryText: (show: boolean) => void
   setTabTextOverride: (tab: TabId, show: boolean) => void
   getTabTextVisibility: (tab: TabId) => boolean
+  setDefaultSearchMode: (mode: SearchMode) => void
   // Tab result cache
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   setTabCache: (tab: TabId, data: any) => void
@@ -156,6 +168,8 @@ export function NavigationProvider({
   const [state, setState] = useState<NavigationState>({
     activeTab: initialTab,
     sectorFilter: null,
+    recsUniverse: null,
+    recsSourceRegion: null,
     recsSource: null,
     analyserTicker: null,
     analyserSource: null,
@@ -164,6 +178,7 @@ export function NavigationProvider({
     user: DEFAULT_USER,
     showExplanatoryText: true,
     tabTextOverrides: {},
+    defaultSearchMode: "live",
     tabCache: {},
   })
 
@@ -181,11 +196,13 @@ export function NavigationProvider({
     setState(prev => ({ ...prev, activeTab: tab }))
   }, [])
 
-  const navigateToRecsWithSector = useCallback((sector: string) => {
+  const navigateToRecsWithSector = useCallback((payload: RecommendationsNavigationContext) => {
     setState(prev => ({
       ...prev,
       activeTab: "recs",
-      sectorFilter: sector,
+      sectorFilter: payload.sector,
+      recsUniverse: payload.recommendationUniverse,
+      recsSourceRegion: payload.sourceRegion,
       recsSource: prev.activeTab,
     }))
   }, [])
@@ -200,7 +217,7 @@ export function NavigationProvider({
   }, [])
 
   const clearSectorFilter = useCallback(() => {
-    setState(prev => ({ ...prev, sectorFilter: null, recsSource: null }))
+    setState(prev => ({ ...prev, sectorFilter: null, recsUniverse: null, recsSourceRegion: null, recsSource: null }))
   }, [])
 
   const clearAnalyserContext = useCallback(() => {
@@ -245,6 +262,7 @@ export function NavigationProvider({
       .then(settings => setState(prev => ({
         ...prev,
         showExplanatoryText: settings.explanatoryTextEnabled,
+        defaultSearchMode: settings.defaultSearchMode,
         tabTextOverrides: {},
       })))
       .catch(err => console.warn('[stock-analyser-settings] load failed', err))
@@ -286,6 +304,12 @@ export function NavigationProvider({
       tabTextOverrides: {}, // Clear all overrides when global setting changes
     }))
     stockAnalyserSettingsService.patchSettings({ explanatoryTextEnabled: show })
+      .catch(err => console.warn('[stock-analyser-settings] save failed', err))
+  }, [])
+
+  const setDefaultSearchMode = useCallback((mode: SearchMode) => {
+    setState(prev => ({ ...prev, defaultSearchMode: mode }))
+    stockAnalyserSettingsService.patchSettings({ defaultSearchMode: mode })
       .catch(err => console.warn('[stock-analyser-settings] save failed', err))
   }, [])
 
@@ -343,6 +367,7 @@ export function NavigationProvider({
     setShowExplanatoryText,
     setTabTextOverride,
     getTabTextVisibility,
+    setDefaultSearchMode,
     setTabCache,
     getTabCache,
   }

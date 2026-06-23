@@ -23,6 +23,7 @@ import {
   type AppAiRuntimeConfigResponse,
 } from '@transformotion/fn-ai-proxy-core';
 import type { StockAnalyserSettings } from '@transformotion/contracts/stock-analyser/types';
+import type { PatchSettingsRequest } from '@transformotion/contracts/stock-analyser/api';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const SETTINGS_TABLE = process.env.SETTINGS_TABLE!;
@@ -135,6 +136,9 @@ async function readSettings(deps: Dependencies, accountId: string, userId: strin
   const explanatoryTextEnabled = typeof res.Item?.['explanatoryTextEnabled'] === 'boolean'
     ? res.Item['explanatoryTextEnabled'] as boolean
     : true;
+  const defaultSearchMode = res.Item?.['defaultSearchMode'] === 'fast' || res.Item?.['defaultSearchMode'] === 'live'
+    ? res.Item['defaultSearchMode'] as StockAnalyserSettings['defaultSearchMode']
+    : 'live';
   const updatedAt = typeof res.Item?.['updatedAt'] === 'string'
     ? res.Item['updatedAt'] as string
     : deps.now().toISOString();
@@ -142,34 +146,62 @@ async function readSettings(deps: Dependencies, accountId: string, userId: strin
     pk: 'SETTINGS',
     sk: 'APP#stock-analyser',
     explanatoryTextEnabled,
+    defaultSearchMode,
     updatedAt,
   };
   return ok({ settings });
 }
 
 async function patchSettings(deps: Dependencies, event: APIGatewayProxyEvent, accountId: string, userId: string) {
-  const body = parseBody<{ explanatoryTextEnabled?: unknown } & Record<string, unknown>>(event);
-  const unexpected = Object.keys(body).filter(key => key !== 'explanatoryTextEnabled');
+  const body = parseBody<PatchSettingsRequest & Record<string, unknown>>(event);
+  const unexpected = Object.keys(body).filter(key => key !== 'explanatoryTextEnabled' && key !== 'defaultSearchMode');
   if (unexpected.length) {
     throw badRequest(`Unsupported settings fields: ${unexpected.join(', ')}`);
   }
-  if (typeof body.explanatoryTextEnabled !== 'boolean') {
+  if (body.explanatoryTextEnabled !== undefined && typeof body.explanatoryTextEnabled !== 'boolean') {
     throw badRequest('explanatoryTextEnabled must be a boolean');
   }
+  if (
+    body.defaultSearchMode !== undefined &&
+    body.defaultSearchMode !== 'fast' &&
+    body.defaultSearchMode !== 'live'
+  ) {
+    throw badRequest('defaultSearchMode must be "live" or "fast"');
+  }
+  if (body.explanatoryTextEnabled === undefined && body.defaultSearchMode === undefined) {
+    throw badRequest('At least one supported settings field is required');
+  }
+
+  const existing = await deps.client.send(new GetCommand({
+    TableName: deps.settingsTable,
+    Key: { pk: accountPk(accountId), sk: userPreferencesSk(userId) },
+  }));
+  const explanatoryTextEnabled = body.explanatoryTextEnabled ?? (
+    typeof existing.Item?.['explanatoryTextEnabled'] === 'boolean'
+      ? existing.Item['explanatoryTextEnabled'] as boolean
+      : true
+  );
+  const defaultSearchMode = body.defaultSearchMode ?? (
+    existing.Item?.['defaultSearchMode'] === 'fast' || existing.Item?.['defaultSearchMode'] === 'live'
+      ? existing.Item['defaultSearchMode'] as StockAnalyserSettings['defaultSearchMode']
+      : 'live'
+  );
   const updatedAt = deps.now().toISOString();
   await deps.client.send(new PutCommand({
     TableName: deps.settingsTable,
     Item: {
       pk: accountPk(accountId),
       sk: userPreferencesSk(userId),
-      explanatoryTextEnabled: body.explanatoryTextEnabled,
+      explanatoryTextEnabled,
+      defaultSearchMode,
       updatedAt,
     },
   }));
   const settings: StockAnalyserSettings = {
     pk: 'SETTINGS',
     sk: 'APP#stock-analyser',
-    explanatoryTextEnabled: body.explanatoryTextEnabled,
+    explanatoryTextEnabled,
+    defaultSearchMode,
     updatedAt,
   };
   return ok({ settings });

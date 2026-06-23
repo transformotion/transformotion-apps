@@ -78,14 +78,18 @@ export function AnalyserTab({
   initialTicker?: string | null
   source?: TabId | null
 }) {
-  const { navigateTo, clearAnalyserContext, isOnWatchlist, addToWatchlist, removeFromWatchlist } = useNavigation()
-  const [isLive, setIsLive] = useState(false)
+  const { navigateTo, clearAnalyserContext, isOnWatchlist, addToWatchlist, removeFromWatchlist, defaultSearchMode } = useNavigation()
+  const [isLive, setIsLive] = useState(defaultSearchMode === "live")
   const [searchValue, setSearchValue] = useState("")
   const [result, setResult] = useState<AnalysisResult | null>(null)
 
   const [chartRange, setChartRange] = useState<OhlcvRange>('1y')
 
   const { callClaude, isLoading: isAnalyzing, error } = useClaude<AnalysisResult>()
+
+  useEffect(() => {
+    setIsLive(defaultSearchMode === "live")
+  }, [defaultSearchMode])
   const { data: liveData, isLoading: isLoadingLive, error: liveError, fetch: fetchLive } = useCycleData()
   const { data: ohlcvData, isLoading: isLoadingChart, fetch: fetchOhlcv } = useOhlcvData()
 
@@ -120,6 +124,7 @@ export function AnalyserTab({
     const analysisResult = await callClaude({
       cacheKey: `ANALYSIS#${ticker}`,
       forceRefresh,
+      webSearch: isLive,
       prompt: createStockAnalysisPrompt(ticker),
       systemPrompt: STOCK_ANALYSIS_SYSTEM_PROMPT,
     })

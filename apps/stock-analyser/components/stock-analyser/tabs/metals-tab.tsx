@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useNavigation } from "../app-shell"
 import {
   PageHeader,
@@ -11,15 +11,7 @@ import {
   TextToggle,
   type TrendSignal,
 } from "@transformotion/ui-primitives"
-import { 
-  TrendingUp, 
-  TrendingDown, 
-  Minus,
-  ChevronDown,
-  Sparkles,
-  AlertCircle,
-  RefreshCw,
-} from "lucide-react"
+import { ChevronDown, AlertCircle, RefreshCw } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useClaude } from "@/lib/hooks"
 import { Spinner } from "@transformotion/ui-primitives"
@@ -99,9 +91,9 @@ const METALS: Metal[] = [
 ]
 
 export function MetalsTab() {
-  const { navigateToAnalyser, getTabTextVisibility, setTabTextOverride, showExplanatoryText, setTabCache, getTabCache } = useNavigation()
-  const [isLive, setIsLive] = useState(false)
-  const [hasRun, setHasRun] = useState(false)
+  const { navigateToAnalyser, getTabTextVisibility, setTabTextOverride, showExplanatoryText, defaultSearchMode, setTabCache, getTabCache } = useNavigation()
+  const [isLive, setIsLive] = useState(defaultSearchMode === "live")
+  const [, setHasRun] = useState(false)
   const cachedMetals = getTabCache("metals")?.metals as Metal[] | null
   const [metalResults, setMetalResults] = useState<Metal[]>(cachedMetals ?? [])
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set())
@@ -121,11 +113,16 @@ export function MetalsTab() {
 
   const { callClaude, isLoading: isAnalyzing, error } = useClaude<{ metals: Metal[] }>()
 
+  useEffect(() => {
+    setIsLive(defaultSearchMode === "live")
+  }, [defaultSearchMode])
+
   const runAnalysis = async (forceRefresh = false) => {
     const today = new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })
     const result = await callClaude({
       cacheKey: 'METALS',
       forceRefresh,
+      webSearch: isLive,
       prompt: `Provide precious metals spot price analysis with latest data for ${today}.
 
 Return a JSON object with "metals" array for Gold, Silver, Platinum, and Palladium. Each should contain:

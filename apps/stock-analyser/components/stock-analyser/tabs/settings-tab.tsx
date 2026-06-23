@@ -3,8 +3,9 @@
 import { useEffect, useState } from "react"
 import { useNavigation } from "../app-shell"
 import { selectUser, useAuthStore } from "@/stores/auth/use-auth-store"
-import { PageHeader, Card, PrimaryButton, SecondaryButton, TextToggle } from "@transformotion/ui-primitives"
-import { AlertCircle, Check, Cpu, FileText, Lock, RotateCcw, Save } from "lucide-react"
+import { PageHeader, Card, PrimaryButton, SecondaryButton, SegmentedControl, TextToggle } from "@transformotion/ui-primitives"
+import { AlertCircle, Check, Cpu, FileText, Lock, RotateCcw, Save, Zap } from "lucide-react"
+import type { SearchMode } from "../app-shell"
 import {
   stockAnalyserSettingsService,
   SUPPORTED_AI_MODELS,
@@ -85,6 +86,46 @@ function AnalysisTextCard() {
             visible={showExplanatoryText}
             onToggle={() => void updatePreference(!showExplanatoryText)}
             size="md"
+          />
+        </div>
+      </div>
+    </Card>
+  )
+}
+
+const SEARCH_MODE_LABELS: Record<SearchMode, string> = { fast: "Fast", live: "Live" }
+const SEARCH_MODE_FROM_LABEL: Record<string, SearchMode> = { Fast: "fast", Live: "live" }
+
+function DefaultSearchModeCard() {
+  const { defaultSearchMode, setDefaultSearchMode } = useNavigation()
+
+  return (
+    <Card className="space-y-4">
+      <div className="flex items-start gap-3">
+        <div className="size-9 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
+          <Zap className="size-5 text-primary" />
+        </div>
+        <div>
+          <h3 className="font-display text-sm font-semibold tracking-wide text-foreground">Default search mode</h3>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            The mode each analysis and recommendation view starts in. Live uses fresh AI analysis; Fast favours cached results.
+            Per-run mode changes do not alter this default.
+          </p>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-surface2/60 px-3 py-3">
+        <div>
+          <p className="text-sm font-medium text-foreground">Mode</p>
+          <p className="text-xs text-muted-foreground">
+            New searches start in {SEARCH_MODE_LABELS[defaultSearchMode]} mode
+          </p>
+        </div>
+        <div className="w-40">
+          <SegmentedControl
+            options={["Fast", "Live"]}
+            value={SEARCH_MODE_LABELS[defaultSearchMode]}
+            onChange={(label) => setDefaultSearchMode(SEARCH_MODE_FROM_LABEL[label])}
           />
         </div>
       </div>
@@ -269,6 +310,7 @@ export function SettingsTab() {
         titleClassName="font-display uppercase tracking-wide"
       />
       <AnalysisTextCard />
+      <DefaultSearchModeCard />
       <AiEngineCard />
     </div>
   )

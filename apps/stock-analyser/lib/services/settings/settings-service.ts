@@ -6,6 +6,7 @@ import {
   type AiRuntimeConfigUpdate,
   type AppAiRuntimeConfigResponse,
 } from '@transformotion/contracts/_shared/ai-runtime';
+import type { PatchSettingsRequest } from '@transformotion/contracts/stock-analyser/api';
 import type { StockAnalyserSettings } from '@transformotion/contracts/stock-analyser/types';
 
 export type {
@@ -26,6 +27,7 @@ const mockSettings: StockAnalyserSettings = {
   pk: 'SETTINGS',
   sk: 'APP#stock-analyser',
   explanatoryTextEnabled: true,
+  defaultSearchMode: 'live',
   updatedAt: new Date().toISOString(),
 };
 
@@ -58,8 +60,13 @@ const mockService = {
   async getSettings(): Promise<StockAnalyserSettings> {
     return { ...mockSettings };
   },
-  async patchSettings(updates: Pick<StockAnalyserSettings, 'explanatoryTextEnabled'>): Promise<StockAnalyserSettings> {
-    mockSettings.explanatoryTextEnabled = updates.explanatoryTextEnabled;
+  async patchSettings(updates: PatchSettingsRequest): Promise<StockAnalyserSettings> {
+    if (typeof updates.explanatoryTextEnabled === 'boolean') {
+      mockSettings.explanatoryTextEnabled = updates.explanatoryTextEnabled;
+    }
+    if (updates.defaultSearchMode === 'fast' || updates.defaultSearchMode === 'live') {
+      mockSettings.defaultSearchMode = updates.defaultSearchMode;
+    }
     mockSettings.updatedAt = new Date().toISOString();
     return { ...mockSettings };
   },
@@ -87,7 +94,7 @@ const realService = {
     const res = await stockAnalyserClient.getSettings();
     return res.settings;
   },
-  async patchSettings(updates: Pick<StockAnalyserSettings, 'explanatoryTextEnabled'>): Promise<StockAnalyserSettings> {
+  async patchSettings(updates: PatchSettingsRequest): Promise<StockAnalyserSettings> {
     const res = await stockAnalyserClient.patchSettings(updates);
     return res.settings;
   },
