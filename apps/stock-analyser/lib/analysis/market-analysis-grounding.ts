@@ -88,11 +88,22 @@ interface SectorLevel {
   change3mPct: number | null
 }
 
+/**
+ * A finite number, else null. The OHLCV boundary is typed `closes: number[]`,
+ * but real feeds can present `null`/`NaN` (Yahoo gaps, incomplete sessions,
+ * sparse proxies). Treat every close defensively so no non-finite value ever
+ * reaches `.toFixed()` (was the #535 US-market crash: a `=== undefined`-only
+ * guard let a `null` close through to `last.toFixed(2)`).
+ */
+function finite(n: unknown): number | null {
+  return typeof n === 'number' && Number.isFinite(n) ? n : null
+}
+
 function pctChange(closes: readonly number[], lookback: number): number | null {
   if (closes.length === 0) return null
-  const last = closes[closes.length - 1]
-  const prior = closes[Math.max(0, closes.length - 1 - lookback)]
-  if (last === undefined || prior === undefined || prior === 0) return null
+  const last = finite(closes[closes.length - 1])
+  const prior = finite(closes[Math.max(0, closes.length - 1 - lookback)])
+  if (last === null || prior === null || prior === 0) return null
   return ((last - prior) / prior) * 100
 }
 
@@ -106,8 +117,8 @@ async function fetchSectorLevel(
         ? getMockOhlcvData(ticker, '3mo', '1d')
         : await getStockAnalyserClient().getOhlcvData(ticker, '3mo', '1d')
     const closes = ohlcv?.closes ?? []
-    const last = closes[closes.length - 1]
-    if (last === undefined) return null
+    const last = finite(closes[closes.length - 1])
+    if (last === null) return null // non-finite/absent last close → omit this sector
     return {
       sector,
       ticker,
@@ -127,20 +138,26 @@ async function fetchSectorLevel(
  * Returns `''` when nothing could be fetched (caller injects nothing).
  */
 export async function buildSectorSuppliedData(region: AnalysisRegion): Promise<string> {
-  const map = SECTOR_PROXY_TICKERS[region] ?? {}
-  const entries = Object.entries(map) as [MarketAnalysisSector, string][]
-  if (entries.length === 0) return ''
+  // Top-level guard: grounding is best-effort and must NEVER reject — a failure
+  // here can never be allowed to block the analysis call.
+  try {
+    const map = SECTOR_PROXY_TICKERS[region] ?? {}
+    const entries = Object.entries(map) as [MarketAnalysisSector, string][]
+    if (entries.length === 0) return ''
 
-  const levels = (
-    await Promise.all(entries.map(([sector, ticker]) => fetchSectorLevel(sector, ticker)))
-  ).filter((l): l is SectorLevel => l !== null)
+    const levels = (
+      await Promise.all(entries.map(([sector, ticker]) => fetchSectorLevel(sector, ticker)))
+    ).filter((l): l is SectorLevel => l !== null)
 
-  if (levels.length === 0) return ''
+    if (levels.length === 0) return ''
 
-  const lines = levels.map((l) => {
-    const fmt = (n: number | null) => (n === null ? 'n/a' : `${n >= 0 ? '+' : ''}${n.toFixed(1)}%`)
-    return `- ${l.sector} (proxy ${l.ticker}): last ${l.last.toFixed(2)}, 1m ${fmt(l.change1mPct)}, 3m ${fmt(l.change3mPct)}`
-  })
+    const lines = levels.map((l) => {
+      const fmt = (n: number | null) => (n === null ? 'n/a' : `${n >= 0 ? '+' : ''}${n.toFixed(1)}%`)
+      return `- ${l.sector} (proxy ${l.ticker}): last ${l.last.toFixed(2)}, 1m ${fmt(l.change1mPct)}, 3m ${fmt(l.change3mPct)}`
+    })
 
-  return `\n\nSUPPLIED SECTOR DATA (real market prices — base each sector's level/return read on THESE figures, not on searched or recalled numbers; cite the proxy as the source for that sector's price read):\n${lines.join('\n')}`
+    return `\n\nSUPPLIED SECTOR DATA (real market prices — base each sector's level/return read on THESE figures, not on searched or recalled numbers; cite the proxy as the source for that sector's price read):\n${lines.join('\n')}`
+  } catch {
+    return ''
+  }
 }

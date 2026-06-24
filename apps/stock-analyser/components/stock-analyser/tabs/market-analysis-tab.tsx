@@ -78,8 +78,12 @@ function SectorPill({ label, color }: { label: string; color: keyof typeof PILL 
   )
 }
 
-// Gradient bar showing cycle position (0 = early/green, 100 = late/pink)
+// Gradient bar showing cycle position (0 = early/green, 100 = late/pink).
+// Defensive: a non-finite position (a model omission) degrades to a "—"
+// placeholder rather than a NaN-positioned marker.
 function CycleBar({ position }: { position: number }) {
+  const ok = typeof position === 'number' && Number.isFinite(position)
+  const pos = ok ? Math.max(0, Math.min(100, position)) : 0
   return (
     <div className="flex items-center gap-2">
       <div className="relative flex items-center" style={{ width: 90, height: 10 }}>
@@ -102,13 +106,13 @@ function CycleBar({ position }: { position: number }) {
             background: 'white',
             borderWidth: '1.5px',
             borderStyle: 'solid',
-            left: `${position}%`,
+            left: `${pos}%`,
             top: '50%',
             transform: 'translate(-50%, -50%)',
           }}
         />
       </div>
-      <span className="text-[10px] text-muted-foreground whitespace-nowrap">Cycle {position}</span>
+      <span className="text-[10px] text-muted-foreground whitespace-nowrap">Cycle {ok ? position : '—'}</span>
     </div>
   )
 }
@@ -168,7 +172,8 @@ export function MarketAnalysisTab() {
     // data, so sector levels/returns are grounded in prices rather than searched.
     // Skipped on a cache hit (the prompt is unused then).
     const willCallModel = forceRefresh || (await dynamoCache.get<MarketAnalysisResult>(cacheKey)) === null
-    const suppliedSectorData = willCallModel ? await buildSectorSuppliedData(region) : ""
+    // Grounding is best-effort: a fetch/format failure must never block analysis.
+    const suppliedSectorData = willCallModel ? await buildSectorSuppliedData(region).catch(() => "") : ""
     const data = await callClaude({
       cacheKey,
       forceRefresh,
@@ -350,8 +355,10 @@ IMPORTANT: Your entire response must be a single valid JSON object. Begin your r
                     </button>
                   )}
                   
-                  <div className="flex items-center justify-between gap-2 pt-1">
-                    <span className={cn("inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-medium", style.bg, style.text)}>
+                  {/* #535: impact pill + source stacked — source on its OWN line
+                      below the pill (reproduces v0's macro-card layout). */}
+                  <div className="flex flex-col gap-2">
+                    <span className={cn("inline-flex w-fit items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-medium", style.bg, style.text)}>
                       <span className={cn("size-1.5 rounded-full", style.text === "text-signal-green" ? "bg-signal-green" : style.text === "text-signal-red" ? "bg-signal-red" : "bg-muted-foreground")} />
                       {indicator.impact}
                     </span>
@@ -402,6 +409,7 @@ IMPORTANT: Your entire response must be a single valid JSON object. Begin your r
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {(result.sectors ?? []).map((sector, i) => {
+                const changeOk = typeof sector.change === 'number' && Number.isFinite(sector.change)
                 return (
                   <Card
                     key={sector.sector}
@@ -426,9 +434,9 @@ IMPORTANT: Your entire response must be a single valid JSON object. Begin your r
                         <SectorPill label={sector.valuation} color={VALUATION_PILL[sector.valuation] ?? 'gray'} />
                         <span
                           className="ml-auto text-xs font-semibold"
-                          style={{ color: sector.change >= 0 ? '#1D9E75' : '#D4537E' }}
+                          style={{ color: !changeOk ? '#444441' : sector.change >= 0 ? '#1D9E75' : '#D4537E' }}
                         >
-                          {sector.change >= 0 ? "+" : ""}{sector.change}%
+                          {changeOk ? `${sector.change >= 0 ? "+" : ""}${sector.change}%` : "—"}
                         </span>
                       </div>
 
