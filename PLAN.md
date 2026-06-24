@@ -1543,8 +1543,12 @@ gate into further build-phase work.)
   gate).** Prod go-live requires the active apps to carry the real
   Transformotion corporate visual identity and verified light/dark
   theming before external users see production.
+- **M19 — Stock Analyser background intelligence and notifications,
+  complete (hard gate).** M17 (go-live) depends on M19 (full Milestone B
+  — background intelligence AND notifications). Prod cannot cut over with
+  M19 incomplete.
 
-Cutover does not begin until both M16 and M18 are done.
+Cutover does not begin until M16, M18, and M19 are all done.
 
 ---
 
@@ -1672,8 +1676,110 @@ For quick visual reference. The full text above is the canonical source.
 | M15 | v0-canonical transition | 2, 4 | M6 |
 | M16 | Account lifecycle and invitation | 3, 4 | M11, M15 |
 | M18 | Corporate rebrand and light/dark theming | 3, 1, 2 | M15, M16 |
-| M17 | Production cutover (go-live) | 2 | M16, M18 |
+| M17 | Production cutover (go-live) | 2 | M16, M18, M19 |
+| M19 | Stock Analyser background intelligence and notifications (PLANNING) | 1, 2, 3 | M18 (closed); ADR D8 |
 
 M8, M9, M10 can run in parallel. M11 follows M10. M7 can run in parallel
 with M6 once M2 and M3 complete. M13 and M14 are sequenced strictly
 linear after M12, per the user preference for focused execution.
+
+M19 is a PLANNING milestone; its full text is Section 26 below. It is
+placed after the reference table deliberately — section order does not
+encode implementation sequence, and Section 26 was appended without
+renumbering the existing sections.
+
+---
+
+## 26. M19 — Stock Analyser background intelligence and notifications
+
+**Status: PLANNING milestone (a.k.a. "Milestone B").** Phase 0 is
+architecture/product **decision** work. This is **not** implementation-ready.
+**No build tickets exist or may be created until the Phase-0 decisions are
+ratified.** No runtime code lands under M19 until that gate is passed.
+
+### Purpose
+
+Add background automation to the Stock Analyser that:
+
+- **(a)** runs Market Analysis across existing markets **on a schedule** and
+  writes refreshed results to the shared cache;
+- **(b)** **background-refreshes** user portfolios and watchlists across **all
+  accounts**;
+- **(c)** **notifies** users when a held stock should be sold or a watchlisted
+  stock should be bought.
+
+These are the "full Milestone B" components: scheduled market-analysis
+generation + cache-write; background portfolio/watchlist refresh; and buy/sell
+notifications.
+
+### Provenance split
+
+| Area | Provenance | Notes |
+|---|---|---|
+| Market-analysis logic | `[prototyped]+[contracted]` — VERIFIED | Market Analysis + Recommendations tabs are real, web-search-grounded, and contracted. |
+| Scheduled execution + cache write | `[net-new]` | New background-job infrastructure. |
+| Cross-account background reads/writes | `[net-new]`, extends ADR D8 | Cron has no user JWT; service-principal auth undefined. |
+| Portfolio/watchlist refresh | `[contracted entities]` + `[net-new job]` | Data exists; scheduled refresh does not. |
+| Buy/sell notifications | `[net-new]` | Rule, delivery channel, UI surface, preferences all unresolved. |
+
+### Phase-0 decision batch
+
+Gate: **all** of the following are ratified into an ADR/contract; any net-new
+user-facing surface is v0-prototyped first; **then** build tickets are
+sequenced. Until then there are no build tickets. The decisions are tracked as
+GitHub DECISION issues under the M19 milestone:
+
+1. **[GATING] Service-principal authorization** (#529) — EventBridge/Lambda
+   jobs read/write account-scoped data with **no user JWT**, fail-closed and
+   auditable. Extends ADR D8 and must be **additive** to it (introduces no read
+   path that trusts a claim a real user's request would not; preserves the
+   "writes fail closed on the live membership row" property). Blocks (a) and
+   (b). **Sequence FIRST.**
+2. **Cache design** (#530) — `PARTIALLY PRE-ANSWERED`: the existing
+   analysis-cache Lambda already writes a SHARED partition for `MARKET`/`RECS`
+   at 24h TTL. Narrows to: reuse SHARED vs dedicated market-cache table; refresh
+   interval; stale-vs-empty on FAILED refresh. (ADR D2 does **not** apply.)
+3. **Scheduler design** (#531) — `PATTERN EXISTS` (cycle-check 8AM AEST
+   EventBridge cron, Phase 4). Decide cadence, retry, fan-out, throttling, cost;
+   build on the existing pattern.
+4. **[OWNER/PRODUCT] Buy/sell signal rule** (#532) — reuse existing SA signal
+   logic, or a new portfolio/watchlist-specific rule? The partner will **not**
+   design this.
+5. **Notification delivery + surface** (#533) — `[net-new]`: in-app centre /
+   SES / push / staged. Any user-facing surface is v0-prototyped first.
+6. **Notification preferences / opt-out** (#534) — `[net-new]`: likely a
+   settings surface. Kept separate from #533.
+7. **Market-data source seam** (#535) — `CONCRETE`: the swap point is
+   `getStockAnalyserClient().getOhlcvData` (today Yahoo, unofficial/no-SLA).
+   Candidates: Twelve Data / EODHD / Alpha Vantage. Open contract Q: does the
+   stored `MarketAnalysisResult` gain a `source`/`provider` field? China out of
+   scope; Japan deferred to the universe-expansion backlog item.
+
+### Named seams
+
+`notification delivery`; `market-data feed`.
+
+### Goals served
+
+Goal 1 (active apps deliver real user value) and Goal 2 (operational hygiene),
+via background intelligence and proactive user notifications, plus Goal 3
+(architecture coherence) through the additive-to-D8 service-principal model.
+
+### Gate to next
+
+All seven Phase-0 decisions ratified into ADR/contract; every net-new
+user-facing surface v0-prototyped; build tickets then sequenced (gating
+decision #529 first). M19 only becomes implementation-ready at that point. As a
+PLANNING milestone, M19's own gate is "Phase-0 decisions ratified," not "code
+shipped."
+
+### Dependencies
+
+- **M18 — Corporate rebrand and theming (closed).** The dashboard surfaces
+  deferred out of M18 (portfolio cards, market-signals panel, notification
+  surfaces) are M19's user-facing presentation layer.
+- **ADR D8 (request-scoped authorization).** Decision #529 extends D8 and must
+  be additive to it.
+- **M17 (go-live) depends on M19 (full Milestone B — background intelligence
+  AND notifications).** Prod cannot cut over with M19 incomplete. (Recorded on
+  both sides: see M17's Dependencies in Section 22.)
