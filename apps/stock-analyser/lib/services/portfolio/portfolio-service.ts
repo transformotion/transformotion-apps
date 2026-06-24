@@ -110,7 +110,12 @@ export const portfolioService = {
       if (signal?.aborted) break
       try {
         const result = await callClaudeAPI<StockAnalysisResult>(
-          { prompt: createStockAnalysisPrompt(ticker), systemPrompt: STOCK_ANALYSIS_SYSTEM_PROMPT },
+          // webSearch: always-on grounding — parity with the Analyser tab, which sends
+          // the same prompt with webSearch:isLive. Portfolio + Watchlist (both route
+          // through this enrichHoldings) have no Live/Fast toggle in v0 and are
+          // always-live by design, so this is hardcoded true — no ModeToggle, zero
+          // surface change. Only cache MISSES reach here, so cost stays bounded.
+          { prompt: createStockAnalysisPrompt(ticker), systemPrompt: STOCK_ANALYSIS_SYSTEM_PROMPT, webSearch: true },
           { signal }
         )
         const normalisedResult = normaliseStockAnalysisSignals(result)
