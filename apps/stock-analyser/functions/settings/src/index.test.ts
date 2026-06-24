@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { APIGatewayProxyEvent } from '@transformotion/lambda-middleware';
+import {
+  DEFAULT_CACHE_FRESHNESS_POLICY,
+  DEFAULT_CACHE_FRESHNESS_PRESETS,
+} from '@transformotion/contracts/stock-analyser/cache-freshness';
 import { createHandler } from './index';
 
 type HandlerDependencies = NonNullable<Parameters<typeof createHandler>[0]>;
@@ -22,7 +26,11 @@ vi.mock('@transformotion/fn-ai-proxy-core', () => ({
 function makeEvent(
   method: 'GET' | 'PATCH' | 'PUT',
   body?: unknown,
-  options: { resource?: string; groups?: string } = {},
+  options: {
+    resource?: string;
+    groups?: string;
+    accounts?: Record<string, Array<{ accountId: string; role: string }>>;
+  } = {},
 ): APIGatewayProxyEvent {
   return {
     httpMethod: method,
@@ -36,7 +44,7 @@ function makeEvent(
           email: 'user@example.com',
           'cognito:groups': options.groups ?? 'stock-app-access',
           apps: JSON.stringify(['stock-analyser']),
-          accounts: JSON.stringify({
+          accounts: JSON.stringify(options.accounts ?? {
             'stock-analyser': [{ accountId: 'acct-1', role: 'viewer' }],
           }),
         },
@@ -157,6 +165,11 @@ describe('Stock Analyser settings handler', () => {
     ));
 
     expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).config.activePolicy).toEqual({
+      freshUntilElapsedRatio: 0.5,
+      staleFromElapsedRatio: 0.9,
+      showOutdatedState: true,
+    });
   });
 
   it('rejects non-admin cache freshness writes', async () => {
@@ -170,8 +183,15 @@ describe('Stock Analyser settings handler', () => {
     expect(res.statusCode).toBe(403);
   });
 
-  it('rejects invalid cache freshness policy updates', async () => {
-    const { deps } = createFakeDeps();
+  it('rejects invalid cache freshness policy updates without overwriting the existing policy', async () => {
+    const existing = {
+      pk: 'SETTINGS',
+      sk: 'CACHE_FRESHNESS#stock-analyser',
+      activePolicy: DEFAULT_CACHE_FRESHNESS_POLICY,
+      presets: DEFAULT_CACHE_FRESHNESS_PRESETS,
+      updatedAt: '2026-06-23T00:00:00.000Z',
+    };
+    const { deps, getItem } = createFakeDeps(existing);
     const res = await createHandler(deps)(makeEvent(
       'PUT',
       { activePolicy: { freshUntilElapsedRatio: 0.7, staleFromElapsedRatio: 0.71, showOutdatedState: true } },
@@ -180,5 +200,63 @@ describe('Stock Analyser settings handler', () => {
 
     expect(res.statusCode).toBe(400);
     expect(JSON.parse(res.body).message).toContain('Invalid cache freshness policy');
+    expect(getItem()).toEqual(existing);
+  });
+
+  it('supports reset-to-default by persisting the default policy and presets', async () => {
+    const { deps, getItem } = createFakeDeps({
+      pk: 'SETTINGS',
+      sk: 'CACHE_FRESHNESS#stock-analyser',
+      activePolicy: {
+        freshUntilElapsedRatio: 0.15,
+        staleFromElapsedRatio: 0.5,
+        showOutdatedState: false,
+      },
+      presets: DEFAULT_CACHE_FRESHNESS_PRESETS,
+      updatedAt: '2026-06-23T00:00:00.000Z',
+    });
+
+    const res = await createHandler(deps)(makeEvent(
+      'PUT',
+      {
+        activePolicy: DEFAULT_CACHE_FRESHNESS_POLICY,
+        presets: DEFAULT_CACHE_FRESHNESS_PRESETS,
+      },
+      { resource: '/cache-freshness', groups: 'stock-app-access,stock-app-admin' },
+    ));
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).config).toMatchObject({
+      activePolicy: DEFAULT_CACHE_FRESHNESS_POLICY,
+      presets: DEFAULT_CACHE_FRESHNESS_PRESETS,
+      updatedAt: '2026-06-24T00:00:00.000Z',
+    });
+    expect(getItem()).toMatchObject({
+      activePolicy: DEFAULT_CACHE_FRESHNESS_POLICY,
+      presets: DEFAULT_CACHE_FRESHNESS_PRESETS,
+      updatedAt: '2026-06-24T00:00:00.000Z',
+    });
+  });
+
+  it('enforces the account read gate before returning the active/default policy', async () => {
+    const send = vi.fn();
+    const deps = {
+      client: { send },
+      settingsTable: 'settings',
+      platformConfigTable: 'platform',
+      now: () => new Date('2026-06-24T00:00:00.000Z'),
+    } as unknown as HandlerDependencies;
+
+    const res = await createHandler(deps)(makeEvent(
+      'GET',
+      undefined,
+      {
+        resource: '/cache-freshness',
+        accounts: { 'stock-analyser': [{ accountId: 'other-acct', role: 'viewer' }] },
+      },
+    ));
+
+    expect(res.statusCode).toBe(403);
+    expect(send).not.toHaveBeenCalled();
   });
 });
