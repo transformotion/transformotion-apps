@@ -12,3 +12,11 @@ export type {
   UseClaudeOptions,
   UseClaudeReturn,
 } from './use-claude'
+export {
+  CACHE_FRESHNESS_POLICY_EVENT,
+  notifyCacheFreshnessPolicyUpdated,
+  useCacheFreshnessPolicy,
+  useCacheStatus,
+  useDerivedCacheStatus,
+} from './use-cache-freshness'
+export type { CacheStatusView } from './use-cache-freshness'

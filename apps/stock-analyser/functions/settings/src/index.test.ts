@@ -19,10 +19,14 @@ vi.mock('@transformotion/fn-ai-proxy-core', () => ({
   }),
 }));
 
-function makeEvent(method: 'GET' | 'PATCH', body?: unknown): APIGatewayProxyEvent {
+function makeEvent(
+  method: 'GET' | 'PATCH' | 'PUT',
+  body?: unknown,
+  options: { resource?: string; groups?: string } = {},
+): APIGatewayProxyEvent {
   return {
     httpMethod: method,
-    resource: '/settings',
+    resource: options.resource ?? '/settings',
     headers: { 'X-Account-Id': 'acct-1' },
     body: body === undefined ? null : JSON.stringify(body),
     requestContext: {
@@ -30,6 +34,7 @@ function makeEvent(method: 'GET' | 'PATCH', body?: unknown): APIGatewayProxyEven
         claims: {
           sub: 'user-1',
           email: 'user@example.com',
+          'cognito:groups': options.groups ?? 'stock-app-access',
           apps: JSON.stringify(['stock-analyser']),
           accounts: JSON.stringify({
             'stock-analyser': [{ accountId: 'acct-1', role: 'viewer' }],
@@ -106,5 +111,74 @@ describe('Stock Analyser settings handler', () => {
 
     expect(res.statusCode).toBe(400);
     expect(JSON.parse(res.body).message).toContain('Unsupported settings fields: market');
+  });
+
+  it('returns the default cache freshness policy when no config exists', async () => {
+    const { deps } = createFakeDeps();
+    const res = await createHandler(deps)(makeEvent('GET', undefined, { resource: '/cache-freshness' }));
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).config).toMatchObject({
+      pk: 'SETTINGS',
+      sk: 'CACHE_FRESHNESS#stock-analyser',
+      activePolicy: {
+        freshUntilElapsedRatio: 0.25,
+        staleFromElapsedRatio: 0.75,
+        showOutdatedState: true,
+      },
+    });
+  });
+
+  it('allows stock-app-admin to update cache freshness policy', async () => {
+    const { deps, getItem } = createFakeDeps();
+    const policy = {
+      freshUntilElapsedRatio: 0.15,
+      staleFromElapsedRatio: 0.5,
+      showOutdatedState: true,
+    };
+
+    const res = await createHandler(deps)(makeEvent(
+      'PUT',
+      { activePolicy: policy },
+      { resource: '/cache-freshness', groups: 'stock-app-access,stock-app-admin' },
+    ));
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).config.activePolicy).toEqual(policy);
+    expect(getItem()).toMatchObject({ pk: 'SETTINGS', sk: 'CACHE_FRESHNESS#stock-analyser', activePolicy: policy });
+  });
+
+  it('allows site-admin to update cache freshness policy', async () => {
+    const { deps } = createFakeDeps();
+    const res = await createHandler(deps)(makeEvent(
+      'PUT',
+      { activePolicy: { freshUntilElapsedRatio: 0.5, staleFromElapsedRatio: 0.9, showOutdatedState: true } },
+      { resource: '/cache-freshness', groups: 'stock-app-access,site-admin' },
+    ));
+
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('rejects non-admin cache freshness writes', async () => {
+    const { deps } = createFakeDeps();
+    const res = await createHandler(deps)(makeEvent(
+      'PUT',
+      { activePolicy: { freshUntilElapsedRatio: 0.15, staleFromElapsedRatio: 0.5, showOutdatedState: true } },
+      { resource: '/cache-freshness', groups: 'stock-app-access' },
+    ));
+
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('rejects invalid cache freshness policy updates', async () => {
+    const { deps } = createFakeDeps();
+    const res = await createHandler(deps)(makeEvent(
+      'PUT',
+      { activePolicy: { freshUntilElapsedRatio: 0.7, staleFromElapsedRatio: 0.71, showOutdatedState: true } },
+      { resource: '/cache-freshness', groups: 'stock-app-access,stock-app-admin' },
+    ));
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).message).toContain('Invalid cache freshness policy');
   });
 });

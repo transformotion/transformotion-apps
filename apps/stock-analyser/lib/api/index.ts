@@ -2,7 +2,11 @@ import { ApiClient, HttpClient } from '@transformotion/api-client'
 import type { PutCacheRequest, ClaudeProxyRequest } from '@transformotion/api-client'
 import type { AiRuntimeConfigUpdate, AppAiRuntimeConfigResponse } from '@transformotion/contracts/_shared/ai-runtime'
 import type { StockAnalyserSettings } from '@transformotion/contracts/stock-analyser/types'
-import type { PatchSettingsRequest } from '@transformotion/contracts/stock-analyser/api'
+import type {
+  CacheFreshnessConfigResponse,
+  PatchSettingsRequest,
+  PutCacheFreshnessConfigRequest,
+} from '@transformotion/contracts/stock-analyser/api'
 import { authService } from '../services/auth'
 import { getConfig } from '../config'
 import { getActiveAccountId } from '@/stores/active-account/use-active-account-store'
@@ -56,6 +60,12 @@ export const stockAnalyserClient = {
   },
   resetAiOverride(): Promise<void> {
     return http().delete('ai-config/override')
+  },
+  getCacheFreshnessConfig(): Promise<CacheFreshnessConfigResponse> {
+    return http().get('cache-freshness')
+  },
+  updateCacheFreshnessConfig(body: PutCacheFreshnessConfigRequest): Promise<CacheFreshnessConfigResponse> {
+    return http().put('cache-freshness', body)
   },
   putCacheEntry(key: string, body: PutCacheRequest): Promise<void> {
     return http().put(`analysis-cache/${encodeURIComponent(key)}`, body)

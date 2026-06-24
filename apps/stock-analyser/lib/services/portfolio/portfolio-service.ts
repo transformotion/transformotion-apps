@@ -7,7 +7,11 @@
 
 import { getStockAnalyserClient } from '@/lib/api'
 import { getConfig } from '@/lib/config'
-import { dynamoCache } from '@/lib/services/cache/dynamo-ttl-cache'
+import {
+  getCacheSnapshot,
+  setCacheSnapshot,
+  type CacheMetadata,
+} from '@/lib/services/cache/dynamo-ttl-cache'
 import { callClaudeAPI } from '@/lib/hooks/use-claude'
 import { getMockOhlcvData } from '@/lib/services/ai/fixtures/ohlcv-data'
 import { latestPriceFromOhlcv } from '@/lib/market-data'
@@ -88,19 +92,23 @@ export const portfolioService = {
   async enrichHoldings(
     tickers: string[],
     onResult: (ticker: string, result: StockAnalysisResult) => void,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    onCacheMetadata?: (ticker: string, metadata: CacheMetadata) => void,
   ): Promise<void> {
     // 1. Check cache for all tickers simultaneously
     const cacheChecks = await Promise.all(
       tickers.map(async (ticker) => ({
         ticker,
-        cached: await dynamoCache.get<StockAnalysisResult>(`ANALYSIS#${ticker}`),
+        cached: await getCacheSnapshot<StockAnalysisResult>(`ANALYSIS#${ticker}`),
       }))
     )
 
     // 2. Deliver cache hits — overlaying the real (market-data) price/change.
     for (const { ticker, cached } of cacheChecks) {
-      if (cached) onResult(ticker, await overlayLivePrice(ticker, normaliseStockAnalysisSignals(cached)))
+      if (cached) {
+        onCacheMetadata?.(ticker, { cachedAt: cached.cachedAt, expiresAt: cached.expiresAt })
+        onResult(ticker, await overlayLivePrice(ticker, normaliseStockAnalysisSignals(cached.value)))
+      }
     }
 
     // 3. Call Claude sequentially for cache misses
@@ -119,9 +127,12 @@ export const portfolioService = {
           { signal }
         )
         const normalisedResult = normaliseStockAnalysisSignals(result)
-        dynamoCache.set(`ANALYSIS#${ticker}`, normalisedResult).catch(err =>
+        try {
+          const entry = await setCacheSnapshot(`ANALYSIS#${ticker}`, normalisedResult)
+          onCacheMetadata?.(ticker, { cachedAt: entry.cachedAt, expiresAt: entry.expiresAt })
+        } catch (err) {
           console.warn('[portfolio] cache write failed for', ticker, err)
-        )
+        }
         onResult(ticker, await overlayLivePrice(ticker, normalisedResult))
       } catch (err) {
         if (signal?.aborted) break

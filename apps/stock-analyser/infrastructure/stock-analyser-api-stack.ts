@@ -32,6 +32,7 @@ export interface StockAnalyserApiStackProps extends cdk.StackProps {
  *   GET/PUT           /portfolio
  *   GET/PUT           /watchlist
  *   GET/PUT/DELETE    /analysis-cache/{key}
+ *   GET/PUT           /cache-freshness
  *   GET               /cycle/ohlcv
  *   GET               /price/ohlcv
  *   POST              /api/claude
@@ -265,6 +266,10 @@ export class StockAnalyserApiStack extends cdk.Stack {
     aiConfig.addMethod('GET', settingsIntegration, auth);
     aiConfigOverride.addMethod('PUT', settingsIntegration, auth);
     aiConfigOverride.addMethod('DELETE', settingsIntegration, auth);
+
+    const cacheFreshness = this.api.root.addResource('cache-freshness');
+    cacheFreshness.addMethod('GET', settingsIntegration, auth);
+    cacheFreshness.addMethod('PUT', settingsIntegration, auth);
 
     new cdk.CfnOutput(this, 'ApiUrl', {
       value: this.api.url,

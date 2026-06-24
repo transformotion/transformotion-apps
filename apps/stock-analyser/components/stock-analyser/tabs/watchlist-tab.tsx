@@ -6,6 +6,7 @@ import { portfolioService, type StockAnalysisResult } from "@/lib/services/portf
 import {
   PageHeader,
   Card,
+  CacheStatusBar,
   VerdictBadge,
   CycleGauge,
   EmptyState,
@@ -17,6 +18,8 @@ import {
 } from "@transformotion/ui-primitives"
 import { Eye, RefreshCw, X, TrendingUp, ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useDerivedCacheStatus } from "@/lib/hooks"
+import type { CacheMetadata } from "@/lib/services/cache/dynamo-ttl-cache"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -47,6 +50,7 @@ export function WatchlistTab() {
   } = useNavigation()
 
   const [analysisMap, setAnalysisMap] = useState<Record<string, StockAnalysisResult>>({})
+  const [cacheMetadata, setCacheMetadata] = useState<Record<string, CacheMetadata>>({})
   const [isAnalysing, setIsAnalysing]   = useState(false)
   const [analysingLeft, setAnalysingLeft] = useState(0)
   const [tickerInput, setTickerInput]   = useState("")
@@ -74,7 +78,10 @@ export function WatchlistTab() {
     const ctrl = new AbortController()
     abortRef.current = ctrl
 
-    if (force) setAnalysisMap({})
+    if (force) {
+      setAnalysisMap({})
+      setCacheMetadata({})
+    }
 
     setIsAnalysing(true)
     setAnalysingLeft(tickers.length)
@@ -87,6 +94,7 @@ export function WatchlistTab() {
           setAnalysingLeft(prev => Math.max(0, prev - 1))
         },
         ctrl.signal,
+        (ticker, metadata) => setCacheMetadata(prev => ({ ...prev, [ticker]: metadata })),
       )
     } finally {
       setIsAnalysing(false)
@@ -149,6 +157,14 @@ export function WatchlistTab() {
       </div>
     </div>
   )
+  const aggregateMetadata = watchlistEntries
+    .map(entry => cacheMetadata[entry.ticker])
+    .filter((entry): entry is CacheMetadata => !!entry)
+    .reduce<CacheMetadata | null>((oldest, entry) => {
+      if (!oldest || entry.cachedAt < oldest.cachedAt) return entry
+      return oldest
+    }, null)
+  const cacheStatus = useDerivedCacheStatus("watchlist", aggregateMetadata)
 
   if (watchlistEntries.length === 0) {
     return (
@@ -160,6 +176,13 @@ export function WatchlistTab() {
           action={
             <TextToggle visible={textVisible} onToggle={toggleTextVisibility} isOverride={isTextOverride} />
           }
+        />
+        <CacheStatusBar
+          freshness={cacheStatus.freshness}
+          lastUpdated={cacheStatus.lastUpdated}
+          isLive
+          onRefresh={() => handleEnrich(watchlistEntries.map(e => e.ticker), true)}
+          onToggleMode={() => undefined}
         />
         <PrimaryButton
           icon={isAnalysing ? undefined : RefreshCw}
@@ -189,6 +212,14 @@ export function WatchlistTab() {
         action={
           <TextToggle visible={textVisible} onToggle={toggleTextVisibility} isOverride={isTextOverride} />
         }
+      />
+
+      <CacheStatusBar
+        freshness={cacheStatus.freshness}
+        lastUpdated={cacheStatus.lastUpdated}
+        isLive
+        onRefresh={() => handleEnrich(watchlistEntries.map(e => e.ticker), true)}
+        onToggleMode={() => undefined}
       />
 
       <PrimaryButton

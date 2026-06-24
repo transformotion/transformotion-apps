@@ -73,11 +73,14 @@ export class StockAnalyserTablesStack extends cdk.Stack {
     });
 
     // ── stock-analyser.settings ─────────────────────────────────────────────
-    // General app settings table. Stores account/app-level AI override and
-    // user-level preferences without overloading portfolio/watchlist/cache/WSS.
+    // General app settings table. Stores account/app-level AI override,
+    // app-wide cache freshness policy, and user-level preferences without
+    // overloading portfolio/watchlist/cache/WSS.
     // Key model:
     //   PK: ACCOUNT#{accountId}
     //   SK: APP#AI_RUNTIME | USER#{userId}#PREFERENCES
+    //   PK: SETTINGS
+    //   SK: CACHE_FRESHNESS#stock-analyser
     this.settingsTable = new dynamodb.Table(this, 'SettingsTable', {
       tableName:     `stock-analyser.settings-${stage}`,
       partitionKey:  { name: 'pk', type: dynamodb.AttributeType.STRING },

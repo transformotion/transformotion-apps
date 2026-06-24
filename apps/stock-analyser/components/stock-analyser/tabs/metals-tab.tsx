@@ -13,7 +13,7 @@ import {
 } from "@transformotion/ui-primitives"
 import { ChevronDown, AlertCircle, RefreshCw } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { useClaude } from "@/lib/hooks"
+import { useCacheStatus, useClaude } from "@/lib/hooks"
 import { Spinner } from "@transformotion/ui-primitives"
 
 interface Metal {
@@ -97,6 +97,7 @@ export function MetalsTab() {
   const cachedMetals = getTabCache("metals")?.metals as Metal[] | null
   const [metalResults, setMetalResults] = useState<Metal[]>(cachedMetals ?? [])
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set())
+  const cacheStatus = useCacheStatus("metals", "METALS")
   
   // Text visibility
   const textVisible = getTabTextVisibility("metals")
@@ -122,6 +123,7 @@ export function MetalsTab() {
     const result = await callClaude({
       cacheKey: 'METALS',
       forceRefresh,
+      onCacheMetadata: cacheStatus.markWritten,
       webSearch: isLive,
       prompt: `Provide precious metals spot price analysis with latest data for ${today}.
 
@@ -172,8 +174,8 @@ Return ONLY valid JSON.`,
       <ModeToggle
         isLive={isLive}
         onToggle={() => setIsLive(!isLive)}
-        cacheAge="just now"
-        freshness="recent"
+        cacheAge={cacheStatus.cacheAge}
+        freshness={cacheStatus.freshness}
       />
 
       {/* Primary CTA */}

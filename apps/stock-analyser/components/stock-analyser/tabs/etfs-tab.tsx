@@ -12,7 +12,7 @@ import {
 } from "@transformotion/ui-primitives"
 import { ChevronRight, ChevronDown, AlertCircle, RefreshCw } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { useClaude } from "@/lib/hooks"
+import { useCacheStatus, useClaude } from "@/lib/hooks"
 import { Spinner } from "@transformotion/ui-primitives"
 import { stockSignalBadgeClassName } from "../status-badge"
 
@@ -46,6 +46,8 @@ export function ETFsTab() {
   const cachedEtfs = getTabCache("etfs")?.etfs as ETF[] | null
   const [etfResults, setEtfResults] = useState<ETF[]>(cachedEtfs ?? [])
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set())
+  const cacheKey = `ETF#${market}`
+  const cacheStatus = useCacheStatus("etfs", cacheKey)
   
   // Text visibility
   const textVisible = getTabTextVisibility("etfs")
@@ -68,8 +70,9 @@ export function ETFsTab() {
 
   const runAnalysis = async (forceRefresh = false) => {
     const result = await callClaude({
-      cacheKey: `ETF#${market}`,
+      cacheKey,
       forceRefresh,
+      onCacheMetadata: cacheStatus.markWritten,
       webSearch: isLive,
       prompt: `Provide ETF recommendations for the ${market} market.
 
@@ -124,8 +127,8 @@ Provide 6 ETFs. Return ONLY valid JSON.`,
       <ModeToggle
         isLive={isLive}
         onToggle={() => setIsLive(!isLive)}
-        cacheAge="3m ago"
-        freshness="recent"
+        cacheAge={cacheStatus.cacheAge}
+        freshness={cacheStatus.freshness}
       />
 
       {/* Primary CTA */}
