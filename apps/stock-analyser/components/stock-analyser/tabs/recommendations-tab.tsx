@@ -18,6 +18,10 @@ import {
 import { ChevronRight, ChevronDown, Search, Loader2, Stars, AlertCircle } from "lucide-react"
 import { useCacheStatus, useClaude } from "@/lib/hooks"
 import { cn } from "@/lib/utils"
+import { getStockAnalyserClient } from "@/lib/api"
+import { getConfig } from "@/lib/config"
+import { getMockOhlcvData } from "@/lib/services/ai/fixtures/ohlcv-data"
+import { latestPriceFromOhlcv } from "@/lib/market-data"
 import type { RecommendationUniverse } from "@transformotion/contracts/stock-analyser/types"
 import {
   RECOMMENDATION_UNIVERSES,
@@ -39,14 +43,37 @@ interface Stock {
   company: string
   sector: string
   subcategory: string
-  price: number
-  change: number
+  // Price/change are overlaid from REAL market data (OHLCV), not the AI — and are
+  // null when no live quote resolves (delisted/unknown ticker). The UI shows "—".
+  price: number | null
+  change: number | null
   verdict: Verdict
   cyclePosition: number
   cycleStage: CycleStage
   conviction: boolean
   analysis: string
   bestExchange: string
+}
+
+/**
+ * Overlay the REAL current price/change (market data / OHLCV) onto a recommended
+ * stock — the AI's own `price`/`change` are NOT trusted for display (#468: price
+ * from market data, not the AI). Best-effort: a ticker with no resolvable quote
+ * (e.g. a delisted symbol like OZL.AX) leaves both null, and the card shows "—".
+ * Mirrors `overlayLivePrice` in portfolio-service; keyed by the model's (already
+ * Yahoo-suffixed) ticker — NOT `normaliseTicker`, which would ASX-ify US codes.
+ */
+async function overlayStockPrice(stock: Stock): Promise<Stock> {
+  try {
+    const ticker = stock.ticker.trim()
+    const ohlcv = getConfig().ai.provider === 'mock'
+      ? getMockOhlcvData(ticker, '1mo', '1d')
+      : await getStockAnalyserClient().getOhlcvData(ticker, '1mo', '1d')
+    const { price, change } = latestPriceFromOhlcv(ohlcv)
+    return { ...stock, price, change }
+  } catch {
+    return { ...stock, price: null, change: null }
+  }
 }
 
 const TOP_PICKS: Stock[] = [
@@ -187,8 +214,10 @@ Return 6 stocks. Return ONLY valid JSON.`,
     })
 
     if (result?.stocks) {
-      setStockResults(result.stocks)
-      setTabCache("recs", { stocks: result.stocks })
+      // Overlay real market-data prices over the AI's numbers before display.
+      const overlaid = await Promise.all(result.stocks.map(overlayStockPrice))
+      setStockResults(overlaid)
+      setTabCache("recs", { stocks: overlaid })
       setHasRun(true)
     }
   }
@@ -384,12 +413,18 @@ Return 6 stocks. Return ONLY valid JSON.`,
                     </span>
                   </div>
 
-                  {/* Price section */}
+                  {/* Price section — real market-data overlay; "—" when no quote resolves */}
                   <div className="flex items-baseline gap-2">
-                    <span className="text-lg font-semibold text-foreground">${stock.price.toFixed(2)}</span>
-                    <span className={cn("text-xs font-semibold", stock.change >= 0 ? "text-signal-green" : "text-signal-red")}>
-                      {stock.change >= 0 ? "+" : ""}{stock.change.toFixed(1)}%
+                    <span className="text-lg font-semibold text-foreground">
+                      {stock.price !== null ? `$${stock.price.toFixed(2)}` : "—"}
                     </span>
+                    {stock.change !== null ? (
+                      <span className={cn("text-xs font-semibold", stock.change >= 0 ? "text-signal-green" : "text-signal-red")}>
+                        {stock.change >= 0 ? "+" : ""}{stock.change.toFixed(1)}%
+                      </span>
+                    ) : (
+                      <span className="text-xs font-semibold text-muted-foreground">—</span>
+                    )}
                   </div>
 
                   {/* Analysis text - conditionally visible or expandable */}
