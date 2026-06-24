@@ -1,10 +1,10 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useNavigation } from "../app-shell"
 import { selectUser, useAuthStore } from "@/stores/auth/use-auth-store"
-import { PageHeader, Card, PrimaryButton, SecondaryButton, SegmentedControl, TextToggle } from "@transformotion/ui-primitives"
-import { AlertCircle, Check, Cpu, FileText, Lock, RotateCcw, Save, Zap } from "lucide-react"
+import { PageHeader, Card, PrimaryButton, SecondaryButton, SegmentedControl, Slider, TextToggle } from "@transformotion/ui-primitives"
+import { AlertCircle, Check, Cpu, FileText, Gauge, Lock, Plus, RotateCcw, Save, Trash2, Zap } from "lucide-react"
 import type { SearchMode } from "../app-shell"
 import { notifyCacheFreshnessPolicyUpdated } from "@/lib/hooks"
 import type { User } from "@transformotion/auth-client"
@@ -317,7 +317,9 @@ function AiEngineCard() {
   )
 }
 
+const GAP = Math.round(MIN_FRESHNESS_RATIO_GAP * 100)
 const pct = (ratio: number) => Math.round(ratio * 100)
+const pctLabel = (ratio: number) => `${pct(ratio)}%`
 
 function policiesEqual(
   a: StockAnalyserCacheFreshnessPolicy,
@@ -330,9 +332,7 @@ function policiesEqual(
   )
 }
 
-function BandPreview({ policy }: { policy: StockAnalyserCacheFreshnessPolicy }) {
-  const fresh = pct(policy.freshUntilElapsedRatio)
-  const stale = pct(policy.staleFromElapsedRatio)
+function BandPreview({ fresh, stale }: { fresh: number; stale: number }) {
   return (
     <div className="space-y-1.5">
       <div className="flex h-2.5 w-full overflow-hidden rounded-full" aria-hidden="true">
@@ -353,7 +353,11 @@ function CacheFreshnessCard() {
   const user = useAuthStore(selectUser)
   const canEdit = userCanEditStockAnalyserAdmin(user)
   const [config, setConfig] = useState<CacheFreshnessConfigRecord | null>(null)
-  const [draft, setDraft] = useState<StockAnalyserCacheFreshnessPolicy>(DEFAULT_CACHE_FRESHNESS_PRESETS[1].policy)
+  const [freshPct, setFreshPct] = useState(() => pct(DEFAULT_CACHE_FRESHNESS_PRESETS[1].policy.freshUntilElapsedRatio))
+  const [stalePct, setStalePct] = useState(() => pct(DEFAULT_CACHE_FRESHNESS_PRESETS[1].policy.staleFromElapsedRatio))
+  const [showOutdated, setShowOutdated] = useState(DEFAULT_CACHE_FRESHNESS_PRESETS[1].policy.showOutdatedState)
+  const [newPresetName, setNewPresetName] = useState("")
+  const [adding, setAdding] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -365,7 +369,9 @@ function CacheFreshnessCard() {
     try {
       const next = await stockAnalyserSettingsService.getCacheFreshnessConfig()
       setConfig(next)
-      setDraft(next.activePolicy)
+      setFreshPct(pct(next.activePolicy.freshUntilElapsedRatio))
+      setStalePct(pct(next.activePolicy.staleFromElapsedRatio))
+      setShowOutdated(next.activePolicy.showOutdatedState)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load cache freshness policy")
     } finally {
@@ -377,10 +383,19 @@ function CacheFreshnessCard() {
     void load()
   }, [])
 
-  const active = config?.activePolicy ?? draft
+  const active = config?.activePolicy ?? DEFAULT_CACHE_FRESHNESS_PRESETS[1].policy
   const presets = config?.presets ?? DEFAULT_CACHE_FRESHNESS_PRESETS
-  const isDirty = config ? !policiesEqual(draft, active) : false
+  const draft: StockAnalyserCacheFreshnessPolicy = {
+    freshUntilElapsedRatio: freshPct / 100,
+    staleFromElapsedRatio: stalePct / 100,
+    showOutdatedState: showOutdated,
+  }
+  const isDirty = !policiesEqual(draft, active)
   const invalid = !isValidCacheFreshnessPolicy(draft)
+  const activePresetId = useMemo(
+    () => presets.find((preset) => policiesEqual(preset.policy, active))?.id ?? null,
+    [presets, active],
+  )
 
   async function savePolicy(policy = draft, presetsOverride = presets) {
     setSaving(true)
@@ -391,7 +406,9 @@ function CacheFreshnessCard() {
         presets: presetsOverride,
       })
       setConfig(next)
-      setDraft(next.activePolicy)
+      setFreshPct(pct(next.activePolicy.freshUntilElapsedRatio))
+      setStalePct(pct(next.activePolicy.staleFromElapsedRatio))
+      setShowOutdated(next.activePolicy.showOutdatedState)
       notifyCacheFreshnessPolicyUpdated()
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
@@ -408,7 +425,9 @@ function CacheFreshnessCard() {
     try {
       const next = await stockAnalyserSettingsService.resetCacheFreshnessConfig()
       setConfig(next)
-      setDraft(next.activePolicy)
+      setFreshPct(pct(next.activePolicy.freshUntilElapsedRatio))
+      setStalePct(pct(next.activePolicy.staleFromElapsedRatio))
+      setShowOutdated(next.activePolicy.showOutdatedState)
       notifyCacheFreshnessPolicyUpdated()
       setSaved(false)
     } catch (err) {
@@ -418,33 +437,70 @@ function CacheFreshnessCard() {
     }
   }
 
-  function updateRatio(field: "freshUntilElapsedRatio" | "staleFromElapsedRatio", value: string) {
-    const numeric = Number(value)
-    if (!Number.isFinite(numeric)) return
-    setDraft(prev => ({ ...prev, [field]: numeric / 100 }))
+  function handleSlider(values: number[]) {
+    let [lo, hi] = values
+    if (hi - lo < GAP) {
+      if (lo !== freshPct) lo = Math.max(0, hi - GAP)
+      else hi = Math.min(100, lo + GAP)
+    }
+    setFreshPct(lo)
+    setStalePct(hi)
     setSaved(false)
+  }
+
+  async function handleApplyPreset(preset: CacheFreshnessPreset) {
+    setFreshPct(pct(preset.policy.freshUntilElapsedRatio))
+    setStalePct(pct(preset.policy.staleFromElapsedRatio))
+    setShowOutdated(preset.policy.showOutdatedState)
+    setSaved(false)
+    await savePolicy(preset.policy)
+  }
+
+  async function handleSaveAsPreset() {
+    const label = newPresetName.trim()
+    if (!label) return
+    const id = label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "custom"
+    const preset: CacheFreshnessPreset = {
+      id: presets.some((item) => item.id === id) ? `${id}-${Date.now()}` : id,
+      label,
+      policy: draft,
+      builtIn: false,
+    }
+    await savePolicy(draft, [...presets, preset])
+    setNewPresetName("")
+    setAdding(false)
+  }
+
+  async function handleDeletePreset(preset: CacheFreshnessPreset) {
+    if (preset.builtIn) return
+    await savePolicy(active, presets.filter((item) => item.id !== preset.id))
   }
 
   return (
     <Card className="space-y-5">
       <div className="flex items-start gap-3">
         <div className="size-9 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
-          <Zap className="size-5 text-primary" />
+          <Gauge className="size-5 text-primary" />
         </div>
         <div>
-          <h3 className="font-display text-sm font-semibold tracking-wide text-foreground">Cache freshness</h3>
+          <h3 className="font-display text-base font-semibold tracking-wide text-foreground">Cache freshness</h3>
           <p className="text-xs text-muted-foreground leading-relaxed">
-            Thresholds classify cached results only. Cache expiry, writes, refreshes, and AI analysis do not change.
+            {canEdit
+              ? "Configure when cached results are labelled Fresh, Recent, or Stale across every analysis view. These thresholds affect badge labels only — not cache expiry or refresh."
+              : "How cached results are labelled Fresh, Recent, or Stale across analysis views. Thresholds are managed by administrators."}
           </p>
         </div>
       </div>
 
       {error && <ErrorBanner message={error} />}
 
-      <div className="rounded-xl border border-border bg-surface2/60 p-3 space-y-3">
-        <BandPreview policy={active} />
-        <div className="flex items-center justify-between text-xs">
-          <span className="text-muted-foreground">Past-expiry data</span>
+      <div className="rounded-xl border border-border bg-surface2/60 p-3 space-y-2.5">
+        <BandPreview
+          fresh={pct(active.freshUntilElapsedRatio)}
+          stale={pct(active.staleFromElapsedRatio)}
+        />
+        <div className="flex items-center justify-between gap-3 text-xs">
+          <span className="text-muted-foreground">Past expiry shows as</span>
           <span className="text-foreground">{active.showOutdatedState ? "Outdated" : "Stale"}</span>
         </div>
       </div>
@@ -454,103 +510,156 @@ function CacheFreshnessCard() {
           <div className="space-y-2">
             <p className="text-sm font-medium text-foreground">Presets</p>
             <div className="flex flex-wrap gap-2">
-              {presets.map((preset: CacheFreshnessPreset) => (
+              {presets.map((preset: CacheFreshnessPreset) => {
+                const isActive = preset.id === activePresetId
+                return (
+                  <span
+                    key={preset.id}
+                    className={cn(
+                      "group inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition-colors",
+                      isActive
+                        ? "border-primary/40 bg-primary/10 text-primary"
+                        : "border-border bg-surface2 text-muted-foreground hover:text-foreground hover:bg-surface2/80",
+                    )}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => void handleApplyPreset(preset)}
+                      className="font-medium"
+                      title={`Apply ${preset.label} (${pctLabel(preset.policy.freshUntilElapsedRatio)} / ${pctLabel(preset.policy.staleFromElapsedRatio)})`}
+                    >
+                      {preset.label}
+                    </button>
+                    {!preset.builtIn && (
+                      <button
+                        type="button"
+                        onClick={() => void handleDeletePreset(preset)}
+                        className="text-muted-foreground hover:text-signal-red"
+                        aria-label={`Delete ${preset.label} preset`}
+                      >
+                        <Trash2 className="size-3" />
+                      </button>
+                    )}
+                  </span>
+                )
+              })}
+              {adding ? (
+                <span className="inline-flex items-center gap-1.5 rounded-lg border border-primary/40 bg-surface2 px-2 py-1">
+                  <input
+                    autoFocus
+                    value={newPresetName}
+                    onChange={(event) => setNewPresetName(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") void handleSaveAsPreset()
+                      if (event.key === "Escape") {
+                        setAdding(false)
+                        setNewPresetName("")
+                      }
+                    }}
+                    placeholder="Preset name"
+                    className="w-28 bg-transparent text-xs text-foreground placeholder:text-muted-foreground focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void handleSaveAsPreset()}
+                    disabled={!newPresetName.trim()}
+                    className="text-primary disabled:opacity-40"
+                    aria-label="Save preset"
+                  >
+                    <Check className="size-3.5" />
+                  </button>
+                </span>
+              ) : (
                 <button
-                  key={preset.id}
                   type="button"
-                  onClick={() => { setDraft(preset.policy); setSaved(false) }}
-                  className="rounded-lg border border-border bg-surface2 px-2.5 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:border-primary/40"
-                  title={`${preset.label}: Fresh < ${pct(preset.policy.freshUntilElapsedRatio)}%, stale >= ${pct(preset.policy.staleFromElapsedRatio)}%`}
+                  onClick={() => setAdding(true)}
+                  className="inline-flex items-center gap-1 rounded-lg border border-dashed border-border px-2.5 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:border-primary/40"
                 >
-                  {preset.label}
+                  <Plus className="size-3" />
+                  Save current as preset
                 </button>
-              ))}
+              )}
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <label className="space-y-1.5">
-              <span className="text-sm font-medium text-foreground">Fresh until (%)</span>
-              <input
-                type="number"
-                min={0}
-                max={95}
-                step={1}
-                value={pct(draft.freshUntilElapsedRatio)}
-                onChange={(e) => updateRatio("freshUntilElapsedRatio", e.target.value)}
-                className="w-full h-11 px-3 rounded-xl bg-surface2 border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
-              />
-            </label>
-            <label className="space-y-1.5">
-              <span className="text-sm font-medium text-foreground">Stale from (%)</span>
-              <input
-                type="number"
-                min={5}
-                max={100}
-                step={1}
-                value={pct(draft.staleFromElapsedRatio)}
-                onChange={(e) => updateRatio("staleFromElapsedRatio", e.target.value)}
-                className="w-full h-11 px-3 rounded-xl bg-surface2 border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
-              />
-            </label>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium text-foreground">Thresholds</p>
+              <p className="text-xs text-muted-foreground tabular-nums">
+                Fresh &lt; <span className="text-signal-green">{freshPct}%</span> · Stale ≥{" "}
+                <span className="text-signal-red">{stalePct}%</span>
+              </p>
+            </div>
+            <Slider
+              value={[freshPct, stalePct]}
+              min={0}
+              max={100}
+              step={1}
+              onValueChange={handleSlider}
+              aria-label="Freshness thresholds"
+            />
           </div>
+
+          {invalid && (
+            <p className="text-xs text-signal-red">
+              Fresh must be below stale with at least {GAP}% between them.
+            </p>
+          )}
 
           <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-surface2/60 px-3 py-3">
             <div>
-              <p className="text-sm font-medium text-foreground">Show Outdated state</p>
+              <p className="text-sm font-medium text-foreground">Show “Outdated” state</p>
               <p className="text-xs text-muted-foreground">
-                {draft.showOutdatedState ? "Expired cache displays Outdated" : "Expired cache displays Stale"}
+                {showOutdated
+                  ? "Past-expiry data gets a distinct Outdated badge"
+                  : "Past-expiry data is labelled Stale"}
               </p>
             </div>
             <button
               type="button"
               role="switch"
-              aria-checked={draft.showOutdatedState}
-              onClick={() => setDraft(prev => ({ ...prev, showOutdatedState: !prev.showOutdatedState }))}
+              aria-checked={showOutdated}
+              onClick={() => {
+                setShowOutdated((value) => !value)
+                setSaved(false)
+              }}
               className={cn(
                 "relative h-6 w-11 shrink-0 rounded-full border transition-colors",
-                draft.showOutdatedState ? "bg-primary border-primary" : "bg-surface2 border-border",
+                showOutdated ? "bg-primary border-primary" : "bg-surface2 border-border",
               )}
             >
               <span
                 className={cn(
                   "absolute top-1/2 -translate-y-1/2 size-5 rounded-full bg-white shadow-sm transition-[left]",
-                  draft.showOutdatedState ? "left-[22px]" : "left-0.5",
+                  showOutdated ? "left-[22px]" : "left-0.5",
                 )}
               />
             </button>
           </div>
 
-          {invalid && (
-            <p className="text-xs text-signal-red">
-              Fresh must be below stale with at least {Math.round(MIN_FRESHNESS_RATIO_GAP * 100)}% between them.
-            </p>
-          )}
-
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center pt-2 border-t border-border">
+          <div className="flex flex-col-reverse gap-2 border-t border-border pt-2 sm:flex-row sm:items-center sm:justify-end">
             {saved && (
-              <span className="flex items-center gap-1.5 text-xs text-signal-green sm:mr-auto" role="status">
+              <span className="mr-auto flex items-center gap-1.5 text-xs text-signal-green" role="status">
                 <Check className="size-4" />
-                Policy saved
+                Saved
               </span>
             )}
-            <SecondaryButton onClick={() => setDraft(active)} disabled={!isDirty || loading || saving}>
-              Cancel
-            </SecondaryButton>
             <SecondaryButton onClick={resetPolicy} disabled={loading || saving}>
               <RotateCcw className="size-4 mr-2" />
-              Reset defaults
+              Reset to defaults
             </SecondaryButton>
             <PrimaryButton onClick={() => void savePolicy()} disabled={!isDirty || invalid || loading || saving}>
-              <Save className="size-4 mr-2" />
+              <Check className="size-4 mr-2" />
               {saving ? "Saving..." : "Save policy"}
             </PrimaryButton>
           </div>
         </>
       ) : (
-        <div className="flex items-start gap-2 rounded-xl border border-border bg-surface2/60 px-3 py-2 text-xs text-muted-foreground">
-          <Lock className="mt-0.5 size-4 shrink-0" />
-          <span>Cache freshness thresholds are managed by site and Stock Analyser administrators.</span>
+        <div className="flex items-start gap-2.5 rounded-xl border border-border bg-surface2/60 p-3" role="note">
+          <Lock className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            Cache freshness thresholds are managed by site and app administrators.
+          </p>
         </div>
       )}
     </Card>
