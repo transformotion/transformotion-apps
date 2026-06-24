@@ -12,21 +12,35 @@ import { getStockAnalyserClient, stockAnalyserClient } from '@/lib/api'
 import { getConfig } from '@/lib/config'
 import { MemoryCacheService } from '@transformotion/cache'
 import type { CacheService } from '@transformotion/cache'
+import {
+  STOCK_ANALYSER_CACHE_TTL_SECONDS,
+  type StockAnalyserCacheSurface,
+} from '@transformotion/contracts/stock-analyser/cache-freshness'
+import type { AnalysisCacheEntry } from '@transformotion/contracts/stock-analyser/types'
 
 // ── TTL table (seconds) ────────────────────────────────────────────────────────
 
 const TTL_SECONDS: Record<string, number> = {
-  MARKET:   24 * 3600,
-  RECS:     24 * 3600,
-  ETFS:     48 * 3600,
-  METALS:    2 * 3600,
-  ANALYSIS:  8 * 3600,
-  CYCLE:     8 * 3600,
+  MARKET:   STOCK_ANALYSER_CACHE_TTL_SECONDS.market,
+  RECS:     STOCK_ANALYSER_CACHE_TTL_SECONDS.recs,
+  ETF:      STOCK_ANALYSER_CACHE_TTL_SECONDS.etfs,
+  ETFS:     STOCK_ANALYSER_CACHE_TTL_SECONDS.etfs,
+  METALS:   STOCK_ANALYSER_CACHE_TTL_SECONDS.metals,
+  ANALYSIS: STOCK_ANALYSER_CACHE_TTL_SECONDS.analyser,
+  CYCLE:    8 * 3600,
 }
-const DEFAULT_TTL = 8 * 3600
+const DEFAULT_TTL = STOCK_ANALYSER_CACHE_TTL_SECONDS.analyser
 
 // Cache types whose data is shared across all accounts
 const SHARED_TYPES = new Set(['MARKET', 'ETFS', 'RECS', 'METALS', 'ANALYSIS', 'CYCLE'])
+
+export type CacheMetadata = Pick<AnalysisCacheEntry, 'cachedAt' | 'expiresAt'>
+export interface CacheSnapshot<T> extends CacheMetadata {
+  value: T
+}
+
+const localMemoryCache = new MemoryCacheService({ defaultTTL: DEFAULT_TTL, prefix: '' })
+const localMetadata = new Map<string, CacheMetadata>()
 
 function parseCachedValue<T>(data: unknown): T {
   return typeof data === 'string' ? JSON.parse(data) as T : data as T
@@ -37,32 +51,63 @@ function getTTL(cacheKey: string): number {
   return TTL_SECONDS[type] ?? DEFAULT_TTL
 }
 
+export function ttlForSurface(surface: StockAnalyserCacheSurface): number {
+  return STOCK_ANALYSER_CACHE_TTL_SECONDS[surface]
+}
+
+export async function getCacheSnapshot<T>(key: string): Promise<CacheSnapshot<T> | null> {
+  try {
+    if (getConfig().storage.provider === 'local') {
+      const cached = await localMemoryCache.get<T>(key)
+      const metadata = localMetadata.get(key)
+      return cached !== null && metadata ? { value: cached, ...metadata } : null
+    }
+    const item = await getStockAnalyserClient().getCache(key)
+    return {
+      value: parseCachedValue<T>(item.data),
+      cachedAt: item.cachedAt,
+      expiresAt: item.expiresAt,
+    }
+  } catch {
+    return null
+  }
+}
+
+export async function setCacheSnapshot<T>(key: string, value: T, ttl?: number): Promise<CacheSnapshot<T>> {
+  const ttlSeconds = ttl ?? getTTL(key)
+  const now = Math.floor(Date.now() / 1000)
+  const metadata = { cachedAt: now, expiresAt: now + ttlSeconds }
+
+  if (getConfig().storage.provider === 'local') {
+    await localMemoryCache.set(key, value, ttlSeconds)
+    localMetadata.set(key, metadata)
+    return { value, ...metadata }
+  }
+
+  await stockAnalyserClient.putCacheEntry(key, {
+    data:       JSON.stringify(value),
+    ttlSeconds,
+    mode:       'live',
+    type:       key.split('#')[0].toLowerCase(),
+    shared:     SHARED_TYPES.has(key.split('#')[0]),
+  })
+  console.log('[dynamo-cache] set:', key, `(ttl ${ttlSeconds}s)`)
+  return { value, ...metadata }
+}
+
 // ── Service implementation ─────────────────────────────────────────────────────
 
 export class DynamoTTLCacheService implements CacheService {
   async get<T>(key: string): Promise<T | null> {
-    try {
-      const item = await getStockAnalyserClient().getCache(key)
-      return parseCachedValue<T>(item.data)
-    } catch {
-      // 404 = cache miss; any other error falls back to null
-      return null
-    }
+    return (await getCacheSnapshot<T>(key))?.value ?? null
   }
 
   async set<T>(key: string, value: T, ttl?: number): Promise<void> {
-    const ttlSeconds = ttl ?? getTTL(key)
-    await stockAnalyserClient.putCacheEntry(key, {
-      data:       JSON.stringify(value),
-      ttlSeconds,
-      mode:       'live',
-      type:       key.split('#')[0].toLowerCase(),
-      shared:     SHARED_TYPES.has(key.split('#')[0]),
-    })
-    console.log('[dynamo-cache] set:', key, `(ttl ${ttlSeconds}s)`)
+    await setCacheSnapshot(key, value, ttl)
   }
 
   async delete(key: string): Promise<void> {
+    localMetadata.delete(key)
     await stockAnalyserClient.deleteCacheEntry(key)
   }
 
@@ -101,5 +146,5 @@ export class DynamoTTLCacheService implements CacheService {
 // ── Singleton — DynamoDB in production, in-memory in mock mode ────────────────
 
 export const dynamoCache: CacheService = getConfig().storage.provider === 'local'
-  ? new MemoryCacheService({ defaultTTL: 8 * 3600, prefix: '' })
+  ? localMemoryCache
   : new DynamoTTLCacheService()

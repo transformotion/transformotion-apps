@@ -8,6 +8,7 @@ import {
   VerdictBadge,
   CycleGauge,
   EmptyState,
+  CacheStatusBar,
   PrimaryButton,
   SecondaryButton,
   TextToggle,
@@ -26,6 +27,8 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Spinner } from "@transformotion/ui-primitives"
+import { useDerivedCacheStatus } from "@/lib/hooks"
+import type { CacheMetadata } from "@/lib/services/cache/dynamo-ttl-cache"
 import {
   portfolioService,
   parseCMCCsv,
@@ -39,6 +42,7 @@ export function PortfolioTab() {
   // ── State ────────────────────────────────────────────────────────────────────
   const [rawHoldings,   setRawHoldings]   = useState<PortfolioHolding[]>([])
   const [analysisMap,   setAnalysisMap]   = useState<Record<string, StockAnalysisResult>>({})
+  const [cacheMetadata, setCacheMetadata] = useState<Record<string, CacheMetadata>>({})
   const [isLoading,     setIsLoading]     = useState(true)
   const [loadError,     setLoadError]     = useState<string | null>(null)
   const [isAnalysing,   setIsAnalysing]   = useState(false)
@@ -82,6 +86,7 @@ export function PortfolioTab() {
     if (force) {
       // Clear analysis map so all tickers are treated as cache misses
       setAnalysisMap({})
+      setCacheMetadata({})
     }
 
     const tickers = rawHoldings.map(h => h.ticker)
@@ -99,7 +104,8 @@ export function PortfolioTab() {
         setAnalysisMap(prev => ({ ...prev, [ticker]: result }))
         setAnalysingLeft(prev => Math.max(0, prev - 1))
       },
-      abortRef.current.signal
+      abortRef.current.signal,
+      (ticker, metadata) => setCacheMetadata(prev => ({ ...prev, [ticker]: metadata }))
     )
 
     setIsAnalysing(false)
@@ -182,6 +188,14 @@ export function PortfolioTab() {
   }))
 
   const enrichedCount  = holdings.filter(h => h.analysis).length
+  const aggregateMetadata = rawHoldings
+    .map(h => cacheMetadata[h.ticker])
+    .filter((entry): entry is CacheMetadata => !!entry)
+    .reduce<CacheMetadata | null>((oldest, entry) => {
+      if (!oldest || entry.cachedAt < oldest.cachedAt) return entry
+      return oldest
+    }, null)
+  const cacheStatus = useDerivedCacheStatus("portfolio", aggregateMetadata)
   const totalValue     = holdings.reduce((s, h) => s + h.shares * (h.analysis?.price ?? 0), 0)
   const totalCost      = holdings.reduce((s, h) => s + (h.isGifted ? 0 : h.shares * h.avgCost), 0)
   const totalPL        = totalValue - totalCost
@@ -255,6 +269,14 @@ export function PortfolioTab() {
         subtitle={`${holdings.length} holdings${enrichedCount < holdings.length ? ` · ${holdings.length - enrichedCount} not yet analysed` : ''}`}
         titleClassName="font-display uppercase tracking-wide"
         action={<TextToggle visible={textVisible} onToggle={toggleText} isOverride={isTextOverride} />}
+      />
+
+      <CacheStatusBar
+        freshness={cacheStatus.freshness}
+        lastUpdated={cacheStatus.lastUpdated}
+        isLive
+        onRefresh={() => handleRefreshAll(true)}
+        onToggleMode={() => undefined}
       />
 
       {/* Primary CTA */}

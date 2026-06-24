@@ -35,7 +35,7 @@ React + TypeScript + Tailwind CSS.
 
 | Stack | Contents |
 |---|---|
-| `Transformotion{Stage}-StockAnalyserTables` | `stock-analyser.portfolio-{stage}`, `stock-analyser.watchlist-{stage}`, `stock-analyser.analysis-cache-{stage}`, `stock-analyser.job-results-{stage}` |
+| `Transformotion{Stage}-StockAnalyserTables` | `stock-analyser.portfolio-{stage}`, `stock-analyser.watchlist-{stage}`, `stock-analyser.analysis-cache-{stage}`, `stock-analyser.job-results-{stage}`, `stock-analyser.settings-{stage}` |
 | `Transformotion{Stage}-StockAnalyserWs` | Stock Analyser-owned WebSocket API, WS Lambdas, and `stock-analyser.ws-connections-{stage}` |
 | `Transformotion{Stage}-StockAnalyserApi` | Stock Analyser-owned REST API Gateway, app Lambdas, and `stock-analyser-ai-proxy-{stage}` |
 
@@ -50,6 +50,7 @@ Current state after #366/#386: Stock Analyser owns its REST API Gateway, AI prox
 | `transformotion-portfolio-{stage}` | `apps/stock-analyser/functions/portfolio` | `GET/PUT /portfolio` |
 | `transformotion-watchlist-{stage}` | `apps/stock-analyser/functions/watchlist` | `GET/PUT /watchlist` |
 | `transformotion-analysis-cache-{stage}` | `apps/stock-analyser/functions/analysis-cache` | `GET/PUT/DELETE /analysis-cache/{key}` |
+| `stock-analyser-settings-{stage}` | `apps/stock-analyser/functions/settings` | `GET/PATCH /settings`, `GET /ai-config`, `PUT/DELETE /ai-config/override`, `GET/PUT /cache-freshness` |
 | `stock-analyser-ai-proxy-{stage}` | `apps/stock-analyser/functions/ai-proxy` | `POST /api/claude` |
 | `transformotion-cycle-check-{stage}` | `apps/stock-analyser/functions/cycle-check` | EventBridge scheduled (no HTTP route) |
 | `transformotion-cycle-data-{stage}` | `apps/stock-analyser/functions/cycle-data` | `GET /cycle/ohlcv?ticker=` |
@@ -63,6 +64,7 @@ Current state after #366/#386: Stock Analyser owns its REST API Gateway, AI prox
 | `stock-analyser.watchlist-{stage}` | `accountId` | `ticker` | Watchlist items per account |
 | `stock-analyser.analysis-cache-{stage}` | `accountId` | `cacheKey` | AI analysis cache (TTL: expiresAt) |
 | `stock-analyser.job-results-{stage}` | `accountId` | `cacheKey` | Async AI job state (TTL: expiresAt) |
+| `stock-analyser.settings-{stage}` | `pk` | `sk` | Account/user settings and app-wide cache freshness policy |
 
 Analysis cache is accessed by `transformotion-analysis-cache-{stage}` (read/delete). Async job records (`job-*` keys) are written by `stock-analyser-ai-proxy-{stage}` to `stock-analyser.job-results-{stage}`. The `analysis-cache` Lambda routes GET requests for `job-*` keys to that app-owned table; all other keys stay on `stock-analyser.analysis-cache-{stage}`.
 
@@ -119,10 +121,12 @@ Stock Analyser AI goes through `useClaude<T>()` or `callClaudeAPI<T>()` in `lib/
 | Data | Cache key format | TTL |
 |---|---|---|
 | Market Analysis | `MARKET#{geography}` | 24h |
-| Recommendations | `RECS#{market}` | 24h |
-| ETFs | `ETFS#{category}` | 48h |
-| Metals | `METALS#all` | 2h |
-| Stock Analysis | `ANALYSIS#{ticker}` | 8h |
+| Recommendations | `RECS#{universe}#{mode}#{sector?}` | 24h |
+| ETFs | `ETF#{market}` | 48h |
+| Metals | `METALS` | 2h |
+| Stock Analysis | `ANALYSIS#{ticker}` | 24h |
+| Portfolio enrichment | `ANALYSIS#{ticker}` | 24h |
+| Watchlist enrichment | `ANALYSIS#{ticker}` | 24h |
 | Market Cycle | `CYCLE#{geography}` | 8h |
 | Computed Cycle Position | `OHLCV#{ticker}` | 1h |
 | Raw OHLCV (shared) | `MARKET-DATA#{ticker}#{range}#{interval}` | 8h |

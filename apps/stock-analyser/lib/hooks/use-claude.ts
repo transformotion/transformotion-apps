@@ -14,7 +14,11 @@
 import { useState, useCallback, useRef } from 'react'
 import { getConfig } from '../config'
 import { getStockAnalyserClient, stockAnalyserClient } from '../api'
-import { dynamoCache } from '../services/cache/dynamo-ttl-cache'
+import {
+  getCacheSnapshot,
+  setCacheSnapshot,
+  type CacheMetadata,
+} from '../services/cache/dynamo-ttl-cache'
 import { authService } from '../services/auth'
 
 export interface ClaudeRequest {
@@ -33,6 +37,7 @@ export interface ClaudeRequest {
    * The fresh result is still written back to cache afterwards.
    */
   forceRefresh?: boolean
+  onCacheMetadata?: (metadata: CacheMetadata) => void
 }
 
 export interface ClaudeResponse<T = unknown> {
@@ -101,7 +106,7 @@ export function useClaude<T = unknown>(): UseClaudeReturn<T> {
 
   const callClaude = useCallback(async (request: ClaudeRequest): Promise<T> => {
     const config = getConfig()
-    const { cacheKey, ...claudeRequest } = request
+    const { cacheKey, onCacheMetadata, ...claudeRequest } = request
 
     // Abort any existing request
     abort()
@@ -113,10 +118,11 @@ export function useClaude<T = unknown>(): UseClaudeReturn<T> {
     try {
       // ── Cache check (skipped when forceRefresh is true) ──────────────────
       if (cacheKey && !request.forceRefresh) {
-        const cached = await dynamoCache.get<T>(cacheKey)
+        const cached = await getCacheSnapshot<T>(cacheKey)
         if (cached !== null) {
           console.log('[useClaude] cache hit:', cacheKey)
-          return cached
+          onCacheMetadata?.({ cachedAt: cached.cachedAt, expiresAt: cached.expiresAt })
+          return cached.value
         }
         console.log('[useClaude] cache miss:', cacheKey)
       } else if (cacheKey && request.forceRefresh) {
@@ -134,7 +140,9 @@ export function useClaude<T = unknown>(): UseClaudeReturn<T> {
 
       // ── Write to cache (fire-and-forget) ─────────────────────────────────
       if (cacheKey && result) {
-        dynamoCache.set(cacheKey, result).catch(err => {
+        setCacheSnapshot(cacheKey, result).then(entry => {
+          onCacheMetadata?.({ cachedAt: entry.cachedAt, expiresAt: entry.expiresAt })
+        }).catch(err => {
           console.warn('[useClaude] cache write failed:', cacheKey, err)
         })
       }

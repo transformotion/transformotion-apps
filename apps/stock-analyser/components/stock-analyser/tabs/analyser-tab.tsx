@@ -25,7 +25,7 @@ import {
   AlertCircle,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { useClaude } from "@/lib/hooks"
+import { useCacheStatus, useClaude } from "@/lib/hooks"
 import { useCycleData } from "@/lib/hooks/use-cycle-data"
 import { useOhlcvData } from "@/lib/hooks/use-ohlcv-data"
 import { latestPriceFromOhlcv } from "@/lib/market-data"
@@ -82,6 +82,8 @@ export function AnalyserTab({
   const [isLive, setIsLive] = useState(defaultSearchMode === "live")
   const [searchValue, setSearchValue] = useState("")
   const [result, setResult] = useState<AnalysisResult | null>(null)
+  const activeTicker = result?.ticker ?? (searchValue || null)
+  const cacheStatus = useCacheStatus("analyser", activeTicker ? `ANALYSIS#${activeTicker}` : null)
 
   const [chartRange, setChartRange] = useState<OhlcvRange>('1y')
 
@@ -124,6 +126,7 @@ export function AnalyserTab({
     const analysisResult = await callClaude({
       cacheKey: `ANALYSIS#${ticker}`,
       forceRefresh,
+      onCacheMetadata: cacheStatus.markWritten,
       webSearch: isLive,
       prompt: createStockAnalysisPrompt(ticker),
       systemPrompt: STOCK_ANALYSIS_SYSTEM_PROMPT,
@@ -203,8 +206,8 @@ export function AnalyserTab({
       {/* Cache Status / Mode Toggle - right above the action button */}
       {result ? (
         <CacheStatusBar
-          freshness="recent"
-          lastUpdated="Updated 8 minutes ago"
+          freshness={cacheStatus.freshness}
+          lastUpdated={cacheStatus.lastUpdated}
           isLive={isLive}
           onRefresh={() => runAnalysis(result.ticker, true)}
           onToggleMode={() => setIsLive(!isLive)}
@@ -213,8 +216,8 @@ export function AnalyserTab({
         <ModeToggle 
           isLive={isLive} 
           onToggle={() => setIsLive(!isLive)} 
-          cacheAge="8 minutes ago"
-          freshness="fresh"
+          cacheAge={cacheStatus.cacheAge}
+          freshness={cacheStatus.freshness}
         />
       )}
 

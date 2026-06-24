@@ -16,7 +16,7 @@ import {
   type CycleStage,
 } from "@transformotion/ui-primitives"
 import { ChevronRight, ChevronDown, Search, Loader2, Stars, AlertCircle } from "lucide-react"
-import { useClaude } from "@/lib/hooks"
+import { useCacheStatus, useClaude } from "@/lib/hooks"
 import { cn } from "@/lib/utils"
 import type { RecommendationUniverse } from "@transformotion/contracts/stock-analyser/types"
 import {
@@ -128,6 +128,8 @@ export function RecommendationsTab() {
   const [stockResults, setStockResults] = useState<Stock[]>(cachedStocks ?? [])
   const autoRunTriggeredRef = useRef<string | null>(null)
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set())
+  const activeCacheKey = `RECS#${universe}#${mode}${sectorFilter ? `#${sectorFilter}` : ''}`
+  const cacheStatus = useCacheStatus("recs", activeCacheKey)
   
   // Text visibility
   const textVisible = getTabTextVisibility("recs")
@@ -159,6 +161,7 @@ export function RecommendationsTab() {
     const result = await callClaude({
       cacheKey,
       forceRefresh,
+      onCacheMetadata: cacheStatus.markWritten,
       webSearch: isLive,
       prompt: `Provide stock recommendations for the ${activeUniverse} universe${sector ? ` in the ${sector} sector` : ''}.
 Mode: ${mode}
@@ -307,8 +310,8 @@ Return 6 stocks. Return ONLY valid JSON.`,
       {/* Cache Status / Mode Toggle - right above the action button */}
       {hasRun ? (
         <CacheStatusBar
-          freshness="stale"
-          lastUpdated="Updated 45 minutes ago"
+          freshness={cacheStatus.freshness}
+          lastUpdated={cacheStatus.lastUpdated}
           isLive={isLive}
           onRefresh={() => handleRunAnalysis(true)}
           onToggleMode={() => setIsLive(!isLive)}
@@ -317,8 +320,8 @@ Return 6 stocks. Return ONLY valid JSON.`,
         <ModeToggle 
           isLive={isLive} 
           onToggle={() => setIsLive(!isLive)} 
-          cacheAge="45 minutes ago"
-          freshness="recent"
+          cacheAge={cacheStatus.cacheAge}
+          freshness={cacheStatus.freshness}
         />
       )}
 

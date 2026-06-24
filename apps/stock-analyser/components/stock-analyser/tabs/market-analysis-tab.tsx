@@ -22,7 +22,7 @@ import {
   RefreshCw,
   AlertCircle,
 } from "lucide-react"
-import { useClaude } from "@/lib/hooks"
+import { useCacheStatus, useClaude } from "@/lib/hooks"
 import { cn } from "@/lib/utils"
 import type {
   AnalysisRegion,
@@ -162,6 +162,8 @@ export function MarketAnalysisTab() {
   const [hasResults, setHasResults] = useState(!!cachedResult)
   const [result, setResult] = useState<MarketAnalysisResult | null>(cachedResult)
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set())
+  const cacheKey = `MARKET#${region}`
+  const cacheStatus = useCacheStatus("market", cacheKey)
   
   // Text visibility
   const textVisible = getTabTextVisibility("market")
@@ -185,8 +187,9 @@ export function MarketAnalysisTab() {
   const runAnalysis = async (forceRefresh = false) => {
     const supportedUniverses = REGION_TO_RECOMMENDATION_UNIVERSES[region]
     const data = await callClaude({
-      cacheKey: `MARKET#${region}`,
+      cacheKey,
       forceRefresh,
+      onCacheMetadata: cacheStatus.markWritten,
       webSearch: isLive,
       prompt: `Provide comprehensive market analysis for the ${REGION_LABELS[region]} region.
 
@@ -277,8 +280,8 @@ IMPORTANT: Your entire response must be a single valid JSON object. Begin your r
       {/* Cache Status / Mode Toggle - right above the action button */}
       {hasResults ? (
         <CacheStatusBar
-          freshness="fresh"
-          lastUpdated="Updated 2 minutes ago"
+          freshness={cacheStatus.freshness}
+          lastUpdated={cacheStatus.lastUpdated}
           isLive={isLive}
           onRefresh={() => runAnalysis(true)}
           onToggleMode={() => setIsLive(!isLive)}
@@ -287,8 +290,8 @@ IMPORTANT: Your entire response must be a single valid JSON object. Begin your r
         <ModeToggle 
           isLive={isLive} 
           onToggle={() => setIsLive(!isLive)} 
-          cacheAge="2 hours ago"
-          freshness="stale"
+          cacheAge={cacheStatus.cacheAge}
+          freshness={cacheStatus.freshness}
         />
       )}
 

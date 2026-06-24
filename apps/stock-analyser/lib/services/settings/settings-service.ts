@@ -7,6 +7,14 @@ import {
   type AppAiRuntimeConfigResponse,
 } from '@transformotion/contracts/_shared/ai-runtime';
 import type { PatchSettingsRequest } from '@transformotion/contracts/stock-analyser/api';
+import type {
+  CacheFreshnessConfigRecord,
+  StockAnalyserCacheFreshnessPolicy,
+} from '@transformotion/contracts/stock-analyser/cache-freshness';
+import {
+  defaultCacheFreshnessConfigRecord,
+  DEFAULT_CACHE_FRESHNESS_POLICY,
+} from '@transformotion/contracts/stock-analyser/cache-freshness';
 import type { StockAnalyserSettings } from '@transformotion/contracts/stock-analyser/types';
 
 export type {
@@ -44,6 +52,9 @@ const mockAiConfig: AppAiRuntimeConfigResponse = {
   effective: { provider: 'claude', model: 'claude-sonnet-4-6', source: 'platform_default' },
   supportedModels: SUPPORTED_AI_MODELS,
 };
+
+let mockCacheFreshnessConfig: CacheFreshnessConfigRecord =
+  defaultCacheFreshnessConfigRecord(new Date().toISOString());
 
 function resolveMockAiConfig(): AppAiRuntimeConfigResponse {
   return {
@@ -87,6 +98,22 @@ const mockService = {
     mockAiConfig.appOverride = null;
     return resolveMockAiConfig();
   },
+  async getCacheFreshnessConfig(): Promise<CacheFreshnessConfigRecord> {
+    return { ...mockCacheFreshnessConfig, activePolicy: { ...mockCacheFreshnessConfig.activePolicy }, presets: mockCacheFreshnessConfig.presets.map(p => ({ ...p, policy: { ...p.policy } })) };
+  },
+  async updateCacheFreshnessConfig(update: { activePolicy?: StockAnalyserCacheFreshnessPolicy; presets?: CacheFreshnessConfigRecord['presets'] }): Promise<CacheFreshnessConfigRecord> {
+    mockCacheFreshnessConfig = {
+      ...mockCacheFreshnessConfig,
+      activePolicy: update.activePolicy ?? mockCacheFreshnessConfig.activePolicy,
+      presets: update.presets ?? mockCacheFreshnessConfig.presets,
+      updatedAt: new Date().toISOString(),
+    };
+    return this.getCacheFreshnessConfig();
+  },
+  async resetCacheFreshnessConfig(): Promise<CacheFreshnessConfigRecord> {
+    mockCacheFreshnessConfig = defaultCacheFreshnessConfigRecord(new Date().toISOString());
+    return this.getCacheFreshnessConfig();
+  },
 };
 
 const realService = {
@@ -107,6 +134,20 @@ const realService = {
   async resetAiOverride(): Promise<AppAiRuntimeConfigResponse> {
     await stockAnalyserClient.resetAiOverride();
     return stockAnalyserClient.getAiConfig();
+  },
+  async getCacheFreshnessConfig(): Promise<CacheFreshnessConfigRecord> {
+    const res = await stockAnalyserClient.getCacheFreshnessConfig();
+    return res.config;
+  },
+  async updateCacheFreshnessConfig(update: { activePolicy?: StockAnalyserCacheFreshnessPolicy; presets?: CacheFreshnessConfigRecord['presets'] }): Promise<CacheFreshnessConfigRecord> {
+    const res = await stockAnalyserClient.updateCacheFreshnessConfig(update);
+    return res.config;
+  },
+  async resetCacheFreshnessConfig(): Promise<CacheFreshnessConfigRecord> {
+    const res = await stockAnalyserClient.updateCacheFreshnessConfig({
+      activePolicy: DEFAULT_CACHE_FRESHNESS_POLICY,
+    });
+    return res.config;
   },
 };
 

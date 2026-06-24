@@ -6,6 +6,7 @@ import {
   ok,
   parseBody,
   requireAccountData,
+  requireAppAdminForApp,
   requireSiteAdmin,
   withAuth,
   type APIGatewayProxyEvent,
@@ -23,7 +24,16 @@ import {
   type AppAiRuntimeConfigResponse,
 } from '@transformotion/fn-ai-proxy-core';
 import type { StockAnalyserSettings } from '@transformotion/contracts/stock-analyser/types';
-import type { PatchSettingsRequest } from '@transformotion/contracts/stock-analyser/api';
+import type {
+  PatchSettingsRequest,
+  PutCacheFreshnessConfigRequest,
+} from '@transformotion/contracts/stock-analyser/api';
+import {
+  defaultCacheFreshnessConfigRecord,
+  isValidCacheFreshnessPolicy,
+  isValidCacheFreshnessPreset,
+  type CacheFreshnessConfigRecord,
+} from '@transformotion/contracts/stock-analyser/cache-freshness';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const SETTINGS_TABLE = process.env.SETTINGS_TABLE!;
@@ -58,6 +68,10 @@ function userPreferencesSk(userId: string) {
 }
 
 const aiRuntimeSk = 'APP#AI_RUNTIME';
+const cacheFreshnessKey = {
+  pk: 'SETTINGS',
+  sk: 'CACHE_FRESHNESS#stock-analyser',
+} as const;
 
 function parseAiUpdateBody(event: APIGatewayProxyEvent) {
   const body = parseBody<UpdateConfigBody & Record<string, unknown>>(event);
@@ -93,6 +107,30 @@ function parseRecord(item: Record<string, unknown> | undefined): AiRuntimeConfig
     return null;
   }
   return { pk: AI_CONFIG_PK, sk, provider, model, updatedAt };
+}
+
+function parseCacheFreshnessConfig(
+  item: Record<string, unknown> | undefined,
+  now: Date,
+): CacheFreshnessConfigRecord {
+  if (!item) return defaultCacheFreshnessConfigRecord(now.toISOString());
+  const activePolicy = item['activePolicy'];
+  const presets = item['presets'];
+  const updatedAt = item['updatedAt'];
+  if (
+    !isValidCacheFreshnessPolicy(activePolicy) ||
+    !Array.isArray(presets) ||
+    !presets.every(isValidCacheFreshnessPreset) ||
+    typeof updatedAt !== 'string'
+  ) {
+    return defaultCacheFreshnessConfigRecord(now.toISOString());
+  }
+  return {
+    ...cacheFreshnessKey,
+    activePolicy,
+    presets,
+    updatedAt,
+  };
 }
 
 async function readPlatformDefault(deps: Dependencies): Promise<AiRuntimeConfigRecord | null> {
@@ -215,6 +253,61 @@ async function readAiConfig(deps: Dependencies, accountId: string) {
   return ok(aiConfigResponse(platformDefault, appOverride));
 }
 
+async function readCacheFreshnessConfig(deps: Dependencies) {
+  const res = await deps.client.send(new GetCommand({
+    TableName: deps.settingsTable,
+    Key: cacheFreshnessKey,
+  }));
+  return ok({ config: parseCacheFreshnessConfig(res.Item, deps.now()) });
+}
+
+function requireCacheFreshnessAdmin(auth: Parameters<typeof requireSiteAdmin>[0]) {
+  if (auth.siteAdmin) {
+    requireSiteAdmin(auth);
+    return;
+  }
+  requireAppAdminForApp(auth, APP_SLUG);
+}
+
+async function updateCacheFreshnessConfig(deps: Dependencies, event: APIGatewayProxyEvent) {
+  const body = parseBody<PutCacheFreshnessConfigRequest & Record<string, unknown>>(event);
+  const unexpected = Object.keys(body).filter(key => key !== 'activePolicy' && key !== 'presets');
+  if (unexpected.length) {
+    throw badRequest(`Unsupported cache freshness fields: ${unexpected.join(', ')}`);
+  }
+  if (body.activePolicy !== undefined && !isValidCacheFreshnessPolicy(body.activePolicy)) {
+    throw badRequest('Invalid cache freshness policy');
+  }
+  if (
+    body.presets !== undefined &&
+    (!Array.isArray(body.presets) || !body.presets.every(isValidCacheFreshnessPreset))
+  ) {
+    throw badRequest('Invalid cache freshness presets');
+  }
+  if (body.activePolicy === undefined && body.presets === undefined) {
+    throw badRequest('At least one cache freshness field is required');
+  }
+
+  const existing = await deps.client.send(new GetCommand({
+    TableName: deps.settingsTable,
+    Key: cacheFreshnessKey,
+  }));
+  const previous = parseCacheFreshnessConfig(existing.Item, deps.now());
+  const updatedAt = deps.now().toISOString();
+  const config: CacheFreshnessConfigRecord = {
+    ...cacheFreshnessKey,
+    activePolicy: body.activePolicy ?? previous.activePolicy,
+    presets: body.presets ?? previous.presets,
+    updatedAt,
+  };
+
+  await deps.client.send(new PutCommand({
+    TableName: deps.settingsTable,
+    Item: config,
+  }));
+  return ok({ config });
+}
+
 async function updateOverride(deps: Dependencies, event: APIGatewayProxyEvent, accountId: string) {
   const { provider, model } = parseAiUpdateBody(event);
   const appOverride: AiRuntimeConfigRecord = {
@@ -265,6 +358,15 @@ export function createHandler(deps: Dependencies = defaultDependencies) {
     if (resource === '/ai-config' && event.httpMethod === 'GET') {
       saData.read(auth, account.accountId);
       return readAiConfig(deps, account.accountId);
+    }
+    if (resource === '/cache-freshness' && event.httpMethod === 'GET') {
+      saData.read(auth, account.accountId);
+      return readCacheFreshnessConfig(deps);
+    }
+    if (resource === '/cache-freshness' && event.httpMethod === 'PUT') {
+      saData.read(auth, account.accountId);
+      requireCacheFreshnessAdmin(auth);
+      return updateCacheFreshnessConfig(deps, event);
     }
     // /ai-config/override is operational-config (D9) — site-admin write of an
     // account-shared config row. Interim: preserve current behaviour (member +
