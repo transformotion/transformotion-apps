@@ -14,6 +14,7 @@
 import { useState, useCallback, useRef } from 'react'
 import { getConfig } from '../config'
 import { getStockAnalyserClient, stockAnalyserClient } from '../api'
+import { mockMarketAnalysisResult } from '@transformotion/contracts/stock-analyser/mocks'
 import {
   getCacheSnapshot,
   setCacheSnapshot,
@@ -289,57 +290,9 @@ async function mockClaudeCall<T>(
 
   // --- Market Analysis: comprehensive macro + sector rotation ---
   if (prompt.includes('comprehensive market analysis') || prompt.includes('Analyse market sectors')) {
-    return {
-      macro: {
-        cycleStage: {
-          label: "CYCLE STAGE",
-          title: "Late Cycle Expansion",
-          description: "Economy at capacity constraints with strong growth momentum but rising inflation pressures",
-          impact: "Neutral"
-        },
-        rateDirection: {
-          label: "RATE DIRECTION",
-          title: "Tightening",
-          description: "RBA hiked to 4.35% in March 2026 amid stagflation risks, further hikes likely",
-          impact: "Headwind"
-        },
-        keyRisk: {
-          label: "KEY RISK",
-          title: "Middle East Conflict Stagflation",
-          description: "Oil prices at $93-105 range, inflation expectations rising, RBA warns of nightmare stagflation scenario",
-          impact: "Headwind"
-        },
-        currency: {
-          label: "USD / CURRENCY",
-          title: "Strong",
-          description: "USD index gained 1.4% since Middle East conflict began, safe haven flows amid geopolitical tensions",
-          impact: "Supportive"
-        }
-      },
-      briefing: "The ASX faces a challenging macro backdrop as the RBA shifts to aggressive tightening amid stagflation risks. The Middle East conflict has driven oil prices to $93-105 range, forcing the RBA to hike rates to 4.35% with more increases likely. Strong USD and elevated energy costs threaten commodity-dependent sectors, while elevated inflation expectations cloud the outlook despite record market highs in 2024.",
-      sectors: [
-        { sector: "Financials", signal: "HOLD", cyclePosition: 72, valuation: "Extended", change: 28, reason: "Banks benefit from rising rates but face margin pressure and credit risks in tightening cycle", bestExchange: "ASX" },
-        { sector: "Materials", signal: "BUY", cyclePosition: 45, valuation: "Attractive", change: -17, reason: "Oversold on China growth fears, energy crisis supports commodity prices medium-term", bestExchange: "TSX" },
-        { sector: "Energy", signal: "BUY", cyclePosition: 85, valuation: "Cheap", change: -19, reason: "Direct beneficiary of oil crisis, strong free cash flows at elevated prices", bestExchange: "NYSE" },
-        { sector: "Healthcare", signal: "HOLD", cyclePosition: 58, valuation: "Fair", change: 27, reason: "Defensive qualities valuable but already well-positioned for stagflation environment", bestExchange: "NASDAQ" },
-        { sector: "Technology", signal: "EXIT", cyclePosition: 35, valuation: "Overvalued", change: 48, reason: "Extreme valuations vulnerable to rising rates and economic slowdown", bestExchange: "NASDAQ" },
-        { sector: "Industrials", signal: "HOLD", cyclePosition: 55, valuation: "Fair", change: 12, reason: "Mixed outlook with infrastructure spending offset by higher input costs", bestExchange: "NYSE" },
-        { sector: "Consumer Discretionary", signal: "EXIT", cyclePosition: 25, valuation: "Expensive", change: 15, reason: "Facing headwinds from rising rates, fuel costs and squeezed consumer spending", bestExchange: "NYSE" },
-        { sector: "Real Estate & REITs", signal: "EXIT", cyclePosition: 20, valuation: "Overvalued", change: 41, reason: "Rising rates and tightening cycle pose significant headwinds to property valuations", bestExchange: "ASX" },
-      ],
-      actionSummary: {
-        enter: [
-          { sector: "Energy", reason: "Direct beneficiary of oil crisis with strong pricing power and cash generation" },
-          { sector: "Materials", reason: "Oversold on China fears, supply constraints support commodity prices" },
-          { sector: "Healthcare", reason: "Defensive characteristics valuable in stagflationary environment" },
-        ],
-        exit: [
-          { sector: "Technology", reason: "Extreme valuations vulnerable to rising rates and economic deceleration" },
-          { sector: "Real Estate & REITs", reason: "Rising rate environment poses existential threat to property valuations" },
-          { sector: "Consumer Discretionary", reason: "Rising fuel costs and rates squeeze discretionary spending power" },
-        ]
-      }
-    } as unknown as T
+    // #535: sourced from the canonical contract mock so the UI shares one shape
+    // (includes per-card `source` attribution).
+    return mockMarketAnalysisResult as unknown as T
   }
 
   // --- Recommendations: stock picks ---
