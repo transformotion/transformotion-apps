@@ -5,6 +5,8 @@
 **Goals served:** 3 (architecture coherence) primarily; 1 and 2 (M19 background intelligence / operational hygiene).
 **Document type:** Architecture decision record (CONTRIBUTING §11). **Not itself normative** — its decision is ratified into `docs/architecture/auth.md` (service-principal authorization model), `docs/architecture/cdk.md` (per-job execution roles and least-privilege policies), and `docs/architecture/inventory.md` as the M19 implementing PRs land. Those PRs cannot begin until the #529 gate and the rest of the M19 Phase-0 decision batch are ratified.
 
+**Amendment (owner-ratified, M19 #529/#531 reconciliation):** The SHARED analysis-cache write (`ANALYSIS#{ticker}`) goes through the **analysis-cache Lambda's service-principal auth path**, **not raw `PutItem`** — superseding the earlier "job writes raw DDB directly to the SHARED partition" language. This gives a single writer, a single auth chokepoint, and one definition of the cache-write shape. The **IAM-plane authorization, D8-isolation, and fail-closed framing are unchanged**; only the SHARED-write *mechanism* changes. The access mechanism for the cross-account reads (holdings/watchlist) and the per-account notification-state write remains **OPEN** (Lambda service-principal path vs IAM-scoped direct) — see the Decision section.
+
 ## Context
 
 D8 is **entirely request-scoped**: tokens identify the principal only; reads check token claims; writes check claims **plus** a live membership-row read, and fail closed on that row. A scheduled job (`EventBridge → Lambda`) carries **no user JWT**, so there is no D8 path for it to read or write account-scoped data.
@@ -20,16 +22,18 @@ M19's background jobs need a defined model: scheduled market-analysis cache-writ
 **Background jobs authorize in the IAM plane, not the claims plane.**
 
 - Each scheduled job runs as a Lambda with a **dedicated, least-privilege execution role**. That role **is** the service-principal identity — there is **no long-lived service secret**; credentials are STS-rotated by the Lambda runtime.
-- The job reads and writes DynamoDB **directly via IAM-scoped permissions, below the D8 request-middleware**. The job never invokes D8's claims plane, so **by construction it cannot trust a user-claim it lacks**. The "additive, not erosive" bar is met **structurally**, not by policy choice.
+- The job authorizes as a **service principal in the IAM plane, never the claims plane** — so **by construction it cannot trust a user-claim it lacks**; the "additive, not erosive" bar is met **structurally**, not by policy choice. The job never invokes D8's user claims-plane write tier.
+- **SHARED analysis-cache write — settled mechanism (owner-ratified).** The refreshed `ANALYSIS#{ticker}` write goes through the **analysis-cache Lambda via a service-principal auth path** (a distinct branch from D8's user-write tier), **not raw `PutItem`**. This keeps a **single writer, a single auth chokepoint, and one definition of the cache-write shape** (no shape duplication between Lambda and job). The SHARED partition is global, non-account-scoped data, so it is not subject to D8's per-account membership write check; D8's user-scoped guarantees are untouched.
+- **Access mechanism for the cross-account reads and the notification-state write — OPEN.** Whether the holdings/watchlist reads and the per-account notification-state write use the Lambda service-principal path or IAM-scoped direct access is **not yet decided** (deferred to #531/#529 design). The authorization plane (IAM service-principal, fail-closed, D8-isolated) is settled regardless of which mechanism is chosen.
 - IAM scope is least-privilege, **no broader than** the operations below. (Drawn against the actual control-plane and app tables — the enumeration/membership source is the Launchpad control plane, **`launchpad-accounts-{stage}` / `launchpad-account-members-{stage}`**, not a `platform.accounts` table, which does not exist.)
 
-| Operation | Table | Access |
+| Operation | Table | Access (and mechanism) |
 |---|---|---|
 | Account enumeration (whom to process; filter `appSlug = stock-analyser`) | `launchpad-accounts-{stage}` (control plane) | read-only |
 | Live membership/status re-check (fail-closed guard) | `launchpad-account-members-{stage}` (control plane) | read-only |
-| Holdings / watchlist read for refresh | `stock-analyser.portfolio-{stage}`, `stock-analyser.watchlist-{stage}` | read-only |
-| Refreshed market-analysis cache-write | SHARED partition of `stock-analyser.analysis-cache-{stage}` | write (shared partition only) |
-| Per-user notification items | notification store (TBD — defined by #533/#534) | write |
+| Holdings / watchlist read for refresh | `stock-analyser.portfolio-{stage}`, `stock-analyser.watchlist-{stage}` | read-only — *mechanism OPEN (Lambda service-principal vs IAM-direct)* |
+| Refreshed market-analysis cache-write | SHARED partition of `stock-analyser.analysis-cache-{stage}` | write — **via analysis-cache Lambda service-principal path (settled; not raw `PutItem`)** |
+| Per-account notification-state write | `stock-analyser.notification-state-{stage}` (net-new; #532) | write — *mechanism OPEN (Lambda service-principal vs IAM-direct)* |
 
 ## Safety property that moves — and the obligation it creates
 
@@ -56,6 +60,8 @@ This preserves D8's **property** — no lingering write capability for a disable
 ## Cross-references
 
 - **D8** (`docs/adr-m16-runtime-architecture.md` §D8) — request-scoped authorization. Unchanged; this ADR sits beside it and extends the model to no-JWT jobs without eroding it.
-- **#531** (scheduler design) — consumes the consent/status gating as the daily job's per-account **skip rules**.
+- **#530** (cache design) — the SHARED analysis-cache write target: reuse the existing SHARED partition (no new analysis table) at 24h TTL. This ADR's settled SHARED-write mechanism (Lambda service-principal path) is how that write happens.
+- **#531** (scheduler design) — consumes the consent/status gating as the daily job's per-account **skip rules**; ratified the SHARED-write-via-Lambda mechanism reconciled above.
+- **#532** (buy/sell signal rule) — defines the net-new per-account **`stock-analyser.notification-state-{stage}`** table this job writes (`lastVerdict` / `lastNotifiedAt`) and the fire-on-transition predicate.
 - **#534** (notification preferences / opt-out) — defines **consent** (default = opted-out), one of the fail-closed gates above.
 - **`cycle-check`** stub (`apps/stock-analyser/functions/cycle-check`) — the existing scheduled job that adopts this pattern on implementation.
