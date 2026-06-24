@@ -11,23 +11,28 @@ import {
   CacheStatusBar,
   ModeToggle,
   TextToggle,
-  type Signal,
 } from "@transformotion/ui-primitives"
 import { Spinner } from "@transformotion/ui-primitives"
-import { 
-  TrendingUp, 
-  BarChart3, 
+import {
+  TrendingUp,
+  BarChart3,
   ChevronRight,
   ChevronDown,
   RefreshCw,
   AlertCircle,
+  Landmark,
 } from "lucide-react"
 import { useCacheStatus, useClaude } from "@/lib/hooks"
 import { cn } from "@/lib/utils"
+import type { AnalysisRegion } from "@transformotion/contracts/stock-analyser/types"
+// #535: the Market Analysis result model is now canonical (promoted out of this
+// tab into the contract). Per-card `source` attribution lives on MacroIndicator
+// and SectorSignal; `opportunity` was reconciled away in the promotion.
 import type {
-  AnalysisRegion,
-  MarketAnalysisSectorResult,
-} from "@transformotion/contracts/stock-analyser/types"
+  MarketAnalysisResult,
+  MacroIndicatorImpact,
+  SectorValuation,
+} from "@transformotion/contracts/stock-analyser/market-analysis"
 import {
   ANALYSIS_REGIONS,
   REGION_LABELS,
@@ -37,52 +42,10 @@ import {
 } from "../markets"
 import { createMarketSectorNavigationPayload } from "../recommendations-flow"
 import { stockSignalBadgeClassName } from "../status-badge"
+import { buildSectorSuppliedData } from "@/lib/analysis/market-analysis-grounding"
+import { dynamoCache } from "@/lib/services/cache/dynamo-ttl-cache"
 
-type Impact = "Supportive" | "Neutral" | "Headwind"
-type Valuation = "Cheap" | "Fair" | "Expensive" | "Extended"
-type Opportunity = "Attractive" | "Neutral" | "Unattractive"
-
-interface MacroIndicator {
-  label: string
-  title: string
-  description: string
-  impact: Impact
-}
-
-interface SectorSignal {
-  sector: string
-  signal: Signal
-  cyclePosition: number
-  valuation: Valuation
-  opportunity: Opportunity
-  change: number
-  reason: string
-  bestExchange: string
-  recommendationUniverse?: MarketAnalysisSectorResult["recommendationUniverse"]
-  sourceRegion?: AnalysisRegion
-}
-
-interface ActionItem {
-  sector: string
-  reason: string
-}
-
-interface MarketAnalysisResult {
-  macro: {
-    cycleStage: MacroIndicator
-    rateDirection: MacroIndicator
-    keyRisk: MacroIndicator
-    currency: MacroIndicator
-  }
-  briefing: string
-  sectors: SectorSignal[]
-  actionSummary: {
-    enter: ActionItem[]
-    exit: ActionItem[]
-  }
-}
-
-const IMPACT_STYLES: Record<Impact, { bg: string; text: string }> = {
+const IMPACT_STYLES: Record<MacroIndicatorImpact, { bg: string; text: string }> = {
   Supportive: { bg: "bg-signal-green/15", text: "text-signal-green" },
   Neutral:    { bg: "bg-muted/50",        text: "text-muted-foreground" },
   Headwind:   { bg: "bg-signal-red/15",   text: "text-signal-red" },
@@ -95,17 +58,13 @@ const PILL: Record<string, React.CSSProperties> = {
   gray:  { background: '#F1EFE8', color: '#444441' },
 }
 
-const VALUATION_PILL: Record<Valuation, keyof typeof PILL> = {
-  Cheap:     'green',
-  Fair:      'amber',
-  Expensive: 'coral',
-  Extended:  'coral',
-}
-
-const OPPORTUNITY_PILL: Record<Opportunity, keyof typeof PILL> = {
-  Attractive:   'green',
-  Neutral:      'gray',
-  Unattractive: 'coral',
+const VALUATION_PILL: Record<SectorValuation, keyof typeof PILL> = {
+  Cheap:      'green',
+  Attractive: 'green',
+  Fair:       'amber',
+  Expensive:  'coral',
+  Overvalued: 'coral',
+  Extended:   'coral',
 }
 
 function SectorPill({ label, color }: { label: string; color: keyof typeof PILL }) {
@@ -154,6 +113,24 @@ function CycleBar({ position }: { position: number }) {
   )
 }
 
+// #535 per-card source attribution. Visually + semantically distinct from the
+// cache-freshness badge: source = "where this read came from" (an authoritative
+// institution), freshness = "how recently it was refreshed". Deliberately quiet
+// (muted, institution icon) so it reads as provenance metadata, not a signal.
+function SourceTag({ name }: { name: string }) {
+  return (
+    <span
+      className="inline-flex items-center gap-1 text-[10px] text-muted-foreground"
+      title={`Source: ${name}`}
+    >
+      <Landmark className="size-3 shrink-0" aria-hidden="true" />
+      <span className="font-medium">
+        <span className="text-muted-foreground/70">Source</span> {name}
+      </span>
+    </span>
+  )
+}
+
 export function MarketAnalysisTab() {
   const { navigateToRecsWithSector, getTabTextVisibility, setTabTextOverride, showExplanatoryText, defaultSearchMode, setTabCache, getTabCache } = useNavigation()
   const [isLive, setIsLive] = useState(defaultSearchMode === "live")
@@ -186,6 +163,12 @@ export function MarketAnalysisTab() {
 
   const runAnalysis = async (forceRefresh = false) => {
     const supportedUniverses = REGION_TO_RECOMMENDATION_UNIVERSES[region]
+    // #535 Bucket-1 grounding: only when we will actually call the model (cache
+    // miss or forced refresh) fetch real sector OHLCV and feed it in as supplied
+    // data, so sector levels/returns are grounded in prices rather than searched.
+    // Skipped on a cache hit (the prompt is unused then).
+    const willCallModel = forceRefresh || (await dynamoCache.get<MarketAnalysisResult>(cacheKey)) === null
+    const suppliedSectorData = willCallModel ? await buildSectorSuppliedData(region) : ""
     const data = await callClaude({
       cacheKey,
       forceRefresh,
@@ -193,15 +176,17 @@ export function MarketAnalysisTab() {
       webSearch: isLive,
       prompt: `Provide comprehensive market analysis for the ${REGION_LABELS[region]} region.
 
+SOURCE ATTRIBUTION (required, per card): For EACH macro indicator and EACH sector, name the authoritative source you based that card's read on and return it as "source": { "name": string } (e.g. "RBA", "ASX", "EIA"). Prefer authoritative / primary sources — exchanges, central banks, regulators, and established financial press. DO NOT base figures on social media, forums, or unattributed aggregators. Source attribution applies ONLY to the macro indicators and sector cards — NOT to "briefing" or "actionSummary".${suppliedSectorData}
+
 Return a JSON object with the following fields:
 
-"macro" — 4 market condition cards, each with label, title, description, and impact ("Supportive" / "Neutral" / "Headwind"):
+"macro" — 4 market condition cards, each with label, title, description, impact ("Supportive" / "Neutral" / "Headwind"), and source ({ name: string }):
   - cycleStage — where the market is in the economic cycle
   - rateDirection — current interest rate trend
   - keyRisk — primary macro risk to watch
   - currency — USD/currency effect on the market
 
-"briefing" — a 2-3 sentence narrative paragraph summarising the macro outlook
+"briefing" — a 2-3 sentence narrative paragraph summarising the macro outlook (synthesis — no source field)
 
 "sectors" — array of 8 sectors, each with:
 
@@ -217,26 +202,26 @@ Return a JSON object with the following fields:
     100 = late cycle (extended, peak territory, vulnerable to rotation out)
     This is a POSITIONAL metric only — it does not imply good or bad.
 
-  - valuation: one of "Cheap" / "Fair" / "Expensive" / "Extended"
+  - valuation: one of "Cheap" / "Attractive" / "Fair" / "Expensive" / "Overvalued" / "Extended"
     How the sector is priced relative to its own fundamentals and history.
     INDEPENDENT of cyclePosition. A sector can be late-cycle but cheap (if beaten down), or early-cycle but expensive (if priced on expectations).
 
-  - opportunity: one of "Attractive" / "Neutral" / "Unattractive"
-    The combined judgment that drives the signal. Reflects the blend of cycle position, valuation, momentum, and macro backdrop. This is what tells the reader whether the sector is worth engaging with right now.
-
   - change: weekly % change (number, e.g. 2.1 or -0.8)
+    Where SUPPLIED SECTOR DATA is given for a sector, base its level/return read on those figures, not on searched or recalled numbers.
 
-  - reason: 1-2 sentence explanation tying the three dimensions together.
+  - reason: 1-2 sentence explanation tying the dimensions together.
     Example: "Late-cycle but still cheap on forward earnings; defensive qualities attractive as growth slows."
 
   - bestExchange: the best listing universe for this sector. MUST be one of: ${supportedUniverses.join(", ")}
 
-"actionSummary" — top-3 trades:
+  - source: { name: string } — the authoritative source this sector's read is based on (use the supplied proxy where given for that sector)
+
+"actionSummary" — top-3 trades (conclusions — no source field):
   - enter: array of top 3 { sector, reason } to buy/overweight
   - exit: array of top 3 { sector, reason } to sell/reduce
 
 IMPORTANT: Your entire response must be a single valid JSON object. Begin your response with { and end with }. Do not include any text, preamble, explanation, or markdown outside the JSON.`,
-      systemPrompt: "You are a senior market strategist. Provide institutional-quality sector rotation analysis. Respond with raw JSON only. Do not use markdown code fences.",
+      systemPrompt: "You are a senior market strategist. Provide institutional-quality sector rotation analysis grounded in authoritative, attributable sources. For every macro indicator and sector card, name the authoritative source you relied on (exchanges, central banks, regulators, established financial press) and never base figures on social media, forums, or unattributed aggregators. Respond with raw JSON only. Do not use markdown code fences.",
     })
 
     if (data) {
@@ -365,10 +350,13 @@ IMPORTANT: Your entire response must be a single valid JSON object. Begin your r
                     </button>
                   )}
                   
-                  <span className={cn("inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-medium", style.bg, style.text)}>
-                    <span className={cn("size-1.5 rounded-full", style.text === "text-signal-green" ? "bg-signal-green" : style.text === "text-signal-red" ? "bg-signal-red" : "bg-muted-foreground")} />
-                    {indicator.impact}
-                  </span>
+                  <div className="flex items-center justify-between gap-2 pt-1">
+                    <span className={cn("inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-medium", style.bg, style.text)}>
+                      <span className={cn("size-1.5 rounded-full", style.text === "text-signal-green" ? "bg-signal-green" : style.text === "text-signal-red" ? "bg-signal-red" : "bg-muted-foreground")} />
+                      {indicator.impact}
+                    </span>
+                    {indicator!.source?.name ? <SourceTag name={indicator!.source.name} /> : null}
+                  </div>
                 </div>
               )
             })}
@@ -432,13 +420,10 @@ IMPORTANT: Your entire response must be a single valid JSON object. Begin your r
                         </span>
                       </div>
 
-                      {/* Cycle · Valuation · Opportunity · Change */}
+                      {/* Cycle · Valuation · Change */}
                       <div className="flex items-center gap-4 flex-wrap">
                         <CycleBar position={sector.cyclePosition} />
                         <SectorPill label={sector.valuation} color={VALUATION_PILL[sector.valuation] ?? 'gray'} />
-                        {sector.opportunity && (
-                          <SectorPill label={sector.opportunity} color={OPPORTUNITY_PILL[sector.opportunity] ?? 'gray'} />
-                        )}
                         <span
                           className="ml-auto text-xs font-semibold"
                           style={{ color: sector.change >= 0 ? '#1D9E75' : '#D4537E' }}
@@ -446,6 +431,9 @@ IMPORTANT: Your entire response must be a single valid JSON object. Begin your r
                           {sector.change >= 0 ? "+" : ""}{sector.change}%
                         </span>
                       </div>
+
+                      {/* #535 per-card source attribution */}
+                      {sector.source?.name ? <SourceTag name={sector.source.name} /> : null}
 
                       {/* Reason - conditionally visible or expandable */}
                       {(textVisible || expandedCards.has(`sector-${sector.sector}`)) && (
