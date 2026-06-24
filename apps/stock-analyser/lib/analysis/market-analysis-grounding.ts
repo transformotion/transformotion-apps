@@ -10,18 +10,20 @@
  * Scope (per #535): Bucket-1 (sector levels/returns) ONLY. Bucket-2 (macro:
  * rates/FX/inflation) is DEFERRED — macro stays cited web search, no feed here.
  *
- * ┌──────────────────────────────────────────────────────────────────────────┐
- * │ ⚠ OWNER REVIEW REQUIRED — SECTOR_PROXY_TICKERS (the one net-new artifact). │
- * │ These proxy tickers are a FIRST CUT. They are not invented silently: every │
- * │ entry is listed here for sign-off, and gaps are left explicit (unmapped    │
- * │ sectors simply contribute no supplied data — the model falls back to cited │
- * │ web search for those, which still satisfies the #535 source-control bar).  │
- * │   • us / global: SPDR sector ETFs — established, liquid, unambiguous Yahoo  │
- * │     symbols (high confidence).                                             │
- * │   • australia: only the ASX sector ETFs I can name with confidence; the    │
- * │     rest are intentionally UNMAPPED pending owner-supplied proxies.        │
- * │   • uk: UNMAPPED pending owner-supplied FTSE sector proxies.               │
- * └──────────────────────────────────────────────────────────────────────────┘
+ * === OWNER REVIEW REQUIRED — SECTOR_PROXY_TICKERS (the one net-new artifact) ===
+ * These proxy tickers are a FIRST CUT. They are not invented silently: every
+ * entry is listed here for sign-off, and gaps are left explicit. An unmapped
+ * sector contributes NO supplied data — the model falls back to cited web search
+ * for it, never a wrong proxy (still satisfies the #535 source-control bar).
+ *   - us: SPDR sector ETFs — established, liquid, unambiguous Yahoo symbols
+ *     (high confidence).
+ *   - global: FULLY UNMAPPED by decision. US sector ETFs are a US lens on a
+ *     global question, so grounding "Global" in them would attribute "grounded"
+ *     to the wrong basket — unmapped + cited web search is the honest default.
+ *   - australia: only the ASX sector ETFs nameable with confidence; the rest
+ *     intentionally UNMAPPED pending owner-supplied proxies. OZR is a
+ *     resources-skew proxy for Materials (accepted-with-flag).
+ *   - uk: FULLY UNMAPPED pending owner-supplied FTSE sector proxies.
  */
 
 import { getStockAnalyserClient } from '@/lib/api'
@@ -64,17 +66,9 @@ export const SECTOR_PROXY_TICKERS: Record<
     'Consumer Discretionary': 'XLY',
     'Real Estate & REITs': 'XLRE',
   },
-  // Global view proxied by the US SPDR sector ETFs (documented stand-in).
-  global: {
-    Financials: 'XLF',
-    Materials: 'XLB',
-    Energy: 'XLE',
-    Healthcare: 'XLV',
-    Technology: 'XLK',
-    Industrials: 'XLI',
-    'Consumer Discretionary': 'XLY',
-    'Real Estate & REITs': 'XLRE',
-  },
+  // FULLY UNMAPPED by decision — US sector ETFs are a US lens on a global
+  // question; "Global" sectors fall back to cited web search.
+  global: {},
   // ASX sector ETFs — only the confident ones; the rest UNMAPPED pending owner review.
   australia: {
     Financials: 'OZF.AX',          // SPDR S&P/ASX 200 Financials ex A-REIT
