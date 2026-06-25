@@ -7,6 +7,11 @@ import type {
   PatchSettingsRequest,
   PutCacheFreshnessConfigRequest,
 } from '@transformotion/contracts/stock-analyser/api'
+import type {
+  NotificationAccountConfig,
+  NotificationMemberConsent,
+  NotificationType,
+} from '@transformotion/contracts/stock-analyser/notification-preferences'
 import { authService } from '../services/auth'
 import { getConfig } from '../config'
 import { getActiveAccountId } from '@/stores/active-account/use-active-account-store'
@@ -66,6 +71,22 @@ export const stockAnalyserClient = {
   },
   updateCacheFreshnessConfig(body: PutCacheFreshnessConfigRequest): Promise<CacheFreshnessConfigResponse> {
     return http().put('cache-freshness', body)
+  },
+  // Notification preferences (M19 #534). Account config write is owner/manager-gated
+  // server-side; consent is keyed to the authenticated principal (own record only).
+  getNotificationConfig(): Promise<{ config: NotificationAccountConfig }> {
+    return http().get('notification-config')
+  },
+  updateNotificationConfig(
+    body: { intervalDays?: number; activeTypes?: NotificationType[] },
+  ): Promise<{ config: NotificationAccountConfig }> {
+    return http().put('notification-config', body)
+  },
+  getNotificationConsent(): Promise<{ consent: NotificationMemberConsent }> {
+    return http().get('notification-consent')
+  },
+  updateNotificationConsent(body: { receiveConsent: boolean }): Promise<{ consent: NotificationMemberConsent }> {
+    return http().put('notification-consent', body)
   },
   putCacheEntry(key: string, body: PutCacheRequest): Promise<void> {
     return http().put(`analysis-cache/${encodeURIComponent(key)}`, body)

@@ -1075,6 +1075,9 @@ importers:
       '@transformotion/data-access':
         specifier: workspace:*
         version: link:../../packages/data-access
+      '@transformotion/fn-account-membership':
+        specifier: workspace:*
+        version: link:../../packages/fn-account-membership
       '@transformotion/logger':
         specifier: workspace:*
         version: link:../../packages/logger
