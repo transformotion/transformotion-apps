@@ -197,6 +197,17 @@ flow, or layout are deviations requiring a provenance-tagged disposition list,
 and the PR carries a visual diff against the v0 surface. Runtime-side
 rearrangement of a prototyped surface without that record is drift, not polish.
 
+**v0 is the authoritative source of truth for the UI.** This is the same reason
+contracts are owned by v0: UI design and shape originate in v0, and runtime
+consumes them. Runtime's job is to **wire the backend to the v0 surface and its
+contracts — not to design, restyle, re-arrange, or re-word UI.** Per §8.A rule 4,
+runtime ports a prototyped surface's **presentation verbatim** (copy the v0
+component; change only import paths and the data/persistence source) and rebuilds
+only the data layer; re-creating, restyling, or re-wording the markup is itself a
+deviation. Every UI change originates in v0 and reaches runtime via the
+v0 → contract/sync path, **never the reverse** — unless the owner has explicitly
+declared runtime ahead for that surface.
+
 Runtime-first contract-changing work is allowed only as an emergency hotfix:
 the issue must be urgent, the owner must explicitly approve runtime-first work
 before implementation, and the PR must include an `Emergency v0 Reconciliation`
