@@ -4,8 +4,14 @@ import { useEffect, useMemo, useState } from "react"
 import { useNavigation } from "../app-shell"
 import { selectUser, useAuthStore } from "@/stores/auth/use-auth-store"
 import { PageHeader, Card, PrimaryButton, SecondaryButton, SegmentedControl, Slider, TextToggle } from "@transformotion/ui-primitives"
-import { AlertCircle, Check, Cpu, FileText, Gauge, Lock, Plus, RotateCcw, Save, Trash2, Zap } from "lucide-react"
+import { AlertCircle, Bell, Briefcase, Check, Clock, Cpu, Eye, FileText, Gauge, Lock, Minus, Plus, RotateCcw, Save, Trash2, Zap } from "lucide-react"
 import type { SearchMode } from "../app-shell"
+import { useNotificationPreferences } from "@/lib/hooks/use-notification-preferences"
+import {
+  MIN_NOTIFICATION_INTERVAL_DAYS,
+  NOTIFICATION_TYPES,
+  type NotificationType,
+} from "@transformotion/contracts/stock-analyser/notification-preferences"
 import { notifyCacheFreshnessPolicyUpdated } from "@/lib/hooks"
 import type { User } from "@transformotion/auth-client"
 import { cn } from "@/lib/utils"
@@ -666,6 +672,239 @@ function CacheFreshnessCard() {
   )
 }
 
+/**
+ * Small on/off switch used by the notification controls. When `disabled` it
+ * renders read-only (visible, non-interactive) — the "applicable but not
+ * entitled" presentation.
+ */
+function Switch({
+  checked,
+  onChange,
+  disabled = false,
+  label,
+}: {
+  checked: boolean
+  onChange: (next: boolean) => void
+  disabled?: boolean
+  label: string
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      className={cn(
+        "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary/40",
+        checked ? "bg-primary" : "bg-surface2 border border-border",
+        disabled && "opacity-60 cursor-not-allowed",
+      )}
+    >
+      <span
+        className={cn(
+          "inline-block size-4 transform rounded-full bg-background shadow transition-transform",
+          checked ? "translate-x-6" : "translate-x-1",
+        )}
+      />
+    </button>
+  )
+}
+
+const TYPE_META: Record<NotificationType, { label: string; icon: typeof Briefcase }> = {
+  portfolio: { label: "Portfolio", icon: Briefcase },
+  watchlist: { label: "Watchlist", icon: Eye },
+}
+
+/** Selectable type pill (Portfolio / Watchlist). Read-only when `disabled`. */
+function TypePill({
+  type,
+  active,
+  disabled,
+  onToggle,
+}: {
+  type: NotificationType
+  active: boolean
+  disabled: boolean
+  onToggle: () => void
+}) {
+  const { label, icon: Icon } = TYPE_META[type]
+  return (
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={active}
+      disabled={disabled}
+      onClick={onToggle}
+      className={cn(
+        "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium border transition-colors",
+        active
+          ? "bg-primary/15 text-primary border-primary/30"
+          : "bg-surface2 text-muted-foreground border-border",
+        disabled ? "cursor-not-allowed opacity-70" : "hover:border-primary/30",
+      )}
+    >
+      <Icon className="size-3.5" />
+      {label}
+      {active && <Check className="size-3.5" />}
+    </button>
+  )
+}
+
+/**
+ * Notification preferences (M19 #534) — role-conditional.
+ *
+ * Renders contents per the two-axis visibility model (applicability +
+ * entitlement) resolved from the active account role + supervisory flags. A
+ * viewer (feature inapplicable) renders NOTHING. A plain member sees account
+ * config read-only plus their own editable consent. Owners/managers/admins edit
+ * account config. The rendering is a UX convenience only — runtime enforces
+ * authorization server-side (see notification-preferences.behaviour.md).
+ */
+function NotificationsCard() {
+  const { user } = useNavigation()
+  const {
+    ready,
+    visibility,
+    config,
+    consent,
+    setIntervalDays,
+    setActiveTypes,
+    setReceiveConsent,
+  } = useNotificationPreferences(user.activeAccountId ?? null)
+
+  // Not ready (SSR/first paint) or the entire feature is inapplicable (viewer):
+  // render nothing at all.
+  if (!ready || visibility.allHidden) return null
+
+  const accountEditable = visibility.intervalDays === "editable"
+  const accountReadOnly = visibility.intervalDays === "read-only"
+  const showAccountConfig = visibility.intervalDays !== "hidden" && config
+  const showConsent = visibility.receiveConsent !== "hidden"
+
+  const activeTypes = config?.activeTypes ?? []
+  const intervalDays = config?.intervalDays ?? MIN_NOTIFICATION_INTERVAL_DAYS
+
+  const toggleType = (type: NotificationType) => {
+    if (!accountEditable) return
+    const next = activeTypes.includes(type)
+      ? activeTypes.filter((t) => t !== type)
+      : [...activeTypes, type]
+    setActiveTypes(next)
+  }
+
+  return (
+    <Card className="space-y-5">
+      <div className="flex items-start gap-3">
+        <div className="size-9 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
+          <Bell className="size-5 text-primary" />
+        </div>
+        <div>
+          <h3 className="font-display text-base font-semibold tracking-wide text-foreground">Notifications</h3>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            Notification analysis is generated per account and delivered only to members who opt in.
+          </p>
+        </div>
+      </div>
+
+      {/* ACCOUNT-level config (owner/manager-controlled). */}
+      {showAccountConfig && (
+        <div className="rounded-xl border border-border bg-surface2/60 p-4 space-y-4">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm font-medium text-foreground">Account settings</p>
+            {accountReadOnly && (
+              <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
+                <Lock className="size-3" />
+                Owners &amp; managers
+              </span>
+            )}
+          </div>
+
+          {/* intervalDays */}
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium text-foreground flex items-center gap-1.5">
+                <Clock className="size-3.5 text-muted-foreground" />
+                Processing interval
+              </p>
+              <p className="text-xs text-muted-foreground">
+                How often this account is processed (minimum 1 day)
+              </p>
+            </div>
+            {accountEditable ? (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  aria-label="Decrease interval"
+                  onClick={() => setIntervalDays(intervalDays - 1)}
+                  disabled={intervalDays <= MIN_NOTIFICATION_INTERVAL_DAYS}
+                  className="size-8 rounded-lg border border-border bg-surface2 flex items-center justify-center text-foreground disabled:opacity-50 disabled:cursor-not-allowed hover:border-primary/30"
+                >
+                  <Minus className="size-4" />
+                </button>
+                <span className="w-20 text-center text-sm font-medium text-foreground tabular-nums">
+                  {intervalDays} {intervalDays === 1 ? "day" : "days"}
+                </span>
+                <button
+                  type="button"
+                  aria-label="Increase interval"
+                  onClick={() => setIntervalDays(intervalDays + 1)}
+                  className="size-8 rounded-lg border border-border bg-surface2 flex items-center justify-center text-foreground hover:border-primary/30"
+                >
+                  <Plus className="size-4" />
+                </button>
+              </div>
+            ) : (
+              <span className="text-sm font-medium text-foreground tabular-nums">
+                {intervalDays} {intervalDays === 1 ? "day" : "days"}
+              </span>
+            )}
+          </div>
+
+          {/* typeSelection */}
+          <div className="space-y-2">
+            <div>
+              <p className="text-sm font-medium text-foreground">Active types</p>
+              <p className="text-xs text-muted-foreground">Which notifications this account generates</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {NOTIFICATION_TYPES.map((type) => (
+                <TypePill
+                  key={type}
+                  type={type}
+                  active={activeTypes.includes(type)}
+                  disabled={!accountEditable}
+                  onToggle={() => toggleType(type)}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PER-MEMBER consent (own record, always editable when shown). */}
+      {showConsent && (
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-surface2/60 px-4 py-3">
+          <div>
+            <p className="text-sm font-medium text-foreground">Receive notifications</p>
+            <p className="text-xs text-muted-foreground">
+              {consent?.receiveConsent
+                ? "You're opted in — notifications will be delivered to you"
+                : "You're opted out — opt in to be delivered notifications"}
+            </p>
+          </div>
+          <Switch
+            label="Receive notifications"
+            checked={!!consent?.receiveConsent}
+            onChange={(next) => setReceiveConsent(next)}
+          />
+        </div>
+      )}
+    </Card>
+  )
+}
+
 export function SettingsTab() {
   return (
     <div className="p-4 space-y-6 max-w-2xl">
@@ -676,6 +915,7 @@ export function SettingsTab() {
       />
       <AnalysisTextCard />
       <DefaultSearchModeCard />
+      <NotificationsCard />
       <CacheFreshnessCard />
       <AiEngineCard />
     </div>

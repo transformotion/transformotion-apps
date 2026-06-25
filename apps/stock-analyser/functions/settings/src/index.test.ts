@@ -260,3 +260,97 @@ describe('Stock Analyser settings handler', () => {
     expect(send).not.toHaveBeenCalled();
   });
 });
+
+// ── Notification preferences authorization (M19 #534) — the load-bearing proof ──
+// The card's role-conditional render is UX, NOT security. These assert the SERVER
+// rejects unauthorised writes regardless of what the UI rendered.
+describe('Notification preferences authorization', () => {
+  function notifDeps(
+    row: { role: string; status?: string } | undefined,
+    initialItem?: Record<string, unknown>,
+  ) {
+    const base = createFakeDeps(initialItem);
+    return {
+      deps: { ...base.deps, membershipLoader: async () => row } as HandlerDependencies,
+      getItem: base.getItem,
+    };
+  }
+  const acct = (role: string) => ({ 'stock-analyser': [{ accountId: 'acct-1', role }] });
+
+  it('REJECTS a member writing account config (past the disabled UI)', async () => {
+    const { deps } = notifDeps({ role: 'member', status: 'active' });
+    const res = await createHandler(deps)(makeEvent(
+      'PUT', { intervalDays: 3 },
+      { resource: '/notification-config', accounts: acct('member') },
+    ));
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('REJECTS a viewer writing account config', async () => {
+    const { deps } = notifDeps({ role: 'viewer', status: 'active' });
+    const res = await createHandler(deps)(makeEvent(
+      'PUT', { activeTypes: ['portfolio'] },
+      { resource: '/notification-config', accounts: acct('viewer') },
+    ));
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('ALLOWS an owner writing account config (interval floored, types filtered)', async () => {
+    const { deps, getItem } = notifDeps({ role: 'owner', status: 'active' });
+    const res = await createHandler(deps)(makeEvent(
+      'PUT', { intervalDays: 0, activeTypes: ['watchlist', 'bogus'] },
+      { resource: '/notification-config', accounts: acct('owner') },
+    ));
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).config).toMatchObject({ intervalDays: 1, activeTypes: ['watchlist'] });
+    expect(getItem()).toMatchObject({ pk: 'SETTINGS', sk: 'NOTIFICATIONS#acct-1' });
+  });
+
+  it('ALLOWS a manager writing account config', async () => {
+    const { deps } = notifDeps({ role: 'manager', status: 'active' });
+    const res = await createHandler(deps)(makeEvent(
+      'PUT', { intervalDays: 5 },
+      { resource: '/notification-config', accounts: acct('manager') },
+    ));
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('REJECTS a viewer writing consent (not applicable — no delivery)', async () => {
+    const { deps } = notifDeps({ role: 'viewer', status: 'active' });
+    const res = await createHandler(deps)(makeEvent(
+      'PUT', { receiveConsent: true },
+      { resource: '/notification-consent', accounts: acct('viewer') },
+    ));
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('writes consent to the CALLER own record only — a crafted body userId is ignored', async () => {
+    const { deps, getItem } = notifDeps({ role: 'member', status: 'active' });
+    // Craft a different userId in the body — the server must ignore it and key by auth.userId (user-1).
+    const res = await createHandler(deps)(makeEvent(
+      'PUT', { receiveConsent: true, userId: 'user-2', accountId: 'acct-1' },
+      { resource: '/notification-consent', accounts: acct('member') },
+    ));
+    expect(res.statusCode).toBe(200);
+    // Stored under the authenticated principal, NOT the crafted user-2.
+    expect(getItem()).toMatchObject({
+      pk: 'NOTIFICATION_CONSENT#acct-1',
+      sk: 'USER#user-1',
+      receiveConsent: true,
+    });
+    expect(JSON.parse(res.body).consent).toMatchObject({ userId: 'user-1', receiveConsent: true });
+  });
+
+  it('fails closed (503) when the membership loader throws on an account-config write', async () => {
+    const base = createFakeDeps();
+    const deps = {
+      ...base.deps,
+      membershipLoader: async () => { throw new Error('ddb down'); },
+    } as HandlerDependencies;
+    const res = await createHandler(deps)(makeEvent(
+      'PUT', { intervalDays: 3 },
+      { resource: '/notification-config', accounts: acct('owner') },
+    ));
+    expect(res.statusCode).toBe(503);
+  });
+});

@@ -255,6 +255,9 @@ export class StockAnalyserApiStack extends cdk.Stack {
     });
     settingsTable.grantReadWriteData(settingsFn);
     aiRuntimeConfigTable.grantReadData(settingsFn);
+    // M19 #534: notification-config writes are D8 control-plane (owner/manager) —
+    // the handler reads the live membership row to authorize. GetItem-only grant.
+    grantMembershipRead(settingsFn);
 
     const settingsIntegration = new apigateway.LambdaIntegration(settingsFn, { proxy: true });
     const settings = this.api.root.addResource('settings');
@@ -270,6 +273,14 @@ export class StockAnalyserApiStack extends cdk.Stack {
     const cacheFreshness = this.api.root.addResource('cache-freshness');
     cacheFreshness.addMethod('GET', settingsIntegration, auth);
     cacheFreshness.addMethod('PUT', settingsIntegration, auth);
+
+    // M19 #534 notification preferences.
+    const notificationConfig = this.api.root.addResource('notification-config');
+    notificationConfig.addMethod('GET', settingsIntegration, auth);
+    notificationConfig.addMethod('PUT', settingsIntegration, auth);
+    const notificationConsent = this.api.root.addResource('notification-consent');
+    notificationConsent.addMethod('GET', settingsIntegration, auth);
+    notificationConsent.addMethod('PUT', settingsIntegration, auth);
 
     new cdk.CfnOutput(this, 'ApiUrl', {
       value: this.api.url,
