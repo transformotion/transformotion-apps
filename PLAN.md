@@ -1547,8 +1547,13 @@ gate into further build-phase work.)
   complete (hard gate).** M17 (go-live) depends on M19 (full Milestone B
   — background intelligence AND notifications). Prod cannot cut over with
   M19 incomplete.
+- **M20 — UI reconciliation (v0 ↔ live parity), complete (hard gate).**
+  Prod go-live requires the v0 prototype and the live runtime apps to be at
+  UI parity, with v0 re-established as the authoritative source of truth.
+  External users must not see a runtime UI that has drifted from the
+  canonical v0 design. Cannot cut over with the apps mid-reconciliation.
 
-Cutover does not begin until M16, M18, and M19 are all done.
+Cutover does not begin until M16, M18, M19, and M20 are all done.
 
 ---
 
@@ -1676,8 +1681,9 @@ For quick visual reference. The full text above is the canonical source.
 | M15 | v0-canonical transition | 2, 4 | M6 |
 | M16 | Account lifecycle and invitation | 3, 4 | M11, M15 |
 | M18 | Corporate rebrand and light/dark theming | 3, 1, 2 | M15, M16 |
-| M17 | Production cutover (go-live) | 2 | M16, M18, M19 |
+| M17 | Production cutover (go-live) | 2 | M16, M18, M19, M20 |
 | M19 | Stock Analyser background intelligence and notifications (PLANNING) | 1, 2, 3 | M18 (closed); ADR D8 |
+| M20 | UI reconciliation — v0 ↔ live parity (PLANNING) | 3, 1 | (audit done); §8.A discipline |
 
 M8, M9, M10 can run in parallel. M11 follows M10. M7 can run in parallel
 with M6 once M2 and M3 complete. M13 and M14 are sequenced strictly
@@ -1783,3 +1789,76 @@ shipped."
 - **M17 (go-live) depends on M19 (full Milestone B — background intelligence
   AND notifications).** Prod cannot cut over with M19 incomplete. (Recorded on
   both sides: see M17's Dependencies in Section 22.)
+
+---
+
+## 27. M20 — UI reconciliation (v0 ↔ live parity; v0 as source of truth)
+
+**Status: PLANNING milestone (decision-gated).** Phase 0 is direction
+decisions + discipline. No reconciliation build work ramps until the Phase-0
+decisions ratify. Placed after the reference table deliberately — section order
+does not encode sequence, and this section was appended without renumbering.
+
+### Purpose
+
+A one-time reconciliation to bring the v0 prototype
+(`transformotion-apps-b8`) and the live runtime apps back to **UI parity**, and
+to re-establish **v0 as the authoritative source of truth for the UI** — so that
+from this point on, every UI change is v0-first and runtime is wire-up-only.
+
+### Why this exists
+
+An audit comparing **every** UI surface (Stock Analyser, Budget Tracker,
+Launchpad) against v0 `main` found the runtime and v0 have diverged
+**extensively and bidirectionally** — dozens of substantive deltas per app.
+Most of "live ahead of v0" is legitimate product work that reached the live app
+**without going through v0**: a design-system typography change (`font-display`
+stripped from primitives, pushed to per-call `titleClassName`), copy hygiene
+(removal of "mock"/"prototype" wording in favour of "authorized server-side"),
+pervasive async/degradation states (loading / error / `—` placeholders / busy
+spinners), and whole features (SA Price History chart; BT's
+Projects→Capital-Expenditure model change and AI-feature removals; Launchpad
+redemption inline flow + AI-engine redesign + callback screen). Several items are
+**v0-ahead**, where blindly "making v0 = live" would delete legitimate v0 work
+(M18 theme-scope, the contract-gated pending-invitations block, the mock-signup
+seam). So this is a real reconciliation with **directional decisions** and
+**land-mines**, not a mechanical copy. The full per-surface audit of record is
+preserved in the milestone's per-app issues.
+
+### Phases
+
+- **Phase 0 (gate).** (a) Ratify the reconciliation-direction decisions — for
+  each bidirectional / feature-level / v0-ahead item, owner rules *v0 adopts
+  live* / *live adopts v0* / *keep deliberately divergent* (#545). (b) Land the
+  v0-authoritative discipline in `CONTRIBUTING.md` §8.A + `AGENTS.md` / `CLAUDE.md`
+  (#546). No build work ramps before Phase 0 ratifies.
+- **Phase 1.** Reconcile each app to parity, v0-first: Stock Analyser (#548),
+  Budget Tracker (#549), Launchpad (#550). Mostly v0 catch-up; some runtime
+  adoption per the Phase-0 rulings.
+- **Phase 2.** Final parity verification + reconciled-baseline record (#547):
+  re-run the per-surface comparison, `pnpm sync:v0` clean, visual diffs, and
+  capture the reconciled "v0 == live" baseline commit.
+
+### Goals served
+
+Goal 3 (architecture coherence) primarily — restoring the v0-canonical UI
+discipline established at M15 — and Goal 1 (active apps deliver real user value)
+by ensuring external users see the canonical design, not drifted runtime UI.
+
+### Gate to next
+
+v0 and the live apps are presentation-identical (modulo items deliberately ruled
+"keep divergent"); the reconciled baseline commit is recorded; the §8.A
+discipline is in force. As a PLANNING milestone, M20's own gate is "Phase-0
+decisions ratified + discipline landed," after which Phase-1/2 are
+implementation work.
+
+### Dependencies
+
+- **The completed UI audit (done).** The per-surface delta across all three apps
+  is captured in issues #548 / #549 / #550; this is the milestone's input.
+- **§8.A discipline (#546).** Should land alongside the Phase-0 decisions so the
+  reconciliation operates under the v0-authoritative rule.
+- **M17 (go-live) depends on M20.** Prod cannot cut over with the apps
+  mid-reconciliation — external users must see the canonical v0 design. (Recorded
+  on both sides: see M17's Dependencies in Section 22.)

@@ -1586,6 +1586,17 @@ The rules above govern whether work is in scope. This subsection governs how a
 prototyped surface is built: the v0 prototype is the settled design, and wire-up
 reproduces it rather than re-deciding it.
 
+**v0 is the authoritative source of truth for the UI** — layout, markup,
+structure, class names, controls, and copy. This is the same reason the
+contracts are owned by v0: design and shape originate in v0, and runtime
+consumes them. Runtime's job is to **wire the backend to the v0 surface and its
+contracts — not to design, restyle, re-arrange, or re-word UI**. Every UI change
+(layout, control, copy, styling) originates in v0 and reaches runtime via the
+v0 change → contract/sync path, **never the reverse**. A UI difference between
+runtime and v0 is a runtime defect to reconcile toward v0, not a v0 gap to
+backfill from runtime — unless the owner has explicitly declared runtime ahead
+for that surface.
+
 1. Settled v0 decisions are read from v0, not re-raised. Where the prototype
    shows how a surface looks or behaves, that is binding. At wire-up a question
    the prototype already answers is answered by consulting the prototype — it
@@ -1609,15 +1620,22 @@ reproduces it rather than re-deciding it.
    changed no shape yet introduced a whole feature; parked as #447 by this gate,
    not the shape gate.)
 
-4. Rebuild-fidelity. Because v0 components are coupled to mock persistence,
-   runtime REBUILDS a prototyped surface against live services rather than
-   porting it. A rebuild must reproduce the prototype's behaviour, controls, and
-   layout. Every deviation — added, removed, or changed control or flow — MUST
-   appear in the PR body as a provenance-tagged disposition list (keep / cut /
-   disable + reason); net-new deviations stop and are raised, not built.
-   Reference example: PR #446 (member-management rebuild), whose "Control
-   disposition (every v0 control)" table is the canonical form — including a
-   net-new affordance flagged as "KEEP (added)".
+4. Presentation is ported verbatim; only persistence is rebuilt. The earlier
+   framing of "rebuild the surface" applies to the **data/persistence layer
+   only** (v0's mock store → live services), and that framing was being
+   over-read as licence to re-create the markup. It is not. **Presentation —
+   JSX structure, element arrangement, class names, controls, and copy — is
+   PORTED VERBATIM, not re-derived.** The mechanical procedure: start from the
+   v0 component as the literal baseline and change ONLY (a) import paths (v0
+   module paths → runtime package paths) and (b) the data/persistence source
+   (mock → live service/contract). Everything else is copied byte-for-byte.
+   Re-styling, re-arranging, re-wording, or re-implementing the markup is itself
+   a deviation. Every deviation — added, removed, or changed control, layout, or
+   copy — MUST appear in the PR body as a provenance-tagged disposition list
+   (keep / cut / disable + reason); **net-new or layout/copy deviations stop and
+   are raised in v0 first, not built runtime-side.** Reference example: PR #446
+   (member-management), whose "Control disposition (every v0 control)" table is
+   the canonical form — including a net-new affordance flagged as "KEEP (added)".
 
 5. Disposition list plus visual diff. The disposition list captures INTENDED
    deviation; it does not catch SILENT drift — wrong data rendered, a projection
