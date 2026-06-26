@@ -74,9 +74,9 @@ Deployed by `deploy-stock-analyser.yml`. Source:
 
 | Stack name | Class | Contents |
 |---|---|---|
-| `Transformotion{Stage}-StockAnalyserTables` | `StockAnalyserTablesStack` | `stock-analyser.portfolio-{stage}`, `stock-analyser.watchlist-{stage}`, `stock-analyser.analysis-cache-{stage}`, `stock-analyser.job-results-{stage}` |
+| `Transformotion{Stage}-StockAnalyserTables` | `StockAnalyserTablesStack` | `stock-analyser.portfolio-{stage}`, `stock-analyser.watchlist-{stage}`, `stock-analyser.analysis-cache-{stage}`, `stock-analyser.job-results-{stage}`, `stock-analyser.settings-{stage}`, `stock-analyser.notification-state-{stage}` |
 | `Transformotion{Stage}-StockAnalyserWs` | `StockAnalyserWsStack` | Stock Analyser-owned WebSocket API, WSS Lambdas, and `stock-analyser.ws-connections-{stage}` |
-| `Transformotion{Stage}-StockAnalyserApi` | `StockAnalyserApiStack` | Stock Analyser-owned REST API Gateway, Lambda functions, Cognito authoriser, and `stock-analyser-ai-proxy-{stage}` |
+| `Transformotion{Stage}-StockAnalyserApi` | `StockAnalyserApiStack` | Stock Analyser-owned REST API Gateway, Lambda functions, Cognito authoriser, `stock-analyser-ai-proxy-{stage}`, and daily `stock-analyser-notification-engine-{stage}` EventBridge processing |
 
 ## Budget Tracker stacks
 
@@ -200,6 +200,15 @@ The handler authorization CI checks scan app-owned Lambda handlers under
 `apps/*/functions/`. Launchpad control-plane/auth-domain handlers have bespoke
 authorization patterns and are explicitly exempted where the generic app-data
 authorization check is not applicable.
+
+The Stock Analyser notification engine is exempted only at
+`apps/stock-analyser/functions/notification-engine/src/index.ts`. It is a
+JWT-less EventBridge scheduled service-principal job, not a request handler.
+Its authorization is the dedicated least-privilege IAM role plus the M19 #529
+in-job fail-closed membership and consent re-check before every recipient
+delivery. The exemption is backed by tests for SHARED-only cache writes,
+cross-account isolation, and fail-closed delivery; the check is waived, not the
+auth requirement.
 
 ## Adding a new app's CDK stacks
 

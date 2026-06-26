@@ -231,6 +231,36 @@ Stock Analyser-owned async AI job results used by its app-owned AI proxy.
 | `status` | String | Job status |
 | `expiresAt` | Number | Epoch seconds, TTL |
 
+### `stock-analyser.settings-{stage}`
+
+Stock Analyser-owned settings store for app-wide policy, account/user
+preferences, and notification delivery consent.
+
+| Attribute | Type | Notes |
+|---|---|---|
+| `pk` (PK) | String | `SETTINGS`, `ACCOUNT#{accountId}`, or `NOTIFICATION_CONSENT#{accountId}` |
+| `sk` (SK) | String | `CACHE_FRESHNESS#stock-analyser`, `NOTIFICATIONS#{accountId}`, `USER#{userId}#PREFERENCES`, `USER#{userId}`, or `APP#AI_RUNTIME` |
+| `activePolicy` | Map | Cache freshness policy row |
+| `intervalDays` | Number | Notification account cadence, minimum 1 |
+| `activeTypes` | List | Notification source types, e.g. `portfolio`, `watchlist` |
+| `receiveConsent` | Boolean | Per-user delivery opt-in, default off when row absent |
+| `updatedAt` | String | ISO 8601 |
+
+### `stock-analyser.notification-state-{stage}`
+
+Durable transition state for M19 background email notifications. This table
+has no TTL so standing verdict state survives across runs.
+
+| Attribute | Type | Notes |
+|---|---|---|
+| `accountId` (PK) | String | Account being processed |
+| `sk` (SK) | String | `NOTIF#{type}#{ticker}` |
+| `type` | String | `Portfolio` or `Watchlist` |
+| `ticker` | String | Normalised ticker |
+| `lastVerdict` | String | `BUY`, `SELL`, `HOLD`, or `NEUTRAL` |
+| `lastNotifiedAt` | Number | Epoch seconds; set only after delivery |
+| `lastProcessedDate` | String | UTC `YYYY-MM-DD` used for cadence checks |
+
 ## Budget Tracker tables
 
 Managed by `TransformotionDev-BudgetTrackerTables` /

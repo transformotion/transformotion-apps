@@ -633,6 +633,23 @@ export const handler = withAuth(async ({ auth, account, event }) => {
 });
 ```
 
+### Scheduled service-principal handlers
+
+`apps/stock-analyser/functions/notification-engine/src/index.ts` is exempt
+from the generic handler-authz-pattern CI check because it is not a
+request-scoped API handler and has no user JWT caller. The check is waived for
+this single file, not the authorization model.
+
+The compensating controls are:
+
+- a dedicated least-privilege Lambda execution role, with SHARED analysis-cache
+  reads restricted to the `SHARED` leading key and writes routed through the
+  analysis-cache service-principal branch;
+- in-job fail-closed live membership and notification-consent re-checks before
+  every per-recipient delivery, as required by the M19 #529 ADR;
+- security tests proving SHARED-only cache-write rejection, fail-closed
+  delivery gating, cross-account isolation, and delivery-time consent re-check.
+
 ### Rules
 
 1. **A policy guard runs before any DynamoDB access.** Data routes call `requireAccountData(app).read`/`.write`; supervisory/ownership routes call `requireAccountAdmin(...)`; platform routes call `requireSiteAdmin`. Multi-app platform handlers (claude-proxy) still call `requireAnyAppAccess` first.
