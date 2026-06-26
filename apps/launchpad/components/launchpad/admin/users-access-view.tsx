@@ -97,6 +97,24 @@ function RoleChip({ role }: { role: AccountRole }) {
   )
 }
 
+// Pending-invitation date helpers — ported verbatim from the v0 prototype
+// (`components/launchpad/admin/users-access-view.tsx`).
+function formatInviteSent(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return '—'
+  return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+function formatInviteExpiry(expiresAt: number): { label: string; expired: boolean } {
+  const ms = expiresAt * 1000
+  const d = new Date(ms)
+  if (Number.isNaN(d.getTime())) return { label: '—', expired: false }
+  return {
+    label: d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }),
+    expired: ms < Date.now(),
+  }
+}
+
 function StatusChip({ status }: { status: AdminUser['status'] }) {
   return (
     <span
@@ -149,11 +167,10 @@ function UserDetailPanel({
   onSetStatus: (userId: string, status: 'active' | 'disabled') => void
 }) {
   const { user } = summary
-  // M11: the COUNT badge (`summary.pendingInvites`) is live, and the backend now
-  // also returns the per-user LIST (`summary.pendingInvitations`, since the v0
-  // contract field landed). Wiring THIS detail list to consume it is a separate
-  // prompt (v0's enriched users-access detail display); kept stubbed for now.
-  const pendingInvites: Array<{ invitationId: string; accountId: string; status: string }> = []
+  // M11: live per-user pending-invitation rows from the contract
+  // (`summary.pendingInvitations`, populated by access-summary). Count badge and
+  // this detail list now agree (one row per grant).
+  const pendingInvites = summary.pendingInvitations
 
   return (
     <div className="space-y-4" aria-label={`Access detail for ${resolveUserLabel(user)}`}>
@@ -231,18 +248,51 @@ function UserDetailPanel({
               <p className="text-sm text-muted-foreground">None.</p>
             ) : (
               <ul className="space-y-1.5">
-                {pendingInvites.map((invite) => (
-                  <li
-                    key={invite.invitationId}
-                    className="flex items-center gap-2 rounded-lg border border-border bg-surface/30 px-3 py-2"
-                  >
-                    <Clock className="size-3.5 shrink-0 text-signal-gold" />
-                    <span className="text-xs text-foreground">{invite.accountId}</span>
-                    <span className="ml-auto text-[10px] uppercase tracking-wider text-muted-foreground">
-                      {invite.status}
-                    </span>
-                  </li>
-                ))}
+                {pendingInvites.map((invite) => {
+                  const expiry = formatInviteExpiry(invite.expiresAt)
+                  return (
+                    <li
+                      key={invite.grantId}
+                      className="flex items-start gap-2 rounded-lg border border-border bg-surface/30 px-3 py-2"
+                    >
+                      <Clock className="mt-0.5 size-3.5 shrink-0 text-signal-gold" />
+                      <div className="min-w-0 flex-1">
+                        {/* Target account/app + role/grant */}
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="min-w-0 truncate text-xs font-medium text-foreground">
+                            {invite.target}
+                          </span>
+                          {invite.role ? (
+                            <RoleChip role={invite.role} />
+                          ) : (
+                            <span className="inline-flex items-center rounded-full bg-surface2 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                              App access
+                            </span>
+                          )}
+                        </div>
+                        {/* Sent + expires */}
+                        <p className="mt-0.5 text-[11px] text-muted-foreground">
+                          Sent {formatInviteSent(invite.createdAt)}
+                          {' · '}
+                          <span className={cn(expiry.expired && 'text-signal-red')}>
+                            {expiry.expired ? 'Expired ' : 'Expires '}
+                            {expiry.label}
+                          </span>
+                        </p>
+                      </div>
+                      <span
+                        className={cn(
+                          'shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider',
+                          expiry.expired
+                            ? 'bg-signal-red/15 text-signal-red'
+                            : 'bg-signal-gold/15 text-signal-gold',
+                        )}
+                      >
+                        {expiry.expired ? 'expired' : invite.status}
+                      </span>
+                    </li>
+                  )
+                })}
               </ul>
             )}
           </div>
