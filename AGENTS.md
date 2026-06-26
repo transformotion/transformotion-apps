@@ -478,6 +478,29 @@ High-value enforcement direction:
 - Do not report deploy-affecting work as Done until deployment and required
   validation have succeeded.
 
+### Milestone Definition of Done and Deferral Discipline
+
+Per `CONTRIBUTING.md` Section 4.4.1 (the governance fix for M11's
+pending-invitations failure — a feature "delivered" by merged PRs that never
+functioned):
+
+- **Functional completion (Rule A):** a milestone is complete only when its
+  in-scope features FUNCTION end-to-end, verified against the working artifact
+  (a real run, the feature doing the thing) — never because PRs merged or issues
+  closed. "PRs merged" is not completion; a PR can deliver nothing.
+- **No homeless deferral (Rule B):** every CUT/deferred item needs a NAMED HOME
+  (a specific milestone or tracked issue) AND its trigger condition. Deferring to
+  "Phase N"/"later" with no tracked owner is prohibited — it is a PR defect, like
+  a missing §2.1 doc update. Disposition lists and "documented seams" sections
+  must name where each deferred item lives next.
+- **Trigger review (Rule C):** when a deferral's trigger is met (e.g. "bundles
+  shipped"), review the items deferred against it for whether they are now due.
+  Satisfying a trigger carries the duty to check what it unblocks.
+- **Close requires a deferral ledger (Rule D):** closing a milestone requires
+  reconciling every item it deferred — each done-and-verified or rehomed to a
+  named owner. No milestone closes with un-homed deferrals of its own scope, even
+  at 100% issue closure.
+
 Other working practices:
 
 - Keep PRs scoped. Split documentation ratification from broad implementation
