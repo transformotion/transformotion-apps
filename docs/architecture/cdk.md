@@ -62,7 +62,7 @@ read-only and keep provider execution in their app runtimes.
 | `launchpad-user-{stage}` | `apps/launchpad/functions/user` | `GET /api/user/profile`, `PUT /api/user/preferences` |
 | `launchpad-accounts-{stage}` | `apps/launchpad/functions/accounts` | `POST /accounts`, `GET/PUT/DELETE /accounts/{id}`, `GET /accounts/{id}/members`, `GET /accounts/{id}/members/detail` (incl. account-scoped pending invitations, #555), `DELETE /accounts/{id}/members/{userId}` |
 | `launchpad-invitations-{stage}` | `apps/launchpad/functions/invitations` | `POST /accounts/{id}/invitations` |
-| `launchpad-invitation-bundles-{stage}` | `apps/launchpad/functions/invitation-bundles` | `POST /api/invitations/bundles` (create) |
+| `launchpad-invitation-bundles-{stage}` | `apps/launchpad/functions/invitation-bundles` | `POST /api/invitations/bundles` (create), `GET …/bundles` (list), `GET …/bundles/{bundleId}` (resolve), `DELETE …/bundles/{bundleId}/grants/{grantId}` (cancel grant, #558) |
 | `launchpad-invitation-redemption-{stage}` | `apps/launchpad/functions/invitation-redemption` | `POST /api/invitations/bundles/{bundleId}/redeem` + `…/redeem-as` (dev-only bypass, STAGE-guarded) |
 | `launchpad-ai-runtime-config-{stage}` | `apps/launchpad/functions/ai-runtime-config` | `GET /api/admin/ai-runtime-config`, `PUT /api/admin/ai-runtime-config/platform-default`, `PUT/DELETE /api/admin/ai-runtime-config/apps/{appSlug}/override` |
 | `launchpad-pre-token-generation-{stage}` | `apps/launchpad/functions/pre-token-generation` | Cognito pre-token generation trigger |
@@ -156,7 +156,7 @@ Launchpad control-plane and auth-domain variables:
 |---|---|---|
 | `USERS_TABLE` | `launchpad-user-{stage}`, `launchpad-account-provisioning-{stage}`, `launchpad-invitation-redemption-{stage}`, `launchpad-pre-token-generation-{stage}` (#501, read-only) | `launchpad-users-{stage}` |
 | `ACCOUNTS_TABLE` | Launchpad account-provisioning, accounts, invitations, pre-token generation | `launchpad-accounts-{stage}` |
-| `ACCOUNT_MEMBERS_TABLE` | Launchpad account-provisioning, accounts, pre-token generation | `launchpad-account-members-{stage}` |
+| `ACCOUNT_MEMBERS_TABLE` | Launchpad account-provisioning, accounts, pre-token generation, invitee-search, invitation-bundles (#558, read-only — cancel-grant owner/manager check) | `launchpad-account-members-{stage}` |
 | `INVITATIONS_TABLE` | `launchpad-invitations-{stage}`, `launchpad-accounts-{stage}` (#555, read-only — surfaces an account's pending invitations on `GET …/members/detail`), `launchpad-access-summary-{stage}` (read-only — per-user pending-invitation list + count, M11) | `launchpad-invitations-{stage}` |
 | `RATE_LIMIT_TABLE` | `launchpad-forgot-provider-{stage}` | `launchpad-rate-limits-{stage}` |
 | `USER_POOL_ID` | Launchpad control-plane/auth Lambdas | LaunchpadAuth User Pool ID |

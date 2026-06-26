@@ -1,14 +1,17 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, PutCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, PutCommand, ScanCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import {
   withAuthOnly,
   parseBody,
   getPathParam,
   ok,
   badRequest,
+  forbidden,
   notFound,
+  requireAccountOwnerOrManager,
   type APIGatewayProxyEvent,
   type AuthClaims,
+  type MembershipLoader,
 } from '@transformotion/lambda-middleware';
 import {
   appAdminGroup,
@@ -47,6 +50,8 @@ export interface BundleCreationDeps {
   ddb: DynamoDBDocumentClient;
   invitationsTable: string;
   accountsTable: string;
+  /** Account-members table — the LIVE owner/manager check for grant cancellation (D8). */
+  accountMembersTable: string;
   // ── Redemption-email send seam (4b / #471) — all OPTIONAL ────────────────
   // When configured, bundle creation also sends the invitee the redemption email
   // carrying the grants preview + bearer link. Absent (e.g. in unit tests) → the
@@ -66,6 +71,19 @@ export function createHandler(deps: BundleCreationDeps) {
     return auth.groups.includes('site-admin')
       || auth.groups.includes(appAdminGroup(appSlug as EntitledAppSlug));
   }
+
+  // LIVE owner/manager check for grant cancellation (D8 write tier — the row is
+  // the authority, not a possibly-stale claim).
+  const membershipLoader: MembershipLoader = async (accountId, userId) => {
+    const res = await deps.ddb.send(new GetCommand({
+      TableName: deps.accountMembersTable,
+      Key: { accountId, userId },
+      ProjectionExpression: '#r, #s',
+      ExpressionAttributeNames: { '#r': 'role', '#s': 'status' },
+    }));
+    if (!res.Item) return undefined;
+    return { role: res.Item['role'] as AccountRole, status: res.Item['status'] as string | undefined };
+  };
 
   async function createBundle(auth: AuthClaims, event: APIGatewayProxyEvent) {
     const { email, grants } = parseBody<{ email?: string; grants?: GrantInput[] }>(event);
@@ -254,6 +272,63 @@ export function createHandler(deps: BundleCreationDeps) {
     return ok({ bundle });
   }
 
+  // Target-resolved authorization for cancelling a grant (contract policy:
+  // `account-owner-or-manager` OR `app-admin-for-app`, plus site-admin
+  // supervisory). Resolve the grant to its target account/app FIRST, then decide.
+  // RULING: any owner/manager of the grant's target account may cancel it —
+  // including one a DIFFERENT admin sent — because it is THEIR account. Fail closed.
+  async function authorizeCancelGrant(auth: AuthClaims, grant: InvitationGrant) {
+    if (auth.groups.includes('site-admin')) return;                                  // supervisory
+    if (auth.groups.includes(appAdminGroup(grant.appSlug as EntitledAppSlug))) return; // app-admin-for-app
+    if (grant.kind === 'account-invite' && grant.accountId) {
+      // LIVE owner/manager of the grant's target account (throws 403 otherwise).
+      await requireAccountOwnerOrManager(membershipLoader, grant.accountId, auth.userId);
+      return;
+    }
+    // An app-grant the caller doesn't app-admin, or an unresolved target → deny.
+    throw forbidden('You are not authorized to cancel this invitation.');
+  }
+
+  // DELETE /api/invitations/bundles/{bundleId}/grants/{grantId} — revoke ONE
+  // pending grant. Removes it from the bundle's grants[]; when none remain the
+  // bundle is marked `revoked`. The cancelled grant then leaves BOTH pending
+  // surfaces (account panel + Users & Access), which read this same store.
+  async function cancelGrant(auth: AuthClaims, bundleId: string, grantId: string) {
+    const res = await deps.ddb.send(new GetCommand({
+      TableName: deps.invitationsTable,
+      Key: { invitationId: bundleId },
+    }));
+    const item = res.Item as (InvitationBundle & { invitationId?: string; invitedBy?: string }) | undefined;
+    if (!item || !Array.isArray(item.grants)) throw notFound('Invitation not found');
+
+    const grant = item.grants.find((g) => g.grantId === grantId);
+    if (!grant) throw notFound('Invitation grant not found'); // unresolved target → fail closed
+
+    await authorizeCancelGrant(auth, grant);
+
+    const remaining = item.grants.filter((g) => g.grantId !== grantId);
+    const status = remaining.length === 0 ? 'revoked' : item.status;
+
+    await deps.ddb.send(new UpdateCommand({
+      TableName: deps.invitationsTable,
+      Key: { invitationId: bundleId },
+      UpdateExpression: 'SET #g = :g, #s = :s',
+      ExpressionAttributeNames: { '#g': 'grants', '#s': 'status' },
+      ExpressionAttributeValues: { ':g': remaining, ':s': status },
+    }));
+
+    const bundle: InvitationBundle = {
+      bundleId: item.bundleId ?? item.invitationId ?? bundleId,
+      email: item.email,
+      invitedBy: item.invitedBy ?? '',
+      createdAt: item.createdAt,
+      expiresAt: item.expiresAt,
+      status,
+      grants: remaining,
+    };
+    return ok({ bundle });
+  }
+
   return withAuthOnly(async ({ auth, event }) => {
     const e = event as APIGatewayProxyEvent;
     const resource = e.resource ?? '';
@@ -266,6 +341,9 @@ export function createHandler(deps: BundleCreationDeps) {
     if (resource === '/api/invitations/bundles/{bundleId}' && event.httpMethod === 'GET') {
       return getBundle(getPathParam(e, 'bundleId'));
     }
+    if (resource === '/api/invitations/bundles/{bundleId}/grants/{grantId}' && event.httpMethod === 'DELETE') {
+      return cancelGrant(auth, getPathParam(e, 'bundleId'), getPathParam(e, 'grantId'));
+    }
     throw badRequest(`Unrecognised route: ${event.httpMethod} ${resource}`);
   });
 }
@@ -274,6 +352,7 @@ export const handler = createHandler({
   ddb: DynamoDBDocumentClient.from(new DynamoDBClient({})),
   invitationsTable: process.env.INVITATIONS_TABLE!,
   accountsTable: process.env.ACCOUNTS_TABLE!,
+  accountMembersTable: process.env.ACCOUNT_MEMBERS_TABLE!,
   // Redemption-email send seam (4b / #471). FROM_EMAIL is stage-derived in the
   // stack; APP_URL builds the /redeem?bundle=<id> bearer link.
   ses: new SESv2Client({}),

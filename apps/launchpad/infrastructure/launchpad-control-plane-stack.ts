@@ -458,6 +458,8 @@ export class LaunchpadControlPlaneStack extends cdk.Stack {
       environment: {
         INVITATIONS_TABLE: invitationsTable.tableName,
         ACCOUNTS_TABLE: accountsTable.tableName,
+        // M11 cancel-grant: LIVE owner/manager check against the members table.
+        ACCOUNT_MEMBERS_TABLE: accountMembersTable.tableName,
         // Redemption-email send seam (4b / #471): the invitee gets the grants
         // preview + /redeem?bundle=<id> bearer link on bundle creation.
         FROM_EMAIL: redemptionFromAddress,
@@ -470,8 +472,9 @@ export class LaunchpadControlPlaneStack extends cdk.Stack {
       },
     });
 
-    invitationsTable.grantReadWriteData(invitationBundlesFn); // write the bundle
+    invitationsTable.grantReadWriteData(invitationBundlesFn); // write the bundle (create + cancel-grant)
     accountsTable.grantReadData(invitationBundlesFn);          // account-invite: validate account/app
+    accountMembersTable.grantReadData(invitationBundlesFn);    // M11 cancel-grant: LIVE owner/manager check
     // Send the redemption email (4b / #471). SES SendEmail can't be ARN-scoped to
     // a from-identity without conditions; mirror forgot-provider's grant.
     invitationBundlesFn.addToRolePolicy(new iam.PolicyStatement({
@@ -547,6 +550,13 @@ export class LaunchpadControlPlaneStack extends cdk.Stack {
     // A1 — GET {bundleId}: redemption link resolve (link-as-bearer; any authed
     // holder of the unguessable id). Served by the bundles fn (read-only).
     bundleResource.addMethod('GET', invitationBundlesIntegration, authOptions);
+    // M11 cancel-grant — DELETE {bundleId}/grants/{grantId}: revoke one pending
+    // grant (target-resolved authz: owner/manager of the grant's account OR
+    // app-admin OR site-admin). #558.
+    bundleResource
+      .addResource('grants')
+      .addResource('{grantId}')
+      .addMethod('DELETE', invitationBundlesIntegration, authOptions);
     const redemptionIntegration = new apigateway.LambdaIntegration(invitationRedemptionFn, { proxy: true });
     // A5 — POST {bundleId}/redeem (auth-only; invitee-only enforced in-handler).
     bundleResource.addResource('redeem').addMethod('POST', redemptionIntegration, authOptions);
