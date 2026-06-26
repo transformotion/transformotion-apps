@@ -222,7 +222,15 @@ function useAccountDirectory(viewer: AdminUser) {
     applyDetail(accountId, res)
   }, [applyDetail])
 
-  return { accounts, membersByAccount, pendingByAccount, viewerRoleByAccount, updateRole, removeMember }
+  // M11 cancel-invitation (#558): revoke the grant, then refetch so the row
+  // leaves the pending list (the server has removed it from the bundle).
+  const cancelInvitation = useCallback(async (accountId: string, bundleId: string, grantId: string) => {
+    await getControlPlaneClient().cancelInvitationGrant(bundleId, grantId)
+    const res = await getControlPlaneClient().getMembersDetail(accountId)
+    applyDetail(accountId, res)
+  }, [applyDetail])
+
+  return { accounts, membersByAccount, pendingByAccount, viewerRoleByAccount, updateRole, removeMember, cancelInvitation }
 }
 
 const ROLE_STYLES: Record<AccountRole, string> = {
@@ -380,6 +388,7 @@ function AccountDetailPanel({
   invitations,
   onUpdateRole,
   onRemoveMember,
+  onCancelInvitation,
 }: {
   viewerRole: AccountRole | null
   viewerIsSiteAdmin: boolean
@@ -388,6 +397,7 @@ function AccountDetailPanel({
   invitations: PendingInviteVM[]
   onUpdateRole: (accountId: string, userId: string, role: AccountRole) => Promise<void>
   onRemoveMember: (accountId: string, userId: string) => Promise<void>
+  onCancelInvitation: (bundleId: string, grantId: string) => Promise<void>
 }) {
   const router = useRouter()
   // M11: real account-scoped pending invitations from GET …/members/detail
@@ -519,10 +529,14 @@ function AccountDetailPanel({
                       >
                         {expired ? 'expired' : invite.status}
                       </span>
-                      {/* Cancel control: v0 wires onClick→cpCancelGrant; runtime has no
-                          cancel-grant endpoint yet, so the X stays inert (separate item). */}
+                      {/* Cancel control (#558): revoke this grant → DELETE
+                          .../grants/{grantId}; the row leaves the pending list. */}
                       <button
                         disabled={!cancel.allowed}
+                        onClick={() => {
+                          if (!cancel.allowed) return
+                          void onCancelInvitation(invite.bundleId, invite.grantId)
+                        }}
                         title={cancel.reason}
                         className="flex size-7 shrink-0 items-center justify-center rounded-md bg-surface2 text-muted-foreground transition-colors hover:text-signal-red disabled:cursor-not-allowed disabled:opacity-40"
                         aria-label={`Cancel invitation for ${invite.email}`}
@@ -553,7 +567,7 @@ function AccountDetailPanel({
 // ---------------------------------------------------------------------------
 
 export function AccountManagementView({ viewer }: { viewer: AdminUser }) {
-  const { accounts, membersByAccount, pendingByAccount, viewerRoleByAccount, updateRole, removeMember } =
+  const { accounts, membersByAccount, pendingByAccount, viewerRoleByAccount, updateRole, removeMember, cancelInvitation } =
     useAccountDirectory(viewer)
   const viewerIsSiteAdmin = userIsSiteAdmin(viewer)
   // Multiple accounts can stay expanded at once; "Collapse all" clears them.
@@ -663,6 +677,13 @@ export function AccountManagementView({ viewer }: { viewer: AdminUser }) {
                         invitations={invitations}
                         onUpdateRole={updateRole}
                         onRemoveMember={removeMember}
+                        onCancelInvitation={async (bundleId, grantId) => {
+                          try {
+                            await cancelInvitation(account.accountId, bundleId, grantId)
+                          } catch (err) {
+                            alert(err instanceof Error ? err.message : 'Could not cancel the invitation.')
+                          }
+                        }}
                       />
                     </div>
                   )}

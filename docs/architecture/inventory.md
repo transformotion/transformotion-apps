@@ -109,6 +109,7 @@ API and Lambdas:
 | `DELETE /accounts/{accountId}/members/{userId}` | `launchpad-accounts-{stage}` |
 | `POST /accounts/{accountId}/invitations` | `launchpad-invitations-{stage}` |
 | `POST /api/invitations/bundles` | `launchpad-invitation-bundles-{stage}` |
+| `DELETE /api/invitations/bundles/{bundleId}/grants/{grantId}` (cancel grant, owner/manager-of-account OR app/site-admin, #558) | `launchpad-invitation-bundles-{stage}` |
 | `POST /api/invitations/bundles/{bundleId}/redeem` | `launchpad-invitation-redemption-{stage}` |
 | `POST /api/invitations/bundles/{bundleId}/redeem-as` (dev-only bypass) | `launchpad-invitation-redemption-{stage}` |
 | `GET /api/admin/ai-runtime-config` | `launchpad-ai-runtime-config-{stage}` |

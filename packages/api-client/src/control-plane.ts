@@ -87,6 +87,20 @@ export class ControlPlaneClient {
   }
 
   /**
+   * DELETE /api/invitations/bundles/{bundleId}/grants/{grantId} — revoke ONE
+   * pending invitation grant (the cancel-X). Target-resolved authz: owner/manager
+   * of the grant's account, OR app-admin for its app, OR site-admin (#558). The
+   * grant then leaves both pending surfaces; the caller refetches (mirrors
+   * removeMember — the server returns the updated bundle but the UI re-reads).
+   */
+  cancelInvitationGrant(bundleId: string, grantId: string, signal?: AbortSignal): Promise<void> {
+    return this.http.delete(
+      `api/invitations/bundles/${encodeURIComponent(bundleId)}/grants/${encodeURIComponent(grantId)}`,
+      signal,
+    );
+  }
+
+  /**
    * POST /api/invitations/invitee-search — scoped invitee discovery for the
    * Invite Composer (CHECK 1 only: who may the sender see/search/select). Returns
    * the sender's search `scope` and `results` (each with display-safe `reasons`).
