@@ -51,6 +51,7 @@ interface RuntimeEnv {
   watchlistTable: string;
   settingsTable: string;
   notificationStateTable: string;
+  analysisCacheTable: string;
   accountMembersTable: string;
   analysisCacheFunctionName: string;
   anthropicSecretName: string;
@@ -77,6 +78,7 @@ function env(): RuntimeEnv {
     watchlistTable: requireEnv('WATCHLIST_TABLE'),
     settingsTable: requireEnv('SETTINGS_TABLE'),
     notificationStateTable: requireEnv('NOTIFICATION_STATE_TABLE'),
+    analysisCacheTable: requireEnv('ANALYSIS_CACHE_TABLE'),
     accountMembersTable: requireEnv('ACCOUNT_MEMBERS_TABLE'),
     analysisCacheFunctionName: requireEnv('ANALYSIS_CACHE_FUNCTION_NAME'),
     anthropicSecretName: requireEnv('ANTHROPIC_SECRET_NAME'),
@@ -236,6 +238,28 @@ async function readWatchlist(runtime: RuntimeEnv, accountId: string): Promise<Wa
   return items as unknown as WatchlistItem[];
 }
 
+function parseCachedAnalysis(item: Record<string, unknown> | undefined): StockAnalysisResult | null {
+  if (!item) return null;
+  const expiresAt = typeof item['expiresAt'] === 'number' ? item['expiresAt'] : 0;
+  if (expiresAt <= Math.floor(Date.now() / 1000)) return null;
+
+  const raw = item['data'];
+  if (typeof raw !== 'string') return null;
+  try {
+    return normaliseStockAnalysisSignals(JSON.parse(raw) as StockAnalysisResult);
+  } catch {
+    return null;
+  }
+}
+
+async function readSharedAnalysisCache(runtime: RuntimeEnv, ticker: string): Promise<StockAnalysisResult | null> {
+  const res = await ddb.send(new GetCommand({
+    TableName: runtime.analysisCacheTable,
+    Key: { accountId: 'SHARED', cacheKey: `ANALYSIS#${ticker.toUpperCase()}` },
+  }));
+  return parseCachedAnalysis(res.Item as Record<string, unknown> | undefined);
+}
+
 function stripCodeFences(text: string): string {
   return text
     .replace(/^```(?:json)?\s*\n?/i, '')
@@ -342,6 +366,7 @@ export function createDependencies(runtime: RuntimeEnv = env()): NotificationEng
     putNotificationState: (record) => putNotificationState(runtime, record),
     readPortfolio: (accountId) => readPortfolio(runtime, accountId),
     readWatchlist: (accountId) => readWatchlist(runtime, accountId),
+    readSharedAnalysisCache: (ticker) => readSharedAnalysisCache(runtime, ticker),
     generateAnalysis: makeGenerateAnalysis(runtime),
     writeSharedAnalysisCache: (ticker, analysis) => writeSharedAnalysisCache(runtime, ticker, analysis),
     sendEmail: (recipient, transition) => sendNotificationEmail(runtime, recipient, transition),

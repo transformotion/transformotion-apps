@@ -201,6 +201,15 @@ The handler authorization CI checks scan app-owned Lambda handlers under
 authorization patterns and are explicitly exempted where the generic app-data
 authorization check is not applicable.
 
+The Stock Analyser notification engine is exempted only at
+`apps/stock-analyser/functions/notification-engine/src/index.ts`. It is a
+JWT-less EventBridge scheduled service-principal job, not a request handler.
+Its authorization is the dedicated least-privilege IAM role plus the M19 #529
+in-job fail-closed membership and consent re-check before every recipient
+delivery. The exemption is backed by tests for SHARED-only cache writes,
+cross-account isolation, and fail-closed delivery; the check is waived, not the
+auth requirement.
+
 ## Adding a new app's CDK stacks
 
 1. Create `apps/{app-name}/infrastructure/{app-name}-tables-stack.ts` for app-owned tables where needed.

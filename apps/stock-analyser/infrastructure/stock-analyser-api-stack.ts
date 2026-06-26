@@ -231,6 +231,7 @@ export class StockAnalyserApiStack extends cdk.Stack {
         WATCHLIST_TABLE: watchlistTable.tableName,
         SETTINGS_TABLE: settingsTable.tableName,
         NOTIFICATION_STATE_TABLE: notificationStateTable.tableName,
+        ANALYSIS_CACHE_TABLE: analysisCacheTable.tableName,
         ACCOUNT_MEMBERS_TABLE: accountMembersTable.tableName,
         ANALYSIS_CACHE_FUNCTION_NAME: cacheFn.functionName,
         ANTHROPIC_SECRET_NAME: anthropicSecret.secretName,
@@ -249,6 +250,15 @@ export class StockAnalyserApiStack extends cdk.Stack {
     settingsTable.grantReadData(notificationEngineFn);
     notificationStateTable.grantReadWriteData(notificationEngineFn);
     accountMembersTable.grantReadData(notificationEngineFn);
+    notificationEngineFn.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['dynamodb:GetItem'],
+      resources: [analysisCacheTable.tableArn],
+      conditions: {
+        'ForAllValues:StringEquals': {
+          'dynamodb:LeadingKeys': ['SHARED'],
+        },
+      },
+    }));
     anthropicSecret.grantRead(notificationEngineFn);
     openaiSecret.grantRead(notificationEngineFn);
     aiRuntimeConfigTable.grantReadData(notificationEngineFn);

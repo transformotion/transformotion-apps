@@ -72,6 +72,7 @@ function deps(overrides: Partial<NotificationEngineDeps> = {}): NotificationEngi
     putNotificationState: vi.fn(async () => undefined),
     readPortfolio: vi.fn(async () => [{ ticker: 'CBA.AX', shares: 1, avgCost: 100, isGifted: false, addedAt: 1 }]),
     readWatchlist: vi.fn(async () => [{ ticker: 'NVDA', name: 'NVIDIA', addedAt: 1 }]),
+    readSharedAnalysisCache: vi.fn(async () => null),
     generateAnalysis: vi.fn(async (ticker) => analysis(ticker, 'BUY')),
     writeSharedAnalysisCache: vi.fn(async () => undefined),
     sendEmail: vi.fn(async () => undefined),
@@ -179,6 +180,46 @@ describe('notification engine account processing', () => {
     expect(readPortfolio).toHaveBeenCalledWith('acct-b');
     expect(putNotificationState.mock.calls.map(([record]) => record.accountId).sort()).toEqual(['acct-a', 'acct-b']);
     expect(putNotificationState.mock.calls.map(([record]) => record.ticker).sort()).toEqual(['CBA.AX', 'MSFT']);
+  });
+
+  it('generates a shared ticker analysis only once per run across accounts', async () => {
+    const generateAnalysis = vi.fn(async (ticker) => analysis(ticker, 'BUY'));
+    const writeSharedAnalysisCache = vi.fn(async () => undefined);
+    const engineDeps = deps({
+      listStockAnalyserMembers: vi.fn(async () => [
+        { ...activeMember, accountId: 'acct-a', userId: 'user-a' },
+        { ...activeMember, accountId: 'acct-b', userId: 'user-b' },
+      ]),
+      readPortfolio: vi.fn(async () => [
+        { ticker: 'CBA.AX', shares: 1, avgCost: 100, isGifted: false, addedAt: 1 },
+      ]),
+      readWatchlist: vi.fn(async () => []),
+      generateAnalysis,
+      writeSharedAnalysisCache,
+    });
+
+    await runNotificationEngine(engineDeps);
+
+    expect(generateAnalysis).toHaveBeenCalledTimes(1);
+    expect(generateAnalysis).toHaveBeenCalledWith('CBA.AX');
+    expect(writeSharedAnalysisCache).toHaveBeenCalledTimes(1);
+    expect(writeSharedAnalysisCache).toHaveBeenCalledWith('CBA.AX', expect.objectContaining({ ticker: 'CBA.AX' }));
+  });
+
+  it('reuses fresh SHARED cache analysis without regenerating', async () => {
+    const generateAnalysis = vi.fn(async (ticker) => analysis(ticker, 'SELL'));
+    const writeSharedAnalysisCache = vi.fn(async () => undefined);
+    const engineDeps = deps({
+      readSharedAnalysisCache: vi.fn(async (ticker) => analysis(ticker, 'BUY')),
+      readWatchlist: vi.fn(async () => []),
+      generateAnalysis,
+      writeSharedAnalysisCache,
+    });
+
+    await runNotificationEngine(engineDeps);
+
+    expect(generateAnalysis).not.toHaveBeenCalled();
+    expect(writeSharedAnalysisCache).not.toHaveBeenCalled();
   });
 
   it('updates lastVerdict every run but lastNotifiedAt only after delivery', async () => {

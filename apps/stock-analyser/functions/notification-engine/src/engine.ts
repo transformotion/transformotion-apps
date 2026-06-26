@@ -54,6 +54,7 @@ export interface NotificationEngineDeps {
   putNotificationState: (record: NotificationStateRecord) => Promise<void>;
   readPortfolio: (accountId: string) => Promise<PortfolioHolding[]>;
   readWatchlist: (accountId: string) => Promise<WatchlistItem[]>;
+  readSharedAnalysisCache: (ticker: string) => Promise<StockAnalysisResult | null>;
   generateAnalysis: (ticker: string) => Promise<StockAnalysisResult>;
   writeSharedAnalysisCache: (ticker: string, analysis: StockAnalysisResult) => Promise<void>;
   sendEmail: (recipient: MemberRow, transition: NotificationTransition) => Promise<void>;
@@ -163,8 +164,29 @@ function configEnablesType(config: NotificationAccountConfig, type: Notification
   return config.activeTypes.includes(notificationType);
 }
 
+function createAnalysisResolver(deps: NotificationEngineDeps) {
+  const memo = new Map<string, Promise<StockAnalysisResult>>();
+  return (ticker: string): Promise<StockAnalysisResult> => {
+    const normalisedTicker = ticker.toUpperCase();
+    const existing = memo.get(normalisedTicker);
+    if (existing) return existing;
+
+    const promise = (async () => {
+      const cached = await deps.readSharedAnalysisCache(normalisedTicker);
+      if (cached) return cached;
+
+      const generated = await deps.generateAnalysis(normalisedTicker);
+      await deps.writeSharedAnalysisCache(normalisedTicker, generated);
+      return generated;
+    })();
+    memo.set(normalisedTicker, promise);
+    return promise;
+  };
+}
+
 async function processTicker(
   deps: NotificationEngineDeps,
+  resolveAnalysis: (ticker: string) => Promise<StockAnalysisResult>,
   accountId: string,
   type: NotificationSourceType,
   ticker: string,
@@ -173,8 +195,7 @@ async function processTicker(
   today: string,
 ): Promise<{ fired: number; sent: number }> {
   const normalisedTicker = ticker.toUpperCase();
-  const analysis = await deps.generateAnalysis(normalisedTicker);
-  await deps.writeSharedAnalysisCache(normalisedTicker, analysis);
+  const analysis = await resolveAnalysis(normalisedTicker);
 
   const transition = evaluateTransition({ accountId, type, ticker: normalisedTicker, analysis, previous });
   let sent = 0;
@@ -212,6 +233,7 @@ export async function runNotificationEngine(deps: NotificationEngineDeps): Promi
 
   const today = deps.today();
   const grouped = groupMembersByAccount(await deps.listStockAnalyserMembers());
+  const resolveAnalysis = createAnalysisResolver(deps);
   result.accountsDiscovered = grouped.size;
 
   for (const [accountId, candidateMembers] of grouped) {
@@ -246,6 +268,7 @@ export async function runNotificationEngine(deps: NotificationEngineDeps): Promi
     for (const item of work) {
       const processed = await processTicker(
         deps,
+        resolveAnalysis,
         accountId,
         item.type,
         item.ticker,

@@ -37,6 +37,12 @@
 #                                                  account-manager → own managed accounts only; zero authority → empty)
 #   apps/launchpad/functions/pre-token-generation/ Cognito trigger: no request-time API caller
 #   apps/launchpad/functions/user/                 auth-infrastructure: withAuthOnly user-owned profile data
+#   apps/stock-analyser/functions/notification-engine/src/index.ts
+#                                                  EventBridge scheduled service-principal job: no JWT caller.
+#                                                  Authorization is the dedicated least-privilege IAM role plus
+#                                                  in-job fail-closed live membership + consent re-check before
+#                                                  every per-recipient delivery; security tests prove SHARED-only
+#                                                  cache writes, cross-account isolation, and fail-closed delivery.
 #
 # Usage: bash scripts/ci/check-handler-authz-pattern.sh
 # Exits 0 if all checked files pass; 1 if any violation found.
@@ -64,6 +70,14 @@ EXEMPT_PATH_PREFIXES=(
   "$REPO_ROOT/apps/launchpad/functions/user/"
 )
 
+EXEMPT_FILES=(
+  # EventBridge scheduled service-principal job. See docs/architecture/auth.md:
+  # the handler-authz-pattern check is waived, not authorization. Compensating
+  # controls are dedicated IAM + in-job fail-closed membership/consent checks,
+  # backed by notification-engine and analysis-cache service-principal tests.
+  "$REPO_ROOT/apps/stock-analyser/functions/notification-engine/src/index.ts"
+)
+
 DYNAMO_PATTERN='PutItemCommand|GetItemCommand|QueryCommand|ScanCommand|UpdateItemCommand|DeleteItemCommand|TransactWriteCommand|BatchGetCommand|BatchWriteCommand'
 AUTHZ_PATTERN='requireAppAccess|requireAnyAppAccess|requireAccountData|requireAccountAdmin|requireSiteAdmin'
 
@@ -73,6 +87,12 @@ VIOLATIONS=()
 
 is_exempt_path() {
   local file="$1"
+  local exempt_file
+  for exempt_file in "${EXEMPT_FILES[@]}"; do
+    if [[ "$file" == "$exempt_file" ]]; then
+      return 0
+    fi
+  done
   local prefix
   for prefix in "${EXEMPT_PATH_PREFIXES[@]}"; do
     if [[ "$file" == "$prefix"* ]]; then
