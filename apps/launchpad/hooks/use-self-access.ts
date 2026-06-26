@@ -88,6 +88,10 @@ export function useSelfAccess(user: User | null): SelfAccess {
         status: 'active' as UserStatus,
         siteAdmin,
         appAccess,
+        // Self-access is derived client-side from claims and has no invitation-store
+        // read — the viewer's own pending invitations are out of scope here; keep
+        // empty (invariant: pendingInvites === pendingInvitations.length).
+        pendingInvitations: [],
         pendingInvites: 0,
       }
 

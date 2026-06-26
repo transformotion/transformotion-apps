@@ -33,7 +33,7 @@ import {
 } from '@/lib/admin/account-policy'
 import { getControlPlaneClient } from '@/lib/services/control-plane-client'
 import { authService } from '@/lib/services/auth'
-import type { AccountMemberRow } from '@transformotion/contracts/launchpad/invitations'
+import type { AccountMemberRow, InvitationBundle } from '@transformotion/contracts/launchpad/invitations'
 import type { AccountRole, EntitledAppSlug } from '@transformotion/contracts/_shared/auth'
 
 /** Minimal account shape the view renders (accountId + appSlug + name). */
@@ -60,6 +60,61 @@ function toMemberVM(row: AccountMemberRow): MemberVM {
   }
 }
 
+/** v0 pending-invitation row shape — one row per account-invite grant. */
+type PendingInviteVM = {
+  bundleId: string
+  grantId: string
+  email: string
+  status: string
+  role: AccountRole
+  createdAt: string
+  expiresAt: number
+}
+
+/**
+ * Flatten the contract's `pendingInvitations` (bundles, grants already scoped to
+ * this account by the backend, #556) into v0's enriched row shape — exactly what
+ * the v0 `listPendingInvitationsForAccount` returns (one row per account-invite
+ * grant, carrying role + sent/expiry). Presentation is reproduced verbatim; only
+ * the data source is live.
+ */
+function toPendingInviteVMs(bundles: InvitationBundle[]): PendingInviteVM[] {
+  return bundles.flatMap((b) =>
+    (b.grants ?? [])
+      .filter((g) => g.kind === 'account-invite')
+      .map((g) => ({
+        bundleId: b.bundleId,
+        grantId: g.grantId,
+        email: b.email,
+        status: b.status,
+        role: (g as { role: AccountRole }).role,
+        createdAt: b.createdAt,
+        expiresAt: b.expiresAt,
+      })),
+  )
+}
+
+// Format helpers — ported verbatim from the v0 prototype
+// (`components/launchpad/admin/account-management-view.tsx`).
+/** Sent date — absolute date from an ISO timestamp. */
+function formatSentDate(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return '—'
+  return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+/** Expiry — absolute date from a Unix-seconds timestamp. */
+function formatExpiry(expiresAt: number): string {
+  const d = new Date(expiresAt * 1000)
+  if (Number.isNaN(d.getTime())) return '—'
+  return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+/** Past-expiry guard (Unix seconds vs now). */
+function isInvitationExpired(expiresAt: number): boolean {
+  return expiresAt * 1000 < Date.now()
+}
+
 /**
  * Live Account directory. v0 read the mock store via `useM11Store()`; the live
  * sources are CONTRACTED endpoints (no GET /accounts needed):
@@ -71,6 +126,7 @@ function toMemberVM(row: AccountMemberRow): MemberVM {
 function useAccountDirectory(viewer: AdminUser) {
   const [accounts, setAccounts] = useState<ManagedAccount[] | null>(null)
   const [membersByAccount, setMembersByAccount] = useState<Map<string, MemberVM[]>>(new Map())
+  const [pendingByAccount, setPendingByAccount] = useState<Map<string, PendingInviteVM[]>>(new Map())
   const [viewerRoleByAccount, setViewerRoleByAccount] = useState<Map<string, AccountRole>>(new Map())
 
   const isSiteAdmin = userIsSiteAdmin(viewer)
@@ -78,17 +134,20 @@ function useAccountDirectory(viewer: AdminUser) {
   const loadMembers = useCallback(async (accts: ManagedAccount[]) => {
     const client = getControlPlaneClient()
     const map = new Map<string, MemberVM[]>()
+    const pending = new Map<string, PendingInviteVM[]>()
     await Promise.all(
       accts.map(async (a) => {
         try {
           const res = await client.getMembersDetail(a.accountId)
           map.set(a.accountId, res.members.map(toMemberVM))
+          pending.set(a.accountId, toPendingInviteVMs(res.pendingInvitations))
         } catch (err) {
           console.warn('[admin] members read failed:', a.accountId, err)
         }
       }),
     )
     setMembersByAccount(map)
+    setPendingByAccount(pending)
   }, [])
 
   const load = useCallback(async () => {
@@ -147,26 +206,23 @@ function useAccountDirectory(viewer: AdminUser) {
     })
   }, [load])
 
+  const applyDetail = useCallback((accountId: string, res: { members: AccountMemberRow[]; pendingInvitations: InvitationBundle[] }) => {
+    setMembersByAccount((prev) => new Map(prev).set(accountId, res.members.map(toMemberVM)))
+    setPendingByAccount((prev) => new Map(prev).set(accountId, toPendingInviteVMs(res.pendingInvitations)))
+  }, [])
+
   const updateRole = useCallback(async (accountId: string, userId: string, role: AccountRole) => {
     const res = await getControlPlaneClient().updateMemberRole(accountId, userId, role)
-    setMembersByAccount((prev) => {
-      const next = new Map(prev)
-      next.set(accountId, res.members.map(toMemberVM))
-      return next
-    })
-  }, [])
+    applyDetail(accountId, res)
+  }, [applyDetail])
 
   const removeMember = useCallback(async (accountId: string, userId: string) => {
     await getControlPlaneClient().removeMember(accountId, userId)
     const res = await getControlPlaneClient().getMembersDetail(accountId)
-    setMembersByAccount((prev) => {
-      const next = new Map(prev)
-      next.set(accountId, res.members.map(toMemberVM))
-      return next
-    })
-  }, [])
+    applyDetail(accountId, res)
+  }, [applyDetail])
 
-  return { accounts, membersByAccount, viewerRoleByAccount, updateRole, removeMember }
+  return { accounts, membersByAccount, pendingByAccount, viewerRoleByAccount, updateRole, removeMember }
 }
 
 const ROLE_STYLES: Record<AccountRole, string> = {
@@ -321,6 +377,7 @@ function AccountDetailPanel({
   viewerIsSiteAdmin,
   account,
   members,
+  invitations,
   onUpdateRole,
   onRemoveMember,
 }: {
@@ -328,12 +385,13 @@ function AccountDetailPanel({
   viewerIsSiteAdmin: boolean
   account: ManagedAccount
   members: MemberVM[]
+  invitations: PendingInviteVM[]
   onUpdateRole: (accountId: string, userId: string, role: AccountRole) => Promise<void>
   onRemoveMember: (accountId: string, userId: string) => Promise<void>
 }) {
   const router = useRouter()
-  // pendingInvitations is shape-present but EMPTY until Phase 8 (bundles).
-  const invitations: Array<{ bundleId: string; grantId: string; email: string; status: string }> = []
+  // M11: real account-scoped pending invitations from GET …/members/detail
+  // (#556). The cancel-X has no server endpoint yet → stays inert (separate item).
   const manages = canManageAccountMembers(viewerRole)
   const supervisory = !manages && viewerIsSiteAdmin
 
@@ -426,18 +484,43 @@ function AccountDetailPanel({
               <ul className="space-y-2">
                 {invitations.map((invite) => {
                   const cancel = canCancelInvitationGrant(viewerRole, viewerIsSiteAdmin)
+                  const expired = isInvitationExpired(invite.expiresAt)
                   return (
                     <li
                       key={invite.grantId}
-                      className="flex items-center gap-2 rounded-lg border border-border bg-surface/30 px-3 py-2"
+                      className="flex items-start gap-2 rounded-lg border border-border bg-surface/30 px-3 py-2"
                     >
-                      <Clock className="size-3.5 shrink-0 text-signal-gold" />
-                      <span className="min-w-0 flex-1 truncate text-xs text-foreground">
-                        {invite.email}
+                      <Clock className="mt-0.5 size-3.5 shrink-0 text-signal-gold" />
+                      <div className="min-w-0 flex-1">
+                        {/* Invited email + role/grant */}
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="min-w-0 truncate text-xs font-medium text-foreground">
+                            {invite.email}
+                          </span>
+                          <RoleChip role={invite.role} />
+                        </div>
+                        {/* Sent date + expiry */}
+                        <p className="mt-0.5 text-[11px] text-muted-foreground">
+                          Sent {formatSentDate(invite.createdAt)}
+                          {' · '}
+                          <span className={cn(expired && 'text-signal-red')}>
+                            {expired ? 'Expired ' : 'Expires '}
+                            {formatExpiry(invite.expiresAt)}
+                          </span>
+                        </p>
+                      </div>
+                      <span
+                        className={cn(
+                          'shrink-0 rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider',
+                          expired
+                            ? 'bg-signal-red/15 text-signal-red'
+                            : 'bg-signal-gold/15 text-signal-gold',
+                        )}
+                      >
+                        {expired ? 'expired' : invite.status}
                       </span>
-                      <span className="shrink-0 rounded-full bg-signal-gold/15 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-signal-gold">
-                        {invite.status}
-                      </span>
+                      {/* Cancel control: v0 wires onClick→cpCancelGrant; runtime has no
+                          cancel-grant endpoint yet, so the X stays inert (separate item). */}
                       <button
                         disabled={!cancel.allowed}
                         title={cancel.reason}
@@ -470,7 +553,7 @@ function AccountDetailPanel({
 // ---------------------------------------------------------------------------
 
 export function AccountManagementView({ viewer }: { viewer: AdminUser }) {
-  const { accounts, membersByAccount, viewerRoleByAccount, updateRole, removeMember } =
+  const { accounts, membersByAccount, pendingByAccount, viewerRoleByAccount, updateRole, removeMember } =
     useAccountDirectory(viewer)
   const viewerIsSiteAdmin = userIsSiteAdmin(viewer)
   // Multiple accounts can stay expanded at once; "Collapse all" clears them.
@@ -531,6 +614,7 @@ export function AccountManagementView({ viewer }: { viewer: AdminUser }) {
           <div className="space-y-2">
             {list.map((account) => {
               const members = membersByAccount.get(account.accountId) ?? []
+              const invitations = pendingByAccount.get(account.accountId) ?? []
               const memberCount = members.length
               const role = viewerRoleByAccount.get(account.accountId) ?? null
               const expanded = expandedIds.has(account.accountId)
@@ -576,6 +660,7 @@ export function AccountManagementView({ viewer }: { viewer: AdminUser }) {
                         viewerIsSiteAdmin={viewerIsSiteAdmin}
                         account={account}
                         members={members}
+                        invitations={invitations}
                         onUpdateRole={updateRole}
                         onRemoveMember={removeMember}
                       />

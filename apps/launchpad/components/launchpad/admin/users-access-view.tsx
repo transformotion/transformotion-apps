@@ -149,8 +149,10 @@ function UserDetailPanel({
   onSetStatus: (userId: string, status: 'active' | 'disabled') => void
 }) {
   const { user } = summary
-  // Pending-invitation detail has no live source yet (access-summary reports a
-  // count of 0; the by-account list is Phase 8). Shape present, no data.
+  // M11: the COUNT badge (`summary.pendingInvites`) is live, and the backend now
+  // also returns the per-user LIST (`summary.pendingInvitations`, since the v0
+  // contract field landed). Wiring THIS detail list to consume it is a separate
+  // prompt (v0's enriched users-access detail display); kept stubbed for now.
   const pendingInvites: Array<{ invitationId: string; accountId: string; status: string }> = []
 
   return (
