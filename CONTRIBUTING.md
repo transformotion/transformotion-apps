@@ -666,7 +666,10 @@ validation is complete, move it back to In Review until validation passes.
 **Issue filing with a numbered milestone — set Status to Todo immediately.** The automation always defaults to Backlog regardless of which milestone is attached. When you file an issue and attach it to a numbered milestone, also set its Project Status to Todo at the same time — manually, via the issue sidebar or the Project board. Leaving it at Backlog contradicts the milestone assignment (numbered milestones are prioritised by definition) and makes the roadmap view inaccurate, because the roadmap filters on Status.
 
 Milestone completion percentage updates automatically as issues close.
-A milestone is "complete" when 100% of its issues are closed.
+A 100%-closed percentage is a progress signal, **not** the definition of done:
+a milestone is complete only when its in-scope features function end-to-end and
+its deferrals are reconciled — see Section 4.4.1 (functional completion + the
+deferral ledger).
 
 **Roadmap view behaviour.** The Roadmap view positions items by date. The project has no custom target-date fields, so positioning falls back to the built-in `Closed` date — meaning open issues have no timeline position and do not appear in the date range the view is currently showing. For forward-looking tracking of active work, use the Kanban view (Status-based), which shows open issues regardless of date. The Roadmap view is most useful as a "what shipped when" retrospective in this project's current configuration. If you need open issues to appear on the roadmap at a specific point in time, add a custom `Target date` field to the project and populate it.
 
@@ -684,13 +687,14 @@ the corresponding GitHub Milestone description is updated in the
 same PR. Descriptions don't auto-sync — they are part of what the
 PR landing the change is responsible for.
 
-**Milestone close convention:** Milestones close when their progress
-reaches 100% (all attached issues closed). Closure is a manual step
-(GitHub doesn't auto-close milestones). The PR landing the final
-issue's resolution may include the milestone closure as a follow-up
-step, or it may be done as a separate small action immediately
-after. Either is acceptable; what matters is that closed milestones
-disappear from the active list once their work is complete.
+**Milestone close convention:** Milestones close when their in-scope work is
+functionally complete (Section 4.4.1 Rule A) AND their deferral ledger is
+reconciled (Rule D) — not merely when the issue-closure percentage reaches 100%.
+Closure is a manual step (GitHub doesn't auto-close milestones). The PR landing
+the final issue's resolution may include the milestone closure as a follow-up
+step, or it may be done as a separate small action immediately after. Either is
+acceptable; what matters is that closed milestones disappear from the active list
+once their work is genuinely complete — features functioning, deferrals homed.
 
 **Bootstrap exception:** Milestones whose work establishes the
 issue-tracking infrastructure itself (notably M-setup) are exempt
@@ -704,6 +708,47 @@ standard pattern.
 For the close-time disciplines — manually closing issues that landed on
 `develop`, closing parent trackers when all children close, and the
 periodic audit that catches what slips through — see Section 4.5.
+
+### 4.4.1 Milestone definition of done and deferral discipline
+
+A milestone's completion percentage (Section 4.4) counts closed issues — it is a
+progress signal, **not** the definition of done. Merged PRs and closed issues do
+not by themselves mean a milestone is complete: a PR can deliver nothing, and a
+closed issue can have shipped a stub. M11's pending-invitations failure — a
+feature "delivered" by merged PRs that never functioned end-to-end, because a
+deferral came due and nobody revisited it — is why these four rules exist.
+
+**Rule A — Functional completion.** A milestone is COMPLETE only when its
+in-scope features FUNCTION end-to-end, VERIFIED against the working artifact — a
+real run, the feature actually doing the thing, in the environment that owns it.
+"PRs merged" and "issues closed" are not completion; completion is the feature
+working, observed. For deploy-affecting work this means verified *after*
+deployment against the live surface (consistent with the Done lifecycle in
+Section 4.4), never at PR merge.
+
+**Rule B — No homeless deferral.** A CUT or deferred item is legitimate only when
+it is recorded with both (1) a NAMED HOME — a specific milestone or a tracked
+GitHub issue that owns it — and (2) its trigger condition (what must become true
+for it to come due). Deferring to "Phase N", "later", or "until X ships" with no
+tracked owner is PROHIBITED. A disposition list (Section 8.A) or a PR
+"documented seams" section that defers an item must name where it lives next. An
+un-homed deferral is a defect in the PR, the same class as a missing §2.1 doc
+update.
+
+**Rule C — Trigger review.** When a deferral's trigger condition is met (e.g.
+"bundles shipped"), the items deferred against that trigger MUST be reviewed for
+whether they are now due. The contributor who satisfies a trigger owns checking
+what it unblocks — search the named home for items gated on it. A met trigger
+with un-reviewed dependents is how a deferral silently rots into a gap.
+
+**Rule D — Close requires a deferral ledger.** Closing a milestone (Section 4.4
+close convention) requires reconciling EVERY item that milestone deferred: each
+is either (a) done and verified (Rule A), or (b) rehomed to a named owner
+(Rule B) — a specific later milestone or tracked issue. No milestone closes with
+un-homed deferrals of its own scope. The close-out PR or close action records the
+ledger — for each deferred item, its disposition (done / rehomed-to-#NNN). A 100%
+issue-closure percentage does **not** authorise closure if the ledger is
+incomplete.
 
 ### 4.5 Close-out hygiene
 
