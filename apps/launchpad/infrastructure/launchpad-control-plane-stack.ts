@@ -269,6 +269,9 @@ export class LaunchpadControlPlaneStack extends cdk.Stack {
       environment: {
         ACCOUNTS_TABLE: accountsTable.tableName,
         ACCOUNT_MEMBERS_TABLE: accountMembersTable.tableName,
+        // M11: ListAccountMembers surfaces an account's pending invitations (was a
+        // Phase-8 empty stub) — read-only filtered Scan of the invitation store.
+        INVITATIONS_TABLE: invitationsTableName,
         APP_CLIENT_STOCK_ANALYSER: stockAnalyserAppClientId,
         APP_CLIENT_BUDGET_TRACKER: budgetTrackerAppClientId,
         APP_SLUGS: appSlugs.join(','),
@@ -283,6 +286,10 @@ export class LaunchpadControlPlaneStack extends cdk.Stack {
 
     accountsTable.grantReadWriteData(accountsFn);
     accountMembersTable.grantReadWriteData(accountsFn);
+    // M11: read-only grant so AccountsFn can Scan the invitation store for an
+    // account's pending invitations (account-scoped, owner/manager/admin-gated).
+    dynamodb.Table.fromTableName(this, 'AccountsInvitationsTable', invitationsTableName)
+      .grantReadData(accountsFn);
     // M16 Phase 6 (PR-6B): member removal / account deletion terminate the target's
     // session (AdminUserGlobalSignOut, D8) and verify supervisory site-admin LIVE
     // (AdminListGroupsForUser, D-3).

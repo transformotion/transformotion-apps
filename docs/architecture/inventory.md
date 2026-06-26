@@ -105,6 +105,7 @@ API and Lambdas:
 | `PUT /accounts/{accountId}` | `launchpad-accounts-{stage}` |
 | `DELETE /accounts/{accountId}` | `launchpad-accounts-{stage}` |
 | `GET /accounts/{accountId}/members` | `launchpad-accounts-{stage}` |
+| `GET /accounts/{accountId}/members/detail` (incl. account-scoped pending invitations, owner/manager/admin-gated, #555) | `launchpad-accounts-{stage}` |
 | `DELETE /accounts/{accountId}/members/{userId}` | `launchpad-accounts-{stage}` |
 | `POST /accounts/{accountId}/invitations` | `launchpad-invitations-{stage}` |
 | `POST /api/invitations/bundles` | `launchpad-invitation-bundles-{stage}` |

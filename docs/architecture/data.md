@@ -129,6 +129,15 @@ Pending, redeemed, and expired invitations.
 
 **GSI:** `email-index` (PK: `email`) - invitation lookup.
 
+**Pending-by-account lookup (#555):** `launchpad-accounts-{stage}` reads this table
+(read-only) to surface an account's pending invitations on
+`GET …/members/detail`. The target account is nested inside each bundle's
+`grants[]`, and a single bundle may grant into multiple accounts — a nested-list
+attribute cannot back a GSI, so there is no viable target-account index without
+denormalising the write path. The handler therefore uses a filtered Scan (the
+same pattern as invitation-bundles-list and invitee-search) against this small,
+low-volume control-plane table.
+
 ### `launchpad-app-admin-grants-{stage}` (M16 D5)
 
 App-admin grants: policy primitive for app-scoped administrative authority. Kept separate from the membership table so `isAppAdmin(userId, appSlug)` is unambiguous and cannot be confused with account membership.

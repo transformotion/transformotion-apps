@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 import type { CognitoIdentityProviderClient } from '@aws-sdk/client-cognito-identity-provider';
-import { createAccount, type CreateAccountDeps } from './index';
+import {
+  createAccount,
+  extractPendingForAccount,
+  canSeePendingInvitations,
+  type CreateAccountDeps,
+} from './index';
 
 // M11 A4 — POST /accounts (self-service create-first-account). createAccount is
 // the testable unit: account + owner membership + ensure {app}-app-access group,
@@ -135,5 +140,92 @@ describe('createAccount (POST /accounts) — M11 A4', () => {
     const res = (await createAccount(event('Household', 'stock-analyser'), auth(['stock-app-access']), deps)) as { statusCode: number };
     expect(res.statusCode).toBe(201);
     expect(rec.ddbCommands).toHaveLength(1); // account+membership still written
+  });
+});
+
+// M11 — ListAccountMembers.pendingInvitations was a Phase-8 empty stub; it now
+// surfaces an account's REAL pending invitations from the (Scanned) invitation
+// store. The Scan/IO is thin; the behaviour lives in these two pure functions.
+const TARGET = 'acct-target';
+const NOW = 1_000_000; // epoch seconds
+
+function bundle(over: Partial<{
+  invitationId: string;
+  email: string;
+  createdAt: string;
+  expiresAt: number;
+  status: string;
+  grants: Array<Record<string, unknown>>;
+}> = {}) {
+  return {
+    invitationId: over.invitationId ?? 'bundle-1',
+    email: over.email ?? 'invitee@example.com',
+    invitedBy: 'owner-1',
+    createdAt: over.createdAt ?? '2026-06-01T00:00:00.000Z',
+    expiresAt: over.expiresAt ?? NOW + 1000,
+    status: over.status ?? 'pending',
+    grants: over.grants ?? [{ accountId: TARGET, role: 'member', appSlug: 'stock-analyser', grantId: 'g1' }],
+  };
+}
+
+describe('extractPendingForAccount — M11 pending-invitations lookup', () => {
+  it('returns pending bundles that grant into the target account', () => {
+    const out = extractPendingForAccount([bundle()], TARGET, NOW);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({ bundleId: 'bundle-1', email: 'invitee@example.com', status: 'pending' });
+    expect(out[0].grants).toHaveLength(1);
+  });
+
+  it('excludes accepted/revoked bundles (status !== pending)', () => {
+    const items = [bundle({ invitationId: 'b-acc', status: 'accepted' }), bundle({ invitationId: 'b-rev', status: 'revoked' })];
+    expect(extractPendingForAccount(items, TARGET, NOW)).toHaveLength(0);
+  });
+
+  it('excludes expired bundles (expiresAt <= now), even if still flagged pending', () => {
+    expect(extractPendingForAccount([bundle({ expiresAt: NOW - 1 })], TARGET, NOW)).toHaveLength(0);
+  });
+
+  it('excludes bundles that only target OTHER accounts', () => {
+    const other = bundle({ grants: [{ accountId: 'acct-other', role: 'member', appSlug: 'stock-analyser', grantId: 'g9' }] });
+    expect(extractPendingForAccount([other], TARGET, NOW)).toHaveLength(0);
+  });
+
+  it('scopes grants to the target account (an owner never sees grants for OTHER accounts in the same bundle)', () => {
+    const mixed = bundle({
+      grants: [
+        { accountId: TARGET, role: 'member', appSlug: 'stock-analyser', grantId: 'g-here' },
+        { accountId: 'acct-other', role: 'viewer', appSlug: 'budget-tracker', grantId: 'g-elsewhere' },
+      ],
+    });
+    const out = extractPendingForAccount([mixed], TARGET, NOW);
+    expect(out).toHaveLength(1);
+    expect(out[0].grants).toHaveLength(1);
+    expect((out[0].grants[0] as { accountId: string }).accountId).toBe(TARGET);
+  });
+
+  it('sorts newest-first by createdAt', () => {
+    const items = [
+      bundle({ invitationId: 'old', createdAt: '2026-06-01T00:00:00.000Z' }),
+      bundle({ invitationId: 'new', createdAt: '2026-06-10T00:00:00.000Z' }),
+    ];
+    expect(extractPendingForAccount(items, TARGET, NOW).map((b) => b.bundleId)).toEqual(['new', 'old']);
+  });
+});
+
+describe('canSeePendingInvitations — M11 account-scoped entitlement', () => {
+  it('owner and manager of the account may see them', () => {
+    expect(canSeePendingInvitations({ callerRole: 'owner', isSiteAdmin: false, isAppAdmin: false })).toBe(true);
+    expect(canSeePendingInvitations({ callerRole: 'manager', isSiteAdmin: false, isAppAdmin: false })).toBe(true);
+  });
+
+  it('a supervisory admin (site-admin or app-admin) may see them', () => {
+    expect(canSeePendingInvitations({ callerRole: 'viewer', isSiteAdmin: true, isAppAdmin: false })).toBe(true);
+    expect(canSeePendingInvitations({ callerRole: 'viewer', isSiteAdmin: false, isAppAdmin: true })).toBe(true);
+  });
+
+  it('a plain member or viewer must NOT see them (stricter than the member list)', () => {
+    expect(canSeePendingInvitations({ callerRole: 'member', isSiteAdmin: false, isAppAdmin: false })).toBe(false);
+    expect(canSeePendingInvitations({ callerRole: 'viewer', isSiteAdmin: false, isAppAdmin: false })).toBe(false);
+    expect(canSeePendingInvitations({ callerRole: undefined, isSiteAdmin: false, isAppAdmin: false })).toBe(false);
   });
 });
