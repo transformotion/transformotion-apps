@@ -157,7 +157,7 @@ Launchpad control-plane and auth-domain variables:
 | `USERS_TABLE` | `launchpad-user-{stage}`, `launchpad-account-provisioning-{stage}`, `launchpad-invitation-redemption-{stage}`, `launchpad-pre-token-generation-{stage}` (#501, read-only) | `launchpad-users-{stage}` |
 | `ACCOUNTS_TABLE` | Launchpad account-provisioning, accounts, invitations, pre-token generation | `launchpad-accounts-{stage}` |
 | `ACCOUNT_MEMBERS_TABLE` | Launchpad account-provisioning, accounts, pre-token generation | `launchpad-account-members-{stage}` |
-| `INVITATIONS_TABLE` | `launchpad-invitations-{stage}`, `launchpad-accounts-{stage}` (#555, read-only — surfaces an account's pending invitations on `GET …/members/detail`) | `launchpad-invitations-{stage}` |
+| `INVITATIONS_TABLE` | `launchpad-invitations-{stage}`, `launchpad-accounts-{stage}` (#555, read-only — surfaces an account's pending invitations on `GET …/members/detail`), `launchpad-access-summary-{stage}` (read-only — per-user pending-invitation list + count, M11) | `launchpad-invitations-{stage}` |
 | `RATE_LIMIT_TABLE` | `launchpad-forgot-provider-{stage}` | `launchpad-rate-limits-{stage}` |
 | `USER_POOL_ID` | Launchpad control-plane/auth Lambdas | LaunchpadAuth User Pool ID |
 | `APP_CLIENT_STOCK_ANALYSER` / `APP_CLIENT_BUDGET_TRACKER` | `launchpad-account-provisioning-{stage}` | LaunchpadAuth app client IDs |
