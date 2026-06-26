@@ -28,7 +28,30 @@ const USERS_TABLE = process.env.USERS_TABLE!;
 const ACCOUNTS_TABLE = process.env.ACCOUNTS_TABLE!;
 const ACCOUNT_MEMBERS_TABLE = process.env.ACCOUNT_MEMBERS_TABLE!;
 const APP_ADMIN_GRANTS_TABLE = process.env.APP_ADMIN_GRANTS_TABLE!;
+const INVITATIONS_TABLE = process.env.INVITATIONS_TABLE!;
 const USER_POOL_ID = process.env.USER_POOL_ID!;
+
+interface StoredBundle {
+  email?: string;
+  status?: string;
+}
+
+/**
+ * Pure: count pending invitation bundles per (normalized) email — the
+ * `UserAccessSummary.pendingInvites` count badge (M11). Mirrors v0's derivation
+ * exactly: bundles with `status === 'pending'`, grouped by lowercased email.
+ * (Only EXISTING users surface a count — invitees who are not yet users do not
+ * appear in the access directory.) Exported for unit tests.
+ */
+export function countPendingInvitesByEmail(bundles: StoredBundle[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const b of bundles) {
+    if (b.status !== 'pending' || !b.email) continue;
+    const key = b.email.trim().toLowerCase();
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return counts;
+}
 
 interface UserRow {
   userId: string;
@@ -77,6 +100,7 @@ export function buildAccessSummaries(
   appSlugByAccount: Map<string, string>,
   accountNameByAccount: Map<string, string>,
   siteAdminIds: Set<string>,
+  pendingCountByEmail: Map<string, number>,
 ): UserAccessSummary[] {
   return users.map(user => {
     const memberships = membershipsByUser.get(user.userId) ?? [];
@@ -112,7 +136,7 @@ export function buildAccessSummaries(
       status: (user.status ?? 'active') as UserStatus,
       siteAdmin: siteAdminIds.has(user.userId),
       appAccess,
-      pendingInvites: 0,
+      pendingInvites: pendingCountByEmail.get(user.email.trim().toLowerCase()) ?? 0,
     };
   });
 }
@@ -138,16 +162,23 @@ async function fetchSiteAdminUserIds(): Promise<Set<string>> {
 export const handler = withAuthOnly(async ({ auth }) => {
   requireSiteAdmin(auth);
 
-  // 1. Scan all users (D4 — scan is the documented approach at this scale)
-  const [usersRes, siteAdminIds] = await Promise.all([
+  // 1. Scan all users + the invitation store (D4 — scan is the documented
+  //    approach at this scale; pending-invite COUNT per user email, M11).
+  const [usersRes, siteAdminIds, invitesRes] = await Promise.all([
     ddb.send(new ScanCommand({
       TableName: USERS_TABLE,
       ProjectionExpression: 'userId, email, displayName, #s',
       ExpressionAttributeNames: { '#s': 'status' },
     })),
     fetchSiteAdminUserIds(),
+    ddb.send(new ScanCommand({
+      TableName: INVITATIONS_TABLE,
+      ProjectionExpression: 'email, #st',
+      ExpressionAttributeNames: { '#st': 'status' },
+    })),
   ]);
   const users = (usersRes.Items ?? []) as UserRow[];
+  const pendingCountByEmail = countPendingInvitesByEmail((invitesRes.Items ?? []) as StoredBundle[]);
 
   if (users.length === 0) return ok({ users: [] });
 
@@ -225,6 +256,7 @@ export const handler = withAuthOnly(async ({ auth }) => {
     appSlugByAccount,
     accountNameByAccount,
     siteAdminIds,
+    pendingCountByEmail,
   );
 
   return ok({ users: summaries });

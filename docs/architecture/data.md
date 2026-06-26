@@ -138,6 +138,12 @@ denormalising the write path. The handler therefore uses a filtered Scan (the
 same pattern as invitation-bundles-list and invitee-search) against this small,
 low-volume control-plane table.
 
+**Pending-count-by-email (M11):** `launchpad-access-summary-{stage}` also reads
+this table (read-only Scan) to compute the per-user pending-invitation **count**
+(`UserAccessSummary.pendingInvites`), matched by lowercased `email`. The
+per-user pending **list** display is not yet wired — `UserAccessSummary` carries
+only the count, so the by-email list awaits a v0 contract field.
+
 ### `launchpad-app-admin-grants-{stage}` (M16 D5)
 
 App-admin grants: policy primitive for app-scoped administrative authority. Kept separate from the membership table so `isAppAdmin(userId, appSlug)` is unambiguous and cannot be confused with account membership.

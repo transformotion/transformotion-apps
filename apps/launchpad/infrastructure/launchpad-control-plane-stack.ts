@@ -317,6 +317,9 @@ export class LaunchpadControlPlaneStack extends cdk.Stack {
         ACCOUNTS_TABLE: accountsTable.tableName,
         ACCOUNT_MEMBERS_TABLE: accountMembersTable.tableName,
         APP_ADMIN_GRANTS_TABLE: appAdminGrantsTable.tableName,
+        // M11: per-user pending-invitation COUNT badge — read-only Scan of the
+        // invitation store (was a hardcoded 0 placeholder).
+        INVITATIONS_TABLE: invitationsTableName,
         USER_POOL_ID: userPoolId,
       },
       bundling: {
@@ -330,6 +333,10 @@ export class LaunchpadControlPlaneStack extends cdk.Stack {
     accountsTable.grantReadData(accessSummaryFn);
     accountMembersTable.grantReadData(accessSummaryFn);
     appAdminGrantsTable.grantReadData(accessSummaryFn);
+    // M11: read-only grant so AccessSummaryFn can Scan the invitation store for
+    // the per-user pending-invitation count.
+    dynamodb.Table.fromTableName(this, 'AccessSummaryInvitationsTable', invitationsTableName)
+      .grantReadData(accessSummaryFn);
 
     accessSummaryFn.addToRolePolicy(new iam.PolicyStatement({
       actions: ['cognito-idp:ListUsersInGroup'],
