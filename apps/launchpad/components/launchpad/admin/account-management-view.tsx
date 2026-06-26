@@ -61,20 +61,58 @@ function toMemberVM(row: AccountMemberRow): MemberVM {
 }
 
 /** v0 pending-invitation row shape — one row per account-invite grant. */
-type PendingInviteVM = { bundleId: string; grantId: string; email: string; status: string }
+type PendingInviteVM = {
+  bundleId: string
+  grantId: string
+  email: string
+  status: string
+  role: AccountRole
+  createdAt: string
+  expiresAt: number
+}
 
 /**
  * Flatten the contract's `pendingInvitations` (bundles, grants already scoped to
- * this account by the backend, #556) into v0's row shape — exactly what the v0
- * `listPendingInvitationsForAccount` mock returned (one row per account-invite
- * grant). Presentation is reproduced verbatim; only the data source is live.
+ * this account by the backend, #556) into v0's enriched row shape — exactly what
+ * the v0 `listPendingInvitationsForAccount` returns (one row per account-invite
+ * grant, carrying role + sent/expiry). Presentation is reproduced verbatim; only
+ * the data source is live.
  */
 function toPendingInviteVMs(bundles: InvitationBundle[]): PendingInviteVM[] {
   return bundles.flatMap((b) =>
     (b.grants ?? [])
       .filter((g) => g.kind === 'account-invite')
-      .map((g) => ({ bundleId: b.bundleId, grantId: g.grantId, email: b.email, status: b.status })),
+      .map((g) => ({
+        bundleId: b.bundleId,
+        grantId: g.grantId,
+        email: b.email,
+        status: b.status,
+        role: (g as { role: AccountRole }).role,
+        createdAt: b.createdAt,
+        expiresAt: b.expiresAt,
+      })),
   )
+}
+
+// Format helpers — ported verbatim from the v0 prototype
+// (`components/launchpad/admin/account-management-view.tsx`).
+/** Sent date — absolute date from an ISO timestamp. */
+function formatSentDate(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return '—'
+  return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+/** Expiry — absolute date from a Unix-seconds timestamp. */
+function formatExpiry(expiresAt: number): string {
+  const d = new Date(expiresAt * 1000)
+  if (Number.isNaN(d.getTime())) return '—'
+  return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+/** Past-expiry guard (Unix seconds vs now). */
+function isInvitationExpired(expiresAt: number): boolean {
+  return expiresAt * 1000 < Date.now()
 }
 
 /**
@@ -446,18 +484,43 @@ function AccountDetailPanel({
               <ul className="space-y-2">
                 {invitations.map((invite) => {
                   const cancel = canCancelInvitationGrant(viewerRole, viewerIsSiteAdmin)
+                  const expired = isInvitationExpired(invite.expiresAt)
                   return (
                     <li
                       key={invite.grantId}
-                      className="flex items-center gap-2 rounded-lg border border-border bg-surface/30 px-3 py-2"
+                      className="flex items-start gap-2 rounded-lg border border-border bg-surface/30 px-3 py-2"
                     >
-                      <Clock className="size-3.5 shrink-0 text-signal-gold" />
-                      <span className="min-w-0 flex-1 truncate text-xs text-foreground">
-                        {invite.email}
+                      <Clock className="mt-0.5 size-3.5 shrink-0 text-signal-gold" />
+                      <div className="min-w-0 flex-1">
+                        {/* Invited email + role/grant */}
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="min-w-0 truncate text-xs font-medium text-foreground">
+                            {invite.email}
+                          </span>
+                          <RoleChip role={invite.role} />
+                        </div>
+                        {/* Sent date + expiry */}
+                        <p className="mt-0.5 text-[11px] text-muted-foreground">
+                          Sent {formatSentDate(invite.createdAt)}
+                          {' · '}
+                          <span className={cn(expired && 'text-signal-red')}>
+                            {expired ? 'Expired ' : 'Expires '}
+                            {formatExpiry(invite.expiresAt)}
+                          </span>
+                        </p>
+                      </div>
+                      <span
+                        className={cn(
+                          'shrink-0 rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider',
+                          expired
+                            ? 'bg-signal-red/15 text-signal-red'
+                            : 'bg-signal-gold/15 text-signal-gold',
+                        )}
+                      >
+                        {expired ? 'expired' : invite.status}
                       </span>
-                      <span className="shrink-0 rounded-full bg-signal-gold/15 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-signal-gold">
-                        {invite.status}
-                      </span>
+                      {/* Cancel control: v0 wires onClick→cpCancelGrant; runtime has no
+                          cancel-grant endpoint yet, so the X stays inert (separate item). */}
                       <button
                         disabled={!cancel.allowed}
                         title={cancel.reason}

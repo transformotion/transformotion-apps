@@ -149,10 +149,10 @@ function UserDetailPanel({
   onSetStatus: (userId: string, status: 'active' | 'disabled') => void
 }) {
   const { user } = summary
-  // M11: the per-user pending-invitation COUNT is now live (see the table badge,
-  // `summary.pendingInvites`). This DETAIL LIST stays empty: `UserAccessSummary`
-  // carries only the count, not a per-user pending LIST — wiring it needs a new
-  // list field on the contract (v0-owned). Held until that v0 contract lands.
+  // M11: the COUNT badge (`summary.pendingInvites`) is live, and the backend now
+  // also returns the per-user LIST (`summary.pendingInvitations`, since the v0
+  // contract field landed). Wiring THIS detail list to consume it is a separate
+  // prompt (v0's enriched users-access detail display); kept stubbed for now.
   const pendingInvites: Array<{ invitationId: string; accountId: string; status: string }> = []
 
   return (

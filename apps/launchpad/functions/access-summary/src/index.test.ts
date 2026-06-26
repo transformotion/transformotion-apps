@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { buildAccessSummaries, countPendingInvitesByEmail } from './index';
+import { buildAccessSummaries, buildPendingByEmail, pendingTargetAccountIds } from './index';
+import type { UserPendingInvitation } from '@transformotion/contracts/launchpad/invitations';
 
 // ---------------------------------------------------------------------------
 // Test area 4: Access summary against legacy membership rows missing appSlug
@@ -12,7 +13,7 @@ type U = { userId: string; email: string; displayName?: string; status?: 'active
 describe('buildAccessSummaries', () => {
   const noGrants = new Map<string, G[]>();
   const noSiteAdmins = new Set<string>();
-  const noPending = new Map<string, number>();
+  const noPending = new Map<string, UserPendingInvitation[]>();
 
   it('includes membership when appSlug is denormalized on the row', () => {
     const user: U = { userId: 'u1', email: 'u1@example.com' };
@@ -125,36 +126,81 @@ describe('buildAccessSummaries', () => {
     });
   });
 
-  it('sets pendingInvites from the per-email count map (case-insensitive), 0 when absent (M11)', () => {
+  it('sets pendingInvitations from the per-email list (case-insensitive); count = length; [] when absent (M11)', () => {
     const users: U[] = [
       { userId: 'u1', email: 'Alice@Example.com' }, // mixed case → matched lowercased
       { userId: 'u2', email: 'bob@example.com' },   // no pending invites
     ];
-    const pending = new Map<string, number>([['alice@example.com', 2]]);
+    const invite: UserPendingInvitation = {
+      bundleId: 'b1', grantId: 'g1', kind: 'account-invite', appSlug: 'stock-analyser',
+      target: 'Alice Portfolio', role: 'member', status: 'pending',
+      createdAt: '2026-06-01T00:00:00.000Z', expiresAt: 1798761600,
+    };
+    const pending = new Map<string, UserPendingInvitation[]>([['alice@example.com', [invite, { ...invite, grantId: 'g2' }]]]);
 
     const result = buildAccessSummaries(users, new Map(), noGrants, new Map(), new Map(), noSiteAdmins, pending);
 
-    expect(result.find(u => u.userId === 'u1')!.pendingInvites).toBe(2);
-    expect(result.find(u => u.userId === 'u2')!.pendingInvites).toBe(0);
+    const u1 = result.find(u => u.userId === 'u1')!;
+    expect(u1.pendingInvitations).toHaveLength(2);
+    expect(u1.pendingInvites).toBe(2); // invariant: count === list length
+    const u2 = result.find(u => u.userId === 'u2')!;
+    expect(u2.pendingInvitations).toEqual([]);
+    expect(u2.pendingInvites).toBe(0);
   });
 });
 
-describe('countPendingInvitesByEmail (M11)', () => {
-  it('counts pending bundles per lowercased email; ignores non-pending and missing email', () => {
-    const counts = countPendingInvitesByEmail([
-      { email: 'Alice@Example.com', status: 'pending' },
-      { email: 'alice@example.com', status: 'pending' }, // same user, 2nd pending bundle
-      { email: 'bob@example.com', status: 'accepted' },  // not pending → ignored
-      { email: 'carol@example.com', status: 'expired' }, // not pending → ignored
-      { status: 'pending' },                              // no email → ignored
-    ]);
+describe('buildPendingByEmail (M11)', () => {
+  const names = new Map<string, string>([['acc-1', "Steve's Portfolio"]]);
 
-    expect(counts.get('alice@example.com')).toBe(2);
-    expect(counts.has('bob@example.com')).toBe(false);
-    expect(counts.has('carol@example.com')).toBe(false);
+  it('builds one row per grant; resolves account-invite target name + role; lowercased email key', () => {
+    const map = buildPendingByEmail(
+      [
+        {
+          bundleId: 'b1', email: 'Alice@Example.com', status: 'pending',
+          createdAt: '2026-06-01T00:00:00.000Z', expiresAt: 1798761600,
+          grants: [{ grantId: 'g1', kind: 'account-invite', appSlug: 'stock-analyser', accountId: 'acc-1', role: 'member' }],
+        },
+      ],
+      names,
+    );
+    const rows = map.get('alice@example.com')!;
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      bundleId: 'b1', grantId: 'g1', kind: 'account-invite', appSlug: 'stock-analyser',
+      target: "Steve's Portfolio", role: 'member', status: 'pending',
+    });
   });
 
-  it('returns an empty map for no bundles', () => {
-    expect(countPendingInvitesByEmail([]).size).toBe(0);
+  it('falls back to accountId when the target account name is unresolved', () => {
+    const rows = buildPendingByEmail(
+      [{ email: 'x@y.com', status: 'pending', grants: [{ grantId: 'g', kind: 'account-invite', appSlug: 'budget-tracker', accountId: 'acc-unknown', role: 'viewer' }] }],
+      new Map(),
+    ).get('x@y.com')!;
+    expect(rows[0]!.target).toBe('acc-unknown');
+  });
+
+  it('app-grant rows use the app label and carry no role', () => {
+    const rows = buildPendingByEmail(
+      [{ email: 'x@y.com', status: 'pending', grants: [{ grantId: 'g', kind: 'app-grant', appSlug: 'stock-analyser' }] }],
+      new Map(),
+    ).get('x@y.com')!;
+    expect(rows[0]!.target).toBe('Stock Analyser');
+    expect(rows[0]!.role).toBeUndefined();
+  });
+
+  it('ignores non-pending bundles and missing email', () => {
+    const map = buildPendingByEmail([
+      { email: 'a@b.com', status: 'accepted', grants: [{ grantId: 'g', kind: 'account-invite', appSlug: 'stock-analyser', accountId: 'acc-1' }] },
+      { status: 'pending', grants: [{ grantId: 'g', kind: 'account-invite', appSlug: 'stock-analyser', accountId: 'acc-1' }] },
+    ], names);
+    expect(map.size).toBe(0);
+  });
+
+  it('pendingTargetAccountIds collects account-invite target ids from pending bundles only', () => {
+    const ids = pendingTargetAccountIds([
+      { status: 'pending', grants: [{ grantId: 'g1', kind: 'account-invite', appSlug: 'stock-analyser', accountId: 'acc-1' }, { grantId: 'g2', kind: 'app-grant', appSlug: 'budget-tracker' }] },
+      { status: 'accepted', grants: [{ grantId: 'g3', kind: 'account-invite', appSlug: 'stock-analyser', accountId: 'acc-2' }] },
+    ]);
+    expect(ids).toEqual(['acc-1']);
   });
 });

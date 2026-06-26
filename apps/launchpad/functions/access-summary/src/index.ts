@@ -14,12 +14,15 @@ import {
   requireSiteAdmin,
   ok,
 } from '@transformotion/lambda-middleware';
-import type { EntitledAppSlug, UserStatus } from '@transformotion/contracts/_shared/auth';
+import type { AccountRole, EntitledAppSlug, UserStatus } from '@transformotion/contracts/_shared/auth';
 import type {
   UserAccessSummary,
   UserAppAccess,
   UserAccountAccess,
+  UserPendingInvitation,
+  InvitationGrantKind,
 } from '@transformotion/contracts/launchpad/invitations';
+import type { InvitationStatus } from '@transformotion/contracts/launchpad/types';
 
 const cognito = new CognitoIdentityProviderClient({});
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -31,26 +34,84 @@ const APP_ADMIN_GRANTS_TABLE = process.env.APP_ADMIN_GRANTS_TABLE!;
 const INVITATIONS_TABLE = process.env.INVITATIONS_TABLE!;
 const USER_POOL_ID = process.env.USER_POOL_ID!;
 
+interface StoredGrant {
+  grantId?: string;
+  kind?: string;
+  appSlug?: string;
+  accountId?: string;
+  role?: string;
+}
+
 interface StoredBundle {
+  bundleId?: string;
+  invitationId?: string;
   email?: string;
   status?: string;
+  createdAt?: string;
+  expiresAt?: number;
+  grants?: StoredGrant[];
+}
+
+const APP_LABELS: Record<string, string> = {
+  'stock-analyser': 'Stock Analyser',
+  'budget-tracker': 'Budget Tracker',
+};
+function appLabel(slug: string): string {
+  return APP_LABELS[slug] ?? slug;
 }
 
 /**
- * Pure: count pending invitation bundles per (normalized) email — the
- * `UserAccessSummary.pendingInvites` count badge (M11). Mirrors v0's derivation
- * exactly: bundles with `status === 'pending'`, grouped by lowercased email.
- * (Only EXISTING users surface a count — invitees who are not yet users do not
- * appear in the access directory.) Exported for unit tests.
+ * Pure: build the per-user pending-invitation LIST (one row per grant) keyed by
+ * lowercased email — `UserAccessSummary.pendingInvitations` (M11). Mirrors v0's
+ * `listPendingInvitationsForEmail`: pending bundles, per grant; target = account
+ * name (account-invite) or app label (app-grant); `role` only for account-invite.
+ * The count badge `pendingInvites` is then just the list length (the contract
+ * invariant `pendingInvites === pendingInvitations.length`). Only EXISTING users
+ * surface anything — invitees who are not yet users are absent from the directory.
+ * Exported for unit tests.
  */
-export function countPendingInvitesByEmail(bundles: StoredBundle[]): Map<string, number> {
-  const counts = new Map<string, number>();
+export function buildPendingByEmail(
+  bundles: StoredBundle[],
+  accountNameByAccount: Map<string, string>,
+): Map<string, UserPendingInvitation[]> {
+  const out = new Map<string, UserPendingInvitation[]>();
   for (const b of bundles) {
     if (b.status !== 'pending' || !b.email) continue;
     const key = b.email.trim().toLowerCase();
-    counts.set(key, (counts.get(key) ?? 0) + 1);
+    const list = out.get(key) ?? [];
+    for (const g of b.grants ?? []) {
+      if (!g.grantId || !g.kind || !g.appSlug) continue;
+      const target =
+        g.kind === 'account-invite'
+          ? (g.accountId ? accountNameByAccount.get(g.accountId) ?? g.accountId : '')
+          : appLabel(g.appSlug);
+      list.push({
+        bundleId: (b.bundleId ?? b.invitationId ?? '') as string,
+        grantId: g.grantId,
+        kind: g.kind as InvitationGrantKind,
+        appSlug: g.appSlug as EntitledAppSlug,
+        target,
+        ...(g.kind === 'account-invite' && g.role ? { role: g.role as AccountRole } : {}),
+        status: b.status as InvitationStatus,
+        createdAt: (b.createdAt ?? '') as UserPendingInvitation['createdAt'],
+        expiresAt: (b.expiresAt ?? 0) as UserPendingInvitation['expiresAt'],
+      });
+    }
+    out.set(key, list);
   }
-  return counts;
+  return out;
+}
+
+/** Account-invite target accountIds across all pending bundles (for name resolution). */
+export function pendingTargetAccountIds(bundles: StoredBundle[]): string[] {
+  const ids = new Set<string>();
+  for (const b of bundles) {
+    if (b.status !== 'pending') continue;
+    for (const g of b.grants ?? []) {
+      if (g.kind === 'account-invite' && g.accountId) ids.add(g.accountId);
+    }
+  }
+  return [...ids];
 }
 
 interface UserRow {
@@ -100,11 +161,12 @@ export function buildAccessSummaries(
   appSlugByAccount: Map<string, string>,
   accountNameByAccount: Map<string, string>,
   siteAdminIds: Set<string>,
-  pendingCountByEmail: Map<string, number>,
+  pendingByEmail: Map<string, UserPendingInvitation[]>,
 ): UserAccessSummary[] {
   return users.map(user => {
     const memberships = membershipsByUser.get(user.userId) ?? [];
     const grants = appAdminGrantsByUser.get(user.userId) ?? [];
+    const pending = pendingByEmail.get(user.email.trim().toLowerCase()) ?? [];
 
     const byApp = new Map<string, UserAccountAccess[]>();
     for (const m of memberships) {
@@ -136,7 +198,9 @@ export function buildAccessSummaries(
       status: (user.status ?? 'active') as UserStatus,
       siteAdmin: siteAdminIds.has(user.userId),
       appAccess,
-      pendingInvites: pendingCountByEmail.get(user.email.trim().toLowerCase()) ?? 0,
+      // Contract invariant: pendingInvites === pendingInvitations.length.
+      pendingInvitations: pending,
+      pendingInvites: pending.length,
     };
   });
 }
@@ -163,7 +227,7 @@ export const handler = withAuthOnly(async ({ auth }) => {
   requireSiteAdmin(auth);
 
   // 1. Scan all users + the invitation store (D4 — scan is the documented
-  //    approach at this scale; pending-invite COUNT per user email, M11).
+  //    approach at this scale; per-user pending-invitation list + count, M11).
   const [usersRes, siteAdminIds, invitesRes] = await Promise.all([
     ddb.send(new ScanCommand({
       TableName: USERS_TABLE,
@@ -173,12 +237,12 @@ export const handler = withAuthOnly(async ({ auth }) => {
     fetchSiteAdminUserIds(),
     ddb.send(new ScanCommand({
       TableName: INVITATIONS_TABLE,
-      ProjectionExpression: 'email, #st',
+      ProjectionExpression: 'bundleId, invitationId, email, #st, createdAt, expiresAt, grants',
       ExpressionAttributeNames: { '#st': 'status' },
     })),
   ]);
   const users = (usersRes.Items ?? []) as UserRow[];
-  const pendingCountByEmail = countPendingInvitesByEmail((invitesRes.Items ?? []) as StoredBundle[]);
+  const pendingBundles = (invitesRes.Items ?? []) as StoredBundle[];
 
   if (users.length === 0) return ok({ users: [] });
 
@@ -233,13 +297,16 @@ export const handler = withAuthOnly(async ({ auth }) => {
     }
   }
 
-  // 4. Fetch account names for rows that have appSlug already set (for display in summary)
-  const accountIdsWithAppSlug = [...new Set(
-    allMembershipRows.filter(m => m.appSlug).map(m => m.accountId),
-  )].filter(id => !accountNameByAccount.has(id));
+  // 4. Fetch account names for display — membership accounts (with appSlug) AND
+  //    pending-invitation TARGET accounts (M11; the invitee is not a member of
+  //    these, so they would otherwise be unresolved → name falls back to id).
+  const accountIdsNeedingName = [...new Set([
+    ...allMembershipRows.filter(m => m.appSlug).map(m => m.accountId),
+    ...pendingTargetAccountIds(pendingBundles),
+  ])].filter(id => !accountNameByAccount.has(id));
 
-  for (let i = 0; i < accountIdsWithAppSlug.length; i += 25) {
-    const chunk = accountIdsWithAppSlug.slice(i, i + 25).map(id => ({ accountId: id }));
+  for (let i = 0; i < accountIdsNeedingName.length; i += 25) {
+    const chunk = accountIdsNeedingName.slice(i, i + 25).map(id => ({ accountId: id }));
     const res = await ddb.send(new BatchGetCommand({
       RequestItems: { [ACCOUNTS_TABLE]: { Keys: chunk, ProjectionExpression: 'accountId, #n', ExpressionAttributeNames: { '#n': 'name' } } },
     }));
@@ -248,7 +315,8 @@ export const handler = withAuthOnly(async ({ auth }) => {
     }
   }
 
-  // 5. Build access summaries
+  // 5. Build access summaries (pending list keyed by email; count = list length)
+  const pendingByEmail = buildPendingByEmail(pendingBundles, accountNameByAccount);
   const summaries = buildAccessSummaries(
     users,
     membershipsByUser,
@@ -256,7 +324,7 @@ export const handler = withAuthOnly(async ({ auth }) => {
     appSlugByAccount,
     accountNameByAccount,
     siteAdminIds,
-    pendingCountByEmail,
+    pendingByEmail,
   );
 
   return ok({ users: summaries });

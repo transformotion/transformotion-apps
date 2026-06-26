@@ -138,11 +138,14 @@ denormalising the write path. The handler therefore uses a filtered Scan (the
 same pattern as invitation-bundles-list and invitee-search) against this small,
 low-volume control-plane table.
 
-**Pending-count-by-email (M11):** `launchpad-access-summary-{stage}` also reads
-this table (read-only Scan) to compute the per-user pending-invitation **count**
-(`UserAccessSummary.pendingInvites`), matched by lowercased `email`. The
-per-user pending **list** display is not yet wired — `UserAccessSummary` carries
-only the count, so the by-email list awaits a v0 contract field.
+**Pending-by-email list (M11):** `launchpad-access-summary-{stage}` also reads
+this table (read-only Scan) to build the per-user pending-invitation **list**
+(`UserAccessSummary.pendingInvitations`, one row per grant), matched by
+lowercased `email`; the count badge `pendingInvites` is the list length (the
+contract invariant `pendingInvites === pendingInvitations.length`). Account-invite
+targets are resolved to account names (BatchGet on the accounts table, fallback to
+id). Only EXISTING users surface anything — invitees who are not yet users are
+absent from the directory.
 
 ### `launchpad-app-admin-grants-{stage}` (M16 D5)
 
