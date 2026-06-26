@@ -5,6 +5,7 @@ import {
   UpdateCommand,
   DeleteCommand,
   QueryCommand,
+  ScanCommand,
   TransactWriteCommand,
 } from '@aws-sdk/lib-dynamodb';
 import {
@@ -39,8 +40,8 @@ import {
   type MembershipLoader,
   type SiteAdminLoader,
 } from '@transformotion/lambda-middleware';
-import type { AccountMemberRow, ListAccountMembersResponse } from '@transformotion/contracts/launchpad/invitations';
-import { appAccessGroup, APP_GROUP_PREFIX, type AccountRole, type EntitledAppSlug, type UserStatus } from '@transformotion/contracts/_shared/auth';
+import type { AccountMemberRow, InvitationBundle, ListAccountMembersResponse } from '@transformotion/contracts/launchpad/invitations';
+import { appAccessGroup, appAdminGroup, APP_GROUP_PREFIX, type AccountRole, type EntitledAppSlug, type UserStatus } from '@transformotion/contracts/_shared/auth';
 import { randomUUID } from 'crypto';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -48,7 +49,74 @@ const cognito = new CognitoIdentityProviderClient({});
 
 const ACCOUNTS_TABLE = process.env.ACCOUNTS_TABLE!;
 const ACCOUNT_MEMBERS_TABLE = process.env.ACCOUNT_MEMBERS_TABLE!;
+const INVITATIONS_TABLE = process.env.INVITATIONS_TABLE!;
 const USER_POOL_ID = process.env.USER_POOL_ID!;
+
+// ── Pending invitations for an account (M11 — was a Phase-8 empty stub) ───────
+// The invitation store (launchpad-invitations) keys by invitationId with the
+// target account nested in `grants[]`. A GSI cannot index a nested-list
+// attribute, and a bundle may grant into MULTIPLE accounts — so there is no
+// viable target-account index without denormalising the write path. A filtered
+// Scan of this small, low-volume control-plane table (the SAME pattern
+// invitation-bundles list + invitee-search already use) is the correct lookup.
+type StoredBundle = {
+  invitationId?: string;
+  bundleId?: string;
+  email?: string;
+  invitedBy?: string;
+  createdAt?: string;
+  expiresAt?: number;
+  status?: string;
+  grants?: Array<Record<string, unknown>>;
+};
+
+/**
+ * Pure: pending bundles that grant into `accountId`, with grants scoped to that
+ * account (so an owner never sees grants targeting OTHER accounts), excluding
+ * accepted/revoked and expired (TTL deletion can lag). Sorted newest-first.
+ */
+export function extractPendingForAccount(
+  items: StoredBundle[],
+  accountId: string,
+  nowSeconds: number,
+): InvitationBundle[] {
+  return items
+    .filter((it) => Array.isArray(it.grants) && it.status === 'pending')
+    .filter((it) => typeof it.expiresAt !== 'number' || it.expiresAt > nowSeconds)
+    .map((it) => ({
+      raw: it,
+      grants: (it.grants ?? []).filter((g) => (g as { accountId?: string }).accountId === accountId),
+    }))
+    .filter(({ grants }) => grants.length > 0)
+    .map(({ raw, grants }) => ({
+      bundleId: (raw.bundleId ?? raw.invitationId ?? '') as string,
+      email: (raw.email ?? '') as InvitationBundle['email'],
+      invitedBy: (raw.invitedBy ?? '') as InvitationBundle['invitedBy'],
+      createdAt: (raw.createdAt ?? '') as InvitationBundle['createdAt'],
+      expiresAt: (raw.expiresAt ?? 0) as InvitationBundle['expiresAt'],
+      status: (raw.status ?? 'pending') as InvitationBundle['status'],
+      grants: grants as unknown as InvitationBundle['grants'],
+    }))
+    .sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''));
+}
+
+/**
+ * Pure: who may SEE an account's pending invitations — owner/manager of the
+ * account, or a supervisory admin (site-admin / app-admin for the account's app).
+ * Plain members and viewers must NOT see them (stricter than the member list).
+ */
+export function canSeePendingInvitations(args: {
+  callerRole: string | undefined;
+  isSiteAdmin: boolean;
+  isAppAdmin: boolean;
+}): boolean {
+  return args.isSiteAdmin || args.isAppAdmin || args.callerRole === 'owner' || args.callerRole === 'manager';
+}
+
+async function loadPendingInvitations(accountId: string): Promise<InvitationBundle[]> {
+  const res = await ddb.send(new ScanCommand({ TableName: INVITATIONS_TABLE }));
+  return extractPendingForAccount((res.Items ?? []) as StoredBundle[], accountId, Math.floor(Date.now() / 1000));
+}
 
 /**
  * Live supervisory-site-admin check (D-3): read the `site-admin` group membership
@@ -239,11 +307,13 @@ async function getAccount(accountId: string, userId: string) {
 
 // R2 — GET /accounts/{accountId}/members/detail: any active member. Returns the
 // full ListAccountMembersResponse (contract) so the v0 account-management-view
-// wires with no adapter. isLastOwner is computed from the loaded members array;
-// pendingInvitations is shape-present but EMPTY until Phase 8 (bundles).
+// wires with no adapter. isLastOwner is computed from the loaded members array.
+// pendingInvitations returns the account's REAL pending invitations (M11 — was a
+// Phase-8 empty stub), but only for entitled callers (owner/manager/admin); a
+// plain member/viewer still gets [] (see canSeePendingInvitations below).
 // (displayName is omitted — optional; read-time enrichment from launchpad-users
 //  per D6 is deferred. The v0 view falls back to email.)
-async function getMembersDetail(accountId: string, userId: string) {
+async function getMembersDetail(accountId: string, userId: string, auth: AuthClaims) {
   const { account, members, callerLoader } = await loadAccountContext(accountId);
   await requireAccountAdmin(() => requireAccountMember(callerLoader, accountId, userId));
   if (!account) throw forbidden(UNIFORM_DENY);
@@ -258,10 +328,20 @@ async function getMembersDetail(accountId: string, userId: string) {
     isLastOwner: m.role === 'owner' && ownerCount === 1,
   }));
 
+  // Pending invitations are account-scoped and gated STRICTER than the member
+  // list: only owner/manager or a supervisory admin may see them — never a plain
+  // member/viewer. (The member list itself is visible to any active member.)
+  const appSlug = (account as { appSlug?: EntitledAppSlug }).appSlug;
+  const entitled = canSeePendingInvitations({
+    callerRole: members.find(m => m.userId === userId)?.role,
+    isSiteAdmin: auth.siteAdmin === true,
+    isAppAdmin: !!appSlug && auth.groups.includes(appAdminGroup(appSlug)),
+  });
+
   const response: ListAccountMembersResponse = {
     accountId,
     members: memberRows,
-    pendingInvitations: [], // EMPTY until Phase 8 (bundles) — shape present, no data
+    pendingInvitations: entitled ? await loadPendingInvitations(accountId) : [],
   };
   return ok(response);
 }
@@ -490,7 +570,9 @@ async function updateMemberRole(
       joinedAt: m.joinedAt,
       isLastOwner: m.role === 'owner' && ownerCount === 1,
     })),
-    pendingInvitations: [], // EMPTY until Phase 8 (bundles) — shape present, no data
+    // The caller of this role-change is owner/manager (gated above) — entitled to
+    // see the account's pending invitations, kept consistent with GET /members/detail.
+    pendingInvitations: await loadPendingInvitations(accountId),
   };
   return ok(response);
 }
@@ -512,7 +594,7 @@ export const handler = withAuthOnly(async ({ auth, event }) => {
 
   // R2 (NEW): full member detail (ListAccountMembersResponse).
   if (resource === '/accounts/{accountId}/members/detail' && event.httpMethod === 'GET') {
-    return getMembersDetail(accountId, userId);
+    return getMembersDetail(accountId, userId, auth);
   }
 
   // Legacy GET /members (thin shape) — retained, unwired-to-UI (see §7 retirement map).
