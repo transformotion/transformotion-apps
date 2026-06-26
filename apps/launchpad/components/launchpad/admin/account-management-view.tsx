@@ -650,6 +650,7 @@ export function AccountManagementView({ viewer }: { viewer: AdminUser }) {
                         </p>
                         <p className="truncate text-xs text-muted-foreground">
                           {memberCount} member{memberCount === 1 ? '' : 's'}
+                          {invitations.length > 0 ? ` · ${invitations.length} pending` : ''}
                         </p>
                       </div>
                       {role ? (
