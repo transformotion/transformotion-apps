@@ -149,7 +149,10 @@ Stock Analyser owns:
 - `Transformotion{Stage}-StockAnalyserApi`
 - WSS connection table: `stock-analyser.ws-connections-{stage}`
 - AI job results table: `stock-analyser.job-results-{stage}`
+- Notification state table: `stock-analyser.notification-state-{stage}`
 - AI runtime Lambda: `stock-analyser-ai-proxy-{stage}`
+- Background notification Lambda: `stock-analyser-notification-engine-{stage}`,
+  invoked daily by EventBridge
 - AI runtime selection: app override -> platform default -> env fallback, using
   app-owned Anthropic/OpenAI secrets
 
@@ -162,6 +165,18 @@ Browser
   -> stock-analyser.job-results
   -> StockAnalyserWs
   -> Browser
+```
+
+The background notification flow is:
+
+```text
+EventBridge daily schedule
+  -> stock-analyser-notification-engine
+  -> launchpad-account-members appSlug-index enumeration
+  -> stock-analyser.portfolio / stock-analyser.watchlist reads
+  -> stock-analyser.analysis-cache SHARED ANALYSIS writes through transformotion-analysis-cache
+  -> stock-analyser.notification-state
+  -> SES email delivery for opted-in write-tier members
 ```
 
 ## Budget Tracker

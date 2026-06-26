@@ -3,6 +3,8 @@ import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import * as events from 'aws-cdk-lib/aws-events';
+import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as lambdaNodejs from 'aws-cdk-lib/aws-lambda-nodejs';
@@ -17,6 +19,7 @@ export interface StockAnalyserApiStackProps extends cdk.StackProps {
   analysisCacheTable: dynamodb.ITable;
   jobResultsTable: dynamodb.ITable;
   settingsTable: dynamodb.ITable;
+  notificationStateTable: dynamodb.ITable;
   wsApiEndpoint: string;
   wsApiId: string;
 }
@@ -51,6 +54,7 @@ export class StockAnalyserApiStack extends cdk.Stack {
       analysisCacheTable,
       jobResultsTable,
       settingsTable,
+      notificationStateTable,
       wsApiEndpoint,
       wsApiId,
     } = props;
@@ -75,8 +79,13 @@ export class StockAnalyserApiStack extends cdk.Stack {
     // row from the launchpad-owned members table. The grant is dynamodb:GetItem
     // ONLY (no Query/index/writes) on this one table — a minimal, auditable
     // cross-domain read; any scope creep shows up as an IAM diff.
-    const accountMembersTable = dynamodb.Table.fromTableName(
-      this, 'AccountMembersTable', `launchpad-account-members-${stage}`,
+    const accountMembersTable = dynamodb.Table.fromTableAttributes(
+      this,
+      'AccountMembersTable',
+      {
+        tableName: `launchpad-account-members-${stage}`,
+        globalIndexes: ['appSlug-index'],
+      },
     );
     const grantMembershipRead = (fn: lambdaNodejs.NodejsFunction) => {
       fn.addEnvironment('ACCOUNT_MEMBERS_TABLE', accountMembersTable.tableName);
@@ -199,6 +208,62 @@ export class StockAnalyserApiStack extends cdk.Stack {
       'AiRuntimeConfigTable',
       `launchpad-ai-runtime-config-${stage}`,
     );
+
+    const notificationEngineRole = new iam.Role(this, 'NotificationEngineRole', {
+      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+      description: 'Dedicated Stock Analyser M19 background notification engine execution role',
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
+      ],
+    });
+
+    const notificationEngineFn = new lambdaNodejs.NodejsFunction(this, 'NotificationEngineFn', {
+      functionName: `stock-analyser-notification-engine-${stage}`,
+      entry: path.join(__dirname, '../functions/notification-engine/src/index.ts'),
+      handler: 'handler',
+      runtime: lambda.Runtime.NODEJS_20_X,
+      timeout: cdk.Duration.minutes(15),
+      memorySize: 512,
+      role: notificationEngineRole,
+      environment: {
+        STAGE: stage,
+        PORTFOLIO_TABLE: portfolioTable.tableName,
+        WATCHLIST_TABLE: watchlistTable.tableName,
+        SETTINGS_TABLE: settingsTable.tableName,
+        NOTIFICATION_STATE_TABLE: notificationStateTable.tableName,
+        ACCOUNT_MEMBERS_TABLE: accountMembersTable.tableName,
+        ANALYSIS_CACHE_FUNCTION_NAME: cacheFn.functionName,
+        ANTHROPIC_SECRET_NAME: anthropicSecret.secretName,
+        OPENAI_SECRET_NAME: openaiSecret.secretName,
+        AI_CONFIG_TABLE: aiRuntimeConfigTable.tableName,
+        APP_AI_CONFIG_TABLE: settingsTable.tableName,
+        AI_FALLBACK_PROVIDER: 'claude',
+        AI_FALLBACK_MODEL: 'claude-sonnet-4-6',
+        FROM_EMAIL: `noreply${stage === 'prod' ? '' : `-${stage}`}@transformotion.com.au`,
+        APP_URL: `https://${stage === 'prod' ? 'apps' : 'dev.apps'}.transformotion.com.au`,
+      },
+      bundling,
+    });
+    portfolioTable.grantReadData(notificationEngineFn);
+    watchlistTable.grantReadData(notificationEngineFn);
+    settingsTable.grantReadData(notificationEngineFn);
+    notificationStateTable.grantReadWriteData(notificationEngineFn);
+    accountMembersTable.grantReadData(notificationEngineFn);
+    anthropicSecret.grantRead(notificationEngineFn);
+    openaiSecret.grantRead(notificationEngineFn);
+    aiRuntimeConfigTable.grantReadData(notificationEngineFn);
+    cacheFn.grantInvoke(notificationEngineFn);
+    notificationEngineFn.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['ses:SendEmail', 'sesv2:SendEmail'],
+      resources: ['*'],
+    }));
+
+    new events.Rule(this, 'NotificationEngineDailySchedule', {
+      ruleName: `stock-analyser-notification-engine-daily-${stage}`,
+      description: 'Daily Stock Analyser M19 background notification processing',
+      schedule: events.Schedule.rate(cdk.Duration.days(1)),
+      targets: [new targets.LambdaFunction(notificationEngineFn)],
+    });
 
     const aiProxyFn = new lambdaNodejs.NodejsFunction(this, 'AiProxyFn', {
       functionName: `stock-analyser-ai-proxy-${stage}`,

@@ -11,6 +11,7 @@ import {
   requireAccountData,
 } from '@transformotion/lambda-middleware';
 import { dynamoMembershipLoader } from '@transformotion/fn-account-membership';
+import type { APIGatewayProxyEvent, Context } from 'aws-lambda';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const TABLE             = process.env.CACHE_TABLE!;
@@ -76,13 +77,71 @@ function normaliseItem(item: Record<string, unknown>) {
 // per-account partition with data that should be global.
 const SHARED_PREFIXES = ['MARKET', 'ETFS', 'RECS', 'METALS', 'ANALYSIS', 'CYCLE'];
 
+interface ServicePrincipalCacheWriteEvent {
+  servicePrincipal: 'stock-analyser-notification-engine';
+  operation: 'put-shared-cache';
+  cacheKey: string;
+  data: unknown;
+  ttlSeconds: number;
+  mode?: string;
+  type?: string;
+}
+
+function cacheKeyPrefix(cacheKey: string): string {
+  return cacheKey.split('#')[0] ?? '';
+}
+
+export function isSharedServiceCacheKey(cacheKey: string): boolean {
+  return SHARED_PREFIXES.includes(cacheKeyPrefix(cacheKey));
+}
+
+function isServicePrincipalCacheWriteEvent(event: unknown): event is ServicePrincipalCacheWriteEvent {
+  const candidate = event as Partial<ServicePrincipalCacheWriteEvent> | null;
+  return (
+    !!candidate &&
+    candidate.servicePrincipal === 'stock-analyser-notification-engine' &&
+    candidate.operation === 'put-shared-cache'
+  );
+}
+
 function resolveWriteAccountId(cacheKey: string, fallbackAccountId: string, clientShared: boolean): string {
-  const prefix = cacheKey.split('#')[0];
+  const prefix = cacheKeyPrefix(cacheKey);
   if (SHARED_PREFIXES.includes(prefix)) return SHARED;
   return clientShared ? SHARED : fallbackAccountId;
 }
 
-export const handler = withAuth(async ({ auth, account, event }) => {
+async function writeSharedCacheFromServicePrincipal(event: ServicePrincipalCacheWriteEvent) {
+  const cacheKey = decodeURIComponent(event.cacheKey);
+  if (!isSharedServiceCacheKey(cacheKey)) {
+    throw badRequest(`Service-principal cache writes are limited to SHARED keys; rejected '${cacheKey}'`);
+  }
+  if (event.data === undefined) throw badRequest('data is required');
+  if (typeof event.ttlSeconds !== 'number' || event.ttlSeconds < 1) {
+    throw badRequest('ttlSeconds must be a positive number');
+  }
+
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  const expiresAt = nowSeconds + event.ttlSeconds;
+
+  await ddb.send(new PutCommand({
+    TableName: TABLE,
+    Item: {
+      accountId: SHARED,
+      cacheKey,
+      data: typeof event.data === 'string' ? event.data : JSON.stringify(event.data),
+      dataType: event.type ?? 'unknown',
+      mode: event.mode ?? 'live',
+      cachedAt: nowSeconds,
+      expiresAt,
+    },
+  }));
+
+  console.log(`[cache:service-principal] Written: ${cacheKey} accountId=${SHARED} ttl=${event.ttlSeconds} type=${event.type ?? 'unknown'}`);
+
+  return { ok: true };
+}
+
+const apiHandler = withAuth(async ({ auth, account, event }) => {
   const { accountId } = account;
   // URL-decode the key so clients can send MARKET%23Global and the DDB key is MARKET#Global.
   const cacheKey = decodeURIComponent(getPathParam(event, 'key'));
@@ -177,3 +236,10 @@ export const handler = withAuth(async ({ auth, account, event }) => {
 
   return ok({ ok: true });
 });
+
+export async function handler(event: APIGatewayProxyEvent | ServicePrincipalCacheWriteEvent, _context?: Context) {
+  if (isServicePrincipalCacheWriteEvent(event)) {
+    return writeSharedCacheFromServicePrincipal(event);
+  }
+  return apiHandler(event as APIGatewayProxyEvent);
+}

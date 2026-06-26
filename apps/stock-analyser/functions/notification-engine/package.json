@@ -1,20 +1,22 @@
 {
-  "name": "@transformotion/fn-analysis-cache",
+  "name": "@transformotion/fn-stock-analyser-notification-engine",
   "version": "0.0.0",
   "private": true,
   "main": "./src/index.ts",
   "scripts": {
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
-    "lint": "echo \"lint: analysis-cache\"",
+    "lint": "echo \"lint: notification-engine\"",
     "test": "vitest run"
   },
   "dependencies": {
-    "@transformotion/fn-account-membership": "workspace:*",
-    "@transformotion/lambda-middleware": "workspace:*"
+    "@transformotion/contracts": "workspace:*",
+    "@transformotion/fn-ai-proxy-core": "workspace:*"
   },
   "devDependencies": {
     "@aws-sdk/client-dynamodb": "^3",
+    "@aws-sdk/client-lambda": "^3",
+    "@aws-sdk/client-sesv2": "^3",
     "@aws-sdk/lib-dynamodb": "^3",
     "@types/aws-lambda": "^8",
     "typescript": "*",
