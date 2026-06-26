@@ -32,7 +32,7 @@ import {
   type EntitledAppSlug,
   type UserStatus,
 } from '@transformotion/contracts/_shared/auth'
-import type { UserAccessSummary as ContractUserAccessSummary } from '@transformotion/contracts/launchpad/invitations'
+import type { UserAccessSummary as ContractUserAccessSummary, UserPendingInvitation } from '@transformotion/contracts/launchpad/invitations'
 
 // ---------------------------------------------------------------------------
 // View-model types (mirror the v0 prototype names the ported views import)
@@ -74,6 +74,9 @@ export interface UserAccessSummary {
   user: AdminUser
   appAccess: AppAccountAccess[]
   pendingInvites: number
+  /** Per-user pending-invitation rows (one per grant) for the detail list (M11).
+   *  v0 derives these client-side; runtime carries the live contract list here. */
+  pendingInvitations: UserPendingInvitation[]
 }
 
 // ---------------------------------------------------------------------------
@@ -146,6 +149,7 @@ export function toViewUserAccessSummary(s: ContractUserAccessSummary): UserAcces
       })),
     })),
     pendingInvites: s.pendingInvites,
+    pendingInvitations: s.pendingInvitations,
   }
 }
 

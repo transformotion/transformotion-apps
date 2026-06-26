@@ -179,7 +179,7 @@ function useSettingsDirectory(viewer: AdminUser) {
       setUsers(res.users.map(toViewUserAccessSummary))
     } catch {
       // Non-site-admin (or read failure): fall back to the viewer alone.
-      setUsers([{ user: viewer, appAccess: [], pendingInvites: 0 }])
+      setUsers([{ user: viewer, appAccess: [], pendingInvites: 0, pendingInvitations: [] }])
     }
   }, [viewer])
 
