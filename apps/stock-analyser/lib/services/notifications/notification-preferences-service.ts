@@ -11,12 +11,15 @@ import { stockAnalyserClient } from '@/lib/api'
 import {
   NOTIFICATION_TYPES,
   defaultNotificationAccountConfig,
+  defaultNotificationEngineConfig,
   defaultNotificationMemberConsent,
   normalizeIntervalDays,
   type NotificationAccountConfig,
+  type NotificationEngineConfig,
   type NotificationMemberConsent,
   type NotificationType,
 } from '@transformotion/contracts/stock-analyser/notification-preferences'
+import type { NotificationRunHistoryView } from '@transformotion/contracts/stock-analyser/notification-run-history'
 
 export interface NotificationPreferencesService {
   getConfig(accountId: string): Promise<NotificationAccountConfig>
@@ -26,12 +29,19 @@ export interface NotificationPreferencesService {
   ): Promise<NotificationAccountConfig>
   getConsent(accountId: string): Promise<NotificationMemberConsent>
   putConsent(accountId: string, receiveConsent: boolean): Promise<NotificationMemberConsent>
+  // App-wide engine kill-switch (M19 #571) — a single global record, account-independent.
+  getEngineConfig(): Promise<NotificationEngineConfig>
+  setEngineConfig(notificationsEnabled: boolean): Promise<NotificationEngineConfig>
+  // Run-history (M19 #573) — the response is ALREADY projected per viewer server-side.
+  getRunHistory(): Promise<NotificationRunHistoryView>
 }
 
 // ── Mock (local dev) — in-memory, single implicit user ──────────────────────────
 const mockConfigs = new Map<string, NotificationAccountConfig>()
 const mockConsents = new Map<string, NotificationMemberConsent>()
 const MOCK_USER = 'user-local'
+// App-wide kill-switch — single global record (default ON), account-independent.
+let mockEngine: NotificationEngineConfig = defaultNotificationEngineConfig()
 
 const mockService: NotificationPreferencesService = {
   async getConfig(accountId) {
@@ -63,6 +73,16 @@ const mockService: NotificationPreferencesService = {
     mockConsents.set(accountId, next)
     return next
   },
+  async getEngineConfig() {
+    return mockEngine
+  },
+  async setEngineConfig(notificationsEnabled) {
+    mockEngine = { notificationsEnabled, updatedAt: new Date().toISOString() }
+    return mockEngine
+  },
+  async getRunHistory() {
+    return { runs: [] }
+  },
 }
 
 // ── Live — settings Lambda (account derived from the X-Account-Id header) ───────
@@ -78,6 +98,16 @@ const realService: NotificationPreferencesService = {
   },
   async putConsent(_accountId, receiveConsent) {
     return (await stockAnalyserClient.updateNotificationConsent({ receiveConsent })).consent
+  },
+  async getEngineConfig() {
+    return (await stockAnalyserClient.getNotificationEngineConfig()).config
+  },
+  async setEngineConfig(notificationsEnabled) {
+    return (await stockAnalyserClient.updateNotificationEngineConfig({ notificationsEnabled })).config
+  },
+  // The server already projects run-history per viewer — consume the response as-is.
+  async getRunHistory() {
+    return stockAnalyserClient.getNotificationRunHistory()
   },
 }
 

@@ -9,9 +9,11 @@ import type {
 } from '@transformotion/contracts/stock-analyser/api'
 import type {
   NotificationAccountConfig,
+  NotificationEngineConfig,
   NotificationMemberConsent,
   NotificationType,
 } from '@transformotion/contracts/stock-analyser/notification-preferences'
+import type { NotificationRunHistoryView } from '@transformotion/contracts/stock-analyser/notification-run-history'
 import { authService } from '../services/auth'
 import { getConfig } from '../config'
 import { getActiveAccountId } from '@/stores/active-account/use-active-account-store'
@@ -87,6 +89,20 @@ export const stockAnalyserClient = {
   },
   updateNotificationConsent(body: { receiveConsent: boolean }): Promise<{ consent: NotificationMemberConsent }> {
     return http().put('notification-consent', body)
+  },
+  // App-wide notification engine kill-switch (M19 #571). PUT is site/app-admin-gated
+  // server-side. Run-history (M19 #573) is ALREADY projected per-viewer by the
+  // server — the client consumes the response as the view (no client-side scoping).
+  getNotificationEngineConfig(): Promise<{ config: NotificationEngineConfig }> {
+    return http().get('notification-engine-config')
+  },
+  updateNotificationEngineConfig(
+    body: { notificationsEnabled: boolean },
+  ): Promise<{ config: NotificationEngineConfig }> {
+    return http().put('notification-engine-config', body)
+  },
+  getNotificationRunHistory(): Promise<NotificationRunHistoryView> {
+    return http().get('notification-history')
   },
   putCacheEntry(key: string, body: PutCacheRequest): Promise<void> {
     return http().put(`analysis-cache/${encodeURIComponent(key)}`, body)
