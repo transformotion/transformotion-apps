@@ -43,6 +43,7 @@ const HIDDEN_VISIBILITY: NotificationVisibility = {
   intervalDays: "hidden",
   typeSelection: "hidden",
   receiveConsent: "hidden",
+  engineToggle: "hidden",
   allHidden: true,
 }
 

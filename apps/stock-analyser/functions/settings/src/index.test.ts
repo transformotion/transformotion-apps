@@ -353,4 +353,44 @@ describe('Notification preferences authorization', () => {
     ));
     expect(res.statusCode).toBe(503);
   });
+
+  // ── #571 PIECE 3 — engine kill-switch write authz (SITE/APP-ADMIN only) ────
+  // The write gate is GROUPS-authoritative (token cognito:groups) — no membership
+  // lookup — so it fails closed by construction (absent admin group → 403). An
+  // owner/manager/member/viewer all lack the admin group → all rejected, even a
+  // request crafted directly past the read-only/hidden UI. (The membership-lookup
+  // fail-closed case lives in the run-history scoping, #573, not this gate.)
+  it('GET engine-config: any member reads it (default ON when unset)', async () => {
+    const { deps } = createFakeDeps();
+    const res = await createHandler(deps)(makeEvent('GET', undefined, { resource: '/notification-engine-config' }));
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).config).toMatchObject({ notificationsEnabled: true });
+  });
+
+  it('PUT engine-config: site-admin and stock-app-admin may toggle', async () => {
+    for (const groups of ['stock-app-access,site-admin', 'stock-app-access,stock-app-admin']) {
+      const { deps, getItem } = createFakeDeps();
+      const res = await createHandler(deps)(makeEvent('PUT', { notificationsEnabled: false }, { resource: '/notification-engine-config', groups }));
+      expect(res.statusCode).toBe(200);
+      expect(JSON.parse(res.body).config.notificationsEnabled).toBe(false);
+      expect((getItem() as { notificationsEnabled: boolean }).notificationsEnabled).toBe(false); // persisted
+    }
+  });
+
+  it('PUT engine-config: REJECTS (403) a non-admin (owner/manager/member/viewer — no admin group), nothing persisted', async () => {
+    // owner role in the token, but NO site/app-admin group → still rejected.
+    const { deps, getItem } = createFakeDeps();
+    const res = await createHandler(deps)(makeEvent(
+      'PUT', { notificationsEnabled: false },
+      { resource: '/notification-engine-config', groups: 'stock-app-access', accounts: { 'stock-analyser': [{ accountId: 'acct-1', role: 'owner' }] } },
+    ));
+    expect(res.statusCode).toBe(403);
+    expect(getItem()).toBeUndefined(); // fail-closed: no write
+  });
+
+  it('PUT engine-config: rejects (400) a missing/invalid notificationsEnabled', async () => {
+    const { deps } = createFakeDeps();
+    const res = await createHandler(deps)(makeEvent('PUT', { enabled: false }, { resource: '/notification-engine-config', groups: 'stock-app-access,site-admin' }));
+    expect(res.statusCode).toBe(400);
+  });
 });

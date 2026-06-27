@@ -53,7 +53,7 @@ Current state after #366/#386: Stock Analyser owns its REST API Gateway, AI prox
 | `transformotion-portfolio-{stage}` | `apps/stock-analyser/functions/portfolio` | `GET/PUT /portfolio` |
 | `transformotion-watchlist-{stage}` | `apps/stock-analyser/functions/watchlist` | `GET/PUT /watchlist` |
 | `transformotion-analysis-cache-{stage}` | `apps/stock-analyser/functions/analysis-cache` | `GET/PUT/DELETE /analysis-cache/{key}` |
-| `stock-analyser-settings-{stage}` | `apps/stock-analyser/functions/settings` | `GET/PATCH /settings`, `GET /ai-config`, `PUT/DELETE /ai-config/override`, `GET/PUT /cache-freshness`, `GET/PUT /notification-config`, `GET/PUT /notification-consent` |
+| `stock-analyser-settings-{stage}` | `apps/stock-analyser/functions/settings` | `GET/PATCH /settings`, `GET /ai-config`, `PUT/DELETE /ai-config/override`, `GET/PUT /cache-freshness`, `GET/PUT /notification-config`, `GET/PUT /notification-consent`, `GET/PUT /notification-engine-config` (#571 kill-switch; PUT site/app-admin) |
 | `stock-analyser-ai-proxy-{stage}` | `apps/stock-analyser/functions/ai-proxy` | `POST /api/claude` |
 | `stock-analyser-notification-engine-{stage}` | `apps/stock-analyser/functions/notification-engine` | EventBridge scheduled (daily, no HTTP route) |
 | `transformotion-cycle-check-{stage}` | `apps/stock-analyser/functions/cycle-check` | EventBridge scheduled (no HTTP route) |

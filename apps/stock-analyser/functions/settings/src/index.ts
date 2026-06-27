@@ -41,10 +41,12 @@ import {
 import {
   NOTIFICATION_TYPES,
   defaultNotificationAccountConfig,
+  defaultNotificationEngineConfig,
   defaultNotificationMemberConsent,
   isValidNotificationAccountConfig,
   normalizeIntervalDays,
   type NotificationAccountConfig,
+  type NotificationEngineConfig,
   type NotificationMemberConsent,
   type NotificationType,
 } from '@transformotion/contracts/stock-analyser/notification-preferences';
@@ -285,6 +287,66 @@ function requireCacheFreshnessAdmin(auth: Parameters<typeof requireSiteAdmin>[0]
     return;
   }
   requireAppAdminForApp(auth, APP_SLUG);
+}
+
+// ── #571 notification engine kill-switch (app-wide) ──────────────────────────
+const notificationEngineConfigKey = {
+  pk: 'SETTINGS',
+  sk: 'NOTIFICATION_ENGINE_CONFIG#stock-analyser',
+} as const;
+
+function parseNotificationEngineConfig(
+  item: Record<string, unknown> | undefined,
+  now: Date,
+): NotificationEngineConfig {
+  if (!item) return defaultNotificationEngineConfig(now.toISOString());
+  const enabled = item['notificationsEnabled'];
+  const updatedAt = item['updatedAt'];
+  if (typeof enabled !== 'boolean' || typeof updatedAt !== 'string') {
+    return defaultNotificationEngineConfig(now.toISOString());
+  }
+  return { notificationsEnabled: enabled, updatedAt };
+}
+
+/**
+ * #571 PIECE 3 — WRITE authz for the engine kill-switch: SITE or SA APP-ADMIN
+ * only, server-enforced + fail-closed. The read-only/hidden UI is UX; this is
+ * the boundary — an owner/manager/member/viewer write is rejected even if the
+ * request is crafted directly past the UI. (Same site-OR-app-admin gate as the
+ * cache-freshness app-wide config.)
+ */
+function requireNotificationEngineAdmin(auth: Parameters<typeof requireSiteAdmin>[0]) {
+  if (auth.siteAdmin) {
+    requireSiteAdmin(auth);
+    return;
+  }
+  requireAppAdminForApp(auth, APP_SLUG);
+}
+
+async function readNotificationEngineConfig(deps: Dependencies) {
+  const res = await deps.client.send(new GetCommand({
+    TableName: deps.settingsTable,
+    Key: notificationEngineConfigKey,
+  }));
+  return ok({ config: parseNotificationEngineConfig(res.Item, deps.now()) });
+}
+
+async function updateNotificationEngineConfig(deps: Dependencies, event: APIGatewayProxyEvent) {
+  const body = parseBody<{ notificationsEnabled?: unknown } & Record<string, unknown>>(event);
+  const unexpected = Object.keys(body).filter(key => key !== 'notificationsEnabled');
+  if (unexpected.length) throw badRequest(`Unsupported engine config fields: ${unexpected.join(', ')}`);
+  if (typeof body.notificationsEnabled !== 'boolean') {
+    throw badRequest('notificationsEnabled (boolean) is required');
+  }
+  const config: NotificationEngineConfig = {
+    notificationsEnabled: body.notificationsEnabled,
+    updatedAt: deps.now().toISOString(),
+  };
+  await deps.client.send(new PutCommand({
+    TableName: deps.settingsTable,
+    Item: { ...notificationEngineConfigKey, ...config },
+  }));
+  return ok({ config });
 }
 
 async function updateCacheFreshnessConfig(deps: Dependencies, event: APIGatewayProxyEvent) {
@@ -528,6 +590,19 @@ export function createHandler(deps: Dependencies = defaultDependencies) {
       saData.read(auth, account.accountId);
       requireSiteAdmin(auth);
       return resetOverride(deps, account.accountId);
+    }
+
+    // ── Notification engine kill-switch (M19 #571, app-wide) ─────────────────
+    // GET: any member may read (the card resolves toggle visibility per role).
+    if (resource === '/notification-engine-config' && event.httpMethod === 'GET') {
+      saData.read(auth, account.accountId);
+      return readNotificationEngineConfig(deps);
+    }
+    // PUT: SITE or SA APP-ADMIN only (Piece 3) — fail-closed past the UI.
+    if (resource === '/notification-engine-config' && event.httpMethod === 'PUT') {
+      saData.read(auth, account.accountId);
+      requireNotificationEngineAdmin(auth);
+      return updateNotificationEngineConfig(deps, event);
     }
 
     // ── Notification preferences (M19 #534) ──────────────────────────────────

@@ -82,6 +82,7 @@ function deps(overrides: Partial<NotificationEngineDeps> = {}): NotificationEngi
     newRunId: () => 'run-test',
     readAccountName: vi.fn(async (accountId) => `Acct ${accountId}`),
     recordSendLog: vi.fn(async () => undefined),
+    readEngineEnabled: vi.fn(async () => true),
   };
   return { ...base, ...overrides };
 }
@@ -379,6 +380,24 @@ describe('notification send-log (#572)', () => {
     }))).rejects.toThrow('members scan failed');
     expect(recordSendLog).toHaveBeenCalledOnce();
     expect(recordSendLog.mock.calls[0][0]).toMatchObject({ status: 'failed' });
+  });
+
+  it('kill-switch OFF (#571): no processing, no sends, minimal engine-disabled record still written', async () => {
+    const sendEmail = vi.fn(async () => undefined);
+    const listStockAnalyserMembers = vi.fn(async () => [activeMember]);
+    const recordSendLog = vi.fn(async (_run: SendLogRun) => undefined);
+    const run = await runNotificationEngine(deps({
+      readEngineEnabled: vi.fn(async () => false),
+      sendEmail,
+      listStockAnalyserMembers,
+      recordSendLog,
+    }));
+
+    expect(sendEmail).not.toHaveBeenCalled();
+    expect(listStockAnalyserMembers).not.toHaveBeenCalled(); // early-return before any account work
+    expect(run.sendLog).toMatchObject({ status: 'success', note: 'engine-disabled', accountsEvaluated: 0, emailsSent: 0 });
+    expect(run.sendLog.accounts).toEqual([]);
+    expect(recordSendLog).toHaveBeenCalledOnce(); // audit record still written via finally
   });
 
   it('cross-account tripwire: flags a member outcome that is not a member of the account', async () => {
