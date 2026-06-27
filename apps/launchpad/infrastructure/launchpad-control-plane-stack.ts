@@ -433,7 +433,12 @@ export class LaunchpadControlPlaneStack extends cdk.Stack {
     invitationsTable.grantReadWriteData(invitationRedemptionFn); // read bundle + mark accepted
     accountsTable.grantReadData(invitationRedemptionFn);          // account-invite: resolve account/appSlug
     accountMembersTable.grantReadWriteData(invitationRedemptionFn); // duplicate check + add membership
-    usersTable.grantReadData(invitationRedemptionFn);             // disabled-status check
+    // disabled-status check (GET) + ensureUserRow upsert (#496 PutItem). The
+    // redemption write is REQUIRED: an invitee may redeem before any app load,
+    // so it cannot rely on account-provisioning's first-load bootstrap of this
+    // row. Scoped to launchpad-users only (table + its indexes), matching the
+    // readWrite userFn/accountProvisioningFn already hold for this table. (#567)
+    usersTable.grantReadWriteData(invitationRedemptionFn);
     // Ensure the `{app}-app-access` group on redemption (membership ⟹ access; the
     // access-only app-grant). AdminListGroupsForUser + ListUsers serve the DEV-ONLY
     // redeem-as bypass (resolve + impersonate the invitee), which is refused in prod
