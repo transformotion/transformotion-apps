@@ -66,6 +66,8 @@ export interface NotificationEngineDeps {
   readAccountName?: (accountId: string) => Promise<string | undefined>;
   /** Persist the run's audit record (run summary + per-account + member outcomes). */
   recordSendLog: (run: SendLogRun) => Promise<void>;
+  /** #571 kill-switch: app-wide `notificationsEnabled` (default ON). */
+  readEngineEnabled: () => Promise<boolean>;
 }
 
 export interface NotificationEngineResult {
@@ -136,6 +138,8 @@ export interface SendLogRun {
   emailsSent: number;
   accounts: SendLogAccount[];
   error?: string;
+  /** #571: set to `engine-disabled` when the run no-op'd because the kill-switch was OFF. */
+  note?: string;
 }
 
 export function stateSk(type: NotificationSourceType, ticker: string): string {
@@ -471,6 +475,16 @@ export async function runNotificationEngine(deps: NotificationEngineDeps): Promi
 
   let runError: unknown;
   try {
+    // #571 kill-switch (OPTION A): flag-checked early-return at the TOP of the run.
+    // EventBridge still fires daily and is UNCHANGED; the job simply no-ops when
+    // OFF. A minimal `engine-disabled` audit record is written (via the finally)
+    // so the history shows the engine fired-but-skipped. Re-enable = flag flip.
+    if (!(await deps.readEngineEnabled())) {
+      sendLog.note = 'engine-disabled';
+      deps.log?.('notification-engine-disabled-skip', { runId: sendLog.runId });
+      return result;
+    }
+
     const today = deps.today();
     const grouped = groupMembersByAccount(await deps.listStockAnalyserMembers());
     const resolveAnalysis = createAnalysisResolver(deps);

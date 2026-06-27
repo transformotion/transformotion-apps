@@ -257,7 +257,14 @@ preferences, and notification delivery consent.
 | Attribute | Type | Notes |
 |---|---|---|
 | `pk` (PK) | String | `SETTINGS`, `ACCOUNT#{accountId}`, or `NOTIFICATION_CONSENT#{accountId}` |
-| `sk` (SK) | String | `CACHE_FRESHNESS#stock-analyser`, `NOTIFICATIONS#{accountId}`, `USER#{userId}#PREFERENCES`, `USER#{userId}`, or `APP#AI_RUNTIME` |
+| `sk` (SK) | String | `CACHE_FRESHNESS#stock-analyser`, `NOTIFICATION_ENGINE_CONFIG#stock-analyser` (#571 kill-switch), `NOTIFICATIONS#{accountId}`, `USER#{userId}#PREFERENCES`, `USER#{userId}`, or `APP#AI_RUNTIME` |
+
+The app-wide **engine kill-switch** (#571) lives at `SETTINGS` /
+`NOTIFICATION_ENGINE_CONFIG#stock-analyser` — `{ notificationsEnabled, updatedAt }`,
+default ON. The notification engine reads it at the top of each daily run and
+no-ops (a minimal `engine-disabled` send-log record) when OFF; the EventBridge
+rule is unchanged. Write is **site/app-admin only** (server-enforced, fail-closed
+via token groups); read is any member (the card resolves toggle visibility).
 | `activePolicy` | Map | Cache freshness policy row |
 | `intervalDays` | Number | Notification account cadence, minimum 1 |
 | `activeTypes` | List | Notification source types, e.g. `portfolio`, `watchlist` |

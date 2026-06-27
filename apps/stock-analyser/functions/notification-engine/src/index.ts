@@ -422,11 +422,22 @@ async function recordSendLog(runtime: RuntimeEnv, run: SendLogRun): Promise<void
   }
 }
 
+// #571 kill-switch: app-wide notificationsEnabled (default ON when absent/malformed).
+async function readEngineEnabled(runtime: RuntimeEnv): Promise<boolean> {
+  const res = await ddb.send(new GetCommand({
+    TableName: runtime.settingsTable,
+    Key: { pk: 'SETTINGS', sk: 'NOTIFICATION_ENGINE_CONFIG#stock-analyser' },
+  }));
+  const enabled = res.Item?.['notificationsEnabled'];
+  return typeof enabled === 'boolean' ? enabled : true;
+}
+
 export function createDependencies(runtime: RuntimeEnv = env()): NotificationEngineDeps {
   return {
     today: todayUtc,
     nowEpochSeconds: () => Math.floor(Date.now() / 1000),
     newRunId: () => randomUUID(),
+    readEngineEnabled: () => readEngineEnabled(runtime),
     readAccountName: (accountId) => readAccountName(runtime, accountId),
     recordSendLog: (run) => recordSendLog(runtime, run),
     listStockAnalyserMembers: () => listStockAnalyserMembers(runtime),

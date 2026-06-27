@@ -372,6 +372,10 @@ export class StockAnalyserApiStack extends cdk.Stack {
     const notificationConsent = this.api.root.addResource('notification-consent');
     notificationConsent.addMethod('GET', settingsIntegration, auth);
     notificationConsent.addMethod('PUT', settingsIntegration, auth);
+    // M19 #571 engine kill-switch (app-wide): GET any member; PUT site/app-admin.
+    const notificationEngineConfig = this.api.root.addResource('notification-engine-config');
+    notificationEngineConfig.addMethod('GET', settingsIntegration, auth);
+    notificationEngineConfig.addMethod('PUT', settingsIntegration, auth);
 
     new cdk.CfnOutput(this, 'ApiUrl', {
       value: this.api.url,
