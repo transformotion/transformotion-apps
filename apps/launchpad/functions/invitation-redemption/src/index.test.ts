@@ -290,6 +290,27 @@ describe('redeem-as (DEV-ONLY impersonation bypass) — the SERVER-SIDE env guar
     expect(groupAdds[0]).toMatchObject({ Username: 'user-invitee', GroupName: 'budget-app-access' });
   });
 
+  it('DEV + site-admin: account invite membership is written for the invitee, not the admin caller', async () => {
+    const { handler, memberPuts, groupAdds } = makeHandler(
+      { bundles: { 'b-1': accountInviteBundle }, accounts: { 'acct-1': account1 } },
+      { stage: 'dev', cognitoUserId: 'user-invitee', liveGroups: [] },
+    );
+    const res = (await handler(redeemAsEvent('b-1', 'site-admin'))) as { body: string };
+    const b = body(res);
+
+    expect(b.userId).toBe('user-invitee');
+    expect(memberPuts).toHaveLength(1);
+    expect(memberPuts[0]).toMatchObject({
+      accountId: 'acct-1',
+      userId: 'user-invitee',
+      email: 'invitee@example.com',
+      appSlug: 'stock-analyser',
+      role: 'member',
+    });
+    expect(memberPuts[0]).not.toMatchObject({ userId: 'admin' });
+    expect(groupAdds[0]).toMatchObject({ Username: 'user-invitee', GroupName: 'stock-app-access' });
+  });
+
   it('DEV + site-admin but the invitee has no Cognito user yet → 400 (cannot impersonate)', async () => {
     const { handler } = makeHandler(
       { bundles: { 'b-2': appGrantBundle } },

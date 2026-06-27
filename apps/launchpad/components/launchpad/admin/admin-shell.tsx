@@ -51,7 +51,6 @@ function canUseInviteSurfaces(viewer: AdminUser): boolean {
 const INVITE_SURFACE_ROUTES = [
   '/launchpad/admin/invite',
   '/launchpad/admin/accounts',
-  '/launchpad/admin/redemption',
 ]
 
 interface AdminNavItem {
@@ -98,8 +97,8 @@ const ADMIN_NAV: AdminNavItem[] = [
     href: '/launchpad/admin/redemption',
     icon: TicketCheck,
     ready: true,
-    // Test-harness surface — hidden outside dev and limited to site-admins
-    // because the live backend lists all invitation bundles for this harness.
+    // Test-harness surface — hidden in production and site-admin only because
+    // the backing redeem-as endpoint applies grants on behalf of invitees.
     visible: (v) => devToolsEnabled() && userIsSiteAdmin(v),
   },
 ]
@@ -173,10 +172,11 @@ export function AdminShell({
   // Site/app-admins see the full admin area. Account owners/managers (who can
   // create at least one invitation grant) may use the invite surfaces only.
   //
-  // M11 dev-only: the Redemption Demo is a site-admin harness for walking ANY
-  // invitee's accept flow from the real invitation link. This widens nothing in
-  // prod — devToolsEnabled() is false there (NEXT_PUBLIC_DEV_TOOLS=false) and
-  // the route additionally notFound()s.
+  // M11 dev-only: the Redemption Demo is a site-admin harness for applying an
+  // invitation on behalf of its invitee. This widens nothing in prod —
+  // devToolsEnabled() is false there (NEXT_PUBLIC_DEV_TOOLS=false) and the
+  // route additionally notFound()s. The real redeem-as bypass remains
+  // STAGE-guarded server-side regardless of this client gate.
   const allowed =
     canEnterAdmin(viewer) ||
     (canUseInviteSurfaces(viewer) &&

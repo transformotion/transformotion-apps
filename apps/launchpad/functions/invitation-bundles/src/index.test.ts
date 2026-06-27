@@ -18,7 +18,6 @@ function makeHandler(seed: Seed = {}) {
       if (name === 'GetCommand' && input.TableName === 'accounts') return { Item: seed.accounts?.[input.Key!.accountId] };
       if (name === 'GetCommand' && input.TableName === 'invitations') return { Item: seed.bundles?.[input.Key!.invitationId] };
       if (name === 'GetCommand' && input.TableName === 'members') return { Item: seed.members?.[`${input.Key!.accountId}#${input.Key!.userId}`] };
-      if (name === 'ScanCommand' && input.TableName === 'invitations') return { Items: Object.values(seed.bundles ?? {}) };
       if (name === 'PutCommand' && input.TableName === 'invitations') { puts.push(input.Item ?? {}); return {}; }
       if (name === 'UpdateCommand' && input.TableName === 'invitations') { updates.push(input); return {}; }
       throw new Error(`unexpected ddb command ${name} on ${input.TableName}`);
@@ -67,32 +66,7 @@ function event(groups: string, body: unknown) {
   } as never;
 }
 
-function listEvent(groups: string, sub = 'sender-1') {
-  return {
-    resource: '/api/invitations/bundles',
-    httpMethod: 'GET',
-    pathParameters: null,
-    headers: {},
-    requestContext: { authorizer: { claims: { sub, email: 'sender@example.com', 'cognito:groups': groups, apps: '[]', accounts: '{}' } } },
-    body: null,
-    isBase64Encoded: false,
-  } as never;
-}
-
 const parse = (res: { body: string }) => JSON.parse(res.body);
-
-function bundle(invitationId: string, invitedBy: string, email = `${invitationId}@example.com`) {
-  return {
-    invitationId,
-    bundleId: invitationId,
-    email,
-    invitedBy,
-    createdAt: `2026-06-0${invitationId.endsWith('1') ? '1' : '2'}T00:00:00.000Z`,
-    expiresAt: 1798761600,
-    status: 'pending',
-    grants: [{ grantId: `g-${invitationId}`, kind: 'app-grant', appSlug: 'stock-analyser' }],
-  };
-}
 
 describe('invitation-bundles — POST /api/invitations/bundles (M11 Chunk 3, Option A)', () => {
   it('site-admin can create an app-grant bundle (roleless, persisted in A5 read shape)', async () => {
@@ -184,34 +158,6 @@ describe('invitation-bundles — POST /api/invitations/bundles (M11 Chunk 3, Opt
     const { handler } = makeHandler();
     expect(((await handler(event('site-admin', { grants: [{ kind: 'app-grant', appSlug: 'stock-analyser' }] }))) as { statusCode: number }).statusCode).toBe(400);
     expect(((await handler(event('site-admin', { email: 'a@b.com', grants: [] }))) as { statusCode: number }).statusCode).toBe(400);
-  });
-});
-
-describe('invitation-bundles — GET /api/invitations/bundles (Redemption Demo inbox)', () => {
-  it('site-admin sees every bundle so the dev harness can open any invitee scenario', async () => {
-    const { handler } = makeHandler({
-      bundles: {
-        b1: bundle('b1', 'sender-1'),
-        b2: bundle('b2', 'other-sender'),
-      },
-    });
-
-    const res = (await handler(listEvent('site-admin', 'sender-1'))) as { statusCode: number; body: string };
-    expect(res.statusCode).toBe(200);
-    expect(parse(res).bundles.map((b: { bundleId: string }) => b.bundleId).sort()).toEqual(['b1', 'b2']);
-  });
-
-  it('non-site callers remain limited to bundles they created', async () => {
-    const { handler } = makeHandler({
-      bundles: {
-        b1: bundle('b1', 'sender-1'),
-        b2: bundle('b2', 'other-sender'),
-      },
-    });
-
-    const res = (await handler(listEvent('', 'sender-1'))) as { statusCode: number; body: string };
-    expect(res.statusCode).toBe(200);
-    expect(parse(res).bundles.map((b: { bundleId: string }) => b.bundleId)).toEqual(['b1']);
   });
 });
 
