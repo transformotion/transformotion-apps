@@ -350,6 +350,28 @@ export class StockAnalyserApiStack extends cdk.Stack {
     // the handler reads the live membership row to authorize. GetItem-only grant.
     grantMembershipRead(settingsFn);
 
+    // M19 #573 — notification run-history READ. Reads the send-log table (#574)
+    // and projects per-viewer SERVER-SIDE over LIVE membership (the userId-index
+    // Query resolves the caller's owned/managed accounts → per-account detail).
+    const notificationHistoryFn = new lambdaNodejs.NodejsFunction(this, 'NotificationHistoryFn', {
+      functionName: `stock-analyser-notification-history-${stage}`,
+      entry: path.join(__dirname, '../functions/notification-history/src/index.ts'),
+      handler: 'handler',
+      runtime: lambda.Runtime.NODEJS_20_X,
+      timeout: cdk.Duration.seconds(15),
+      memorySize: 256,
+      environment: {
+        SEND_LOG_TABLE: notificationSendLogTable.tableName,
+        ACCOUNT_MEMBERS_TABLE: accountMembersTable.tableName,
+      },
+      bundling,
+    });
+    notificationSendLogTable.grantReadData(notificationHistoryFn); // runs + GSI1 recency
+    notificationHistoryFn.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['dynamodb:Query'],
+      resources: [accountMembersTable.tableArn, `${accountMembersTable.tableArn}/index/userId-index`],
+    }));
+
     const settingsIntegration = new apigateway.LambdaIntegration(settingsFn, { proxy: true });
     const settings = this.api.root.addResource('settings');
     settings.addMethod('GET', settingsIntegration, auth);
@@ -376,6 +398,10 @@ export class StockAnalyserApiStack extends cdk.Stack {
     const notificationEngineConfig = this.api.root.addResource('notification-engine-config');
     notificationEngineConfig.addMethod('GET', settingsIntegration, auth);
     notificationEngineConfig.addMethod('PUT', settingsIntegration, auth);
+    // M19 #573 run-history READ (server-scoped per viewer).
+    this.api.root
+      .addResource('notification-history')
+      .addMethod('GET', new apigateway.LambdaIntegration(notificationHistoryFn, { proxy: true }), auth);
 
     new cdk.CfnOutput(this, 'ApiUrl', {
       value: this.api.url,

@@ -53,6 +53,7 @@ Current state after #366/#386: Stock Analyser owns its REST API Gateway, AI prox
 | `stock-analyser-settings-{stage}` | `apps/stock-analyser/functions/settings` | `GET/PATCH /settings`, `GET /ai-config`, `PUT/DELETE /ai-config/override`, `GET/PUT /cache-freshness`, `GET/PUT /notification-config`, `GET/PUT /notification-consent`, `GET/PUT /notification-engine-config` (#571 kill-switch; PUT site/app-admin) |
 | `stock-analyser-ai-proxy-{stage}` | `apps/stock-analyser/functions/ai-proxy` | `POST /api/claude` |
 | `stock-analyser-notification-engine-{stage}` | `apps/stock-analyser/functions/notification-engine` | EventBridge scheduled (daily, no HTTP route) |
+| `stock-analyser-notification-history-{stage}` | `apps/stock-analyser/functions/notification-history` | `GET /notification-history` (#573 run-history; server-scoped per viewer) |
 | `transformotion-cycle-check-{stage}` | `apps/stock-analyser/functions/cycle-check` | EventBridge scheduled (no HTTP route) |
 | `transformotion-cycle-data-{stage}` | `apps/stock-analyser/functions/cycle-data` | `GET /cycle/ohlcv?ticker=` |
 | `transformotion-market-data-{stage}` | `apps/stock-analyser/functions/market-data` | `GET /price/ohlcv?ticker=&range=&interval=` |

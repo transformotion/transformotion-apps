@@ -68,6 +68,13 @@ EXEMPT_PATH_PREFIXES=(
   "$REPO_ROOT/apps/launchpad/functions/invitee-search/"
   "$REPO_ROOT/apps/launchpad/functions/pre-token-generation/"
   "$REPO_ROOT/apps/launchpad/functions/user/"
+  # #573 run-history READ: withAuthOnly + the server-side projection
+  # (projectRunHistoryForViewer over LIVE membership) IS the authorization — every
+  # caller reads, the WIRE PAYLOAD is scoped per viewer (admin→summaries,
+  # owner/manager→own detail, member/viewer→nothing), fail-closed on lookup error.
+  # A baseline require* does not fit (a site-admin who is not an SA member must
+  # still see all runs). Compensating control: the payload-scoping test suite.
+  "$REPO_ROOT/apps/stock-analyser/functions/notification-history/"
 )
 
 EXEMPT_FILES=(
