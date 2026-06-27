@@ -55,7 +55,8 @@ function GrantIcon({ kind, className }: { kind: InvitationGrant['kind']; classNa
  * Live redemption-demo data. v0 read seed bundles + the mock store; the live
  * sources are GET /api/invitations/bundles (inbox) and GET /api/admin/users/access
  * (sender/recipient labels + recipient context, site-admin). Accepting drives the
- * REAL redeem-as dev bypass (POST .../redeem-as) — the only behavioural difference.
+ * REAL redeem-as dev bypass (POST .../redeem-as), applying grants to the invitee
+ * resolved from the bundle email instead of the signed-in admin.
  */
 function useRedemptionData() {
   const [bundles, setBundles] = useState<InvitationBundle[] | null>(null)
@@ -133,11 +134,13 @@ function InvitationEmail({
   senderName,
   onAccept,
   busy,
+  canApply,
 }: {
   bundle: InvitationBundle
   senderName: string
   onAccept: () => void
   busy: boolean
+  canApply: boolean
 }) {
   const expired = bundle.status === 'expired'
   return (
@@ -179,11 +182,11 @@ function InvitationEmail({
           </div>
         ) : null}
 
-        <PrimaryButton className="mt-5 w-full" icon={MailOpen} onClick={onAccept} disabled={busy}>
-          {busy ? 'Accepting…' : 'Accept invitation'}
+        <PrimaryButton className="mt-5 w-full" icon={MailOpen} onClick={onAccept} disabled={busy || !canApply}>
+          {busy ? 'Accepting…' : 'Accept invite for recipient'}
         </PrimaryButton>
         <p className="mt-2 text-center text-[11px] text-muted-foreground">
-          Clicking the link processes each item independently — some can apply while others don&apos;t.
+          Applies this bundle to the invited user server-side. The admin session is not granted access.
         </p>
       </div>
     </Card>
@@ -281,23 +284,27 @@ function RedemptionResult({
   )
 }
 
-function InviteeContext({ bundle, directory }: { bundle: InvitationBundle; directory: UserAccessSummary[] }) {
-  const summary = directory.find((u) => u.user.email.toLowerCase() === bundle.email.toLowerCase())
+function findInvitee(bundle: InvitationBundle, directory: UserAccessSummary[]): UserAccessSummary | undefined {
+  return directory.find((u) => u.user.email.toLowerCase() === bundle.email.toLowerCase())
+}
+
+function InviteeContext({ bundle, invitee }: { bundle: InvitationBundle; invitee: UserAccessSummary | undefined }) {
   return (
     <Card>
       <h3 className="mb-2 text-sm font-semibold text-foreground">Who is the recipient?</h3>
-      {!summary ? (
+      {!invitee ? (
         <p className="text-xs text-muted-foreground">
-          <span className="text-foreground">{bundle.email}</span> isn&apos;t a Transformotion user yet — they&apos;re
-          brand new, so nothing here conflicts.
+          <span className="text-foreground">{bundle.email}</span> is not yet a Transformotion user. This admin
+          harness cannot pre-attach access by email alone; the invitee needs a Cognito user before the demo can
+          apply grants on their behalf.
         </p>
       ) : (
         <>
           <p className="text-xs text-muted-foreground">
-            <span className="text-foreground">{resolveUserLabel(summary.user)}</span> already has access to:
+            <span className="text-foreground">{resolveUserLabel(invitee.user)}</span> already has access to:
           </p>
           <ul className="mt-2 space-y-1">
-            {summary.appAccess.map((app) => (
+            {invitee.appAccess.map((app) => (
               <li key={app.appSlug} className="text-[11px] text-muted-foreground">
                 <span className="text-foreground">{app.appLabel}</span>
                 {' — '}
@@ -306,10 +313,10 @@ function InviteeContext({ bundle, directory }: { bundle: InvitationBundle; direc
                   : 'app-level only'}
               </li>
             ))}
-            {summary.appAccess.length === 0 && <li className="text-[11px] text-muted-foreground">No current access.</li>}
+            {invitee.appAccess.length === 0 && <li className="text-[11px] text-muted-foreground">No current access.</li>}
           </ul>
           <p className="mt-2 text-[11px] text-muted-foreground text-pretty">
-            That existing access is exactly why some items below may not apply.
+            The demo applies accepted grants to this resolved invitee record, not to the signed-in admin.
           </p>
         </>
       )}
@@ -324,6 +331,7 @@ export function RedemptionDemoView() {
   const [busy, setBusy] = useState(false)
 
   const bundle = bundles?.find((b) => b.bundleId === bundleId) ?? bundles?.[0] ?? null
+  const invitee = bundle ? findInvitee(bundle, directory) : undefined
 
   function senderName(userId: string): string {
     const summary = directory.find((u) => u.user.userId === userId)
@@ -377,7 +385,7 @@ export function RedemptionDemoView() {
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
       <div className="space-y-4 lg:col-span-2">
         <Inbox bundles={bundles} selectedId={bundle.bundleId} onSelect={selectBundle} />
-        <InviteeContext bundle={bundle} directory={directory} />
+        <InviteeContext bundle={bundle} invitee={invitee} />
       </div>
 
       <div className="lg:col-span-3">
@@ -389,6 +397,7 @@ export function RedemptionDemoView() {
             senderName={senderName(bundle.invitedBy)}
             onAccept={() => acceptBundle(bundle)}
             busy={busy}
+            canApply={!!invitee}
           />
         )}
       </div>
