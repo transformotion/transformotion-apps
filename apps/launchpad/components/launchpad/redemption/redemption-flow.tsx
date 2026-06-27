@@ -18,6 +18,7 @@ import { Loader2 } from 'lucide-react'
 import type {
   AuthenticatedIdentity,
   RedemptionApplied,
+  RedemptionEvaluation,
   RedemptionPolicy,
 } from '@transformotion/contracts/launchpad/redemption'
 import type { InvitationBundle } from '@transformotion/contracts/launchpad/invitations'
@@ -53,6 +54,11 @@ export function RedemptionFlow({
   const [confirmedMismatchBind, setConfirmedMismatchBind] = useState(false)
   const [applied, setApplied] = useState<RedemptionApplied | null>(null)
   const [applying, setApplying] = useState(false)
+  // A non-applied async apply outcome (e.g. the server-side redeem failed and
+  // applyRedemption's catch returned link-invalid). v0's mock apply is sync +
+  // infallible, so its flow only handled 'applied'; the live backend can fail,
+  // and without surfacing that result the UI hangs on "Applying…" forever (#567).
+  const [applyOutcome, setApplyOutcome] = useState<RedemptionEvaluation | null>(null)
   // The bundle is resolved POST-auth (GET {bundleId} is auth-only). null until
   // fetched; `bundleLoaded` distinguishes "still loading" from a real not-found.
   const [bundle, setBundle] = useState<InvitationBundle | null>(null)
@@ -91,11 +97,17 @@ export function RedemptionFlow({
   const handleApply = useCallback(async () => {
     if (!identity) return
     setApplying(true)
+    setApplyOutcome(null)
     const result = await applyRedemption(bundleId, identity)
     setApplying(false)
     if (result.status === 'applied') {
       setApplied(result)
       onApplied?.(result)
+    } else {
+      // Apply did not succeed (server error → applyRedemption's catch). Surface
+      // the terminal outcome so the flow renders a real screen instead of
+      // hanging on "Applying…". (#567)
+      setApplyOutcome(result)
     }
   }, [identity, bundleId, onApplied])
 
@@ -116,6 +128,14 @@ export function RedemptionFlow({
   }, [evaluation.status, applied, applying])
 
   if (applied) return <AppliedScreen evaluation={applied} />
+
+  // A failed apply (live backend can fail; v0's mock can't) — render the terminal
+  // outcome's screen rather than hang on "Applying…". applyRedemption maps any
+  // apply failure to link-invalid; show that screen so the invitee gets a
+  // readable "this link can't be redeemed" state with next steps, not a freeze.
+  if (applyOutcome && applyOutcome.status === 'link-invalid') {
+    return <LinkInvalidScreen evaluation={applyOutcome} />
+  }
 
   // Authenticated but the bundle hasn't resolved yet → loading (NOT not-found).
   if (identity && !bundleLoaded) return <TransitionCard label="Loading your invitation…" />

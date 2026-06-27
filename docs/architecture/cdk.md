@@ -154,7 +154,7 @@ Launchpad control-plane and auth-domain variables:
 
 | Variable | Lambda | Value |
 |---|---|---|
-| `USERS_TABLE` | `launchpad-user-{stage}`, `launchpad-account-provisioning-{stage}`, `launchpad-invitation-redemption-{stage}`, `launchpad-pre-token-generation-{stage}` (#501, read-only) | `launchpad-users-{stage}` |
+| `USERS_TABLE` | `launchpad-user-{stage}`, `launchpad-account-provisioning-{stage}`, `launchpad-invitation-redemption-{stage}` (read-write — `ensureUserRow` upsert on redeem, #496/#567), `launchpad-pre-token-generation-{stage}` (#501, read-only) | `launchpad-users-{stage}` |
 | `ACCOUNTS_TABLE` | Launchpad account-provisioning, accounts, invitations, pre-token generation | `launchpad-accounts-{stage}` |
 | `ACCOUNT_MEMBERS_TABLE` | Launchpad account-provisioning, accounts, pre-token generation, invitee-search, invitation-bundles (#558, read-only — cancel-grant owner/manager check) | `launchpad-account-members-{stage}` |
 | `INVITATIONS_TABLE` | `launchpad-invitations-{stage}`, `launchpad-accounts-{stage}` (#555, read-only — surfaces an account's pending invitations on `GET …/members/detail`), `launchpad-access-summary-{stage}` (read-only — per-user pending-invitation list + count, M11) | `launchpad-invitations-{stage}` |
