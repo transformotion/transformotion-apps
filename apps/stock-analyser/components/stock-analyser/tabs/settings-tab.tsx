@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import { useNavigation } from "../app-shell"
 import { selectUser, useAuthStore } from "@/stores/auth/use-auth-store"
 import { PageHeader, Card, PrimaryButton, SecondaryButton, SegmentedControl, Slider, TextToggle } from "@transformotion/ui-primitives"
-import { AlertCircle, Bell, Briefcase, Check, Clock, Cpu, Eye, FileText, Gauge, Lock, Minus, Plus, RotateCcw, Save, Trash2, Zap } from "lucide-react"
+import { AlertCircle, AlertTriangle, ArrowRight, Bell, Briefcase, Check, ChevronDown, Clock, Cpu, Eye, FileText, Gauge, History, Lock, Mail, Minus, MinusCircle, Plus, Power, RotateCcw, Save, Trash2, Zap } from "lucide-react"
 import type { SearchMode } from "../app-shell"
 import { useNotificationPreferences } from "@/lib/hooks/use-notification-preferences"
 import {
@@ -12,6 +12,13 @@ import {
   NOTIFICATION_TYPES,
   type NotificationType,
 } from "@transformotion/contracts/stock-analyser/notification-preferences"
+import type {
+  NotificationOutcomeReason,
+  NotificationRunStatus,
+  NotificationRunAccountView,
+  NotificationRunView,
+  NotificationRunHistoryView,
+} from "@transformotion/contracts/stock-analyser/notification-run-history"
 import { notifyCacheFreshnessPolicyUpdated } from "@/lib/hooks"
 import type { User } from "@transformotion/auth-client"
 import { cn } from "@/lib/utils"
@@ -752,6 +759,246 @@ function TypePill({
   )
 }
 
+/** Human label for each leaf member-outcome reason (#573). */
+const RUN_REASON_LABEL: Record<NotificationOutcomeReason, string> = {
+  delivered: "Delivered",
+  "consent-off": "Opted out",
+  disabled: "Engine disabled",
+  viewer: "Read-only viewer",
+  "not-a-member": "Not a member",
+  "lookup-error": "Lookup error",
+  "no-actionable-transition": "No actionable change",
+}
+
+/** Overall-run status chip styling (#573). */
+const RUN_STATUS_STYLE: Record<NotificationRunStatus, { label: string; cls: string }> = {
+  success: { label: "Success", cls: "bg-signal-green/15 text-signal-green" },
+  partial: { label: "Partial", cls: "bg-signal-gold/15 text-signal-gold" },
+  failed: { label: "Failed", cls: "bg-signal-red/15 text-signal-red" },
+}
+
+/** Short run date, e.g. "Jun 27". */
+function formatRunDate(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return "—"
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" })
+}
+
+/**
+ * One account's record in the expanded run-history. Renders per the account's
+ * OWN visibility (#573 corrected): `detail` accounts show ticker transitions +
+ * per-member outcome rows; `summary` accounts (admin-without-ownership) show
+ * only the account line, status, and emails-sent count — member identities and
+ * transitions are never present in the payload, so there is nothing to hide.
+ */
+function RunAccountBlock({ account }: { account: NotificationRunAccountView }) {
+  const statusCls =
+    account.accountStatus === "processed"
+      ? "text-signal-green"
+      : account.accountStatus === "error"
+        ? "text-signal-red"
+        : "text-muted-foreground"
+  const isSummaryOnly = account.visibility === "summary"
+  return (
+    <div className="rounded-lg border border-border bg-surface/40 p-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="min-w-0 truncate text-sm font-medium text-foreground">{account.accountName}</p>
+        <span className={cn("shrink-0 text-[10px] font-semibold uppercase tracking-wider", statusCls)}>
+          {account.accountStatus}
+        </span>
+      </div>
+
+      {isSummaryOnly ? (
+        // Admin-without-ownership: count only, no member detail in the payload.
+        <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+          <Mail className="size-3.5 shrink-0" />
+          <span>
+            {account.emailsSent} {account.emailsSent === 1 ? "email" : "emails"} sent
+          </span>
+          <span className="ml-auto inline-flex items-center gap-1 text-[10px]">
+            <Lock className="size-3" />
+            Member detail visible to account owners
+          </span>
+        </div>
+      ) : (
+        <>
+          {account.transitions.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {account.transitions.map((t) => (
+                <span
+                  key={t.ticker}
+                  className="inline-flex items-center gap-1 rounded-md bg-surface2 px-2 py-0.5 text-[10px] font-medium text-foreground"
+                >
+                  {t.ticker}
+                  <span className="text-muted-foreground">{t.from}</span>
+                  <ArrowRight className="size-3 text-muted-foreground" />
+                  <span className="text-foreground">{t.to}</span>
+                </span>
+              ))}
+            </div>
+          )}
+
+          <ul className="mt-2 space-y-1">
+            {account.memberOutcomes.map((m) => {
+              const sent = m.outcome === "sent"
+              return (
+                <li key={m.userId} className="flex items-center gap-2 text-xs">
+                  {sent ? (
+                    <Mail className="size-3.5 shrink-0 text-signal-green" />
+                  ) : (
+                    <MinusCircle className="size-3.5 shrink-0 text-muted-foreground" />
+                  )}
+                  <span className="min-w-0 flex-1 truncate text-foreground">{m.email}</span>
+                  {sent && m.tickers?.length ? (
+                    <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">
+                      {m.tickers.join(", ")}
+                    </span>
+                  ) : null}
+                  <span
+                    className={cn(
+                      "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium",
+                      sent ? "bg-signal-green/15 text-signal-green" : "bg-surface2 text-muted-foreground",
+                    )}
+                  >
+                    {RUN_REASON_LABEL[m.reason]}
+                  </span>
+                </li>
+              )
+            })}
+          </ul>
+        </>
+      )}
+    </div>
+  )
+}
+
+/** The "N emails [across M accounts]" tail of a run's one-line summary. */
+function runEmailsLabel(run: NotificationRunView): string {
+  const emails = `${run.emailsSent} ${run.emailsSent === 1 ? "email" : "emails"}`
+  return run.showCrossAccountHeader
+    ? `${emails} across ${run.accountsEvaluated} ${run.accountsEvaluated === 1 ? "account" : "accounts"}`
+    : emails
+}
+
+/**
+ * LEVEL 2 (#573 extend): one RUN in the history list, independently expandable
+ * into its per-account breakdown. The run is already scoped/projected by the
+ * hook (per the per-account MAX rule); this row only renders what it is given.
+ */
+function RunRow({ run }: { run: NotificationRunView }) {
+  const [open, setOpen] = useState(false)
+  const status = RUN_STATUS_STYLE[run.status]
+
+  return (
+    <div className="rounded-lg border border-border bg-surface/40">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center gap-3 px-3 py-2.5 text-left"
+      >
+        <span className="shrink-0 text-xs font-medium tabular-nums text-foreground">
+          {formatRunDate(run.ranAt)}
+        </span>
+        <span
+          className={cn(
+            "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
+            status.cls,
+          )}
+        >
+          {status.label}
+        </span>
+        <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+          {runEmailsLabel(run)}
+        </span>
+        <ChevronDown
+          className={cn(
+            "size-4 shrink-0 text-muted-foreground transition-transform",
+            open && "rotate-180",
+          )}
+        />
+      </button>
+
+      {open && (
+        <div className="space-y-3 border-t border-border px-3 py-3">
+          {run.accounts.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No account records in this run.</p>
+          ) : (
+            run.accounts.map((account) => (
+              <RunAccountBlock key={account.accountId} account={account} />
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * LEVEL 1 (#573 extend): notification run-HISTORY. COLLAPSED by default: the
+ * latest run's one-line summary + status chip (cross-account for admins;
+ * account-scoped for owner/manager — no cross-account count). EXPANDED: the
+ * LIST of runs (most-recent-first), each a {@link RunRow} that itself expands
+ * into per-account → per-member detail. The `history` is already scoped/
+ * projected per run by the hook; this component only renders what it is given
+ * (the server is the real scoping boundary — see
+ * notification-run-history.behaviour.md).
+ */
+function NotificationRunHistory({ history }: { history: NotificationRunHistoryView }) {
+  const [expanded, setExpanded] = useState(false)
+  const runs = history.runs
+  const latest = runs[0]
+  const latestStatus = RUN_STATUS_STYLE[latest.status]
+
+  return (
+    <div className="rounded-xl border border-border bg-surface2/60">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
+        className="flex w-full items-center gap-3 px-4 py-3 text-left"
+      >
+        <History className="size-4 shrink-0 text-muted-foreground" />
+        <div className="min-w-0 flex-1">
+          <p className="flex items-center gap-2 text-sm font-medium text-foreground">
+            Run history
+            <span
+              className={cn(
+                "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
+                latestStatus.cls,
+              )}
+            >
+              {latestStatus.label}
+            </span>
+          </p>
+          <p className="truncate text-xs text-muted-foreground">
+            {`Last run ${formatRunDate(latest.ranAt)}, ${runEmailsLabel(latest)}`}
+          </p>
+        </div>
+        <ChevronDown
+          className={cn(
+            "size-4 shrink-0 text-muted-foreground transition-transform",
+            expanded && "rotate-180",
+          )}
+        />
+      </button>
+
+      {expanded && (
+        <div className="space-y-2 border-t border-border px-4 py-3">
+          {runs.map((run) => (
+            <RunRow key={run.runId} run={run} />
+          ))}
+          {history.nextCursor && (
+            <p className="px-1 pt-1 text-[11px] text-muted-foreground">
+              Showing the {runs.length} most recent runs.
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 /**
  * Notification preferences (M19 #534) — role-conditional.
  *
@@ -769,9 +1016,12 @@ function NotificationsCard() {
     visibility,
     config,
     consent,
+    engine,
+    runHistory,
     setIntervalDays,
     setActiveTypes,
     setReceiveConsent,
+    setNotificationsEnabled,
   } = useNotificationPreferences(user.activeAccountId ?? null)
 
   // Not ready (SSR/first paint) or the entire feature is inapplicable (viewer):
@@ -782,6 +1032,12 @@ function NotificationsCard() {
   const accountReadOnly = visibility.intervalDays === "read-only"
   const showAccountConfig = visibility.intervalDays !== "hidden" && config
   const showConsent = visibility.receiveConsent !== "hidden"
+
+  // App-wide kill-switch (#571): editable for site/app-admin, read-only for
+  // owner/manager, hidden for member/viewer.
+  const showEngineToggle = visibility.engineToggle !== "hidden"
+  const engineEditable = visibility.engineToggle === "editable"
+  const notificationsEnabled = engine?.notificationsEnabled ?? true
 
   const activeTypes = config?.activeTypes ?? []
   const intervalDays = config?.intervalDays ?? MIN_NOTIFICATION_INTERVAL_DAYS
@@ -807,6 +1063,67 @@ function NotificationsCard() {
           </p>
         </div>
       </div>
+
+      {/* APP-WIDE engine kill-switch (#571) — platform control, admin-editable. */}
+      {showEngineToggle && (
+        <div
+          className={cn(
+            "rounded-xl border p-4",
+            notificationsEnabled
+              ? "border-border bg-surface2/60"
+              : "border-signal-red/40 bg-signal-red/10",
+          )}
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-2.5">
+              <Power
+                className={cn(
+                  "mt-0.5 size-4 shrink-0",
+                  notificationsEnabled ? "text-signal-green" : "text-signal-red",
+                )}
+              />
+              <div>
+                <p className="text-sm font-medium text-foreground flex items-center gap-2">
+                  Notification engine
+                  <span
+                    className={cn(
+                      "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
+                      notificationsEnabled
+                        ? "bg-signal-green/15 text-signal-green"
+                        : "bg-signal-red/15 text-signal-red",
+                    )}
+                  >
+                    {notificationsEnabled ? "Enabled" : "Disabled"}
+                  </span>
+                </p>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  {notificationsEnabled
+                    ? "The daily notification job runs platform-wide. Disable to pause all sends (e.g. when AI credit is exhausted)."
+                    : "All notification sends are paused platform-wide. No one is delivered notifications until re-enabled."}
+                </p>
+                {!engineEditable && (
+                  <span className="mt-1.5 inline-flex items-center gap-1 text-[10px] text-muted-foreground">
+                    <Lock className="size-3" />
+                    Administrators only
+                  </span>
+                )}
+              </div>
+            </div>
+            <Switch
+              label="Notification engine enabled"
+              checked={notificationsEnabled}
+              disabled={!engineEditable}
+              onChange={(next) => setNotificationsEnabled(next)}
+            />
+          </div>
+          {!notificationsEnabled && (
+            <p className="mt-3 flex items-center gap-1.5 rounded-lg bg-signal-red/10 px-3 py-2 text-[11px] font-medium text-signal-red">
+              <AlertTriangle className="size-3.5 shrink-0" />
+              Account interval and per-member consent below have no effect while the engine is disabled.
+            </p>
+          )}
+        </div>
+      )}
 
       {/* ACCOUNT-level config (owner/manager-controlled). */}
       {showAccountConfig && (
@@ -901,6 +1218,11 @@ function NotificationsCard() {
           />
         </div>
       )}
+
+      {/* Run-history / send-log (#573) — a LIST of runs, each expandable into
+          its per-account detail. admin: full + cross-account counts;
+          owner/manager: own accounts only; member/viewer: not rendered. */}
+      {runHistory && <NotificationRunHistory history={runHistory} />}
     </Card>
   )
 }

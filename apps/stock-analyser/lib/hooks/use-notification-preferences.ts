@@ -8,10 +8,12 @@ import {
   normalizeIntervalDays,
   resolveNotificationVisibility,
   type NotificationAccountConfig,
+  type NotificationEngineConfig,
   type NotificationMemberConsent,
   type NotificationViewerContext,
   type NotificationVisibility,
 } from "@transformotion/contracts/stock-analyser/notification-preferences"
+import type { NotificationRunHistoryView } from "@transformotion/contracts/stock-analyser/notification-run-history"
 import { stockAnalyserNotificationService } from "@/lib/services/notifications/notification-preferences-service"
 
 /**
@@ -34,9 +36,18 @@ export interface UseNotificationPreferencesResult {
   visibility: NotificationVisibility
   config: NotificationAccountConfig | null
   consent: NotificationMemberConsent | null
+  engine: NotificationEngineConfig | null
+  /**
+   * Run-history LIST (most-recent-first), ALREADY PROJECTED to what this viewer
+   * may see (#573). The server is the scoping boundary; the client consumes the
+   * response as the view (it does NOT call projectRunHistoryForViewer). `null`
+   * when there is nothing to show, so the card omits the section entirely.
+   */
+  runHistory: NotificationRunHistoryView | null
   setIntervalDays: (days: number) => void
   setActiveTypes: (types: NotificationAccountConfig["activeTypes"]) => void
   setReceiveConsent: (receive: boolean) => void
+  setNotificationsEnabled: (enabled: boolean) => void
 }
 
 const HIDDEN_VISIBILITY: NotificationVisibility = {
@@ -61,6 +72,8 @@ export function useNotificationPreferences(
   const [context, setContext] = useState<NotificationViewerContext>(EMPTY_CONTEXT)
   const [config, setConfig] = useState<NotificationAccountConfig | null>(null)
   const [consent, setConsent] = useState<NotificationMemberConsent | null>(null)
+  const [engine, setEngine] = useState<NotificationEngineConfig | null>(null)
+  const [runHistory, setRunHistory] = useState<NotificationRunHistoryView | null>(null)
 
   const isSiteAdmin = user?.metadata?.siteAdmin === true
   const isAppAdmin = ((user?.metadata?.appAdmin as string[] | undefined) ?? []).includes("stock-analyser")
@@ -80,16 +93,27 @@ export function useNotificationPreferences(
 
       let cfg: NotificationAccountConfig | null = null
       let cns: NotificationMemberConsent | null = null
+      let eng: NotificationEngineConfig | null = null
+      let rh: NotificationRunHistoryView | null = null
       if (activeAccountId && isNotificationFeatureApplicable(ctx)) {
-        ;[cfg, cns] = await Promise.all([
+        ;[cfg, cns, eng, rh] = await Promise.all([
           stockAnalyserNotificationService.getConfig(activeAccountId).catch(() => null),
           stockAnalyserNotificationService.getConsent(activeAccountId).catch(() => null),
+          stockAnalyserNotificationService.getEngineConfig().catch(() => null),
+          // The server already projects run-history per viewer — consume as-is.
+          // Empty-runs responses collapse to null so the card omits the section.
+          stockAnalyserNotificationService
+            .getRunHistory()
+            .then((view) => (view.runs.length > 0 ? view : null))
+            .catch(() => null),
         ])
       }
       if (cancelled) return
       setContext(ctx)
       setConfig(cfg)
       setConsent(cns)
+      setEngine(eng)
+      setRunHistory(rh)
       setReady(true)
     })()
     return () => {
@@ -109,6 +133,9 @@ export function useNotificationPreferences(
       stockAnalyserNotificationService.getConsent(activeAccountId).then(setConsent).catch(() => {})
     }
   }, [activeAccountId])
+  const refetchEngine = useCallback(() => {
+    stockAnalyserNotificationService.getEngineConfig().then(setEngine).catch(() => {})
+  }, [])
 
   const setIntervalDays = useCallback(
     (days: number) => {
@@ -147,5 +174,28 @@ export function useNotificationPreferences(
     [activeAccountId, refetchConsent],
   )
 
-  return { ready, context, visibility, config, consent, setIntervalDays, setActiveTypes, setReceiveConsent }
+  const setNotificationsEnabled = useCallback(
+    (enabled: boolean) => {
+      setEngine((e) => (e ? { ...e, notificationsEnabled: enabled } : e)) // optimistic
+      stockAnalyserNotificationService
+        .setEngineConfig(enabled)
+        .then(setEngine)
+        .catch(refetchEngine)
+    },
+    [refetchEngine],
+  )
+
+  return {
+    ready,
+    context,
+    visibility,
+    config,
+    consent,
+    engine,
+    runHistory,
+    setIntervalDays,
+    setActiveTypes,
+    setReceiveConsent,
+    setNotificationsEnabled,
+  }
 }
