@@ -1,43 +1,20 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   TicketCheck,
   Mail,
   MailOpen,
   Building2,
   KeyRound,
-  Sparkles,
-  CheckCircle2,
-  XCircle,
   Clock,
-  CopyCheck,
-  UserCog,
-  ArrowRight,
-  RotateCcw,
-  ShieldCheck,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { Card, PrimaryButton, SecondaryButton, EmptyState } from '@/components/ui/design-system'
+import { Card, PrimaryButton, EmptyState } from '@/components/ui/design-system'
 import { appLabel, resolveUserLabel, toViewUserAccessSummary, type UserAccessSummary } from '@/lib/admin/view-model'
 import { getControlPlaneClient } from '@/lib/services/control-plane-client'
-import { authService } from '@/lib/services/auth'
-import { redeemBundleAsInvitee, type GrantRedemptionResult } from '@/lib/services/invitations'
-import type { EntitledAppSlug } from '@transformotion/contracts/_shared/auth'
 import type { InvitationBundle, InvitationGrant } from '@transformotion/contracts/launchpad/invitations'
-
-type GrantOutcome = GrantRedemptionResult['outcome']
-
-const OUTCOME_STYLES: Record<
-  GrantOutcome,
-  { label: string; chip: string; icon: typeof CheckCircle2 }
-> = {
-  accepted: { label: 'Added', chip: 'bg-signal-green/15 text-signal-green', icon: CheckCircle2 },
-  rejected: { label: 'Skipped', chip: 'bg-signal-red/15 text-signal-red', icon: XCircle },
-  expired: { label: 'Expired', chip: 'bg-signal-gold/15 text-signal-gold', icon: Clock },
-  unauthorized: { label: 'Not allowed', chip: 'bg-signal-red/15 text-signal-red', icon: XCircle },
-  duplicate: { label: 'No change', chip: 'bg-surface2 text-muted-foreground', icon: CopyCheck },
-}
 
 function grantHeadline(grant: InvitationGrant): string {
   if (grant.kind === 'account-invite') {
@@ -52,10 +29,10 @@ function GrantIcon({ kind, className }: { kind: InvitationGrant['kind']; classNa
 }
 
 /**
- * Live redemption-demo data. v0 read seed bundles + the mock store; the live
- * sources are GET /api/invitations/bundles (inbox) and GET /api/admin/users/access
- * (sender/recipient labels + recipient context, site-admin). Accepting drives the
- * REAL redeem-as dev bypass (POST .../redeem-as) — the only behavioural difference.
+ * Live redemption-demo data. v0 reads every seed/store bundle; the live source
+ * is GET /api/invitations/bundles, where site-admin sees every bundle. Opening
+ * an invitation launches the real /redeem?bundle=<id> invitee route instead of
+ * the legacy inline redeem-as impersonation path.
  */
 function useRedemptionData() {
   const [bundles, setBundles] = useState<InvitationBundle[] | null>(null)
@@ -75,7 +52,7 @@ function useRedemptionData() {
     void refresh()
   }, [refresh])
 
-  return { bundles, directory, refresh }
+  return { bundles, directory }
 }
 
 function Inbox({
@@ -131,13 +108,11 @@ function Inbox({
 function InvitationEmail({
   bundle,
   senderName,
-  onAccept,
-  busy,
+  onOpen,
 }: {
   bundle: InvitationBundle
   senderName: string
-  onAccept: () => void
-  busy: boolean
+  onOpen: () => void
 }) {
   const expired = bundle.status === 'expired'
   return (
@@ -179,103 +154,13 @@ function InvitationEmail({
           </div>
         ) : null}
 
-        <PrimaryButton className="mt-5 w-full" icon={MailOpen} onClick={onAccept} disabled={busy}>
-          {busy ? 'Accepting…' : 'Accept invitation'}
+        <PrimaryButton className="mt-5 w-full" icon={MailOpen} onClick={onOpen}>
+          Open invitation link
         </PrimaryButton>
         <p className="mt-2 text-center text-[11px] text-muted-foreground">
-          Clicking the link processes each item independently — some can apply while others don&apos;t.
+          Opens the real invitee redemption route. If you&apos;re signed in as the wrong person, use
+          the flow&apos;s switch-account step.
         </p>
-      </div>
-    </Card>
-  )
-}
-
-function OutcomeRow({ result }: { result: GrantRedemptionResult }) {
-  const style = OUTCOME_STYLES[result.outcome]
-  const Icon = style.icon
-  return (
-    <div className="flex items-start justify-between gap-3 rounded-lg border border-border bg-surface/40 p-3">
-      <div className="flex items-start gap-2.5 min-w-0">
-        <GrantIcon kind={result.kind as InvitationGrant['kind']} className="mt-0.5 size-4" />
-        <div className="min-w-0">
-          <p className="truncate text-sm font-medium text-foreground">{result.target}</p>
-          <p className="text-[11px] text-muted-foreground">{appLabel(result.appSlug as EntitledAppSlug)}</p>
-          <p className="mt-1 text-xs text-muted-foreground text-pretty">{result.reason}</p>
-          {result.outcome === 'duplicate' && (
-            <span className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-surface2 px-2.5 py-1 text-[11px] font-medium text-foreground">
-              <UserCog className="size-3.5" />
-              Manage role in User Management
-              <ArrowRight className="size-3" />
-            </span>
-          )}
-          {result.outcome === 'accepted' && result.kind === 'app-grant' && (
-            <span className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary">
-              <Sparkles className="size-3.5" />
-              Create your first account on the launchpad
-              <ArrowRight className="size-3" />
-            </span>
-          )}
-        </div>
-      </div>
-      <span
-        className={cn(
-          'inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider',
-          style.chip,
-        )}
-      >
-        <Icon className="size-3" />
-        {style.label}
-      </span>
-    </div>
-  )
-}
-
-function RedemptionResult({
-  bundle,
-  results,
-  onReset,
-}: {
-  bundle: InvitationBundle
-  results: GrantRedemptionResult[]
-  onReset: () => void
-}) {
-  const added = results.filter((r) => r.outcome === 'accepted').length
-  const total = results.length
-  const allGood = added === total
-  const noneGood = added === 0
-
-  const banner = allGood
-    ? { tone: 'bg-signal-green/15 text-signal-green border-signal-green/30', icon: CheckCircle2 }
-    : noneGood
-      ? { tone: 'bg-signal-red/15 text-signal-red border-signal-red/30', icon: XCircle }
-      : { tone: 'bg-signal-gold/15 text-signal-gold border-signal-gold/30', icon: ShieldCheck }
-  const BannerIcon = banner.icon
-
-  const headline = allGood ? "You're all set" : noneGood ? 'Nothing was added' : 'Partly added to your account'
-
-  return (
-    <Card className="overflow-hidden p-0">
-      <div className={cn('flex items-center gap-3 border-b px-5 py-4', banner.tone)}>
-        <BannerIcon className="size-6 shrink-0" />
-        <div>
-          <p className="text-sm font-semibold">{headline}</p>
-          <p className="text-xs opacity-90">
-            {added} of {total} {total === 1 ? 'item' : 'items'} added to {bundle.email}
-          </p>
-        </div>
-      </div>
-
-      <div className="px-5 py-5">
-        <h3 className="mb-2 text-sm font-semibold text-foreground">What happened to each item</h3>
-        <div className="space-y-2">
-          {results.map((result) => (
-            <OutcomeRow key={result.grantId} result={result} />
-          ))}
-        </div>
-
-        <SecondaryButton className="mt-5 w-full" icon={RotateCcw} onClick={onReset}>
-          Back to the invitation
-        </SecondaryButton>
       </div>
     </Card>
   )
@@ -318,10 +203,9 @@ function InviteeContext({ bundle, directory }: { bundle: InvitationBundle; direc
 }
 
 export function RedemptionDemoView() {
-  const { bundles, directory, refresh } = useRedemptionData()
+  const router = useRouter()
+  const { bundles, directory } = useRedemptionData()
   const [bundleId, setBundleId] = useState<string>('')
-  const [results, setResults] = useState<GrantRedemptionResult[] | null>(null)
-  const [busy, setBusy] = useState(false)
 
   const bundle = bundles?.find((b) => b.bundleId === bundleId) ?? bundles?.[0] ?? null
 
@@ -330,33 +214,12 @@ export function RedemptionDemoView() {
     return summary ? resolveUserLabel(summary.user) : userId
   }
 
-  async function acceptBundle(b: InvitationBundle) {
-    setBusy(true)
-    try {
-      const idToken = await authService.getIdToken()
-      if (!idToken) throw new Error('Not signed in')
-      const res = await redeemBundleAsInvitee(idToken, b.bundleId)
-      setResults(res.results)
-      void refresh()
-    } catch (err) {
-      setResults(
-        b.grants.map((g) => ({
-          grantId: g.grantId,
-          kind: g.kind,
-          appSlug: g.appSlug,
-          target: g.kind === 'account-invite' ? g.accountId : appLabel(g.appSlug),
-          outcome: 'rejected' as const,
-          reason: err instanceof Error ? err.message : 'Redemption failed.',
-        })),
-      )
-    } finally {
-      setBusy(false)
-    }
+  function openBundle(b: InvitationBundle) {
+    router.push(`/redeem?bundle=${encodeURIComponent(b.bundleId)}`)
   }
 
   function selectBundle(id: string) {
     setBundleId(id)
-    setResults(null)
   }
 
   if (bundles === null) {
@@ -381,16 +244,11 @@ export function RedemptionDemoView() {
       </div>
 
       <div className="lg:col-span-3">
-        {results ? (
-          <RedemptionResult bundle={bundle} results={results} onReset={() => setResults(null)} />
-        ) : (
-          <InvitationEmail
-            bundle={bundle}
-            senderName={senderName(bundle.invitedBy)}
-            onAccept={() => acceptBundle(bundle)}
-            busy={busy}
-          />
-        )}
+        <InvitationEmail
+          bundle={bundle}
+          senderName={senderName(bundle.invitedBy)}
+          onOpen={() => openBundle(bundle)}
+        />
       </div>
     </div>
   )

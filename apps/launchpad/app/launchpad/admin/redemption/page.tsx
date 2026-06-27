@@ -6,8 +6,8 @@ import { RedemptionDemoView } from '@/components/launchpad/admin/redemption-demo
 import { devToolsEnabled } from '@/lib/dev-tools'
 
 // Dev-only test harness. notFound() when dev tools are disabled (prod) — the nav
-// also hides it, but the route guards itself too. Accepting an invitation drives
-// the REAL redeem-as dev bypass (server-side STAGE-guarded against prod).
+// also hides it, but the route guards itself too. Opening an invitation launches
+// the real /redeem?bundle=<id> invitee flow.
 export default function AdminRedemptionPage() {
   if (!devToolsEnabled()) notFound()
   return (
