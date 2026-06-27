@@ -20,6 +20,7 @@ export interface StockAnalyserApiStackProps extends cdk.StackProps {
   jobResultsTable: dynamodb.ITable;
   settingsTable: dynamodb.ITable;
   notificationStateTable: dynamodb.ITable;
+  notificationSendLogTable: dynamodb.ITable;
   wsApiEndpoint: string;
   wsApiId: string;
 }
@@ -55,6 +56,7 @@ export class StockAnalyserApiStack extends cdk.Stack {
       jobResultsTable,
       settingsTable,
       notificationStateTable,
+      notificationSendLogTable,
       wsApiEndpoint,
       wsApiId,
     } = props;
@@ -94,6 +96,11 @@ export class StockAnalyserApiStack extends cdk.Stack {
         resources: [accountMembersTable.tableArn],
       }));
     };
+
+    // #572: the notification engine reads account display names for the send-log
+    // (best-effort, read-time). GetItem-only on the launchpad-owned accounts
+    // table — same minimal cross-domain read pattern as the members table above.
+    const accountsTable = dynamodb.Table.fromTableName(this, 'LaunchpadAccountsTable', `launchpad-accounts-${stage}`);
 
     const bundling: lambdaNodejs.BundlingOptions = {
       externalModules: ['@aws-sdk/*'],
@@ -231,6 +238,8 @@ export class StockAnalyserApiStack extends cdk.Stack {
         WATCHLIST_TABLE: watchlistTable.tableName,
         SETTINGS_TABLE: settingsTable.tableName,
         NOTIFICATION_STATE_TABLE: notificationStateTable.tableName,
+        SEND_LOG_TABLE: notificationSendLogTable.tableName,
+        ACCOUNTS_TABLE: accountsTable.tableName,
         ANALYSIS_CACHE_TABLE: analysisCacheTable.tableName,
         ACCOUNT_MEMBERS_TABLE: accountMembersTable.tableName,
         ANALYSIS_CACHE_FUNCTION_NAME: cacheFn.functionName,
@@ -249,6 +258,13 @@ export class StockAnalyserApiStack extends cdk.Stack {
     watchlistTable.grantReadData(notificationEngineFn);
     settingsTable.grantReadData(notificationEngineFn);
     notificationStateTable.grantReadWriteData(notificationEngineFn);
+    // #572: write-only on the send-log (the engine only appends run records;
+    // reads belong to #573). Best-effort GetItem on launchpad-accounts for names.
+    notificationSendLogTable.grantWriteData(notificationEngineFn);
+    notificationEngineFn.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['dynamodb:GetItem'],
+      resources: [accountsTable.tableArn],
+    }));
     accountMembersTable.grantReadData(notificationEngineFn);
     notificationEngineFn.addToRolePolicy(new iam.PolicyStatement({
       actions: ['dynamodb:GetItem'],

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   accountIsDue,
+  assertNoCrossAccount,
   eligibleRecipients,
   evaluateTransition,
   runNotificationEngine,
@@ -8,6 +9,8 @@ import {
   type MemberRow,
   type NotificationEngineDeps,
   type NotificationStateRecord,
+  type SendLogAccount,
+  type SendLogRun,
 } from './engine';
 import type { StockAnalysisResult } from '../../../lib/services/portfolio/types';
 import type {
@@ -76,6 +79,9 @@ function deps(overrides: Partial<NotificationEngineDeps> = {}): NotificationEngi
     generateAnalysis: vi.fn(async (ticker) => analysis(ticker, 'BUY')),
     writeSharedAnalysisCache: vi.fn(async () => undefined),
     sendEmail: vi.fn(async () => undefined),
+    newRunId: () => 'run-test',
+    readAccountName: vi.fn(async (accountId) => `Acct ${accountId}`),
+    recordSendLog: vi.fn(async () => undefined),
   };
   return { ...base, ...overrides };
 }
@@ -245,34 +251,28 @@ describe('notification engine account processing', () => {
     }));
   });
 
-  it('re-checks consent at delivery time and skips email if consent is withdrawn mid-run', async () => {
+  it('evaluates each member ONCE per run (no redundant per-ticker consent re-read), and respects consent', async () => {
+    // #572 refactor: eligibility (consent/disabled/viewer/live) is computed once
+    // per account, not re-read per ticker. A consenting member is delivered to;
+    // consent is read exactly once for that member across the whole run.
     const sendEmail = vi.fn(async () => undefined);
-    const readMemberConsent = vi
-      .fn()
-      .mockResolvedValueOnce({
-        accountId: 'acct-a',
-        userId: 'user-1',
-        receiveConsent: true,
-        updatedAt: '2026-06-26T00:00:00.000Z',
-      })
-      .mockResolvedValueOnce({
-        accountId: 'acct-a',
-        userId: 'user-1',
-        receiveConsent: false,
-        updatedAt: '2026-06-26T00:00:01.000Z',
-      });
+    const readMemberConsent = vi.fn(async (accountId, userId) => ({
+      accountId, userId, receiveConsent: true, updatedAt: '2026-06-26T00:00:00.000Z',
+    }));
     const engineDeps = deps({
       readMemberConsent,
-      readWatchlist: vi.fn(async () => []),
+      // two tickers fire for the SAME member — eligibility must not be re-read per ticker.
+      readPortfolio: vi.fn(async () => [{ ticker: 'CBA.AX', shares: 1, avgCost: 100, isGifted: false, addedAt: 1 }]),
+      readWatchlist: vi.fn(async () => [{ ticker: 'NVDA', name: 'NVIDIA', addedAt: 1 }]),
       sendEmail,
     });
 
     const result = await runNotificationEngine(engineDeps);
 
-    expect(result.transitionsFired).toBe(1);
-    expect(result.emailsSent).toBe(0);
-    expect(sendEmail).not.toHaveBeenCalled();
-    expect(readMemberConsent).toHaveBeenCalledTimes(2);
+    expect(result.transitionsFired).toBe(2);
+    expect(result.emailsSent).toBe(2);            // one per fired ticker for the eligible member
+    expect(readMemberConsent).toHaveBeenCalledTimes(1); // ONCE per member, not per ticker
+    expect(sendEmail).toHaveBeenCalledTimes(2);
   });
 
   it('skips not-due accounts and accounts with no consenting recipients', async () => {
@@ -288,5 +288,115 @@ describe('notification engine account processing', () => {
       readMemberConsent: vi.fn(async (accountId, userId) => ({ accountId, userId, receiveConsent: false, updatedAt: 'now' })),
     });
     expect(await runNotificationEngine(noConsent)).toMatchObject({ accountsSkippedNoConsent: 1, accountsProcessed: 0 });
+  });
+});
+
+// ── #572 send-log: every member's outcome+reason recorded at the leaf ─────────
+describe('notification send-log (#572)', () => {
+  const members = (...m: Array<Partial<MemberRow> & { userId: string }>): MemberRow[] =>
+    m.map((x) => ({ accountId: 'acct-a', appSlug: 'stock-analyser', role: 'member', email: `${x.userId}@example.com`, ...x }));
+
+  function outcome(run: Awaited<ReturnType<typeof runNotificationEngine>>, userId: string) {
+    return run.sendLog.accounts[0]?.memberOutcomes.find((o) => o.userId === userId);
+  }
+
+  it('records a SENT outcome (delivered) with the delivered tickers, and the run summary', async () => {
+    const run = await runNotificationEngine(deps());
+    expect(run.sendLog.runId).toBe('run-test');
+    expect(run.sendLog.status).toBe('success');
+    expect(run.sendLog.accounts[0]).toMatchObject({ accountId: 'acct-a', accountName: 'Acct acct-a', status: 'processed' });
+    expect(outcome(run, 'user-1')).toMatchObject({ outcome: 'sent', reason: 'delivered' });
+    expect(outcome(run, 'user-1')?.tickers).toContain('CBA.AX');
+    expect(run.sendLog.emailsSent).toBe(run.emailsSent);
+  });
+
+  it('records each SKIP reason at the leaf: disabled / viewer / consent-off / not-a-member / lookup-error', async () => {
+    const roster = members(
+      { userId: 'ok' },
+      { userId: 'disabled' },
+      { userId: 'viewer' },
+      { userId: 'consent-off' },
+      { userId: 'ghost' },     // no live row → not-a-member
+      { userId: 'boom' },      // lookup throws
+    );
+    const run = await runNotificationEngine(deps({
+      listStockAnalyserMembers: vi.fn(async () => roster),
+      readLiveMember: vi.fn(async (accountId, userId) => {
+        if (userId === 'boom') throw new Error('ddb blip');
+        if (userId === 'ghost') return null;
+        const role = userId === 'viewer' ? 'viewer' : 'member';
+        const status = userId === 'disabled' ? 'disabled' : 'active';
+        return { accountId, userId, email: `${userId}@example.com`, appSlug: 'stock-analyser', role, status };
+      }),
+      readMemberConsent: vi.fn(async (accountId, userId) => ({ accountId, userId, receiveConsent: userId !== 'consent-off', updatedAt: 'now' })),
+    }));
+
+    expect(outcome(run, 'ok')).toMatchObject({ outcome: 'sent', reason: 'delivered' });
+    expect(outcome(run, 'disabled')).toMatchObject({ outcome: 'skipped', reason: 'disabled' });
+    expect(outcome(run, 'viewer')).toMatchObject({ outcome: 'skipped', reason: 'viewer' });
+    expect(outcome(run, 'consent-off')).toMatchObject({ outcome: 'skipped', reason: 'consent-off' });
+    expect(outcome(run, 'ghost')).toMatchObject({ outcome: 'skipped', reason: 'not-a-member' });
+    expect(outcome(run, 'boom')).toMatchObject({ outcome: 'skipped', reason: 'lookup-error' });
+  });
+
+  it('records no-actionable-transition for eligible members when no ticker fires', async () => {
+    const run = await runNotificationEngine(deps({
+      generateAnalysis: vi.fn(async (ticker) => analysis(ticker, 'HOLD')), // never actionable
+    }));
+    expect(run.sendLog.accounts[0].status).toBe('processed');
+    expect(outcome(run, 'user-1')).toMatchObject({ outcome: 'skipped', reason: 'no-actionable-transition' });
+    expect(run.sendLog.emailsSent).toBe(0);
+  });
+
+  it('partial failure: one account errors → recorded as failed, run downgraded to partial, summary still written', async () => {
+    const recordSendLog = vi.fn(async () => undefined);
+    const run = await runNotificationEngine(deps({
+      listStockAnalyserMembers: vi.fn(async () => [
+        { accountId: 'acct-a', userId: 'user-1', email: 'a@x.com', appSlug: 'stock-analyser', role: 'member' },
+        { accountId: 'acct-b', userId: 'user-2', email: 'b@x.com', appSlug: 'stock-analyser', role: 'member' },
+      ]),
+      readPortfolio: vi.fn(async (accountId) => {
+        if (accountId === 'acct-b') throw new Error('portfolio read failed');
+        return [{ ticker: 'CBA.AX', shares: 1, avgCost: 100, isGifted: false, addedAt: 1 }];
+      }),
+      readWatchlist: vi.fn(async () => []),
+      recordSendLog,
+    }));
+
+    expect(run.sendLog.status).toBe('partial');
+    const failed = run.sendLog.accounts.find((a) => a.accountId === 'acct-b');
+    expect(failed).toMatchObject({ status: 'failed' });
+    expect(failed?.error).toContain('portfolio read failed');
+    expect(run.sendLog.accounts.find((a) => a.accountId === 'acct-a')?.status).toBe('processed');
+    expect(recordSendLog).toHaveBeenCalledOnce(); // audit written despite the failure
+  });
+
+  it('run-level failure: member listing throws → status failed, recorded, then rethrown', async () => {
+    const recordSendLog = vi.fn(async (_run: SendLogRun) => undefined);
+    await expect(runNotificationEngine(deps({
+      listStockAnalyserMembers: vi.fn(async () => { throw new Error('members scan failed'); }),
+      recordSendLog,
+    }))).rejects.toThrow('members scan failed');
+    expect(recordSendLog).toHaveBeenCalledOnce();
+    expect(recordSendLog.mock.calls[0][0]).toMatchObject({ status: 'failed' });
+  });
+
+  it('cross-account tripwire: flags a member outcome that is not a member of the account', async () => {
+    const log = vi.fn();
+    const account: SendLogAccount = {
+      accountId: 'acct-a',
+      status: 'processed',
+      transitions: [],
+      emailsSent: 0,
+      memberOutcomes: [{ userId: 'foreign', outcome: 'sent', reason: 'delivered' }],
+    };
+    assertNoCrossAccount({ log }, 'acct-a', members({ userId: 'user-1' }), account);
+    expect(account.error).toContain('cross-account leak');
+    expect(log).toHaveBeenCalledWith('cross-account-leak-detected', expect.objectContaining({ userId: 'foreign' }));
+
+    // No false positive on a clean account.
+    const clean: SendLogAccount = { accountId: 'acct-a', status: 'processed', transitions: [], emailsSent: 0, memberOutcomes: [{ userId: 'user-1', outcome: 'sent', reason: 'delivered' }] };
+    assertNoCrossAccount({ log: vi.fn() }, 'acct-a', members({ userId: 'user-1' }), clean);
+    expect(clean.error).toBeUndefined();
   });
 });

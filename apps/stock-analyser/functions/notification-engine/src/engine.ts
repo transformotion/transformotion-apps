@@ -59,6 +59,13 @@ export interface NotificationEngineDeps {
   writeSharedAnalysisCache: (ticker: string, analysis: StockAnalysisResult) => Promise<void>;
   sendEmail: (recipient: MemberRow, transition: NotificationTransition) => Promise<void>;
   log?: (message: string, context?: Record<string, unknown>) => void;
+  // ── #572 send-log (audit) ────────────────────────────────────────────────
+  /** Mint a run id (injectable so tests are deterministic). */
+  newRunId: () => string;
+  /** Best-effort account display name (read-time enrichment; falls back to id). */
+  readAccountName?: (accountId: string) => Promise<string | undefined>;
+  /** Persist the run's audit record (run summary + per-account + member outcomes). */
+  recordSendLog: (run: SendLogRun) => Promise<void>;
 }
 
 export interface NotificationEngineResult {
@@ -68,6 +75,67 @@ export interface NotificationEngineResult {
   accountsSkippedNoConsent: number;
   transitionsFired: number;
   emailsSent: number;
+  /** #572: the audit record assembled for this run (also persisted via deps). */
+  sendLog: SendLogRun;
+}
+
+// ── #572 send-log record schema (run → per-account → embedded member leaf) ───
+export type SendLogReason =
+  | 'delivered'                  // sent
+  | 'consent-off'                // gated: member has not opted in
+  | 'disabled'                   // gated: member status !== active
+  | 'viewer'                     // gated: viewers never receive
+  | 'not-a-member'               // gated: no live membership row
+  | 'lookup-error'               // gated: live/consent read failed (fail-closed)
+  | 'no-actionable-transition'   // eligible, but no ticker transition fired this run
+  | 'account-not-due';           // eligible, but the account's interval had not elapsed
+
+/** A member's leaf outcome — identity + reason kept (NOT counts): the verification signal. */
+export interface MemberOutcome {
+  userId: string;
+  email?: string;
+  outcome: 'sent' | 'skipped';
+  reason: SendLogReason;
+  /** For `sent`: which ticker transitions were delivered to this member. */
+  tickers?: string[];
+}
+
+export interface SendLogTransition {
+  ticker: string;
+  type: NotificationSourceType;
+  fromVerdict?: Verdict;
+  toVerdict: Verdict;
+}
+
+export type SendLogAccountStatus =
+  | 'processed'
+  | 'skipped-not-due'
+  | 'skipped-no-eligible'
+  | 'failed';
+
+export interface SendLogAccount {
+  accountId: string;
+  accountName?: string;
+  status: SendLogAccountStatus;
+  transitions: SendLogTransition[];
+  emailsSent: number;
+  memberOutcomes: MemberOutcome[];
+  error?: string;
+}
+
+export type SendLogStatus = 'success' | 'partial' | 'failed';
+
+export interface SendLogRun {
+  runId: string;
+  ranAt: number;                 // epoch seconds
+  status: SendLogStatus;
+  accountsEvaluated: number;
+  accountsProcessed: number;
+  accountsSkippedNotDue: number;
+  accountsSkippedNoEligible: number;
+  emailsSent: number;
+  accounts: SendLogAccount[];
+  error?: string;
 }
 
 export function stateSk(type: NotificationSourceType, ticker: string): string {
@@ -134,12 +202,29 @@ export function groupMembersByAccount(members: MemberRow[]): Map<string, MemberR
   return grouped;
 }
 
-export async function eligibleRecipients(
+/** Gate reasons an evaluation can carry (the eligible case has no skip reason). */
+export type GateReason = 'consent-off' | 'disabled' | 'viewer' | 'not-a-member' | 'lookup-error';
+
+export interface RecipientDecision {
+  candidate: MemberRow;
+  /** The live-merged recipient (present iff eligible). */
+  recipient?: MemberRow;
+  eligible: boolean;
+  skipReason?: GateReason;
+}
+
+/**
+ * #572: evaluate EVERY candidate and emit its decision + gate reason — not just
+ * the survivors. The reason was always computed at each gate; previously each
+ * skip was a bare `continue` that discarded it. Capturing it here is the
+ * mechanism behind skip-with-reason in the send-log and the adversarial test.
+ */
+export async function evaluateRecipients(
   deps: Pick<NotificationEngineDeps, 'readLiveMember' | 'readMemberConsent' | 'log'>,
   accountId: string,
   candidates: MemberRow[],
-): Promise<MemberRow[]> {
-  const recipients: MemberRow[] = [];
+): Promise<RecipientDecision[]> {
+  const decisions: RecipientDecision[] = [];
   for (const candidate of candidates) {
     let live: MemberRow | null;
     let consent: NotificationMemberConsent | null;
@@ -148,15 +233,26 @@ export async function eligibleRecipients(
       consent = await deps.readMemberConsent(accountId, candidate.userId);
     } catch (err) {
       deps.log?.('delivery-gate-skip-lookup-error', { accountId, userId: candidate.userId, err: String(err) });
+      decisions.push({ candidate, eligible: false, skipReason: 'lookup-error' });
       continue;
     }
-    if (!live) continue;
-    if (live.status && live.status !== 'active') continue;
-    if (live.role === 'viewer') continue;
-    if (!consent?.receiveConsent) continue;
-    recipients.push({ ...candidate, ...live, email: live.email ?? candidate.email });
+    if (!live) { decisions.push({ candidate, eligible: false, skipReason: 'not-a-member' }); continue; }
+    if (live.status && live.status !== 'active') { decisions.push({ candidate, eligible: false, skipReason: 'disabled' }); continue; }
+    if (live.role === 'viewer') { decisions.push({ candidate, eligible: false, skipReason: 'viewer' }); continue; }
+    if (!consent?.receiveConsent) { decisions.push({ candidate, eligible: false, skipReason: 'consent-off' }); continue; }
+    decisions.push({ candidate, eligible: true, recipient: { ...candidate, ...live, email: live.email ?? candidate.email } });
   }
-  return recipients;
+  return decisions;
+}
+
+/** Derived: the live-merged recipients who passed every gate (compat helper). */
+export async function eligibleRecipients(
+  deps: Pick<NotificationEngineDeps, 'readLiveMember' | 'readMemberConsent' | 'log'>,
+  accountId: string,
+  candidates: MemberRow[],
+): Promise<MemberRow[]> {
+  const decisions = await evaluateRecipients(deps, accountId, candidates);
+  return decisions.filter((d) => d.eligible && d.recipient).map((d) => d.recipient!);
 }
 
 function configEnablesType(config: NotificationAccountConfig, type: NotificationSourceType): boolean {
@@ -191,19 +287,22 @@ async function processTicker(
   type: NotificationSourceType,
   ticker: string,
   previous: NotificationStateRecord | undefined,
-  candidateMembers: MemberRow[],
+  eligible: MemberRow[],
   today: string,
-): Promise<{ fired: number; sent: number }> {
+): Promise<{ transition: NotificationTransition; sentUserIds: string[]; sent: number }> {
   const normalisedTicker = ticker.toUpperCase();
   const analysis = await resolveAnalysis(normalisedTicker);
 
   const transition = evaluateTransition({ accountId, type, ticker: normalisedTicker, analysis, previous });
+  const sentUserIds: string[] = [];
   let sent = 0;
   if (transition.shouldNotify) {
-    const recipients = await eligibleRecipients(deps, accountId, candidateMembers);
-    for (const recipient of recipients) {
+    // Eligibility is computed ONCE per account now (the previous per-ticker
+    // re-evaluation is gone); every eligible member receives the fired transition.
+    for (const recipient of eligible) {
       if (!recipient.email) continue;
       await deps.sendEmail(recipient, transition);
+      sentUserIds.push(recipient.userId);
       sent += 1;
     }
   }
@@ -218,10 +317,148 @@ async function processTicker(
     lastProcessedDate: today,
   });
 
-  return { fired: transition.shouldNotify ? 1 : 0, sent };
+  return { transition, sentUserIds, sent };
+}
+
+/**
+ * #572 tripwire: leakage is impossible by construction (groupMembersByAccount
+ * only pairs a member with their OWN account) — so we VERIFY it every run.
+ * Every outcome's userId must be a real candidate member of this account.
+ */
+export function assertNoCrossAccount(
+  deps: Pick<NotificationEngineDeps, 'log'>,
+  accountId: string,
+  candidateMembers: MemberRow[],
+  account: SendLogAccount,
+): void {
+  const members = new Set(candidateMembers.map((m) => m.userId));
+  for (const outcome of account.memberOutcomes) {
+    if (!members.has(outcome.userId)) {
+      deps.log?.('cross-account-leak-detected', { accountId, userId: outcome.userId, outcome: outcome.outcome });
+      account.error = `cross-account leak: ${outcome.userId} is not a member of ${accountId}`;
+    }
+  }
+}
+
+async function processAccount(
+  deps: NotificationEngineDeps,
+  resolveAnalysis: (ticker: string) => Promise<StockAnalysisResult>,
+  accountId: string,
+  candidateMembers: MemberRow[],
+  today: string,
+  result: NotificationEngineResult,
+  sendLog: SendLogRun,
+): Promise<SendLogAccount> {
+  const accountName = deps.readAccountName
+    ? await deps.readAccountName(accountId).catch(() => undefined)
+    : undefined;
+
+  const decisions = await evaluateRecipients(deps, accountId, candidateMembers);
+  const eligible = decisions.filter((d) => d.eligible && d.recipient).map((d) => d.recipient!);
+  const gatedOutcomes: MemberOutcome[] = decisions
+    .filter((d) => !d.eligible)
+    .map((d) => ({ userId: d.candidate.userId, email: d.candidate.email, outcome: 'skipped', reason: d.skipReason! }));
+
+  // No eligible recipients → skip account (every member is gated).
+  if (eligible.length === 0) {
+    result.accountsSkippedNoConsent += 1;
+    sendLog.accountsSkippedNoEligible += 1;
+    const account: SendLogAccount = { accountId, accountName, status: 'skipped-no-eligible', transitions: [], emailsSent: 0, memberOutcomes: gatedOutcomes };
+    assertNoCrossAccount(deps, accountId, candidateMembers, account);
+    return account;
+  }
+
+  const [configFromStore, states] = await Promise.all([
+    deps.readNotificationConfig(accountId),
+    deps.readNotificationStates(accountId),
+  ]);
+  const config = configFromStore ?? defaultNotificationAccountConfig(accountId, `${today}T00:00:00.000Z`);
+
+  // Not due → skip; eligible members carry account-not-due, gated keep their reason.
+  if (!accountIsDue(states, config.intervalDays, today)) {
+    result.accountsSkippedNotDue += 1;
+    sendLog.accountsSkippedNotDue += 1;
+    const memberOutcomes: MemberOutcome[] = [
+      ...gatedOutcomes,
+      ...eligible.map((r): MemberOutcome => ({ userId: r.userId, email: r.email, outcome: 'skipped', reason: 'account-not-due' })),
+    ];
+    const account: SendLogAccount = { accountId, accountName, status: 'skipped-not-due', transitions: [], emailsSent: 0, memberOutcomes };
+    assertNoCrossAccount(deps, accountId, candidateMembers, account);
+    return account;
+  }
+
+  // Process: evaluate each ticker once over the shared eligible set.
+  const statesByKey = new Map(states.map((state) => [state.sk, state]));
+  const work: Array<{ type: NotificationSourceType; ticker: string }> = [];
+  if (configEnablesType(config, 'Portfolio')) {
+    for (const holding of await deps.readPortfolio(accountId)) work.push({ type: 'Portfolio', ticker: holding.ticker });
+  }
+  if (configEnablesType(config, 'Watchlist')) {
+    for (const item of await deps.readWatchlist(accountId)) work.push({ type: 'Watchlist', ticker: item.ticker });
+  }
+
+  const transitions: SendLogTransition[] = [];
+  const sentTickersByUser = new Map<string, string[]>();
+  let emailsSent = 0;
+
+  for (const item of work) {
+    const processed = await processTicker(
+      deps,
+      resolveAnalysis,
+      accountId,
+      item.type,
+      item.ticker,
+      statesByKey.get(stateSk(item.type, item.ticker)),
+      eligible,
+      today,
+    );
+    if (processed.transition.shouldNotify) {
+      result.transitionsFired += 1;
+      transitions.push({
+        ticker: processed.transition.ticker,
+        type: item.type,
+        fromVerdict: processed.transition.previousVerdict,
+        toVerdict: processed.transition.currentVerdict,
+      });
+      for (const uid of processed.sentUserIds) {
+        sentTickersByUser.set(uid, [...(sentTickersByUser.get(uid) ?? []), processed.transition.ticker]);
+      }
+    }
+    emailsSent += processed.sent;
+  }
+
+  result.accountsProcessed += 1;
+  result.emailsSent += emailsSent;
+  sendLog.accountsProcessed += 1;
+  sendLog.emailsSent += emailsSent;
+
+  const memberOutcomes: MemberOutcome[] = [
+    ...gatedOutcomes,
+    ...eligible.map((r): MemberOutcome => {
+      const tickers = sentTickersByUser.get(r.userId);
+      return tickers && tickers.length > 0
+        ? { userId: r.userId, email: r.email, outcome: 'sent', reason: 'delivered', tickers }
+        : { userId: r.userId, email: r.email, outcome: 'skipped', reason: 'no-actionable-transition' };
+    }),
+  ];
+
+  const account: SendLogAccount = { accountId, accountName, status: 'processed', transitions, emailsSent, memberOutcomes };
+  assertNoCrossAccount(deps, accountId, candidateMembers, account);
+  return account;
 }
 
 export async function runNotificationEngine(deps: NotificationEngineDeps): Promise<NotificationEngineResult> {
+  const sendLog: SendLogRun = {
+    runId: deps.newRunId(),
+    ranAt: deps.nowEpochSeconds(),
+    status: 'success',
+    accountsEvaluated: 0,
+    accountsProcessed: 0,
+    accountsSkippedNotDue: 0,
+    accountsSkippedNoEligible: 0,
+    emailsSent: 0,
+    accounts: [],
+  };
   const result: NotificationEngineResult = {
     accountsDiscovered: 0,
     accountsProcessed: 0,
@@ -229,59 +466,44 @@ export async function runNotificationEngine(deps: NotificationEngineDeps): Promi
     accountsSkippedNoConsent: 0,
     transitionsFired: 0,
     emailsSent: 0,
+    sendLog,
   };
 
-  const today = deps.today();
-  const grouped = groupMembersByAccount(await deps.listStockAnalyserMembers());
-  const resolveAnalysis = createAnalysisResolver(deps);
-  result.accountsDiscovered = grouped.size;
+  let runError: unknown;
+  try {
+    const today = deps.today();
+    const grouped = groupMembersByAccount(await deps.listStockAnalyserMembers());
+    const resolveAnalysis = createAnalysisResolver(deps);
+    result.accountsDiscovered = grouped.size;
+    sendLog.accountsEvaluated = grouped.size;
 
-  for (const [accountId, candidateMembers] of grouped) {
-    const recipients = await eligibleRecipients(deps, accountId, candidateMembers);
-    if (recipients.length === 0) {
-      result.accountsSkippedNoConsent += 1;
-      continue;
+    for (const [accountId, candidateMembers] of grouped) {
+      // Per-account guard (#572): one account's failure is RECORDED and downgrades
+      // the run to `partial` — it never loses the whole run's audit record.
+      try {
+        sendLog.accounts.push(await processAccount(deps, resolveAnalysis, accountId, candidateMembers, today, result, sendLog));
+      } catch (err) {
+        deps.log?.('notification-account-error', { accountId, err: String(err) });
+        sendLog.accounts.push({ accountId, status: 'failed', transitions: [], emailsSent: 0, memberOutcomes: [], error: String((err as Error)?.message ?? err) });
+        sendLog.status = 'partial';
+      }
     }
-
-    const [configFromStore, states] = await Promise.all([
-      deps.readNotificationConfig(accountId),
-      deps.readNotificationStates(accountId),
-    ]);
-    const config = configFromStore ?? defaultNotificationAccountConfig(accountId, `${today}T00:00:00.000Z`);
-
-    if (!accountIsDue(states, config.intervalDays, today)) {
-      result.accountsSkippedNotDue += 1;
-      continue;
+  } catch (err) {
+    // Run-level failure (e.g. member listing) — status failed; still recorded.
+    runError = err;
+    sendLog.status = 'failed';
+    sendLog.error = String((err as Error)?.message ?? err);
+    deps.log?.('notification-run-error', { err: String(err) });
+  } finally {
+    // Summary (+ all records) written in finally so a failed run still leaves an
+    // audit trail — an audit log that vanishes on failure is worthless.
+    try {
+      await deps.recordSendLog(sendLog);
+    } catch (logErr) {
+      deps.log?.('notification-send-log-write-error', { err: String(logErr) });
     }
-
-    const statesByKey = new Map(states.map((state) => [state.sk, state]));
-    const work: Array<{ type: NotificationSourceType; ticker: string }> = [];
-    if (configEnablesType(config, 'Portfolio')) {
-      const holdings = await deps.readPortfolio(accountId);
-      for (const holding of holdings) work.push({ type: 'Portfolio', ticker: holding.ticker });
-    }
-    if (configEnablesType(config, 'Watchlist')) {
-      const items = await deps.readWatchlist(accountId);
-      for (const item of items) work.push({ type: 'Watchlist', ticker: item.ticker });
-    }
-
-    for (const item of work) {
-      const processed = await processTicker(
-        deps,
-        resolveAnalysis,
-        accountId,
-        item.type,
-        item.ticker,
-        statesByKey.get(stateSk(item.type, item.ticker)),
-        candidateMembers,
-        today,
-      );
-      result.transitionsFired += processed.fired;
-      result.emailsSent += processed.sent;
-    }
-
-    result.accountsProcessed += 1;
   }
 
+  if (runError) throw runError; // preserve the failure signal to EventBridge/Lambda
   return result;
 }
