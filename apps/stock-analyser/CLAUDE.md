@@ -38,7 +38,7 @@ React + TypeScript + Tailwind CSS.
 
 | Stack | Contents |
 |---|---|
-| `Transformotion{Stage}-StockAnalyserTables` | `stock-analyser.portfolio-{stage}`, `stock-analyser.watchlist-{stage}`, `stock-analyser.analysis-cache-{stage}`, `stock-analyser.job-results-{stage}`, `stock-analyser.settings-{stage}`, `stock-analyser.notification-state-{stage}` |
+| `Transformotion{Stage}-StockAnalyserTables` | `stock-analyser.portfolio-{stage}`, `stock-analyser.watchlist-{stage}`, `stock-analyser.analysis-cache-{stage}`, `stock-analyser.job-results-{stage}`, `stock-analyser.settings-{stage}`, `stock-analyser.notification-state-{stage}`, `stock-analyser.notification-send-log-{stage}` |
 | `Transformotion{Stage}-StockAnalyserWs` | Stock Analyser-owned WebSocket API, WS Lambdas, and `stock-analyser.ws-connections-{stage}` |
 | `Transformotion{Stage}-StockAnalyserApi` | Stock Analyser-owned REST API Gateway, app Lambdas, and `stock-analyser-ai-proxy-{stage}` |
 
@@ -70,6 +70,7 @@ Current state after #366/#386: Stock Analyser owns its REST API Gateway, AI prox
 | `stock-analyser.job-results-{stage}` | `accountId` | `cacheKey` | Async AI job state (TTL: expiresAt) |
 | `stock-analyser.settings-{stage}` | `pk` | `sk` | Account/user settings, app-wide cache freshness policy, and notification preferences/consent |
 | `stock-analyser.notification-state-{stage}` | `accountId` | `sk` | Durable notification transition state (no TTL) |
+| `stock-analyser.notification-send-log-{stage}` | `pk` | `sk` | M19 #572 notification run/send audit log (run summary + per-account + embedded member outcomes); GSI1 recency, GSI2 per-account; TTL `expiresAt` (90d) |
 
 Analysis cache is accessed by `transformotion-analysis-cache-{stage}` (read/delete). Async job records (`job-*` keys) are written by `stock-analyser-ai-proxy-{stage}` to `stock-analyser.job-results-{stage}`. The `analysis-cache` Lambda routes GET requests for `job-*` keys to that app-owned table; all other keys stay on `stock-analyser.analysis-cache-{stage}`.
 

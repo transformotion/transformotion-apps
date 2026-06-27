@@ -74,7 +74,7 @@ Deployed by `deploy-stock-analyser.yml`. Source:
 
 | Stack name | Class | Contents |
 |---|---|---|
-| `Transformotion{Stage}-StockAnalyserTables` | `StockAnalyserTablesStack` | `stock-analyser.portfolio-{stage}`, `stock-analyser.watchlist-{stage}`, `stock-analyser.analysis-cache-{stage}`, `stock-analyser.job-results-{stage}`, `stock-analyser.settings-{stage}`, `stock-analyser.notification-state-{stage}` |
+| `Transformotion{Stage}-StockAnalyserTables` | `StockAnalyserTablesStack` | `stock-analyser.portfolio-{stage}`, `stock-analyser.watchlist-{stage}`, `stock-analyser.analysis-cache-{stage}`, `stock-analyser.job-results-{stage}`, `stock-analyser.settings-{stage}`, `stock-analyser.notification-state-{stage}`, `stock-analyser.notification-send-log-{stage}` |
 | `Transformotion{Stage}-StockAnalyserWs` | `StockAnalyserWsStack` | Stock Analyser-owned WebSocket API, WSS Lambdas, and `stock-analyser.ws-connections-{stage}` |
 | `Transformotion{Stage}-StockAnalyserApi` | `StockAnalyserApiStack` | Stock Analyser-owned REST API Gateway, Lambda functions, Cognito authoriser, `stock-analyser-ai-proxy-{stage}`, and daily `stock-analyser-notification-engine-{stage}` EventBridge processing |
 

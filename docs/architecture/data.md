@@ -279,6 +279,30 @@ has no TTL so standing verdict state survives across runs.
 | `lastNotifiedAt` | Number | Epoch seconds; set only after delivery |
 | `lastProcessedDate` | String | UTC `YYYY-MM-DD` used for cadence checks |
 
+### `stock-analyser.notification-send-log-{stage}` (M19 #572)
+
+Append-only **audit** of each notification run — the source for the run-history
+UI (#573) and the adversarial leakage/skip verification. Three levels: a run
+summary, one item per evaluated account, with the per-member outcome+reason list
+embedded at the leaf (identity + reason, **not** counts — that leaf is the
+verification signal). **TTL `expiresAt` (90 days)** — the inverse of
+notification-state's no-TTL store, which is why it is a separate table.
+
+| Item | PK | SK | Key attributes |
+|---|---|---|---|
+| Run summary | `RUN#{runId}` | `SUMMARY` | `runId`, `ranAt` (epoch), `status` (`success`/`partial`/`failed`), `accountsEvaluated`, `accountsProcessed`, `accountsSkippedNotDue`, `accountsSkippedNoEligible`, `emailsSent`, `error?` |
+| Per-account | `RUN#{runId}` | `ACCT#{accountId}` | `accountId`, `accountName?`, `status` (`processed`/`skipped-not-due`/`skipped-no-eligible`/`failed`), `transitions[]` (`{ticker,type,fromVerdict,toVerdict}`), `emailsSent`, `memberOutcomes[]`, `error?` |
+
+`memberOutcomes[]` leaf: `{ userId, email?, outcome: sent\|skipped, reason, tickers? }`.
+`reason` ∈ `delivered` (sent) / `consent-off` / `disabled` / `viewer` /
+`not-a-member` / `lookup-error` / `no-actionable-transition` / `account-not-due`.
+
+- **GSI1** `gsi1-runs-by-recency` (PK `gsi1pk`=`RUNS`, SK `gsi1sk`=`ranAt`) — recent-runs list.
+- **GSI2** `gsi2-account-history` (PK `gsi2pk`=`ACCT#{accountId}`, SK `gsi2sk`=`ranAt`) — per-account history.
+- By-run reads (verification) use `Query` on `PK=RUN#{runId}` (summary + all accounts in one query).
+
+The engine holds **write-only** on this table (it appends run records); reads are #573's.
+
 ## Budget Tracker tables
 
 Managed by `TransformotionDev-BudgetTrackerTables` /

@@ -30,12 +30,14 @@ import {
 } from '../../../lib/analysis/stock-analysis-signals';
 import type { StockAnalysisResult } from '../../../lib/services/portfolio/types';
 import { buildNotificationEmail } from './email';
+import { randomUUID } from 'crypto';
 import {
   runNotificationEngine,
   type MemberRow,
   type NotificationEngineDeps,
   type NotificationStateRecord,
   type NotificationTransition,
+  type SendLogRun,
 } from './engine';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -53,6 +55,8 @@ interface RuntimeEnv {
   notificationStateTable: string;
   analysisCacheTable: string;
   accountMembersTable: string;
+  sendLogTable: string;
+  accountsTable: string;
   analysisCacheFunctionName: string;
   anthropicSecretName: string;
   openaiSecretName?: string;
@@ -80,6 +84,8 @@ function env(): RuntimeEnv {
     notificationStateTable: requireEnv('NOTIFICATION_STATE_TABLE'),
     analysisCacheTable: requireEnv('ANALYSIS_CACHE_TABLE'),
     accountMembersTable: requireEnv('ACCOUNT_MEMBERS_TABLE'),
+    sendLogTable: requireEnv('SEND_LOG_TABLE'),
+    accountsTable: requireEnv('ACCOUNTS_TABLE'),
     analysisCacheFunctionName: requireEnv('ANALYSIS_CACHE_FUNCTION_NAME'),
     anthropicSecretName: requireEnv('ANTHROPIC_SECRET_NAME'),
     openaiSecretName: process.env.OPENAI_SECRET_NAME,
@@ -354,10 +360,75 @@ async function sendNotificationEmail(runtime: RuntimeEnv, recipient: MemberRow, 
   }));
 }
 
+// Best-effort account display name (launchpad-accounts; falls back to id).
+async function readAccountName(runtime: RuntimeEnv, accountId: string): Promise<string | undefined> {
+  try {
+    const res = await ddb.send(new GetCommand({ TableName: runtime.accountsTable, Key: { accountId } }));
+    const name = res.Item?.['name'];
+    return typeof name === 'string' && name.length > 0 ? name : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+// #572 send-log persistence — write the run summary + one item per account
+// (member outcomes embedded), with GSI keys for recency + per-account history
+// and a 90-day TTL (append-only audit that should age out).
+const SEND_LOG_TTL_SECONDS = 90 * 24 * 60 * 60;
+
+async function recordSendLog(runtime: RuntimeEnv, run: SendLogRun): Promise<void> {
+  const expiresAt = run.ranAt + SEND_LOG_TTL_SECONDS;
+  // 1. Run summary — GSI1 (RUNS → ranAt) drives the recency list.
+  await ddb.send(new PutCommand({
+    TableName: runtime.sendLogTable,
+    Item: {
+      pk: `RUN#${run.runId}`,
+      sk: 'SUMMARY',
+      gsi1pk: 'RUNS',
+      gsi1sk: run.ranAt,
+      runId: run.runId,
+      ranAt: run.ranAt,
+      status: run.status,
+      accountsEvaluated: run.accountsEvaluated,
+      accountsProcessed: run.accountsProcessed,
+      accountsSkippedNotDue: run.accountsSkippedNotDue,
+      accountsSkippedNoEligible: run.accountsSkippedNoEligible,
+      emailsSent: run.emailsSent,
+      ...(run.error ? { error: run.error } : {}),
+      expiresAt,
+    },
+  }));
+  // 2. Per-account items — GSI2 (ACCT#{id} → ranAt) drives per-account history.
+  for (const account of run.accounts) {
+    await ddb.send(new PutCommand({
+      TableName: runtime.sendLogTable,
+      Item: {
+        pk: `RUN#${run.runId}`,
+        sk: `ACCT#${account.accountId}`,
+        gsi2pk: `ACCT#${account.accountId}`,
+        gsi2sk: run.ranAt,
+        runId: run.runId,
+        ranAt: run.ranAt,
+        accountId: account.accountId,
+        ...(account.accountName ? { accountName: account.accountName } : {}),
+        status: account.status,
+        transitions: account.transitions,
+        emailsSent: account.emailsSent,
+        memberOutcomes: account.memberOutcomes,
+        ...(account.error ? { error: account.error } : {}),
+        expiresAt,
+      },
+    }));
+  }
+}
+
 export function createDependencies(runtime: RuntimeEnv = env()): NotificationEngineDeps {
   return {
     today: todayUtc,
     nowEpochSeconds: () => Math.floor(Date.now() / 1000),
+    newRunId: () => randomUUID(),
+    readAccountName: (accountId) => readAccountName(runtime, accountId),
+    recordSendLog: (run) => recordSendLog(runtime, run),
     listStockAnalyserMembers: () => listStockAnalyserMembers(runtime),
     readNotificationConfig: (accountId) => readNotificationConfig(runtime, accountId),
     readMemberConsent: (accountId, userId) => readMemberConsent(runtime, accountId, userId),

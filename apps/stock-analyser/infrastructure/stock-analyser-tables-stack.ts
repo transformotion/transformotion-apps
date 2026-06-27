@@ -24,6 +24,7 @@ export class StockAnalyserTablesStack extends cdk.Stack {
   public readonly jobResultsTable:    dynamodb.Table;
   public readonly settingsTable:      dynamodb.Table;
   public readonly notificationStateTable: dynamodb.Table;
+  public readonly notificationSendLogTable: dynamodb.Table;
 
   constructor(scope: Construct, id: string, props: StockAnalyserTablesStackProps) {
     super(scope, id, props);
@@ -103,6 +104,30 @@ export class StockAnalyserTablesStack extends cdk.Stack {
       removalPolicy: removal,
     });
 
+    // #572 notification send-log (audit): run summary + per-account items.
+    // Keyed PK=RUN#{runId}/SK=SUMMARY|ACCT#{accountId} (by-run reads in one query);
+    // GSI1 RUNS→ranAt (recency list), GSI2 ACCT#{id}→ranAt (per-account history).
+    // TTL `expiresAt` (90d default) — append-only audit that should age out, the
+    // INVERSE of notification-state's no-TTL verdict store (hence a separate table).
+    this.notificationSendLogTable = new dynamodb.Table(this, 'NotificationSendLogTable', {
+      tableName:           `stock-analyser.notification-send-log-${stage}`,
+      partitionKey:        { name: 'pk', type: dynamodb.AttributeType.STRING },
+      sortKey:             { name: 'sk', type: dynamodb.AttributeType.STRING },
+      billingMode:         dynamodb.BillingMode.PAY_PER_REQUEST,
+      timeToLiveAttribute: 'expiresAt',
+      removalPolicy:       removal,
+    });
+    this.notificationSendLogTable.addGlobalSecondaryIndex({
+      indexName:    'gsi1-runs-by-recency',
+      partitionKey: { name: 'gsi1pk', type: dynamodb.AttributeType.STRING },  // 'RUNS'
+      sortKey:      { name: 'gsi1sk', type: dynamodb.AttributeType.NUMBER },  // ranAt
+    });
+    this.notificationSendLogTable.addGlobalSecondaryIndex({
+      indexName:    'gsi2-account-history',
+      partitionKey: { name: 'gsi2pk', type: dynamodb.AttributeType.STRING },  // 'ACCT#{accountId}'
+      sortKey:      { name: 'gsi2sk', type: dynamodb.AttributeType.NUMBER },  // ranAt
+    });
+
     // ── Outputs ───────────────────────────────────────────────────────────
     const out = (id: string, table: dynamodb.Table, hint: string) => {
       new cdk.CfnOutput(this, id, {
@@ -118,5 +143,6 @@ export class StockAnalyserTablesStack extends cdk.Stack {
     out('SAJobResultsTableArn',    this.jobResultsTable,    'stock-analyser.job-results table ARN');
     out('SASettingsTableArn',      this.settingsTable,      'stock-analyser.settings table ARN');
     out('SANotificationStateTableArn', this.notificationStateTable, 'stock-analyser.notification-state table ARN');
+    out('SANotificationSendLogTableArn', this.notificationSendLogTable, 'stock-analyser.notification-send-log table ARN');
   }
 }
