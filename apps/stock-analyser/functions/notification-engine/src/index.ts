@@ -39,8 +39,14 @@ import {
   type NotificationTransition,
   type SendLogRun,
 } from './engine';
+import { SEND_LOG_TTL_SECONDS, writeSendLog } from './send-log';
 
-const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+// removeUndefinedValues (#578): the safety net so a stray `undefined` (e.g. a
+// member with no email) can never throw mid-write and drop subsequent records.
+// Records are also kept clean at the source (see memberOutcome in engine.ts).
+const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}), {
+  marshallOptions: { removeUndefinedValues: true },
+});
 const lambda = new LambdaClient({});
 const ses = new SESv2Client({});
 
@@ -371,55 +377,21 @@ async function readAccountName(runtime: RuntimeEnv, accountId: string): Promise<
   }
 }
 
-// #572 send-log persistence — write the run summary + one item per account
-// (member outcomes embedded), with GSI keys for recency + per-account history
-// and a 90-day TTL (append-only audit that should age out).
-const SEND_LOG_TTL_SECONDS = 90 * 24 * 60 * 60;
-
+// #572 send-log persistence — run summary + one item per account (member
+// outcomes embedded), GSI keys for recency + per-account history, 90-day TTL.
+// #578: the write is fault-tolerant (per-account isolation, status escalation,
+// summary written last) — see writeSendLog in ./send-log.
 async function recordSendLog(runtime: RuntimeEnv, run: SendLogRun): Promise<void> {
-  const expiresAt = run.ranAt + SEND_LOG_TTL_SECONDS;
-  // 1. Run summary — GSI1 (RUNS → ranAt) drives the recency list.
-  await ddb.send(new PutCommand({
-    TableName: runtime.sendLogTable,
-    Item: {
-      pk: `RUN#${run.runId}`,
-      sk: 'SUMMARY',
-      gsi1pk: 'RUNS',
-      gsi1sk: run.ranAt,
-      runId: run.runId,
-      ranAt: run.ranAt,
-      status: run.status,
-      accountsEvaluated: run.accountsEvaluated,
-      accountsProcessed: run.accountsProcessed,
-      accountsSkippedNotDue: run.accountsSkippedNotDue,
-      accountsSkippedNoEligible: run.accountsSkippedNoEligible,
-      emailsSent: run.emailsSent,
-      ...(run.error ? { error: run.error } : {}),
-      expiresAt,
+  await writeSendLog(
+    async (item) => {
+      await ddb.send(new PutCommand({ TableName: runtime.sendLogTable, Item: item }));
     },
-  }));
-  // 2. Per-account items — GSI2 (ACCT#{id} → ranAt) drives per-account history.
-  for (const account of run.accounts) {
-    await ddb.send(new PutCommand({
-      TableName: runtime.sendLogTable,
-      Item: {
-        pk: `RUN#${run.runId}`,
-        sk: `ACCT#${account.accountId}`,
-        gsi2pk: `ACCT#${account.accountId}`,
-        gsi2sk: run.ranAt,
-        runId: run.runId,
-        ranAt: run.ranAt,
-        accountId: account.accountId,
-        ...(account.accountName ? { accountName: account.accountName } : {}),
-        status: account.status,
-        transitions: account.transitions,
-        emailsSent: account.emailsSent,
-        memberOutcomes: account.memberOutcomes,
-        ...(account.error ? { error: account.error } : {}),
-        expiresAt,
-      },
-    }));
-  }
+    run,
+    {
+      ttlSeconds: SEND_LOG_TTL_SECONDS,
+      log: (message, context) => console.log(JSON.stringify({ message, ...context })),
+    },
+  );
 }
 
 // #571 kill-switch: app-wide notificationsEnabled (default ON when absent/malformed).

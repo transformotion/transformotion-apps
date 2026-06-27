@@ -309,6 +309,13 @@ notification-state's no-TTL store, which is why it is a separate table.
 - By-run reads (verification) use `Query` on `PK=RUN#{runId}` (summary + all accounts in one query).
 
 The engine holds **write-only** on this table (it appends run records); reads are #573's.
+The write is **fault-tolerant** (#578): per-account writes are isolated, so one
+account whose write fails is recorded as a `failed` marker (`error` set) and the
+loop continues rather than dropping the accounts that follow; any write loss
+escalates the run to `partial`, and the `SUMMARY` is written **last** so its
+`status` reflects the actual write outcome. Member leaves omit `email` when
+absent (never `undefined`), and the client uses `removeUndefinedValues` as a
+safety net.
 
 ## Budget Tracker tables
 
