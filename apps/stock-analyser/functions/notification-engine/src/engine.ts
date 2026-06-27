@@ -146,6 +146,30 @@ export function stateSk(type: NotificationSourceType, ticker: string): string {
   return `NOTIF#${type}#${ticker.toUpperCase()}`;
 }
 
+/**
+ * Build a member's leaf outcome with `email` OMITTED when the member has none
+ * (#578). A member with no email must yield `{ userId, outcome, reason }` — NOT
+ * `{ email: undefined, ... }`. The DynamoDB DocumentClient rejects `undefined`
+ * by default, and one such value previously threw mid-write and dropped every
+ * subsequent account from the send-log (run fd4461f3). Keep the record clean at
+ * the source; the marshaller's `removeUndefinedValues` is only the safety net.
+ */
+function memberOutcome(
+  userId: string,
+  email: string | undefined,
+  outcome: MemberOutcome['outcome'],
+  reason: SendLogReason,
+  tickers?: string[],
+): MemberOutcome {
+  return {
+    userId,
+    ...(email ? { email } : {}),
+    outcome,
+    reason,
+    ...(tickers && tickers.length > 0 ? { tickers } : {}),
+  };
+}
+
 function coerceVerdict(value: unknown): Verdict {
   const upper = String(value ?? '').toUpperCase();
   return upper === 'BUY' || upper === 'SELL' || upper === 'HOLD' || upper === 'NEUTRAL' ? upper : 'NEUTRAL';
@@ -361,7 +385,7 @@ async function processAccount(
   const eligible = decisions.filter((d) => d.eligible && d.recipient).map((d) => d.recipient!);
   const gatedOutcomes: MemberOutcome[] = decisions
     .filter((d) => !d.eligible)
-    .map((d) => ({ userId: d.candidate.userId, email: d.candidate.email, outcome: 'skipped', reason: d.skipReason! }));
+    .map((d) => memberOutcome(d.candidate.userId, d.candidate.email, 'skipped', d.skipReason!));
 
   // No eligible recipients → skip account (every member is gated).
   if (eligible.length === 0) {
@@ -384,7 +408,7 @@ async function processAccount(
     sendLog.accountsSkippedNotDue += 1;
     const memberOutcomes: MemberOutcome[] = [
       ...gatedOutcomes,
-      ...eligible.map((r): MemberOutcome => ({ userId: r.userId, email: r.email, outcome: 'skipped', reason: 'account-not-due' })),
+      ...eligible.map((r): MemberOutcome => memberOutcome(r.userId, r.email, 'skipped', 'account-not-due')),
     ];
     const account: SendLogAccount = { accountId, accountName, status: 'skipped-not-due', transitions: [], emailsSent: 0, memberOutcomes };
     assertNoCrossAccount(deps, accountId, candidateMembers, account);
@@ -441,8 +465,8 @@ async function processAccount(
     ...eligible.map((r): MemberOutcome => {
       const tickers = sentTickersByUser.get(r.userId);
       return tickers && tickers.length > 0
-        ? { userId: r.userId, email: r.email, outcome: 'sent', reason: 'delivered', tickers }
-        : { userId: r.userId, email: r.email, outcome: 'skipped', reason: 'no-actionable-transition' };
+        ? memberOutcome(r.userId, r.email, 'sent', 'delivered', tickers)
+        : memberOutcome(r.userId, r.email, 'skipped', 'no-actionable-transition');
     }),
   ];
 

@@ -340,6 +340,23 @@ describe('notification send-log (#572)', () => {
     expect(outcome(run, 'boom')).toMatchObject({ outcome: 'skipped', reason: 'lookup-error' });
   });
 
+  it('omits email (never undefined) for members with no email — the clean record that broke the write (#578)', async () => {
+    // Mirrors run fd4461f3: seeded persona members with NO email. The leaf must be
+    // { userId, outcome, reason } — NOT { email: undefined, ... }, which the
+    // DynamoDB marshaller rejects (and previously dropped every later account).
+    const run = await runNotificationEngine(deps({
+      listStockAnalyserMembers: vi.fn(async () => [
+        { accountId: 'acct-a', userId: 'no-mail', appSlug: 'stock-analyser', role: 'member' }, // no email
+      ]),
+      readLiveMember: vi.fn(async (accountId, userId) => ({ accountId, userId, appSlug: 'stock-analyser', role: 'member', status: 'active' })), // live row also lacks email
+      readMemberConsent: vi.fn(async (accountId, userId) => ({ accountId, userId, receiveConsent: false, updatedAt: 'now' })), // consent off → gated path
+    }));
+
+    const o = outcome(run, 'no-mail')!;
+    expect(o).toMatchObject({ outcome: 'skipped', reason: 'consent-off' });
+    expect('email' in o).toBe(false); // key OMITTED, not present-as-undefined
+  });
+
   it('records no-actionable-transition for eligible members when no ticker fires', async () => {
     const run = await runNotificationEngine(deps({
       generateAnalysis: vi.fn(async (ticker) => analysis(ticker, 'HOLD')), // never actionable
