@@ -164,6 +164,8 @@ describe('OpenAIProvider', () => {
         { role: 'user', content: 'Say hi' },
       ],
       max_output_tokens: 100,
+      tools: [{ type: 'web_search' }],
+      tool_choice: 'required',
     });
     expect(result).toEqual({
       content: 'Hello from OpenAI',

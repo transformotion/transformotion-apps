@@ -1,6 +1,11 @@
 import { getOpenAIApiKey } from '../secrets';
 import { normaliseProviderError } from '../provider';
-import { STRUCTURED_OUTPUT_NAME, toOpenAiStrictSchema } from '../structured-output';
+import {
+  buildGroundedResearchPrompt,
+  groundedResearchIsUnavailable,
+  STRUCTURED_OUTPUT_NAME,
+  toOpenAiStrictSchema,
+} from '../structured-output';
 import {
   AiProviderError,
   AiProviderNonJsonError,
@@ -40,48 +45,7 @@ function bodyPrefix(body: string): string {
 export class OpenAIProvider implements AiProvider {
   constructor(private readonly options: AiProxyOptions) {}
 
-  async generate(request: AiProviderRequest): Promise<AiProviderResult> {
-    const {
-      prompt,
-      system,
-      model = this.options.model ?? 'gpt-5.4-mini',
-      maxTokens = 4000,
-      responseSchema,
-    } = request;
-
-    const apiKey = await getOpenAIApiKey({
-      secretName: this.options.openaiSecretName!,
-      client: this.options.secretsManagerClient,
-      cacheTtlMs: this.options.apiKeyCacheTtlMs,
-    });
-
-    const input = system
-      ? [
-          { role: 'system', content: system },
-          { role: 'user', content: prompt },
-        ]
-      : [{ role: 'user', content: prompt }];
-
-    const requestBody: Record<string, unknown> = {
-      model,
-      input,
-      max_output_tokens: maxTokens,
-    };
-
-    // STRUCTURED OUTPUT: constrain the model to the canonical schema (strict
-    // json_schema) instead of prompt-and-parse. OpenAI does not web-search here,
-    // so this is unconditionally single-pass.
-    if (responseSchema) {
-      requestBody['text'] = {
-        format: {
-          type: 'json_schema',
-          name: STRUCTURED_OUTPUT_NAME,
-          schema: toOpenAiStrictSchema(responseSchema),
-          strict: true,
-        },
-      };
-    }
-
+  private async send(apiKey: string, model: string, requestBody: Record<string, unknown>): Promise<OpenAIResponse> {
     const fetchImpl = this.options.fetchImpl ?? fetch;
     const res = await fetchImpl('https://api.openai.com/v1/responses', {
       method: 'POST',
@@ -117,18 +81,133 @@ export class OpenAIProvider implements AiProvider {
       throw normaliseProviderError('openai', res.status, data?.error?.message ?? String(res.status), data?.error?.code ?? data?.error?.type);
     }
 
+    return data;
+  }
+
+  private toResult(
+    data: OpenAIResponse,
+    content: string,
+    model: string,
+    priorInputTokens = 0,
+    priorOutputTokens = 0,
+  ): AiProviderResult {
+    const inputTokens = (data.usage?.input_tokens ?? 0) + priorInputTokens;
+    const outputTokens = (data.usage?.output_tokens ?? 0) + priorOutputTokens;
+    return {
+      content,
+      provider: 'openai',
+      model: data.model ?? model,
+      inputTokens,
+      outputTokens,
+      totalTokens: data.usage?.total_tokens !== undefined
+        ? data.usage.total_tokens + priorInputTokens + priorOutputTokens
+        : inputTokens + outputTokens,
+    };
+  }
+
+  async generate(request: AiProviderRequest): Promise<AiProviderResult> {
+    const {
+      prompt,
+      system,
+      model = this.options.model ?? 'gpt-5.4-mini',
+      maxTokens = 4000,
+      webSearch = false,
+      responseSchema,
+    } = request;
+
+    const apiKey = await getOpenAIApiKey({
+      secretName: this.options.openaiSecretName!,
+      client: this.options.secretsManagerClient,
+      cacheTtlMs: this.options.apiKeyCacheTtlMs,
+    });
+
+    const input = system
+      ? [
+          { role: 'system', content: system },
+          { role: 'user', content: prompt },
+        ]
+      : [{ role: 'user', content: prompt }];
+
+    const buildRequestBody = (requestInput: unknown, schema?: unknown): Record<string, unknown> => {
+      const requestBody: Record<string, unknown> = {
+        model,
+        input: requestInput,
+        max_output_tokens: maxTokens,
+      };
+      if (schema) {
+        requestBody['text'] = {
+          format: {
+            type: 'json_schema',
+            name: STRUCTURED_OUTPUT_NAME,
+            schema: toOpenAiStrictSchema(schema),
+            strict: true,
+          },
+        };
+      }
+      return requestBody;
+    };
+
+    const withWebSearch = (requestBody: Record<string, unknown>): Record<string, unknown> => ({
+      ...requestBody,
+      tools: [{ type: 'web_search' }],
+      tool_choice: 'required',
+    });
+
+    // Free-text output keeps the existing single pass, but Live must actually
+    // ground the answer with the hosted web-search tool.
+    if (!responseSchema) {
+      const data = await this.send(apiKey, model, webSearch ? withWebSearch(buildRequestBody(input)) : buildRequestBody(input));
+      const content = extractOpenAIText(data);
+      if (!content) {
+        throw new AiProviderError('provider_bad_response', 502, false, 'No text content returned from the AI model');
+      }
+      return this.toResult(data, content, model);
+    }
+
+    // Fast structured output: single strict schema pass, no web search.
+    if (!webSearch) {
+      const data = await this.send(apiKey, model, buildRequestBody(input, responseSchema));
+      const content = extractOpenAIText(data);
+      if (!content) {
+        throw new AiProviderError('provider_bad_response', 502, false, 'No text content returned from the AI model');
+      }
+      return this.toResult(data, content, model);
+    }
+
+    // Live structured output: two-pass. Pass 1 performs real hosted web search
+    // for current grounding; pass 2 formats that grounded content into the
+    // strict schema without another search.
+    const researchInput = system
+      ? [
+          { role: 'system', content: system },
+          { role: 'user', content: buildGroundedResearchPrompt(prompt) },
+        ]
+      : [{ role: 'user', content: buildGroundedResearchPrompt(prompt) }];
+    const research = await this.send(apiKey, model, withWebSearch(buildRequestBody(researchInput)));
+    const grounded = extractOpenAIText(research);
+    if (!grounded) {
+      throw new AiProviderError('provider_bad_response', 502, false, 'No grounded research returned from the AI model');
+    }
+    if (groundedResearchIsUnavailable(grounded)) {
+      throw new AiProviderError('provider_bad_response', 502, false, 'OpenAI grounded research did not contain enough verifiable data for structured output');
+    }
+
+    const formatPrompt =
+      `Format the grounded research below into the ${STRUCTURED_OUTPUT_NAME} JSON schema. ` +
+      'Use the grounded research as the factual source of truth; do not add, invent, or omit data.\n\n' +
+      `Original request:\n${prompt}\n\nGrounded research:\n${grounded}`;
+    const formatInput = system
+      ? [
+          { role: 'system', content: system },
+          { role: 'user', content: formatPrompt },
+        ]
+      : [{ role: 'user', content: formatPrompt }];
+    const data = await this.send(apiKey, model, buildRequestBody(formatInput, responseSchema));
     const content = extractOpenAIText(data);
     if (!content) {
       throw new AiProviderError('provider_bad_response', 502, false, 'No text content returned from the AI model');
     }
 
-    return {
-      content,
-      provider: 'openai',
-      model: data.model ?? model,
-      inputTokens: data.usage?.input_tokens ?? 0,
-      outputTokens: data.usage?.output_tokens ?? 0,
-      totalTokens: data.usage?.total_tokens,
-    };
+    return this.toResult(data, content, model, research.usage?.input_tokens ?? 0, research.usage?.output_tokens ?? 0);
   }
 }

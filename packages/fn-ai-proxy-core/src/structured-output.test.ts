@@ -1,6 +1,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- asserting dynamic provider request/response JSON bodies */
 import { describe, expect, it, beforeEach } from 'vitest';
-import { STRUCTURED_OUTPUT_NAME, toOpenAiStrictSchema, toAnthropicInputSchema } from './structured-output';
+import {
+  GROUNDED_RESEARCH_AVAILABLE,
+  GROUNDED_RESEARCH_UNAVAILABLE,
+  STRUCTURED_OUTPUT_NAME,
+  toOpenAiStrictSchema,
+  toAnthropicInputSchema,
+  toAnthropicStrictInputSchema,
+} from './structured-output';
 import { OpenAIProvider } from './providers/openai';
 import { ClaudeProvider } from './providers/claude';
 import { createAiProxyHandler } from './handler';
@@ -71,6 +78,24 @@ describe('structured-output schema shaping', () => {
     expect(out.properties.b.minimum).toBe(0);
     expect(out.required).toEqual(['a', 'b', 'nested']);
   });
+
+  it('toAnthropicStrictInputSchema strips strict-mode unsupported validation keywords', () => {
+    const out = toAnthropicStrictInputSchema(sampleSchema) as Record<string, any>;
+    expect(out.$schema).toBeUndefined();
+    expect(out.properties.a.minLength).toBeUndefined();
+    expect(out.properties.b.minimum).toBeUndefined();
+    expect(out.properties.b.maximum).toBeUndefined();
+    expect(out.required).toEqual(['a', 'b', 'nested']);
+    expect(out.additionalProperties).toBe(false);
+    expect(out.properties.a.type).toBe('string');
+  });
+
+  it('detects unavailable grounded research in text-line or JSON status forms', async () => {
+    const { groundedResearchIsUnavailable } = await import('./structured-output');
+    expect(groundedResearchIsUnavailable(`${GROUNDED_RESEARCH_UNAVAILABLE}\nNo data.`)).toBe(true);
+    expect(groundedResearchIsUnavailable('{"DATA_STATUS":"UNAVAILABLE","reason":"No data"}')).toBe(true);
+    expect(groundedResearchIsUnavailable(`${GROUNDED_RESEARCH_AVAILABLE}\nGrounded data.`)).toBe(false);
+  });
 });
 
 describe('OpenAIProvider structured output', () => {
@@ -107,6 +132,87 @@ describe('OpenAIProvider structured output', () => {
     await provider.generate({ prompt: 'p' });
     expect(body!.text).toBeUndefined();
   });
+
+  it('Fast (no web search) sends one strict schema pass without web-search tools', async () => {
+    const bodies: Record<string, any>[] = [];
+    const provider = new OpenAIProvider({
+      openaiSecretName: 'openai-secret',
+      secretsManagerClient: secretClient('openai-key'),
+      fetchImpl: async (_url, init) => {
+        bodies.push(JSON.parse(String(init?.body)));
+        return jsonResponse({
+          output_text: '{"a":"fast","b":1,"nested":{"c":"x"}}',
+          model: 'gpt-5.5',
+          usage: { input_tokens: 2, output_tokens: 3, total_tokens: 5 },
+        });
+      },
+    });
+    const res = await provider.generate({ prompt: 'p', responseSchema: sampleSchema, webSearch: false });
+    expect(bodies.length).toBe(1);
+    expect(bodies[0].text.format.name).toBe(STRUCTURED_OUTPUT_NAME);
+    expect(bodies[0].tools).toBeUndefined();
+    expect(bodies[0].tool_choice).toBeUndefined();
+    expect(JSON.parse(res.content)).toEqual({ a: 'fast', b: 1, nested: { c: 'x' } });
+  });
+
+  it('Live (web search) uses TWO-PASS: web-search research then strict schema format', async () => {
+    const bodies: Record<string, any>[] = [];
+    const provider = new OpenAIProvider({
+      openaiSecretName: 'openai-secret',
+      secretsManagerClient: secretClient('openai-key'),
+      fetchImpl: async (_url, init) => {
+        const body = JSON.parse(String(init?.body));
+        bodies.push(body);
+        if (bodies.length === 1) {
+          return jsonResponse({
+            output_text: `${GROUNDED_RESEARCH_AVAILABLE}\ngrounded current research about SpaceX being listed as SPCX`,
+            model: 'gpt-5.5',
+            usage: { input_tokens: 10, output_tokens: 20, total_tokens: 30 },
+          });
+        }
+        return jsonResponse({
+          output_text: '{"a":"grounded","b":2,"nested":{"c":"spcx"}}',
+          model: 'gpt-5.5',
+          usage: { input_tokens: 4, output_tokens: 6, total_tokens: 10 },
+        });
+      },
+    });
+    const res = await provider.generate({ prompt: 'Analyse SpaceX', responseSchema: sampleSchema, webSearch: true });
+    expect(bodies.length).toBe(2);
+    expect(bodies[0].tools).toEqual([{ type: 'web_search' }]);
+    expect(bodies[0].tool_choice).toBe('required');
+    expect(bodies[0].text).toBeUndefined();
+    expect(String(bodies[0].input[0].content)).toContain('DATA_STATUS');
+    expect(bodies[1].tools).toBeUndefined();
+    expect(bodies[1].tool_choice).toBeUndefined();
+    expect(bodies[1].text.format.name).toBe(STRUCTURED_OUTPUT_NAME);
+    expect(String(bodies[1].input[0].content)).toContain('Analyse SpaceX');
+    expect(String(bodies[1].input[0].content)).toContain('grounded current research');
+    expect(JSON.parse(res.content)).toEqual({ a: 'grounded', b: 2, nested: { c: 'spcx' } });
+    expect(res.inputTokens).toBe(14);
+    expect(res.outputTokens).toBe(26);
+    expect(res.totalTokens).toBe(40);
+  });
+
+  it('Live fails before OpenAI format pass when grounded research is unavailable', async () => {
+    const bodies: Record<string, any>[] = [];
+    const provider = new OpenAIProvider({
+      openaiSecretName: 'openai-secret',
+      secretsManagerClient: secretClient('openai-key'),
+      fetchImpl: async (_url, init) => {
+        bodies.push(JSON.parse(String(init?.body)));
+        return jsonResponse({
+          output_text: `${GROUNDED_RESEARCH_UNAVAILABLE}\nNo active public security could be verified.`,
+          model: 'gpt-5.5',
+          usage: { input_tokens: 10, output_tokens: 20, total_tokens: 30 },
+        });
+      },
+    });
+    await expect(provider.generate({ prompt: 'Analyse ZZZZQX', responseSchema: sampleSchema, webSearch: true }))
+      .rejects.toMatchObject({ errorClass: 'provider_bad_response', statusCode: 502 });
+    expect(bodies.length).toBe(1);
+    expect(bodies[0].tools).toEqual([{ type: 'web_search' }]);
+  });
 });
 
 describe('ClaudeProvider structured output', () => {
@@ -122,7 +228,7 @@ describe('ClaudeProvider structured output', () => {
         calls += 1;
         body = JSON.parse(String(init?.body));
         return jsonResponse({
-          content: [{ type: 'tool_use', name: STRUCTURED_OUTPUT_NAME, input: { a: 'x', b: 1 } }],
+          content: [{ type: 'tool_use', name: STRUCTURED_OUTPUT_NAME, input: { a: 'x', b: 1, nested: { c: 'z' } } }],
           model: 'claude-sonnet-4-6',
           usage: { input_tokens: 5, output_tokens: 3 },
         });
@@ -133,7 +239,8 @@ describe('ClaudeProvider structured output', () => {
     expect(body!.tool_choice).toEqual({ type: 'tool', name: STRUCTURED_OUTPUT_NAME });
     expect(body!.tools[0].name).toBe(STRUCTURED_OUTPUT_NAME);
     expect(body!.tools[0].input_schema.required).toEqual(['a', 'b', 'nested']);
-    expect(JSON.parse(res.content)).toEqual({ a: 'x', b: 1 });
+    expect(body!.tools[0].strict).toBe(true);
+    expect(JSON.parse(res.content)).toEqual({ a: 'x', b: 1, nested: { c: 'z' } });
   });
 
   it('Live (web search) → TWO-PASS: research (web_search) then forced-tool format', async () => {
@@ -145,9 +252,9 @@ describe('ClaudeProvider structured output', () => {
         const b = JSON.parse(String(init?.body));
         bodies.push(b);
         if (bodies.length === 1) {
-          return jsonResponse({ content: [{ type: 'text', text: 'grounded research' }], model: 'claude-sonnet-4-6', usage: { input_tokens: 10, output_tokens: 20 } });
+          return jsonResponse({ content: [{ type: 'text', text: `${GROUNDED_RESEARCH_AVAILABLE}\ngrounded research` }], model: 'claude-sonnet-4-6', usage: { input_tokens: 10, output_tokens: 20 } });
         }
-        return jsonResponse({ content: [{ type: 'tool_use', name: STRUCTURED_OUTPUT_NAME, input: { a: 'y' } }], model: 'claude-sonnet-4-6', usage: { input_tokens: 4, output_tokens: 6 } });
+        return jsonResponse({ content: [{ type: 'tool_use', name: STRUCTURED_OUTPUT_NAME, input: { a: 'y', b: 2, nested: { c: 'q' } } }], model: 'claude-sonnet-4-6', usage: { input_tokens: 4, output_tokens: 6 } });
       },
     });
     const res = await provider.generate({ prompt: 'p', responseSchema: sampleSchema, webSearch: true });
@@ -155,12 +262,60 @@ describe('ClaudeProvider structured output', () => {
     // Pass 1 = web search, NOT forced tool.
     expect(bodies[0].tools[0].type).toBe('web_search_20250305');
     expect(bodies[0].tool_choice).toBeUndefined();
+    expect(String(bodies[0].messages[0].content)).toContain('DATA_STATUS');
     // Pass 2 = forced tool, NO web search; prompt carries the grounded text.
     expect(bodies[1].tool_choice).toEqual({ type: 'tool', name: STRUCTURED_OUTPUT_NAME });
+    expect(bodies[1].tools[0].strict).toBe(true);
     expect(String(bodies[1].messages[0].content)).toContain('grounded research');
-    expect(JSON.parse(res.content)).toEqual({ a: 'y' });
+    expect(JSON.parse(res.content)).toEqual({ a: 'y', b: 2, nested: { c: 'q' } });
     expect(res.inputTokens).toBe(14);                        // tokens summed across passes
     expect(res.outputTokens).toBe(26);
+  });
+
+  it('Live retries Claude format pass when forced-tool output punts with <UNKNOWN> or wrong types', async () => {
+    const bodies: Record<string, any>[] = [];
+    const provider = new ClaudeProvider({
+      anthropicSecretName: 'anthropic-secret',
+      secretsManagerClient: secretClient('anthropic-key'),
+      fetchImpl: async (_url, init) => {
+        const b = JSON.parse(String(init?.body));
+        bodies.push(b);
+        if (bodies.length === 1) {
+          return jsonResponse({ content: [{ type: 'text', text: `${GROUNDED_RESEARCH_AVAILABLE}\ngrounded research includes a=Alpha, b=42, nested c=Gamma` }], model: 'claude-sonnet-4-6', usage: { input_tokens: 10, output_tokens: 20 } });
+        }
+        if (bodies.length === 2) {
+          return jsonResponse({ content: [{ type: 'tool_use', name: STRUCTURED_OUTPUT_NAME, input: { a: '<UNKNOWN>', b: '42', nested: { c: 'Gamma' } } }], model: 'claude-sonnet-4-6', usage: { input_tokens: 4, output_tokens: 6 } });
+        }
+        return jsonResponse({ content: [{ type: 'tool_use', name: STRUCTURED_OUTPUT_NAME, input: { a: 'Alpha', b: 42, nested: { c: 'Gamma' } } }], model: 'claude-sonnet-4-6', usage: { input_tokens: 5, output_tokens: 7 } });
+      },
+    });
+    const res = await provider.generate({ prompt: 'p', responseSchema: sampleSchema, webSearch: true });
+    expect(bodies.length).toBe(3);
+    expect(String(bodies[2].messages[0].content)).toContain('$.a must not be empty or <UNKNOWN>');
+    expect(String(bodies[2].messages[0].content)).toContain('$.b must be a number');
+    expect(JSON.parse(res.content)).toEqual({ a: 'Alpha', b: 42, nested: { c: 'Gamma' } });
+    expect(res.inputTokens).toBe(15);
+    expect(res.outputTokens).toBe(27);
+  });
+
+  it('Live fails before Claude format pass when grounded research is unavailable', async () => {
+    const bodies: Record<string, any>[] = [];
+    const provider = new ClaudeProvider({
+      anthropicSecretName: 'anthropic-secret',
+      secretsManagerClient: secretClient('anthropic-key'),
+      fetchImpl: async (_url, init) => {
+        bodies.push(JSON.parse(String(init?.body)));
+        return jsonResponse({
+          content: [{ type: 'text', text: `${GROUNDED_RESEARCH_UNAVAILABLE}\nNo active public security could be verified.` }],
+          model: 'claude-sonnet-4-6',
+          usage: { input_tokens: 10, output_tokens: 20 },
+        });
+      },
+    });
+    await expect(provider.generate({ prompt: 'Analyse ZZZZQX', responseSchema: sampleSchema, webSearch: true }))
+      .rejects.toMatchObject({ errorClass: 'provider_bad_response', statusCode: 502 });
+    expect(bodies.length).toBe(1);
+    expect(bodies[0].tools[0].type).toBe('web_search_20250305');
   });
 });
 
@@ -178,7 +333,7 @@ describe('createAiProxyHandler surface → schema resolution', () => {
       fetchImpl: async (_url, init) => {
         body = JSON.parse(String(init?.body));
         return jsonResponse({
-          content: [{ type: 'tool_use', name: STRUCTURED_OUTPUT_NAME, input: { a: 'x', b: 1 } }],
+          content: [{ type: 'tool_use', name: STRUCTURED_OUTPUT_NAME, input: { a: 'x', b: 1, nested: { c: 'z' } } }],
           model: 'claude-sonnet-4-6',
           usage: { input_tokens: 1, output_tokens: 1 },
         });
@@ -194,7 +349,7 @@ describe('createAiProxyHandler surface → schema resolution', () => {
     // The handler resolved surface='analyser' → schema → forced-tool structured output.
     expect(body!.tool_choice).toEqual({ type: 'tool', name: STRUCTURED_OUTPUT_NAME });
     expect(body!.tools[0].name).toBe(STRUCTURED_OUTPUT_NAME);
-    expect(JSON.parse(JSON.parse(res.body).content)).toEqual({ a: 'x', b: 1 });
+    expect(JSON.parse(JSON.parse(res.body).content)).toEqual({ a: 'x', b: 1, nested: { c: 'z' } });
   });
 
   it('does NOT constrain when the surface has no registered schema (free-text back-compat)', async () => {

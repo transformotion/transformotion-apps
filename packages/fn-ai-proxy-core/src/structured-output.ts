@@ -5,6 +5,8 @@
 
 /** Stable name for the structured-output schema/tool across providers. */
 export const STRUCTURED_OUTPUT_NAME = 'analysis_result';
+export const GROUNDED_RESEARCH_AVAILABLE = 'DATA_STATUS: AVAILABLE';
+export const GROUNDED_RESEARCH_UNAVAILABLE = 'DATA_STATUS: UNAVAILABLE';
 
 type SchemaObject = Record<string, unknown>;
 
@@ -16,6 +18,10 @@ function isObject(value: unknown): value is SchemaObject {
 const META_KEYS = new Set(['$schema', '$id', 'title']);
 // Keywords OpenAI strict structured outputs does NOT support — must be stripped.
 const OPENAI_UNSUPPORTED = new Set(['minLength', 'maxLength', 'minimum', 'maximum', 'minItems', 'maxItems', 'format', 'pattern']);
+// Anthropic strict tool-use accepts a narrower JSON Schema subset than its
+// normal tool schema. Keep type/required/properties/items/enums, then enforce
+// the richer canonical constraints in runtime post-validation.
+const ANTHROPIC_STRICT_UNSUPPORTED = new Set(['minLength', 'maxLength', 'minimum', 'maximum', 'minItems', 'maxItems', 'format', 'pattern']);
 
 /**
  * Shape a canonical schema for **OpenAI strict** structured outputs:
@@ -69,4 +75,42 @@ export function toAnthropicInputSchema(schema: unknown): SchemaObject {
     }
   }
   return out;
+}
+
+/** Shape a canonical schema for Anthropic strict tool-use. */
+export function toAnthropicStrictInputSchema(schema: unknown): SchemaObject {
+  if (!isObject(schema)) return { type: 'object' };
+  const out: SchemaObject = {};
+  for (const [key, value] of Object.entries(schema)) {
+    if (META_KEYS.has(key) || ANTHROPIC_STRICT_UNSUPPORTED.has(key)) continue;
+    if (key === 'properties' && isObject(value)) {
+      const props: SchemaObject = {};
+      for (const [propKey, propVal] of Object.entries(value)) props[propKey] = toAnthropicStrictInputSchema(propVal);
+      out['properties'] = props;
+    } else if (key === 'items') {
+      out['items'] = toAnthropicStrictInputSchema(value);
+    } else {
+      out[key] = value;
+    }
+  }
+  return out;
+}
+
+export function buildGroundedResearchPrompt(originalPrompt: string): string {
+  return (
+    'Use current web search to collect grounded evidence for every required field in this structured-output Live request. ' +
+    'Do not infer facts from ticker conventions, naming patterns, stale memory, or generic market behaviour. ' +
+    `Begin the response with exactly one status line: "${GROUNDED_RESEARCH_AVAILABLE}" if current search results identify the target and provide enough reliable evidence to populate the required fields, or "${GROUNDED_RESEARCH_UNAVAILABLE}" if any required field would need guessing. ` +
+    'For ticker/security analysis, enough evidence includes a verified active tradable instrument, current price/change, and enough price/volume/technical context to support the technical fields. ' +
+    'If unavailable, explain what is missing and do not invent placeholder or numeric technicals.\n\n' +
+    `Original request:\n${originalPrompt}`
+  );
+}
+
+export function groundedResearchIsUnavailable(grounded: string): boolean {
+  const prefix = grounded.slice(0, 1000).toUpperCase();
+  return (
+    prefix.includes(GROUNDED_RESEARCH_UNAVAILABLE) ||
+    /["']?DATA_STATUS["']?\s*[:=]\s*["']?UNAVAILABLE/.test(prefix)
+  );
 }
