@@ -225,7 +225,11 @@ Managed by `TransformotionDev-StockAnalyserTables` /
 
 ### `stock-analyser.analysis-cache-{stage}`
 
-Cache of AI analysis results and shared market data.
+Cache of AI analysis results and shared market data. The market-wide entries
+`MARKET#{region}` (`SHARED` partition, 24h TTL) are **warmed daily** by the
+notification engine (#584) so the Market tab reads hit cache instead of running
+a live model call; the warm-write runs the SAME grounded computation as a live
+Market-tab run (identical-by-construction) and is gated by the #571 kill-switch.
 
 | Attribute | Type | Notes |
 |---|---|---|

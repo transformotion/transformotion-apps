@@ -83,6 +83,7 @@ function deps(overrides: Partial<NotificationEngineDeps> = {}): NotificationEngi
     readAccountName: vi.fn(async (accountId) => `Acct ${accountId}`),
     recordSendLog: vi.fn(async () => undefined),
     readEngineEnabled: vi.fn(async () => true),
+    warmMarketCache: vi.fn(async () => undefined),
   };
   return { ...base, ...overrides };
 }
@@ -433,6 +434,35 @@ describe('notification send-log (#572)', () => {
     expect(run.sendLog).toMatchObject({ status: 'success', note: 'engine-disabled', accountsEvaluated: 0, emailsSent: 0 });
     expect(run.sendLog.accounts).toEqual([]);
     expect(recordSendLog).toHaveBeenCalledOnce(); // audit record still written via finally
+  });
+
+  it('warms the market cache ONCE per run — not per account, AFTER the kill-switch gate (#584)', async () => {
+    const warmMarketCache = vi.fn(async () => undefined);
+    await runNotificationEngine(deps({
+      listStockAnalyserMembers: vi.fn(async () => [
+        { ...activeMember, accountId: 'acct-a', userId: 'user-a' },
+        { ...activeMember, accountId: 'acct-b', userId: 'user-b' },
+      ]),
+      warmMarketCache,
+    }));
+    expect(warmMarketCache).toHaveBeenCalledTimes(1); // once per run, regardless of 2 accounts
+  });
+
+  it('does NOT warm the market cache when the kill-switch is OFF (#584 inside the #571 gate)', async () => {
+    const warmMarketCache = vi.fn(async () => undefined);
+    const run = await runNotificationEngine(deps({
+      readEngineEnabled: vi.fn(async () => false),
+      warmMarketCache,
+    }));
+    expect(warmMarketCache).not.toHaveBeenCalled(); // whole batch no-ops when OFF
+    expect(run.sendLog.note).toBe('engine-disabled');
+  });
+
+  it('a market-warming failure is best-effort — it does not abort the notification run (#584)', async () => {
+    const warmMarketCache = vi.fn(async () => { throw new Error('all regions failed'); });
+    const run = await runNotificationEngine(deps({ warmMarketCache }));
+    expect(warmMarketCache).toHaveBeenCalledOnce();
+    expect(run.sendLog.accounts.length).toBeGreaterThan(0); // accounts still processed
   });
 
   it('cross-account tripwire: flags a member outcome that is not a member of the account', async () => {
