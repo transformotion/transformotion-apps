@@ -1,6 +1,11 @@
 import { getOpenAIApiKey } from '../secrets';
 import { normaliseProviderError } from '../provider';
-import { STRUCTURED_OUTPUT_NAME, toOpenAiStrictSchema } from '../structured-output';
+import {
+  buildGroundedResearchPrompt,
+  groundedResearchIsUnavailable,
+  STRUCTURED_OUTPUT_NAME,
+  toOpenAiStrictSchema,
+} from '../structured-output';
 import {
   AiProviderError,
   AiProviderNonJsonError,
@@ -172,10 +177,19 @@ export class OpenAIProvider implements AiProvider {
     // Live structured output: two-pass. Pass 1 performs real hosted web search
     // for current grounding; pass 2 formats that grounded content into the
     // strict schema without another search.
-    const research = await this.send(apiKey, model, withWebSearch(buildRequestBody(input)));
+    const researchInput = system
+      ? [
+          { role: 'system', content: system },
+          { role: 'user', content: buildGroundedResearchPrompt(prompt) },
+        ]
+      : [{ role: 'user', content: buildGroundedResearchPrompt(prompt) }];
+    const research = await this.send(apiKey, model, withWebSearch(buildRequestBody(researchInput)));
     const grounded = extractOpenAIText(research);
     if (!grounded) {
       throw new AiProviderError('provider_bad_response', 502, false, 'No grounded research returned from the AI model');
+    }
+    if (groundedResearchIsUnavailable(grounded)) {
+      throw new AiProviderError('provider_bad_response', 502, false, 'OpenAI grounded research did not contain enough verifiable data for structured output');
     }
 
     const formatPrompt =
