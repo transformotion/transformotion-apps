@@ -32,6 +32,26 @@ export class AiProviderError extends HttpError {
   }
 }
 
+export interface AiProviderResponseDiagnostics {
+  provider: AiProviderId;
+  model: string;
+  phase: 'provider_http_json_parse' | 'model_output_json_parse';
+  httpStatus?: number;
+  responseHeaders?: Record<string, string>;
+  responseBodyPrefix?: string;
+  modelOutputPrefix?: string;
+}
+
+export class AiProviderNonJsonError extends AiProviderError {
+  constructor(
+    message: string,
+    public readonly diagnostics: AiProviderResponseDiagnostics,
+  ) {
+    super('provider_bad_response', 502, false, message);
+    this.name = 'AiProviderNonJsonError';
+  }
+}
+
 export interface AiProxyOptions {
   anthropicSecretName?: string;
   openaiSecretName?: string;

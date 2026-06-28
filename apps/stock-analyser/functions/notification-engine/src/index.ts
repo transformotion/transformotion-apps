@@ -10,9 +10,11 @@ import { InvokeCommand, LambdaClient } from '@aws-sdk/client-lambda';
 import { SESv2Client, SendEmailCommand } from '@aws-sdk/client-sesv2';
 import type { ScheduledEvent } from 'aws-lambda';
 import {
+  AiProviderNonJsonError,
   createAiProvider,
   resolveAiRuntimeConfig,
   type AiProvider,
+  type AiProviderResult,
   type ResolvedAiRuntimeConfig,
 } from '@transformotion/fn-ai-proxy-core';
 import {
@@ -33,6 +35,7 @@ import { buildNotificationEmail } from './email';
 import { randomUUID } from 'crypto';
 import {
   runNotificationEngine,
+  type AnalysisGenerationContext,
   type MemberRow,
   type NotificationEngineDeps,
   type NotificationStateRecord,
@@ -57,6 +60,7 @@ const APP_SLUG = 'stock-analyser';
 const ANALYSIS_TTL_SECONDS = 24 * 60 * 60;
 // #584: MARKET#{region} warm-write TTL — matches the live Market tab's cache TTL.
 const MARKET_TTL_SECONDS = 24 * 60 * 60;
+const AI_RESPONSE_LOG_PREFIX_CHARS = 1000;
 
 interface RuntimeEnv {
   stage: string;
@@ -286,6 +290,58 @@ function stripCodeFences(text: string): string {
     .trim();
 }
 
+function textPrefix(value: string): string {
+  return value.slice(0, AI_RESPONSE_LOG_PREFIX_CHARS);
+}
+
+function logAnalysisGenerationError(
+  message: string,
+  context: {
+    ticker: string;
+    provider: string;
+    model: string;
+    generationContext?: AnalysisGenerationContext;
+    err?: unknown;
+    details?: Record<string, unknown>;
+  },
+) {
+  console.log(JSON.stringify({
+    message,
+    ticker: context.ticker,
+    provider: context.provider,
+    model: context.model,
+    accountId: context.generationContext?.accountId,
+    runId: context.generationContext?.runId,
+    sourceType: context.generationContext?.sourceType,
+    ...(context.details ?? {}),
+    ...(context.err ? { err: context.err instanceof Error ? context.err.message : String(context.err) } : {}),
+  }));
+}
+
+export function parseStockAnalysisProviderResult(
+  result: AiProviderResult,
+  ticker: string,
+  generationContext?: AnalysisGenerationContext,
+): StockAnalysisResult {
+  const rawOutput = stripCodeFences(result.content);
+  try {
+    return normaliseStockAnalysisSignals(JSON.parse(rawOutput) as StockAnalysisResult);
+  } catch (err) {
+    logAnalysisGenerationError('notification-analysis-model-output-unparseable', {
+      ticker,
+      provider: result.provider,
+      model: result.model,
+      generationContext,
+      err,
+      details: {
+        phase: 'model_output_json_parse',
+        modelOutputPrefix: textPrefix(rawOutput),
+      },
+    });
+    throw new Error(`model output unparseable while analysing ${ticker}`);
+  }
+}
+
 function makeAiProviderFactory(runtime: RuntimeEnv) {
   let cached: Promise<{ provider: AiProvider; config: ResolvedAiRuntimeConfig }> | null = null;
   return async () => {
@@ -315,15 +371,37 @@ function makeAiProviderFactory(runtime: RuntimeEnv) {
 
 function makeGenerateAnalysis(runtime: RuntimeEnv) {
   const providerFactory = makeAiProviderFactory(runtime);
-  return async (ticker: string): Promise<StockAnalysisResult> => {
+  return async (ticker: string, generationContext?: AnalysisGenerationContext): Promise<StockAnalysisResult> => {
     const { provider, config } = await providerFactory();
-    const result = await provider.generate({
-      prompt: createStockAnalysisPrompt(ticker),
-      system: STOCK_ANALYSIS_SYSTEM_PROMPT,
-      model: config.model,
-      webSearch: true,
-    });
-    return normaliseStockAnalysisSignals(JSON.parse(stripCodeFences(result.content)) as StockAnalysisResult);
+    let result: Awaited<ReturnType<AiProvider['generate']>>;
+    try {
+      result = await provider.generate({
+        prompt: createStockAnalysisPrompt(ticker),
+        system: STOCK_ANALYSIS_SYSTEM_PROMPT,
+        model: config.model,
+        webSearch: true,
+      });
+    } catch (err) {
+      if (err instanceof AiProviderNonJsonError) {
+        logAnalysisGenerationError('notification-analysis-provider-non-json', {
+          ticker,
+          provider: err.diagnostics.provider,
+          model: err.diagnostics.model,
+          generationContext,
+          err,
+          details: {
+            phase: err.diagnostics.phase,
+            httpStatus: err.diagnostics.httpStatus,
+            responseHeaders: err.diagnostics.responseHeaders,
+            responseBodyPrefix: err.diagnostics.responseBodyPrefix,
+          },
+        });
+        throw new Error(`provider returned non-JSON HTTP response while analysing ${ticker}`);
+      }
+      throw err;
+    }
+
+    return parseStockAnalysisProviderResult(result, ticker, generationContext);
   };
 }
 

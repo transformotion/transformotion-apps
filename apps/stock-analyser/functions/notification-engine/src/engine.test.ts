@@ -130,6 +130,25 @@ describe('notification transition predicate', () => {
   });
 });
 
+describe('notification engine analysis error reporting', () => {
+  it('records a useful account error when ticker analysis returns non-JSON output', async () => {
+    const run = await runNotificationEngine(deps({
+      readPortfolio: vi.fn(async () => []),
+      readWatchlist: vi.fn(async () => [{ ticker: 'FMG.AX', name: 'Fortescue', addedAt: 1 }]),
+      generateAnalysis: vi.fn(async () => {
+        throw new Error('model output unparseable while analysing FMG.AX');
+      }),
+    }));
+
+    expect(run.sendLog.status).toBe('partial');
+    expect(run.sendLog.accounts[0]).toMatchObject({
+      accountId: 'acct-a',
+      status: 'failed',
+      error: 'model output unparseable while analysing FMG.AX',
+    });
+  });
+});
+
 describe('notification due check', () => {
   it('skips accounts whose interval has not elapsed and processes due accounts', () => {
     expect(accountIsDue([{ accountId: 'acct-a', sk: 'x', type: 'Portfolio', ticker: 'CBA.AX', lastProcessedDate: '2026-06-25' }], 7, '2026-06-26')).toBe(false);
@@ -209,7 +228,11 @@ describe('notification engine account processing', () => {
     await runNotificationEngine(engineDeps);
 
     expect(generateAnalysis).toHaveBeenCalledTimes(1);
-    expect(generateAnalysis).toHaveBeenCalledWith('CBA.AX');
+    expect(generateAnalysis).toHaveBeenCalledWith('CBA.AX', expect.objectContaining({
+      accountId: 'acct-a',
+      runId: 'run-test',
+      sourceType: 'Portfolio',
+    }));
     expect(writeSharedAnalysisCache).toHaveBeenCalledTimes(1);
     expect(writeSharedAnalysisCache).toHaveBeenCalledWith('CBA.AX', expect.objectContaining({ ticker: 'CBA.AX' }));
   });

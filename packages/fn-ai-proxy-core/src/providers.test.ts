@@ -130,6 +130,7 @@ describe('ClaudeProvider', () => {
 describe('OpenAIProvider', () => {
   beforeEach(() => {
     resetApiKeyCache();
+    warnSpy.mockClear();
   });
 
   it('maps OpenAI text and token usage into the provider contract', async () => {
@@ -192,6 +193,47 @@ describe('OpenAIProvider', () => {
       errorClass: 'authentication',
       statusCode: 502,
       retryable: false,
+    });
+  });
+
+  it('captures status, headers, and body prefix for non-JSON OpenAI HTTP responses', async () => {
+    const provider = new OpenAIProvider({
+      anthropicSecretName: 'unused',
+      openaiSecretName: 'openai-secret',
+      secretsManagerClient: secretClient('openai-key'),
+      fetchImpl: async () => new Response('<!DOCTYPE html><title>Gateway error</title>', {
+        status: 502,
+        headers: { 'Content-Type': 'text/html', 'x-request-id': 'req-1' },
+      }),
+    });
+
+    await expect(provider.generate({
+      prompt: 'Say hi',
+      model: 'gpt-5.5',
+      maxTokens: 100,
+    })).rejects.toMatchObject({
+      name: 'AiProviderNonJsonError',
+      diagnostics: {
+        provider: 'openai',
+        model: 'gpt-5.5',
+        phase: 'provider_http_json_parse',
+        httpStatus: 502,
+        responseBodyPrefix: '<!DOCTYPE html><title>Gateway error</title>',
+      },
+    });
+
+    const logged = JSON.parse(String(warnSpy.mock.calls.at(-1)?.[0])) as Record<string, unknown>;
+    expect(logged).toMatchObject({
+      eventName: 'ai_provider_non_json_response',
+      provider: 'openai',
+      model: 'gpt-5.5',
+      phase: 'provider_http_json_parse',
+      httpStatus: 502,
+      responseBodyPrefix: '<!DOCTYPE html><title>Gateway error</title>',
+    });
+    expect(logged.responseHeaders).toMatchObject({
+      'content-type': 'text/html',
+      'x-request-id': 'req-1',
     });
   });
 
