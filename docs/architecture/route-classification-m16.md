@@ -38,7 +38,7 @@ This table is the **security-review artifact** for the site-admin-bypass removal
 | `GET /settings` | settings | …+ requireAccountAccess(member) | `requireAccountData.read` | **D12 user-scoped** `SK=USER#{userId}#PREFERENCES` | Confirmed | PR-B |
 | `PATCH /settings` | settings | …+ requireAccountAccess(member) | `requireAccountData.read` **+ handler SK-owner match** | **D12 user-scoped: viewer MAY write OWN prefs** — NOT `.write` (which rejects viewer) | Confirmed | PR-B |
 | `GET /ai-config` | settings | …+ requireAccountAccess(member) | `operational-config` (read) | effective AI config; retiring | Status-uncertain-resolved | PR-C |
-| `PUT/DELETE /ai-config/override` | settings | …+ **requireSiteAdmin** | `operational-config` → **app-admin** (D9) | per-account `APP#AI_RUNTIME`; **rehomed app-level** | Aspirational-never-built (site-admin write of account config) | PR-C |
+| `PUT/DELETE /ai-config/override` | settings | …+ **requireSiteAdmin** | `operational-config` → **app-admin** (D9) | **app-level** `AI_CONFIG` / `APP#stock-analyser` (top-level), read by live app + batch engine (#586; was per-account `APP#AI_RUNTIME`, which the batch never read) | **Implemented app-level (#586)** | #586 |
 
 ## 2. Budget Tracker — app-data routes (`requireAccountData('budget-tracker')`)
 

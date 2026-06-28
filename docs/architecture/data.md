@@ -260,8 +260,14 @@ preferences, and notification delivery consent.
 
 | Attribute | Type | Notes |
 |---|---|---|
-| `pk` (PK) | String | `SETTINGS`, `ACCOUNT#{accountId}`, or `NOTIFICATION_CONSENT#{accountId}` |
-| `sk` (SK) | String | `CACHE_FRESHNESS#stock-analyser`, `NOTIFICATION_ENGINE_CONFIG#stock-analyser` (#571 kill-switch), `NOTIFICATIONS#{accountId}`, `USER#{userId}#PREFERENCES`, `USER#{userId}`, or `APP#AI_RUNTIME` |
+| `pk` (PK) | String | `SETTINGS`, `ACCOUNT#{accountId}`, `NOTIFICATION_CONSENT#{accountId}`, or `AI_CONFIG` (#586 app-level AI override) |
+| `sk` (SK) | String | `CACHE_FRESHNESS#stock-analyser`, `NOTIFICATION_ENGINE_CONFIG#stock-analyser` (#571 kill-switch), `NOTIFICATIONS#{accountId}`, `USER#{userId}#PREFERENCES`, `USER#{userId}`, or `APP#stock-analyser` (#586 AI Engine override, under `pk=AI_CONFIG`) |
+
+The **AI Engine override** (#586) is **app-level**: ONE record at `AI_CONFIG` /
+`APP#stock-analyser` (`{ provider, model, updatedAt }`, top-level shape), read by
+BOTH the live app (ai-proxy) and the daily batch engine. It replaced a
+per-account `ACCOUNT#{accountId}` / `APP#AI_RUNTIME` row that the batch never
+read — see [auth/route classification](./route-classification-m16.md).
 
 The app-wide **engine kill-switch** (#571) lives at `SETTINGS` /
 `NOTIFICATION_ENGINE_CONFIG#stock-analyser` — `{ notificationsEnabled, updatedAt }`,

@@ -36,7 +36,6 @@ const CONFIG_TABLE = process.env.AI_CONFIG_TABLE!;
 const BUDGET_TRACKER_SETTINGS_TABLE = process.env.BUDGET_TRACKER_SETTINGS_TABLE;
 const STOCK_ANALYSER_SETTINGS_TABLE = process.env.STOCK_ANALYSER_SETTINGS_TABLE;
 const BUDGET_TRACKER_SETTING_KEY = 'AI_CONFIG#APP#budget-tracker';
-const STOCK_ANALYSER_AI_RUNTIME_SK = 'APP#AI_RUNTIME';
 
 interface Dependencies {
   client: DynamoDBDocumentClient;
@@ -142,13 +141,14 @@ async function readBudgetTrackerAppOverride(
 
 async function readStockAnalyserAppOverride(
   deps: Dependencies,
-  auth: AuthClaims,
 ): Promise<AiRuntimeConfigRecord | null> {
-  const accountId = firstAccountId(auth, 'stock-analyser');
-  if (!deps.stockAnalyserSettingsTable || !accountId) return null;
+  // #586: the Stock Analyser AI override is APP-LEVEL — one record at
+  // {AI_CONFIG, APP#stock-analyser} in the SA settings table (was per-account
+  // {ACCOUNT#…, APP#AI_RUNTIME}). This admin view just reflects it.
+  if (!deps.stockAnalyserSettingsTable) return null;
   const res = await deps.client.send(new GetCommand({
     TableName: deps.stockAnalyserSettingsTable,
-    Key: { pk: `ACCOUNT#${accountId}`, sk: STOCK_ANALYSER_AI_RUNTIME_SK },
+    Key: { pk: AI_CONFIG_PK, sk: appOverrideSk('stock-analyser') },
   }));
   return parseRecord(res.Item, appOverrideSk('stock-analyser'));
 }
@@ -163,7 +163,7 @@ async function readAppOwnedOverride(
       return await readBudgetTrackerAppOverride(deps, auth);
     }
     if (appSlug === 'stock-analyser') {
-      return await readStockAnalyserAppOverride(deps, auth);
+      return await readStockAnalyserAppOverride(deps);
     }
   } catch (err) {
     console.warn(`[launchpad-ai-runtime-config] App-owned AI override read failed for ${appSlug}:`, err);

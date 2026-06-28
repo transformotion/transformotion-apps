@@ -91,6 +91,26 @@ describe('Stock Analyser settings handler', () => {
     });
   });
 
+  it('AI override save writes ONE app-level record (top-level shape), not a per-account row (#586)', async () => {
+    const { deps, getItem } = createFakeDeps();
+    const res = await createHandler(deps)(makeEvent(
+      'PUT',
+      { provider: 'openai', model: 'gpt-5.4-mini' },
+      { resource: '/ai-config/override', groups: 'site-admin' },
+    ));
+
+    expect(res.statusCode).toBe(200);
+    const written = getItem() as Record<string, unknown>;
+    // App-level key the engine + ai-proxy read — NOT {ACCOUNT#…, APP#AI_RUNTIME}.
+    expect(written.pk).toBe('AI_CONFIG');
+    expect(written.sk).toBe('APP#stock-analyser');
+    // Top-level provider/model (not nested under `config`) — the shape the resolver reads.
+    expect(written.provider).toBe('openai');
+    expect(written.model).toBe('gpt-5.4-mini');
+    expect(written).not.toHaveProperty('config');
+    expect(String(written.pk)).not.toMatch(/^ACCOUNT#/);
+  });
+
   it('patches defaultSearchMode without mutating explanatory text to an invalid value', async () => {
     const { deps, getItem } = createFakeDeps({
       pk: 'ACCOUNT#acct-1',
