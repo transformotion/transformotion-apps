@@ -99,6 +99,15 @@ export interface AiProviderRequest {
   model?: string;
   maxTokens?: number;
   webSearch?: boolean;
+  /**
+   * Structured-output JSON Schema (the v0 canonical schema for the surface). When
+   * present, the provider CONSTRAINS output to it via its native structured-output
+   * mechanism (OpenAI response_format json_schema / Anthropic forced tool-use)
+   * instead of free-text prompt-and-parse. Provider-agnostic at the call site;
+   * provider-specific shaping (e.g. OpenAI strict-mode) is applied inside each
+   * provider. See contracts/stock-analyser/structured-output.behaviour.md.
+   */
+  responseSchema?: unknown;
 }
 
 export interface AiProviderResult {
@@ -163,6 +172,9 @@ export interface AiProxyAuthContext {
 export interface AnthropicContentBlock {
   type: string;
   text?: string;
+  /** Present on `tool_use` blocks (forced-tool structured output). */
+  name?: string;
+  input?: unknown;
 }
 
 export interface AnthropicResponse {

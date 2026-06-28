@@ -1,5 +1,6 @@
 import { getOpenAIApiKey } from '../secrets';
 import { normaliseProviderError } from '../provider';
+import { STRUCTURED_OUTPUT_NAME, toOpenAiStrictSchema } from '../structured-output';
 import {
   AiProviderError,
   AiProviderNonJsonError,
@@ -45,6 +46,7 @@ export class OpenAIProvider implements AiProvider {
       system,
       model = this.options.model ?? 'gpt-5.4-mini',
       maxTokens = 4000,
+      responseSchema,
     } = request;
 
     const apiKey = await getOpenAIApiKey({
@@ -60,6 +62,26 @@ export class OpenAIProvider implements AiProvider {
         ]
       : [{ role: 'user', content: prompt }];
 
+    const requestBody: Record<string, unknown> = {
+      model,
+      input,
+      max_output_tokens: maxTokens,
+    };
+
+    // STRUCTURED OUTPUT: constrain the model to the canonical schema (strict
+    // json_schema) instead of prompt-and-parse. OpenAI does not web-search here,
+    // so this is unconditionally single-pass.
+    if (responseSchema) {
+      requestBody['text'] = {
+        format: {
+          type: 'json_schema',
+          name: STRUCTURED_OUTPUT_NAME,
+          schema: toOpenAiStrictSchema(responseSchema),
+          strict: true,
+        },
+      };
+    }
+
     const fetchImpl = this.options.fetchImpl ?? fetch;
     const res = await fetchImpl('https://api.openai.com/v1/responses', {
       method: 'POST',
@@ -67,11 +89,7 @@ export class OpenAIProvider implements AiProvider {
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        model,
-        input,
-        max_output_tokens: maxTokens,
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     const rawBody = await res.text();

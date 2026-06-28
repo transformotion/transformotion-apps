@@ -123,7 +123,18 @@ Stock Analyser AI goes through `useClaude<T>()` or `callClaudeAPI<T>()` in `lib/
 3. `ClaudeAIService` at `lib/services/ai/claude-ai.ts` delegates to `callClaudeAPI` — no change needed for new prompts
 4. Mock flag is `config.ai.provider === 'mock'` (set via `NEXT_PUBLIC_AI_OVERRIDE` / `NEXT_PUBLIC_RUNTIME_PROFILE`). Do not check `config.features.useMockData` for AI branching.
 
-### Cache key conventions
+### Structured output (schema-constrained JSON)
+
+JSON-returning AI surfaces should pass a `responseSchema` (the v0 canonical
+schema from `@transformotion/contracts/stock-analyser/structured-output`) to
+`provider.generate` so the model is **constrained** to valid schema-matching JSON
+instead of prompt-and-parse. The provider abstraction is provider-agnostic at the
+call site; each `fn-ai-proxy-core` provider applies its own mechanism (OpenAI
+`response_format` json_schema strict; Anthropic forced tool-use, **two-pass** in
+Live/web-search mode). Tolerant `JSON.parse(stripCodeFences(...))` + the
+#589/#597 non-JSON instrumentation remain as a **logged backstop**. Conform to
+`contracts/stock-analyser/structured-output.behaviour.md`. Market warm + per-ticker
+analysis use this today; Recs is deferred to the #592 backend-engine contract.
 
 | Data | Cache key format | TTL |
 |---|---|---|
