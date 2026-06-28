@@ -1,7 +1,12 @@
 import { createAiProxyHandler, AI_CONFIG_PK, appOverrideSk } from '@transformotion/fn-ai-proxy-core';
+import { stockAnalyserStructuredOutputSchemas } from '@transformotion/contracts/stock-analyser/structured-output';
 
 export const handler = createAiProxyHandler({
   appSlug: 'stock-analyser',
+  // #structured-output: the proxy resolves a request's `surface` to its canonical
+  // schema here (server-side) and passes it to the provider as responseSchema, so
+  // interactive tab calls (analyser/market) are schema-constrained like the engine.
+  structuredOutputSchemas: stockAnalyserStructuredOutputSchemas,
   anthropicSecretName: process.env.ANTHROPIC_SECRET_NAME!,
   openaiSecretName: process.env.OPENAI_SECRET_NAME,
   aiConfigTableName: process.env.AI_CONFIG_TABLE,

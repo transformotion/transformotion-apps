@@ -130,8 +130,12 @@ call site; each `fn-ai-proxy-core` provider applies its own mechanism (OpenAI
 `response_format` json_schema strict; Anthropic forced tool-use, **two-pass** in
 Live/web-search mode). Tolerant `JSON.parse(stripCodeFences(...))` + the
 #589/#597 non-JSON instrumentation remain as a **logged backstop**. Conform to
-`contracts/stock-analyser/structured-output.behaviour.md`. Market warm + per-ticker
-analysis use this today; Recs is deferred to the #592 backend-engine contract.
+`contracts/stock-analyser/structured-output.behaviour.md`. The engine hot path
+(market warm + per-ticker analysis) passes the schema directly; the interactive
+Analyser and Market tabs send a small `surface` string (`analyser` | `market`)
+and the AI proxy resolves it **server-side** to the canonical schema (via the
+app-supplied `structuredOutputSchemas` registry), keeping the schema off the
+wire. Recs is deferred to the #592 backend-engine contract.
 
 ### Cache key conventions
 

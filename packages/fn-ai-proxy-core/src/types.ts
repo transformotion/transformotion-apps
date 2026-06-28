@@ -80,6 +80,14 @@ export interface AiProxyOptions {
   aiConfigClient?: DynamoDBDocumentClient;
   apiGatewayManagementClient?: ApiGatewayManagementApiClient;
   fetchImpl?: typeof fetch;
+  /**
+   * App-owned structured-output schema registry, keyed by `surface`. When a
+   * request names a `surface` present here, the resolved schema is passed to the
+   * provider as `responseSchema` (provider-agnostic at the call site; the app
+   * supplies its own canonical schemas). Decouples the generic proxy from any
+   * one app's surfaces.
+   */
+  structuredOutputSchemas?: Record<string, unknown>;
 }
 
 export interface AiProxyRequest {
@@ -91,6 +99,12 @@ export interface AiProxyRequest {
   asyncMode?: boolean;
   connectionId?: string;
   appName?: string;
+  /**
+   * Structured-output surface (e.g. 'analyser', 'market'). Resolved server-side
+   * to a `responseSchema` via `AiProxyOptions.structuredOutputSchemas` so the big
+   * schema never crosses the wire from the client.
+   */
+  surface?: string;
 }
 
 export interface AiProviderRequest {

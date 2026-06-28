@@ -77,7 +77,14 @@ export function createAiProxyHandler(options: AiProxyOptions) {
       asyncMode = false,
       connectionId,
       appName,
+      surface,
     } = parseBody<AiProxyRequest>(event);
+
+    // Resolve the structured-output schema for the named surface (server-side, so
+    // the schema never crosses the wire). Absent surface/registry → free-text.
+    const responseSchema = surface && options.structuredOutputSchemas
+      ? options.structuredOutputSchemas[surface]
+      : undefined;
 
     if (!prompt?.trim()) {
       throw badRequest('prompt is required');
@@ -123,6 +130,7 @@ export function createAiProxyHandler(options: AiProxyOptions) {
         configurationSource: runtimeConfig.source,
         maxTokens,
         webSearch,
+        ...(responseSchema !== undefined ? { responseSchema } : {}),
         ...(connectionId ? { connectionId } : {}),
       };
 
@@ -145,6 +153,7 @@ export function createAiProxyHandler(options: AiProxyOptions) {
         model: runtimeConfig.model,
         maxTokens,
         webSearch,
+        responseSchema,
       });
       emitAiProxyTelemetry({
         eventName: 'ai_runtime_execution',

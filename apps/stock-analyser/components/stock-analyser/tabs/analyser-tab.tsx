@@ -93,6 +93,7 @@ export function AnalyserTab({
       webSearch,
       prompt: createStockAnalysisPrompt(analysedTicker),
       systemPrompt: STOCK_ANALYSIS_SYSTEM_PROMPT,
+      surface: "analyser", // structured output — proxy resolves the canonical schema
     }),
     parse: (raw) => (raw ? normaliseStockAnalysisSignals(raw as AnalysisResult) : null),
   })
