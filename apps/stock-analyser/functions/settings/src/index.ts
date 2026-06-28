@@ -87,7 +87,6 @@ function userPreferencesSk(userId: string) {
   return `USER#${userId}#PREFERENCES`;
 }
 
-const aiRuntimeSk = 'APP#AI_RUNTIME';
 const cacheFreshnessKey = {
   pk: 'SETTINGS',
   sk: 'CACHE_FRESHNESS#stock-analyser',
@@ -161,10 +160,14 @@ async function readPlatformDefault(deps: Dependencies): Promise<AiRuntimeConfigR
   return parseRecord(res.Item);
 }
 
-async function readAppOverride(deps: Dependencies, accountId: string): Promise<AiRuntimeConfigRecord | null> {
+// #586: the AI Engine override is APP-LEVEL — one record at {AI_CONFIG,
+// APP#stock-analyser} read by BOTH the live app (ai-proxy) and the batch job
+// (notification engine), in the top-level shape the resolver expects. (Was
+// per-account {ACCOUNT#…, APP#AI_RUNTIME}, which the batch never read.)
+async function readAppOverride(deps: Dependencies): Promise<AiRuntimeConfigRecord | null> {
   const res = await deps.client.send(new GetCommand({
     TableName: deps.settingsTable,
-    Key: { pk: accountPk(accountId), sk: aiRuntimeSk },
+    Key: { pk: AI_CONFIG_PK, sk: appOverrideSk(APP_SLUG) },
   }));
   return parseRecord(res.Item);
 }
@@ -265,10 +268,10 @@ async function patchSettings(deps: Dependencies, event: APIGatewayProxyEvent, ac
   return ok({ settings });
 }
 
-async function readAiConfig(deps: Dependencies, accountId: string) {
+async function readAiConfig(deps: Dependencies) {
   const [platformDefault, appOverride] = await Promise.all([
     readPlatformDefault(deps),
-    readAppOverride(deps, accountId),
+    readAppOverride(deps),
   ]);
   return ok(aiConfigResponse(platformDefault, appOverride));
 }
@@ -388,8 +391,10 @@ async function updateCacheFreshnessConfig(deps: Dependencies, event: APIGatewayP
   return ok({ config });
 }
 
-async function updateOverride(deps: Dependencies, event: APIGatewayProxyEvent, accountId: string) {
+async function updateOverride(deps: Dependencies, event: APIGatewayProxyEvent) {
   const { provider, model } = parseAiUpdateBody(event);
+  // #586: write ONE app-level record, TOP-LEVEL shape (provider/model on the
+  // item, not nested under `config`) so the engine's resolver reads it directly.
   const appOverride: AiRuntimeConfigRecord = {
     pk: AI_CONFIG_PK,
     sk: appOverrideSk(APP_SLUG),
@@ -399,21 +404,16 @@ async function updateOverride(deps: Dependencies, event: APIGatewayProxyEvent, a
   };
   await deps.client.send(new PutCommand({
     TableName: deps.settingsTable,
-    Item: {
-      pk: accountPk(accountId),
-      sk: aiRuntimeSk,
-      config: appOverride,
-      updatedAt: appOverride.updatedAt,
-    },
+    Item: appOverride,
   }));
   const platformDefault = await readPlatformDefault(deps);
   return ok(aiConfigResponse(platformDefault, appOverride));
 }
 
-async function resetOverride(deps: Dependencies, accountId: string) {
+async function resetOverride(deps: Dependencies) {
   await deps.client.send(new DeleteCommand({
     TableName: deps.settingsTable,
-    Key: { pk: accountPk(accountId), sk: aiRuntimeSk },
+    Key: { pk: AI_CONFIG_PK, sk: appOverrideSk(APP_SLUG) },
   }));
   return noContent();
 }
@@ -567,7 +567,7 @@ export function createHandler(deps: Dependencies = defaultDependencies) {
     }
     if (resource === '/ai-config' && event.httpMethod === 'GET') {
       saData.read(auth, account.accountId);
-      return readAiConfig(deps, account.accountId);
+      return readAiConfig(deps);
     }
     if (resource === '/cache-freshness' && event.httpMethod === 'GET') {
       saData.read(auth, account.accountId);
@@ -578,18 +578,19 @@ export function createHandler(deps: Dependencies = defaultDependencies) {
       requireCacheFreshnessAdmin(auth);
       return updateCacheFreshnessConfig(deps, event);
     }
-    // /ai-config/override is operational-config (D9) — site-admin write of an
-    // account-shared config row. Interim: preserve current behaviour (member +
-    // site-admin). PR-C rehomes this to app-level config gated by app-admin.
+    // /ai-config/override is APP-LEVEL operational config (#586): one record at
+    // {AI_CONFIG, APP#stock-analyser} governing the whole app (live + batch),
+    // site-admin write. (saData.read still establishes the account context for
+    // the D9 read gate; the override itself is no longer per-account.)
     if (resource === '/ai-config/override' && event.httpMethod === 'PUT') {
       saData.read(auth, account.accountId);
       requireSiteAdmin(auth);
-      return updateOverride(deps, event, account.accountId);
+      return updateOverride(deps, event);
     }
     if (resource === '/ai-config/override' && event.httpMethod === 'DELETE') {
       saData.read(auth, account.accountId);
       requireSiteAdmin(auth);
-      return resetOverride(deps, account.accountId);
+      return resetOverride(deps);
     }
 
     // ── Notification engine kill-switch (M19 #571, app-wide) ─────────────────

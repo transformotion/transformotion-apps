@@ -1,4 +1,4 @@
-import { createAiProxyHandler } from '@transformotion/fn-ai-proxy-core';
+import { createAiProxyHandler, AI_CONFIG_PK, appOverrideSk } from '@transformotion/fn-ai-proxy-core';
 
 export const handler = createAiProxyHandler({
   appSlug: 'stock-analyser',
@@ -6,9 +6,12 @@ export const handler = createAiProxyHandler({
   openaiSecretName: process.env.OPENAI_SECRET_NAME,
   aiConfigTableName: process.env.AI_CONFIG_TABLE,
   appOverrideTableName: process.env.APP_AI_CONFIG_TABLE,
-  appOverrideKey: (accountId) => ({
-    pk: `ACCOUNT#${accountId}`,
-    sk: 'APP#AI_RUNTIME',
+  // #586: the AI Engine override is APP-LEVEL — read the same {AI_CONFIG,
+  // APP#stock-analyser} record the batch engine reads (was per-account
+  // {ACCOUNT#…, APP#AI_RUNTIME}, which only the live app honoured).
+  appOverrideKey: () => ({
+    pk: AI_CONFIG_PK,
+    sk: appOverrideSk('stock-analyser'),
   }),
   fallbackProvider: process.env.AI_FALLBACK_PROVIDER,
   fallbackModel: process.env.AI_FALLBACK_MODEL,

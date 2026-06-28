@@ -138,11 +138,8 @@ describe('ai-runtime-config handler', () => {
       [PLATFORM_DEFAULT_SK]: record(PLATFORM_DEFAULT_SK, 'claude', 'claude-sonnet-4-6'),
       [appOverrideSk('stock-analyser')]: record(appOverrideSk('stock-analyser'), 'claude', 'claude-haiku-4-5-20251001'),
       'budget-tracker.settings-dev|accountId=bt-account|settingKey=AI_CONFIG#APP#budget-tracker': record(appOverrideSk('budget-tracker'), 'openai', 'gpt-5.4-mini'),
-      'stock-analyser.settings-dev|pk=ACCOUNT#sa-account|sk=APP#AI_RUNTIME': {
-        pk: 'ACCOUNT#sa-account',
-        sk: 'APP#AI_RUNTIME',
-        config: record(appOverrideSk('stock-analyser'), 'openai', 'gpt-5.5'),
-      },
+      // #586: SA AI override is APP-LEVEL — top-level record at {AI_CONFIG, APP#stock-analyser}.
+      'stock-analyser.settings-dev|pk=AI_CONFIG|sk=APP#stock-analyser': record(appOverrideSk('stock-analyser'), 'openai', 'gpt-5.5'),
     });
     const handler = createHandler({
       client,
