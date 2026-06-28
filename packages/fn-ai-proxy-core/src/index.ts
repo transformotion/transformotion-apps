@@ -11,7 +11,7 @@ export {
   resolveAiRuntimeConfig,
   resolveEnvFallbackConfig,
 } from './config';
-export { AiProviderError } from './types';
+export { AiProviderError, AiProviderNonJsonError } from './types';
 export { callClaude, ClaudeProvider, stripAnthropicCitations } from './providers/claude';
 export { OpenAIProvider } from './providers/openai';
 export { executeAsyncJob } from './async-job';
@@ -25,6 +25,7 @@ export type {
   AiErrorClass,
   AiProvider,
   AiProviderId,
+  AiProviderResponseDiagnostics,
   AiProviderRequest,
   AiProviderResult,
   AiProxyAsyncResponse,

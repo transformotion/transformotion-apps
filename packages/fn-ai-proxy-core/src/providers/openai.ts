@@ -1,6 +1,16 @@
 import { getOpenAIApiKey } from '../secrets';
 import { normaliseProviderError } from '../provider';
-import { AiProviderError, type AiProvider, type AiProviderRequest, type AiProviderResult, type AiProxyOptions, type OpenAIResponse } from '../types';
+import {
+  AiProviderError,
+  AiProviderNonJsonError,
+  type AiProvider,
+  type AiProviderRequest,
+  type AiProviderResult,
+  type AiProxyOptions,
+  type OpenAIResponse,
+} from '../types';
+
+const RESPONSE_BODY_LOG_PREFIX_CHARS = 1000;
 
 function extractOpenAIText(data: OpenAIResponse): string | undefined {
   if (data.output_text?.trim()) {
@@ -16,6 +26,14 @@ function extractOpenAIText(data: OpenAIResponse): string | undefined {
   }
 
   return undefined;
+}
+
+function responseHeaders(headers: Headers): Record<string, string> {
+  return Object.fromEntries(headers.entries());
+}
+
+function bodyPrefix(body: string): string {
+  return body.slice(0, RESPONSE_BODY_LOG_PREFIX_CHARS);
 }
 
 export class OpenAIProvider implements AiProvider {
@@ -56,7 +74,26 @@ export class OpenAIProvider implements AiProvider {
       }),
     });
 
-    const data = await res.json() as OpenAIResponse;
+    const rawBody = await res.text();
+    let data: OpenAIResponse;
+    try {
+      data = JSON.parse(rawBody) as OpenAIResponse;
+    } catch (err) {
+      const diagnostics = {
+        provider: 'openai' as const,
+        model,
+        phase: 'provider_http_json_parse' as const,
+        httpStatus: res.status,
+        responseHeaders: responseHeaders(res.headers),
+        responseBodyPrefix: bodyPrefix(rawBody),
+      };
+      console.warn(JSON.stringify({
+        eventName: 'ai_provider_non_json_response',
+        ...diagnostics,
+        err: err instanceof Error ? err.message : String(err),
+      }));
+      throw new AiProviderNonJsonError('OpenAI provider returned a non-JSON HTTP response', diagnostics);
+    }
 
     if (!res.ok) {
       throw normaliseProviderError('openai', res.status, data?.error?.message ?? String(res.status), data?.error?.code ?? data?.error?.type);

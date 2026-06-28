@@ -43,6 +43,12 @@ export interface NotificationTransition {
   analysis: StockAnalysisResult;
 }
 
+export interface AnalysisGenerationContext {
+  accountId: string;
+  runId: string;
+  sourceType: NotificationSourceType;
+}
+
 export interface NotificationEngineDeps {
   today: () => string;
   nowEpochSeconds: () => number;
@@ -55,7 +61,7 @@ export interface NotificationEngineDeps {
   readPortfolio: (accountId: string) => Promise<PortfolioHolding[]>;
   readWatchlist: (accountId: string) => Promise<WatchlistItem[]>;
   readSharedAnalysisCache: (ticker: string) => Promise<StockAnalysisResult | null>;
-  generateAnalysis: (ticker: string) => Promise<StockAnalysisResult>;
+  generateAnalysis: (ticker: string, context?: AnalysisGenerationContext) => Promise<StockAnalysisResult>;
   writeSharedAnalysisCache: (ticker: string, analysis: StockAnalysisResult) => Promise<void>;
   sendEmail: (recipient: MemberRow, transition: NotificationTransition) => Promise<void>;
   log?: (message: string, context?: Record<string, unknown>) => void;
@@ -296,7 +302,7 @@ function configEnablesType(config: NotificationAccountConfig, type: Notification
 
 function createAnalysisResolver(deps: NotificationEngineDeps) {
   const memo = new Map<string, Promise<StockAnalysisResult>>();
-  return (ticker: string): Promise<StockAnalysisResult> => {
+  return (ticker: string, context?: AnalysisGenerationContext): Promise<StockAnalysisResult> => {
     const normalisedTicker = ticker.toUpperCase();
     const existing = memo.get(normalisedTicker);
     if (existing) return existing;
@@ -305,7 +311,7 @@ function createAnalysisResolver(deps: NotificationEngineDeps) {
       const cached = await deps.readSharedAnalysisCache(normalisedTicker);
       if (cached) return cached;
 
-      const generated = await deps.generateAnalysis(normalisedTicker);
+      const generated = await deps.generateAnalysis(normalisedTicker, context);
       await deps.writeSharedAnalysisCache(normalisedTicker, generated);
       return generated;
     })();
@@ -316,8 +322,9 @@ function createAnalysisResolver(deps: NotificationEngineDeps) {
 
 async function processTicker(
   deps: NotificationEngineDeps,
-  resolveAnalysis: (ticker: string) => Promise<StockAnalysisResult>,
+  resolveAnalysis: (ticker: string, context?: AnalysisGenerationContext) => Promise<StockAnalysisResult>,
   accountId: string,
+  runId: string,
   type: NotificationSourceType,
   ticker: string,
   previous: NotificationStateRecord | undefined,
@@ -325,7 +332,7 @@ async function processTicker(
   today: string,
 ): Promise<{ transition: NotificationTransition; sentUserIds: string[]; sent: number }> {
   const normalisedTicker = ticker.toUpperCase();
-  const analysis = await resolveAnalysis(normalisedTicker);
+  const analysis = await resolveAnalysis(normalisedTicker, { accountId, runId, sourceType: type });
 
   const transition = evaluateTransition({ accountId, type, ticker: normalisedTicker, analysis, previous });
   const sentUserIds: string[] = [];
@@ -376,7 +383,7 @@ export function assertNoCrossAccount(
 
 async function processAccount(
   deps: NotificationEngineDeps,
-  resolveAnalysis: (ticker: string) => Promise<StockAnalysisResult>,
+  resolveAnalysis: (ticker: string, context?: AnalysisGenerationContext) => Promise<StockAnalysisResult>,
   accountId: string,
   accountName: string | undefined,
   candidateMembers: MemberRow[],
@@ -438,6 +445,7 @@ async function processAccount(
       deps,
       resolveAnalysis,
       accountId,
+      sendLog.runId,
       item.type,
       item.ticker,
       statesByKey.get(stateSk(item.type, item.ticker)),
