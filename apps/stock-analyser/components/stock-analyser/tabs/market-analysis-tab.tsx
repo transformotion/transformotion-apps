@@ -24,7 +24,7 @@ import {
 } from "lucide-react"
 import { useCacheStatus, useClaude } from "@/lib/hooks"
 import { cn } from "@/lib/utils"
-import type { AnalysisRegion } from "@transformotion/contracts/stock-analyser/types"
+import type { AnalysisRegion, PriceRange, PriceInterval } from "@transformotion/contracts/stock-analyser/types"
 // #535: the Market Analysis result model is now canonical (promoted out of this
 // tab into the contract). Per-card `source` attribution lives on MacroIndicator
 // and SectorSignal; `opportunity` was reconciled away in the promotion.
@@ -36,14 +36,35 @@ import type {
 import {
   ANALYSIS_REGIONS,
   REGION_LABELS,
-  REGION_TO_RECOMMENDATION_UNIVERSES,
   regionFromLabel,
   resolveSectorUniverse,
 } from "../markets"
 import { createMarketSectorNavigationPayload } from "../recommendations-flow"
 import { stockSignalBadgeClassName } from "../status-badge"
 import { buildSectorSuppliedData } from "@/lib/analysis/market-analysis-grounding"
+import { createMarketAnalysisPrompt, MARKET_ANALYSIS_SYSTEM_PROMPT } from "@/lib/analysis/market-analysis-signals"
 import { dynamoCache } from "@/lib/services/cache/dynamo-ttl-cache"
+import { getConfig } from "@/lib/config"
+import { getStockAnalyserClient } from "@/lib/api"
+import { getMockOhlcvData } from "@/lib/services/ai/fixtures/ohlcv-data"
+
+/**
+ * Client OHLCV source for the #535 Bucket-1 grounding — preserves the prior
+ * mock-vs-live split that used to live inside the grounding module. The grounding
+ * builder now takes this as an INJECTED fetcher so the SAME builder is reusable
+ * server-side by the daily cache-warming job (#584).
+ */
+async function fetchClientSectorOhlcv(
+  ticker: string,
+  range: PriceRange,
+  interval: PriceInterval,
+): Promise<readonly number[] | null> {
+  const ohlcv =
+    getConfig().ai.provider === "mock"
+      ? getMockOhlcvData(ticker, range, interval)
+      : await getStockAnalyserClient().getOhlcvData(ticker, range, interval)
+  return ohlcv?.closes ?? null
+}
 
 const IMPACT_STYLES: Record<MacroIndicatorImpact, { bg: string; text: string }> = {
   Supportive: { bg: "bg-signal-green/15", text: "text-signal-green" },
@@ -166,67 +187,23 @@ export function MarketAnalysisTab() {
   }, [defaultSearchMode])
 
   const runAnalysis = async (forceRefresh = false) => {
-    const supportedUniverses = REGION_TO_RECOMMENDATION_UNIVERSES[region]
     // #535 Bucket-1 grounding: only when we will actually call the model (cache
     // miss or forced refresh) fetch real sector OHLCV and feed it in as supplied
     // data, so sector levels/returns are grounded in prices rather than searched.
     // Skipped on a cache hit (the prompt is unused then).
     const willCallModel = forceRefresh || (await dynamoCache.get<MarketAnalysisResult>(cacheKey)) === null
     // Grounding is best-effort: a fetch/format failure must never block analysis.
-    const suppliedSectorData = willCallModel ? await buildSectorSuppliedData(region).catch(() => "") : ""
+    // The OHLCV source is injected so the SAME builder runs server-side (#584).
+    const suppliedSectorData = willCallModel ? await buildSectorSuppliedData(region, fetchClientSectorOhlcv).catch(() => "") : ""
     const data = await callClaude({
       cacheKey,
       forceRefresh,
       onCacheMetadata: cacheStatus.markWritten,
       webSearch: isLive,
-      prompt: `Provide comprehensive market analysis for the ${REGION_LABELS[region]} region.
-
-SOURCE ATTRIBUTION (required, per card): For EACH macro indicator and EACH sector, name the authoritative source you based that card's read on and return it as "source": { "name": string } (e.g. "RBA", "ASX", "EIA"). Prefer authoritative / primary sources — exchanges, central banks, regulators, and established financial press. DO NOT base figures on social media, forums, or unattributed aggregators. Source attribution applies ONLY to the macro indicators and sector cards — NOT to "briefing" or "actionSummary".${suppliedSectorData}
-
-Return a JSON object with the following fields:
-
-"macro" — 4 market condition cards, each with label, title, description, impact ("Supportive" / "Neutral" / "Headwind"), and source ({ name: string }):
-  - cycleStage — where the market is in the economic cycle
-  - rateDirection — current interest rate trend
-  - keyRisk — primary macro risk to watch
-  - currency — USD/currency effect on the market
-
-"briefing" — a 2-3 sentence narrative paragraph summarising the macro outlook (synthesis — no source field)
-
-"sectors" — array of 8 sectors, each with:
-
-  - sector: sector name — one of: Financials, Materials, Energy, Healthcare, Technology, Industrials, Consumer Discretionary, Real Estate & REITs
-
-  - signal: "BUY" / "HOLD" / "EXIT"
-    The overall recommendation, synthesising cycle position, valuation, and momentum.
-
-  - cyclePosition: integer 0–100
-    Where the sector sits in its economic cycle.
-    0 = early cycle (just beginning to recover/accelerate)
-    50 = mid cycle (established trend, neither early nor late)
-    100 = late cycle (extended, peak territory, vulnerable to rotation out)
-    This is a POSITIONAL metric only — it does not imply good or bad.
-
-  - valuation: one of "Cheap" / "Attractive" / "Fair" / "Expensive" / "Overvalued" / "Extended"
-    How the sector is priced relative to its own fundamentals and history.
-    INDEPENDENT of cyclePosition. A sector can be late-cycle but cheap (if beaten down), or early-cycle but expensive (if priced on expectations).
-
-  - change: weekly % change (number, e.g. 2.1 or -0.8)
-    Where SUPPLIED SECTOR DATA is given for a sector, base its level/return read on those figures, not on searched or recalled numbers.
-
-  - reason: 1-2 sentence explanation tying the dimensions together.
-    Example: "Late-cycle but still cheap on forward earnings; defensive qualities attractive as growth slows."
-
-  - bestExchange: the best listing universe for this sector. MUST be one of: ${supportedUniverses.join(", ")}
-
-  - source: { name: string } — the authoritative source this sector's read is based on (use the supplied proxy where given for that sector)
-
-"actionSummary" — top-3 trades (conclusions — no source field):
-  - enter: array of top 3 { sector, reason } to buy/overweight
-  - exit: array of top 3 { sector, reason } to sell/reduce
-
-IMPORTANT: Your entire response must be a single valid JSON object. Begin your response with { and end with }. Do not include any text, preamble, explanation, or markdown outside the JSON.`,
-      systemPrompt: "You are a senior market strategist. Provide institutional-quality sector rotation analysis grounded in authoritative, attributable sources. For every macro indicator and sector card, name the authoritative source you relied on (exchanges, central banks, regulators, established financial press) and never base figures on social media, forums, or unattributed aggregators. Respond with raw JSON only. Do not use markdown code fences.",
+      // #584: prompt + system come from the shared market-analysis-signals module
+      // (the SINGLE source) so the daily warm-write === a live run by construction.
+      prompt: createMarketAnalysisPrompt(region, suppliedSectorData),
+      systemPrompt: MARKET_ANALYSIS_SYSTEM_PROMPT,
     })
 
     if (data) {

@@ -210,6 +210,20 @@ delivery. The exemption is backed by tests for SHARED-only cache writes,
 cross-account isolation, and fail-closed delivery; the check is waived, not the
 auth requirement.
 
+#584 (market-wide cache warming): the same engine run, AFTER the #571
+kill-switch gate, warms `MARKET#{region}` for every region by running the SAME
+grounded market-analysis computation the live Market tab runs (shared
+`lib/analysis/market-analysis-signals` prompt + `market-analysis-grounding`),
+then SHARED-writes each result through the existing analysis-cache
+service-principal invoke (`MARKET` is a `SHARED_PREFIXES` key). For the #535
+Bucket-1 grounding it invokes the **market-data** Lambda's service-principal
+`get-ohlcv` branch (the same shared OHLCV source the frontend hits), so the
+engine role gains `lambda:InvokeFunction` on `transformotion-market-data-{stage}`
+and the `MARKET_DATA_FUNCTION_NAME` env var. `market-data`'s service-principal
+branch is JWT-less but reachable only by the granted engine role; the
+authenticated API path keeps its `requireAccountData` gate (so the handler-authz
+check still passes via `saData.read`).
+
 ## Adding a new app's CDK stacks
 
 1. Create `apps/{app-name}/infrastructure/{app-name}-tables-stack.ts` for app-owned tables where needed.

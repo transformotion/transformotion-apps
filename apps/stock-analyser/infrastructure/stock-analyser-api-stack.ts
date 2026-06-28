@@ -243,6 +243,9 @@ export class StockAnalyserApiStack extends cdk.Stack {
         ANALYSIS_CACHE_TABLE: analysisCacheTable.tableName,
         ACCOUNT_MEMBERS_TABLE: accountMembersTable.tableName,
         ANALYSIS_CACHE_FUNCTION_NAME: cacheFn.functionName,
+        // #584: invoke market-data's service-principal branch for #535 sector
+        // OHLCV grounding when warming MARKET#{region}.
+        MARKET_DATA_FUNCTION_NAME: marketDataFn.functionName,
         ANTHROPIC_SECRET_NAME: anthropicSecret.secretName,
         OPENAI_SECRET_NAME: openaiSecret.secretName,
         AI_CONFIG_TABLE: aiRuntimeConfigTable.tableName,
@@ -279,6 +282,9 @@ export class StockAnalyserApiStack extends cdk.Stack {
     openaiSecret.grantRead(notificationEngineFn);
     aiRuntimeConfigTable.grantReadData(notificationEngineFn);
     cacheFn.grantInvoke(notificationEngineFn);
+    // #584: warm MARKET#{region} — invoke market-data (service-principal OHLCV
+    // grounding) and write the warmed entry via the analysis-cache invoke above.
+    marketDataFn.grantInvoke(notificationEngineFn);
     notificationEngineFn.addToRolePolicy(new iam.PolicyStatement({
       actions: ['ses:SendEmail', 'sesv2:SendEmail'],
       resources: ['*'],

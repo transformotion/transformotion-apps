@@ -5,20 +5,18 @@ import {
   type AnalysisRegion,
   type RecommendationUniverse,
 } from "@transformotion/contracts/stock-analyser/types"
+// REGION_LABELS is owned by the shared market-analysis-signals module (the single
+// source the prompt + the cache-warming job also use); re-exported here for the UI.
+// Relative (not `@/`) so the vitest graph — which has no `@/` alias — resolves it.
+import { REGION_LABELS } from "../../lib/analysis/market-analysis-signals"
 
 export {
   ANALYSIS_REGIONS,
   RECOMMENDATION_UNIVERSES,
   REGION_TO_RECOMMENDATION_UNIVERSES,
+  REGION_LABELS,
   type AnalysisRegion,
   type RecommendationUniverse,
-}
-
-export const REGION_LABELS: Record<AnalysisRegion, string> = {
-  global: "Global",
-  australia: "Australia",
-  us: "US",
-  uk: "UK",
 }
 
 const REGION_LABEL_TO_REGION = Object.fromEntries(

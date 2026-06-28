@@ -40,6 +40,9 @@ import {
   type SendLogRun,
 } from './engine';
 import { SEND_LOG_TTL_SECONDS, writeSendLog } from './send-log';
+import { buildSectorSuppliedData, type SectorOhlcvFetcher } from '../../../lib/analysis/market-analysis-grounding';
+import { createMarketAnalysisPrompt, MARKET_ANALYSIS_SYSTEM_PROMPT } from '../../../lib/analysis/market-analysis-signals';
+import { ANALYSIS_REGIONS, type AnalysisRegion } from '@transformotion/contracts/stock-analyser/types';
 
 // removeUndefinedValues (#578): the safety net so a stray `undefined` (e.g. a
 // member with no email) can never throw mid-write and drop subsequent records.
@@ -52,6 +55,8 @@ const ses = new SESv2Client({});
 
 const APP_SLUG = 'stock-analyser';
 const ANALYSIS_TTL_SECONDS = 24 * 60 * 60;
+// #584: MARKET#{region} warm-write TTL — matches the live Market tab's cache TTL.
+const MARKET_TTL_SECONDS = 24 * 60 * 60;
 
 interface RuntimeEnv {
   stage: string;
@@ -64,6 +69,7 @@ interface RuntimeEnv {
   sendLogTable: string;
   accountsTable: string;
   analysisCacheFunctionName: string;
+  marketDataFunctionName: string;
   anthropicSecretName: string;
   openaiSecretName?: string;
   aiConfigTableName?: string;
@@ -93,6 +99,7 @@ function env(): RuntimeEnv {
     sendLogTable: requireEnv('SEND_LOG_TABLE'),
     accountsTable: requireEnv('ACCOUNTS_TABLE'),
     analysisCacheFunctionName: requireEnv('ANALYSIS_CACHE_FUNCTION_NAME'),
+    marketDataFunctionName: requireEnv('MARKET_DATA_FUNCTION_NAME'),
     anthropicSecretName: requireEnv('ANTHROPIC_SECRET_NAME'),
     openaiSecretName: process.env.OPENAI_SECRET_NAME,
     aiConfigTableName: process.env.AI_CONFIG_TABLE,
@@ -404,12 +411,91 @@ async function readEngineEnabled(runtime: RuntimeEnv): Promise<boolean> {
   return typeof enabled === 'boolean' ? enabled : true;
 }
 
+// ── #584 market-wide cache warming ───────────────────────────────────────────
+// Server-side OHLCV for the #535 Bucket-1 grounding: invoke the market-data
+// Lambda's service-principal branch — the SAME shared source the frontend
+// ultimately hits, so warmed sector data === live. Best-effort: any failure
+// yields null and the grounding omits that sector (never blocks the warm).
+function makeServerOhlcvFetcher(runtime: RuntimeEnv): SectorOhlcvFetcher {
+  return async (ticker, range, interval) => {
+    try {
+      const res = await lambda.send(new InvokeCommand({
+        FunctionName: runtime.marketDataFunctionName,
+        InvocationType: 'RequestResponse',
+        Payload: Buffer.from(JSON.stringify({
+          servicePrincipal: 'stock-analyser-notification-engine',
+          operation: 'get-ohlcv',
+          ticker, range, interval,
+        })),
+      }));
+      if (res.FunctionError) return null;
+      const payload = res.Payload ? JSON.parse(Buffer.from(res.Payload).toString('utf8')) : null;
+      const closes = (payload as { closes?: unknown } | null)?.closes;
+      return Array.isArray(closes) ? (closes as number[]) : null;
+    } catch {
+      return null;
+    }
+  };
+}
+
+// SHARED-write the warmed MARKET#{region} entry via the analysis-cache
+// service-principal path (#537 SHARED-prefix; reuses the engine's existing
+// analysis-cache invoke). 24h TTL — matches the live Market tab.
+async function writeSharedMarketCache(runtime: RuntimeEnv, region: AnalysisRegion, data: unknown): Promise<void> {
+  const response = await lambda.send(new InvokeCommand({
+    FunctionName: runtime.analysisCacheFunctionName,
+    InvocationType: 'RequestResponse',
+    Payload: Buffer.from(JSON.stringify({
+      servicePrincipal: 'stock-analyser-notification-engine',
+      operation: 'put-shared-cache',
+      cacheKey: `MARKET#${region}`,
+      data,
+      ttlSeconds: MARKET_TTL_SECONDS,
+      mode: 'live',
+      type: 'market',
+    })),
+  }));
+  if (response.FunctionError) {
+    const payload = response.Payload ? Buffer.from(response.Payload).toString('utf8') : '';
+    throw new Error(`market cache service-principal write failed: ${response.FunctionError} ${payload}`);
+  }
+}
+
+// Warm MARKET#{region} for EVERY region, ONCE per job run. Each region is the
+// SAME grounded computation the live Market tab runs (shared prompt + system +
+// grounding) → the warm-write is identical-to-live by construction. Per-region
+// isolation: one region's model/cache failure never drops the others.
+function makeWarmMarketCache(runtime: RuntimeEnv): () => Promise<void> {
+  const providerFactory = makeAiProviderFactory(runtime);
+  const fetchOhlcv = makeServerOhlcvFetcher(runtime);
+  return async () => {
+    const { provider, config } = await providerFactory();
+    for (const region of ANALYSIS_REGIONS) {
+      try {
+        const suppliedSectorData = await buildSectorSuppliedData(region, fetchOhlcv).catch(() => '');
+        const result = await provider.generate({
+          prompt: createMarketAnalysisPrompt(region, suppliedSectorData),
+          system: MARKET_ANALYSIS_SYSTEM_PROMPT,
+          model: config.model,
+          webSearch: true,
+        });
+        const data = JSON.parse(stripCodeFences(result.content));
+        await writeSharedMarketCache(runtime, region, data);
+        console.log(JSON.stringify({ message: 'notification-market-warm-ok', region }));
+      } catch (err) {
+        console.log(JSON.stringify({ message: 'notification-market-warm-region-error', region, err: String(err) }));
+      }
+    }
+  };
+}
+
 export function createDependencies(runtime: RuntimeEnv = env()): NotificationEngineDeps {
   return {
     today: todayUtc,
     nowEpochSeconds: () => Math.floor(Date.now() / 1000),
     newRunId: () => randomUUID(),
     readEngineEnabled: () => readEngineEnabled(runtime),
+    warmMarketCache: makeWarmMarketCache(runtime),
     readAccountName: (accountId) => readAccountName(runtime, accountId),
     recordSendLog: (run) => recordSendLog(runtime, run),
     listStockAnalyserMembers: () => listStockAnalyserMembers(runtime),

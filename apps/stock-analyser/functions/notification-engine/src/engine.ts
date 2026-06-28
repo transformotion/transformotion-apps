@@ -68,6 +68,12 @@ export interface NotificationEngineDeps {
   recordSendLog: (run: SendLogRun) => Promise<void>;
   /** #571 kill-switch: app-wide `notificationsEnabled` (default ON). */
   readEngineEnabled: () => Promise<boolean>;
+  /**
+   * #584: warm the market-wide analysis cache (`MARKET#{region}` for each
+   * region). Runs ONCE per job execution, AFTER the kill-switch gate, so an
+   * engine-OFF run does NO market warming. Optional so unit tests can omit it.
+   */
+  warmMarketCache?: () => Promise<void>;
 }
 
 export interface NotificationEngineResult {
@@ -505,6 +511,16 @@ export async function runNotificationEngine(deps: NotificationEngineDeps): Promi
       sendLog.note = 'engine-disabled';
       deps.log?.('notification-engine-disabled-skip', { runId: sendLog.runId });
       return result;
+    }
+
+    // #584: warm the market-wide analysis cache ONCE per run, AFTER the
+    // kill-switch gate (engine OFF → no warming AND no sends — the switch pauses
+    // the WHOLE batch, the bigger AI-credit consumer). Best-effort: a warming
+    // failure must never abort the notification run.
+    try {
+      await deps.warmMarketCache?.();
+    } catch (err) {
+      deps.log?.('notification-market-warm-error', { err: String(err) });
     }
 
     const today = deps.today();

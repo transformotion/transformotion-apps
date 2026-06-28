@@ -26,10 +26,24 @@
  *   - uk: FULLY UNMAPPED pending owner-supplied FTSE sector proxies.
  */
 
-import { getStockAnalyserClient } from '@/lib/api'
-import { getConfig } from '@/lib/config'
-import { getMockOhlcvData } from '@/lib/services/ai/fixtures/ohlcv-data'
-import type { AnalysisRegion } from '@transformotion/contracts/stock-analyser/types'
+import type {
+  AnalysisRegion,
+  PriceRange,
+  PriceInterval,
+} from '@transformotion/contracts/stock-analyser/types'
+
+/**
+ * OHLCV source, INJECTED by the caller (#584). The frontend passes a client/mock
+ * fetcher; the daily cache-warming job passes a server-side fetcher (market-data
+ * Lambda). Keeping this module free of frontend seams lets the Lambda import it
+ * and produce the SAME supplied-data block the live tab does. Returns `closes`
+ * (most-recent last) or `null` when unavailable.
+ */
+export type SectorOhlcvFetcher = (
+  ticker: string,
+  range: PriceRange,
+  interval: PriceInterval,
+) => Promise<readonly number[] | null>;
 
 /** The eight sectors the Market Analysis prompt enumerates (must match the prompt). */
 export const MARKET_ANALYSIS_SECTORS = [
@@ -110,13 +124,10 @@ function pctChange(closes: readonly number[], lookback: number): number | null {
 async function fetchSectorLevel(
   sector: MarketAnalysisSector,
   ticker: string,
+  fetchOhlcv: SectorOhlcvFetcher,
 ): Promise<SectorLevel | null> {
   try {
-    const ohlcv =
-      getConfig().ai.provider === 'mock'
-        ? getMockOhlcvData(ticker, '3mo', '1d')
-        : await getStockAnalyserClient().getOhlcvData(ticker, '3mo', '1d')
-    const closes = ohlcv?.closes ?? []
+    const closes = (await fetchOhlcv(ticker, '3mo', '1d')) ?? []
     const last = finite(closes[closes.length - 1])
     if (last === null) return null // non-finite/absent last close → omit this sector
     return {
@@ -137,7 +148,10 @@ async function fetchSectorLevel(
  * the model reasons over fed sector levels rather than searching for them.
  * Returns `''` when nothing could be fetched (caller injects nothing).
  */
-export async function buildSectorSuppliedData(region: AnalysisRegion): Promise<string> {
+export async function buildSectorSuppliedData(
+  region: AnalysisRegion,
+  fetchOhlcv: SectorOhlcvFetcher,
+): Promise<string> {
   // Top-level guard: grounding is best-effort and must NEVER reject — a failure
   // here can never be allowed to block the analysis call.
   try {
@@ -146,7 +160,7 @@ export async function buildSectorSuppliedData(region: AnalysisRegion): Promise<s
     if (entries.length === 0) return ''
 
     const levels = (
-      await Promise.all(entries.map(([sector, ticker]) => fetchSectorLevel(sector, ticker)))
+      await Promise.all(entries.map(([sector, ticker]) => fetchSectorLevel(sector, ticker, fetchOhlcv)))
     ).filter((l): l is SectorLevel => l !== null)
 
     if (levels.length === 0) return ''
