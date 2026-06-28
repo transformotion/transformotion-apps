@@ -3,7 +3,27 @@ import { describe, expect, it, beforeEach } from 'vitest';
 import { STRUCTURED_OUTPUT_NAME, toOpenAiStrictSchema, toAnthropicInputSchema } from './structured-output';
 import { OpenAIProvider } from './providers/openai';
 import { ClaudeProvider } from './providers/claude';
+import { createAiProxyHandler } from './handler';
 import { resetApiKeyCache } from './secrets';
+
+function apiEvent(body: unknown) {
+  return {
+    headers: { 'X-Account-Id': 'account-1' },
+    requestContext: {
+      requestId: 'req-1',
+      authorizer: {
+        claims: {
+          sub: 'user-1', email: 'u@e.com', 'cognito:groups': '',
+          apps: JSON.stringify(['stock-analyser']),
+          accounts: JSON.stringify({ 'stock-analyser': [{ accountId: 'account-1', role: 'member' }] }),
+          site_admin: 'false',
+        },
+      },
+    },
+    body: JSON.stringify(body),
+    isBase64Encoded: false,
+  } as never;
+}
 
 function secretClient(secret: string) {
   return { send: async () => ({ SecretString: secret }) } as never;
@@ -141,5 +161,67 @@ describe('ClaudeProvider structured output', () => {
     expect(JSON.parse(res.content)).toEqual({ a: 'y' });
     expect(res.inputTokens).toBe(14);                        // tokens summed across passes
     expect(res.outputTokens).toBe(26);
+  });
+});
+
+describe('createAiProxyHandler surface → schema resolution', () => {
+  beforeEach(() => resetApiKeyCache());
+
+  it('resolves a registered surface to its schema and constrains provider output', async () => {
+    let body: Record<string, any> | undefined;
+    const handler = createAiProxyHandler({
+      provider: 'claude',
+      anthropicSecretName: 'anthropic-secret',
+      permittedApps: ['stock-analyser'],
+      secretsManagerClient: secretClient('anthropic-key'),
+      structuredOutputSchemas: { analyser: sampleSchema },
+      fetchImpl: async (_url, init) => {
+        body = JSON.parse(String(init?.body));
+        return jsonResponse({
+          content: [{ type: 'tool_use', name: STRUCTURED_OUTPUT_NAME, input: { a: 'x', b: 1 } }],
+          model: 'claude-sonnet-4-6',
+          usage: { input_tokens: 1, output_tokens: 1 },
+        });
+      },
+    });
+
+    const res = (await handler(apiEvent({ prompt: 'p', surface: 'analyser', maxTokens: 100 }))) as {
+      statusCode: number;
+      body: string;
+    };
+
+    expect(res.statusCode).toBe(200);
+    // The handler resolved surface='analyser' → schema → forced-tool structured output.
+    expect(body!.tool_choice).toEqual({ type: 'tool', name: STRUCTURED_OUTPUT_NAME });
+    expect(body!.tools[0].name).toBe(STRUCTURED_OUTPUT_NAME);
+    expect(JSON.parse(JSON.parse(res.body).content)).toEqual({ a: 'x', b: 1 });
+  });
+
+  it('does NOT constrain when the surface has no registered schema (free-text back-compat)', async () => {
+    let body: Record<string, any> | undefined;
+    const handler = createAiProxyHandler({
+      provider: 'claude',
+      anthropicSecretName: 'anthropic-secret',
+      permittedApps: ['stock-analyser'],
+      secretsManagerClient: secretClient('anthropic-key'),
+      structuredOutputSchemas: { analyser: sampleSchema },
+      fetchImpl: async (_url, init) => {
+        body = JSON.parse(String(init?.body));
+        return jsonResponse({
+          content: [{ type: 'text', text: 'free text' }],
+          model: 'claude-sonnet-4-6',
+          usage: { input_tokens: 1, output_tokens: 1 },
+        });
+      },
+    });
+
+    const res = (await handler(apiEvent({ prompt: 'p', surface: 'unregistered', maxTokens: 100 }))) as {
+      statusCode: number;
+      body: string;
+    };
+
+    expect(res.statusCode).toBe(200);
+    expect(body!.tool_choice).toBeUndefined();               // free-text, no forced tool
+    expect(JSON.parse(res.body).content).toBe('free text');
   });
 });

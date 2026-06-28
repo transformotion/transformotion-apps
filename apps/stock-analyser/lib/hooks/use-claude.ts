@@ -28,6 +28,12 @@ export interface ClaudeRequest {
   systemPrompt?: string
   maxTokens?: number
   /**
+   * Structured-output surface ('analyser' | 'market'). Forwarded to the proxy,
+   * which resolves it server-side to the canonical schema and constrains the
+   * model's output. Surfaces without a schema (etfs/metals/recs) omit it.
+   */
+  surface?: string
+  /**
    * DynamoDB cache key (e.g. 'MARKET#ASX', 'ANALYSIS#CBA.AX').
    * When provided: checks DynamoDB before calling Claude, saves result after.
    * Cache is always checked regardless of AI provider.
@@ -210,7 +216,7 @@ async function subscribeViaWss<T>(
 
   // Phase 2: start the job, then wait for job_complete notification
   const { jobId } = await stockAnalyserClient.claudeAsyncStart(
-    { prompt: request.prompt, systemPrompt: request.systemPrompt, webSearch: request.webSearch, maxTokens: request.maxTokens },
+    { prompt: request.prompt, systemPrompt: request.systemPrompt, webSearch: request.webSearch, maxTokens: request.maxTokens, surface: request.surface },
     connectionId,
     signal,
   )

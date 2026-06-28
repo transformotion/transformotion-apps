@@ -110,7 +110,7 @@ export const stockAnalyserClient = {
   deleteCacheEntry(key: string): Promise<void> {
     return http().delete(`analysis-cache/${encodeURIComponent(key)}`)
   },
-  claudeAsyncStart(req: Omit<ClaudeProxyRequest, 'asyncMode'>, connectionId?: string, signal?: AbortSignal): Promise<{ jobId: string }> {
+  claudeAsyncStart(req: Omit<ClaudeProxyRequest, 'asyncMode'> & { surface?: string }, connectionId?: string, signal?: AbortSignal): Promise<{ jobId: string }> {
     return http().post('api/claude', { ...req, asyncMode: true, ...(connectionId ? { connectionId, appName: 'stock-analyser' } : {}) }, signal)
   },
 }

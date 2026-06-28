@@ -173,6 +173,7 @@ export function MarketAnalysisTab() {
         webSearch,
         prompt: createMarketAnalysisPrompt(region, suppliedSectorData),
         systemPrompt: MARKET_ANALYSIS_SYSTEM_PROMPT,
+        surface: "market", // structured output — proxy resolves the canonical schema
       }
     },
     parse: (raw) => {
