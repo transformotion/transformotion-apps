@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useNavigation, type TabId } from "../app-shell"
 import {
   PageHeader,
@@ -11,13 +11,12 @@ import {
   SecondaryButton,
   EmptyState,
   CacheStatusBar,
-  ModeToggle,
   FullCycleGauge,
   type Verdict,
   type CycleStage,
 } from "@transformotion/ui-primitives"
 import { Spinner } from "@transformotion/ui-primitives"
-import { 
+import {
   Search,
   TrendingUp,
   Eye,
@@ -25,7 +24,7 @@ import {
   AlertCircle,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { useCacheStatus, useClaude } from "@/lib/hooks"
+import { useScopedAnalysis } from "@/lib/hooks/use-scoped-analysis"
 import { useCycleData } from "@/lib/hooks/use-cycle-data"
 import { useOhlcvData } from "@/lib/hooks/use-ohlcv-data"
 import { latestPriceFromOhlcv } from "@/lib/market-data"
@@ -78,64 +77,79 @@ export function AnalyserTab({
   initialTicker?: string | null
   source?: TabId | null
 }) {
-  const { navigateTo, clearAnalyserContext, isOnWatchlist, addToWatchlist, removeFromWatchlist, defaultSearchMode } = useNavigation()
-  const [isLive, setIsLive] = useState(defaultSearchMode === "live")
+  const { navigateTo, clearAnalyserContext, isOnWatchlist, addToWatchlist, removeFromWatchlist } = useNavigation()
   const [searchValue, setSearchValue] = useState("")
-  const [result, setResult] = useState<AnalysisResult | null>(null)
-  const activeTicker = result?.ticker ?? (searchValue || null)
-  const cacheStatus = useCacheStatus("analyser", activeTicker ? `ANALYSIS#${activeTicker}` : null)
-
+  // The submitted ticker = the cache SCOPE, kept separate from the search box so
+  // typing doesn't flicker the shown result; it only changes on an analyse action.
+  const [analysedTicker, setAnalysedTicker] = useState("")
+  const pendingRunRef = useRef<string | null>(null)
   const [chartRange, setChartRange] = useState<OhlcvRange>('1y')
 
-  const { callClaude, isLoading: isAnalyzing, error } = useClaude<AnalysisResult>()
+  // Unified cache-first analysis, scoped by the analysed ticker.
+  const analysis = useScopedAnalysis<AnalysisResult>({
+    surface: "analyser",
+    scopeKey: analysedTicker,
+    buildRequest: (webSearch) => ({
+      webSearch,
+      prompt: createStockAnalysisPrompt(analysedTicker),
+      systemPrompt: STOCK_ANALYSIS_SYSTEM_PROMPT,
+    }),
+    parse: (raw) => (raw ? normaliseStockAnalysisSignals(raw as AnalysisResult) : null),
+  })
+  const result = analysis.result
+  const isAnalyzing = analysis.isRunning
+  const isLive = analysis.isLive
 
-  useEffect(() => {
-    setIsLive(defaultSearchMode === "live")
-  }, [defaultSearchMode])
   const { data: liveData, isLoading: isLoadingLive, error: liveError, fetch: fetchLive } = useCycleData()
   const { data: ohlcvData, isLoading: isLoadingChart, fetch: fetchOhlcv } = useOhlcvData()
 
-  // Auto-analyse only if navigated from another tab (source is set)
+  // Submit a ticker for analysis (search box, quick picks, Enter, or nav). Sets
+  // the scope to the ticker, then runs cache-first once the scope is committed.
+  const analyseTicker = (raw: string | null | undefined) => {
+    const t = (raw ?? "").toUpperCase().trim()
+    if (!t || analysis.isRunning) return
+    setSearchValue(t)
+    if (t === analysedTicker) {
+      void analysis.run()
+    } else {
+      pendingRunRef.current = t
+      setAnalysedTicker(t)
+    }
+  }
+
+  // Fire the pending run once `analysedTicker` reflects the requested ticker
+  // (so run() reads the correct scope key).
+  useEffect(() => {
+    if (pendingRunRef.current && pendingRunRef.current === analysedTicker) {
+      pendingRunRef.current = null
+      void analysis.run()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [analysedTicker])
+
+  // Auto-analyse only if navigated from another tab (source is set).
   useEffect(() => {
     if (initialTicker && source) {
-      setSearchValue(initialTicker)
-      runAnalysis(initialTicker)
+      analyseTicker(initialTicker)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialTicker, source])
 
-  // Fetch live OHLCV cycle data whenever live mode is active and we have a result
+  // Fetch live OHLCV cycle data whenever live mode is active and we have a result.
   useEffect(() => {
-    if (isLive && result?.ticker) {
+    if (analysis.isLive && result?.ticker) {
       fetchLive(result.ticker)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLive, result?.ticker])
+  }, [analysis.isLive, result?.ticker])
 
-  // Fetch price chart data whenever ticker or selected range changes
+  // Fetch price chart data whenever ticker or selected range changes.
   useEffect(() => {
     if (result?.ticker) {
       fetchOhlcv(result.ticker, chartRange)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [result?.ticker, chartRange])
-
-  const runAnalysis = async (ticker: string, forceRefresh = false) => {
-    if (!ticker || isAnalyzing) return
-
-    const analysisResult = await callClaude({
-      cacheKey: `ANALYSIS#${ticker}`,
-      forceRefresh,
-      onCacheMetadata: cacheStatus.markWritten,
-      webSearch: isLive,
-      prompt: createStockAnalysisPrompt(ticker),
-      systemPrompt: STOCK_ANALYSIS_SYSTEM_PROMPT,
-    })
-
-    if (analysisResult) {
-      setResult(normaliseStockAnalysisSignals(analysisResult))
-    }
-  }
 
   const handleBack = () => {
     if (source) {
@@ -174,7 +188,7 @@ export function AnalyserTab({
           type="text"
           value={searchValue}
           onChange={(e) => setSearchValue(e.target.value.toUpperCase())}
-          onKeyDown={(e) => e.key === "Enter" && runAnalysis(searchValue)}
+          onKeyDown={(e) => e.key === "Enter" && analyseTicker(searchValue)}
           placeholder="Search ticker or company..."
           className="w-full h-11 pl-10 pr-4 bg-card border border-border rounded-xl text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
         />
@@ -186,7 +200,7 @@ export function AnalyserTab({
           {QUICK_PICKS.map((ticker) => (
             <button
               key={ticker}
-              onClick={() => { setSearchValue(ticker); runAnalysis(ticker); }}
+              onClick={() => analyseTicker(ticker)}
               className="px-3 py-1.5 bg-surface2 text-sm text-muted-foreground rounded-lg hover:text-foreground transition-colors"
             >
               {ticker}
@@ -196,35 +210,29 @@ export function AnalyserTab({
       )}
 
       {/* Error display */}
-      {error && (
+      {analysis.error && (
         <div className="p-3 rounded-lg bg-signal-red/10 border border-signal-red/20 flex items-start gap-2">
           <AlertCircle className="size-4 text-signal-red mt-0.5 shrink-0" />
-          <div className="text-sm text-signal-red">{error?.message}</div>
+          <div className="text-sm text-signal-red">{analysis.error.message}</div>
         </div>
       )}
 
-      {/* Cache Status / Mode Toggle - right above the action button */}
-      {result ? (
+      {/* Unified cache control: freshness + Live/Fast toggle + force-live Refresh.
+          Shown once a ticker has been analysed (the scope the badge/refresh act on). */}
+      {result && (
         <CacheStatusBar
-          freshness={cacheStatus.freshness}
-          lastUpdated={cacheStatus.lastUpdated}
-          isLive={isLive}
-          onRefresh={() => runAnalysis(result.ticker, true)}
-          onToggleMode={() => setIsLive(!isLive)}
-        />
-      ) : (
-        <ModeToggle 
-          isLive={isLive} 
-          onToggle={() => setIsLive(!isLive)} 
-          cacheAge={cacheStatus.cacheAge}
-          freshness={cacheStatus.freshness}
+          freshness={analysis.status.freshness}
+          lastUpdated={analysis.status.lastUpdated}
+          isLive={analysis.isLive}
+          onRefresh={analysis.refresh}
+          onToggleMode={analysis.toggleMode}
         />
       )}
 
-      {/* Analyse Button - always show when there's a search value */}
+      {/* Analyse Button - always show when there's a search value (cache-first run) */}
       {searchValue && (
         <PrimaryButton
-          onClick={() => runAnalysis(searchValue)}
+          onClick={() => analyseTicker(searchValue)}
           disabled={isAnalyzing}
           icon={TrendingUp}
           className="w-full"

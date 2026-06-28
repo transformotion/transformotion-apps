@@ -10,13 +10,12 @@ import {
   BackLink,
   PrimaryButton,
   CacheStatusBar,
-  ModeToggle,
   TextToggle,
   type Verdict,
   type CycleStage,
 } from "@transformotion/ui-primitives"
 import { ChevronRight, ChevronDown, Search, Loader2, Stars, AlertCircle } from "lucide-react"
-import { useCacheStatus, useClaude } from "@/lib/hooks"
+import { useScopedAnalysis } from "@/lib/hooks/use-scoped-analysis"
 import { cn } from "@/lib/utils"
 import { getStockAnalyserClient } from "@/lib/api"
 import { getConfig } from "@/lib/config"
@@ -30,7 +29,6 @@ import {
 import {
   getIncomingRecommendationUniverse,
   getInitialRecommendationUniverse,
-  isLiveSearchMode,
   isMarketOriginatedUniverseUnavailable,
   shouldDisableRecommendationsRun,
 } from "../recommendations-flow"
@@ -143,54 +141,24 @@ const BOTTOM_OF_CYCLE: Stock[] = [
 ]
 
 export function RecommendationsTab() {
-  const { navigateToAnalyser, sectorFilter, recsUniverse, recsSourceRegion, recsSource, clearSectorFilter, navigateTo, getTabTextVisibility, setTabTextOverride, showExplanatoryText, defaultSearchMode, setTabCache, getTabCache } = useNavigation()
-  const [isLive, setIsLive] = useState(isLiveSearchMode(defaultSearchMode))
+  const { navigateToAnalyser, sectorFilter, recsUniverse, recsSourceRegion, recsSource, clearSectorFilter, navigateTo, getTabTextVisibility, setTabTextOverride, showExplanatoryText } = useNavigation()
   const incomingUniverse = getIncomingRecommendationUniverse(recsUniverse)
   const universeUnavailable = isMarketOriginatedUniverseUnavailable(sectorFilter, incomingUniverse)
   const [universe, setUniverse] = useState<RecommendationUniverse>(() => getInitialRecommendationUniverse(recsUniverse))
   const [universeTouched, setUniverseTouched] = useState(false)
   const [mode, setMode] = useState<Mode>("Top Picks")
-  const [hasRun, setHasRun] = useState(false)
-  const cachedStocks = getTabCache("recs")?.stocks as Stock[] | null
-  const [stockResults, setStockResults] = useState<Stock[]>(cachedStocks ?? [])
   const autoRunTriggeredRef = useRef<string | null>(null)
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set())
-  const activeCacheKey = `RECS#${universe}#${mode}${sectorFilter ? `#${sectorFilter}` : ''}`
-  const cacheStatus = useCacheStatus("recs", activeCacheKey)
-  
-  // Text visibility
-  const textVisible = getTabTextVisibility("recs")
-  const isTextOverride = showExplanatoryText !== textVisible
-  const toggleTextVisibility = () => setTabTextOverride("recs", !textVisible)
-  const toggleCardExpand = (ticker: string) => {
-    setExpandedCards(prev => {
-      const next = new Set(prev)
-      if (next.has(ticker)) next.delete(ticker)
-      else next.add(ticker)
-      return next
-    })
-  }
 
-  const { callClaude, isLoading, error } = useClaude<{ stocks: Stock[] }>()
-
-  useEffect(() => {
-    setIsLive(isLiveSearchMode(defaultSearchMode))
-  }, [defaultSearchMode])
-
-  const runRecommendations = async (
-    sectorOverride?: string,
-    forceRefresh = false,
-    universeOverride?: RecommendationUniverse,
-  ) => {
-    const sector = sectorOverride || sectorFilter
-    const activeUniverse = universeOverride ?? universe
-    const cacheKey = `RECS#${activeUniverse}#${mode}${sector ? `#${sector}` : ''}`
-    const result = await callClaude({
-      cacheKey,
-      forceRefresh,
-      onCacheMetadata: cacheStatus.markWritten,
-      webSearch: isLive,
-      prompt: `Provide stock recommendations for the ${activeUniverse} universe${sector ? ` in the ${sector} sector` : ''}.
+  // Unified cache-first analysis. Scope = universe + mode (+ sector when arriving
+  // from a Market Analysis sector card), so each distinct query has its own cache
+  // slot and changing ANY dimension reverts the tab to idle.
+  const analysis = useScopedAnalysis<Stock[]>({
+    surface: "recs",
+    scopeKey: `${universe}|${mode}${sectorFilter ? `|${sectorFilter}` : ""}`,
+    buildRequest: (webSearch) => ({
+      webSearch,
+      prompt: `Provide stock recommendations for the ${universe} universe${sectorFilter ? ` in the ${sectorFilter} sector` : ''}.
 Mode: ${mode}
 
 Return a JSON object with "stocks" array, each containing:
@@ -211,45 +179,64 @@ ${mode === "Top Picks" ? "Focus on stocks with strong momentum and bullish signa
 
 Return 6 stocks. Return ONLY valid JSON.`,
       systemPrompt: "You are a stock analyst providing recommendations. Provide realistic stock picks with compelling analysis and appropriate cycle positions. Respond with raw JSON only. Do not use markdown code fences.",
-    })
+    }),
+    // Overlay real market-data prices over the AI numbers (runtime real-data
+    // layer), for BOTH fetched and cache-served stocks via one path.
+    parse: async (raw) => {
+      const stocks = (raw as { stocks?: Stock[] })?.stocks
+      if (!stocks) return mode === "Top Picks" ? TOP_PICKS : BOTTOM_OF_CYCLE
+      return Promise.all(stocks.map(overlayStockPrice))
+    },
+  })
 
-    if (result?.stocks) {
-      // Overlay real market-data prices over the AI's numbers before display.
-      const overlaid = await Promise.all(result.stocks.map(overlayStockPrice))
-      setStockResults(overlaid)
-      setTabCache("recs", { stocks: overlaid })
-      setHasRun(true)
-    }
+  // Text visibility
+  const textVisible = getTabTextVisibility("recs")
+  const isTextOverride = showExplanatoryText !== textVisible
+  const toggleTextVisibility = () => setTabTextOverride("recs", !textVisible)
+  const toggleCardExpand = (ticker: string) => {
+    setExpandedCards(prev => {
+      const next = new Set(prev)
+      if (next.has(ticker)) next.delete(ticker)
+      else next.add(ticker)
+      return next
+    })
   }
 
-  // Auto-run search when navigating from Market Analysis with a sector filter
+  // Navigating from a Market Analysis sector card IS an explicit analyse request,
+  // so sync the carried universe/mode; a missing/invalid universe renders the
+  // recovery state instead — never a silent ASX run.
   useEffect(() => {
-    if (sectorFilter) {
-      setMode("Top Picks")
-      if (incomingUniverse) {
-        setUniverseTouched(false)
-        setUniverse(incomingUniverse)
-        const autoRunKey = `${sectorFilter}:${incomingUniverse}`
-        if (autoRunTriggeredRef.current !== autoRunKey) {
-          autoRunTriggeredRef.current = autoRunKey
-          runRecommendations(sectorFilter, false, incomingUniverse)
-        }
-      } else {
-        setUniverseTouched(false)
-      }
+    if (!sectorFilter) return
+    setMode("Top Picks")
+    if (incomingUniverse) {
+      setUniverseTouched(false)
+      setUniverse(incomingUniverse)
+    } else {
+      setUniverseTouched(false)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sectorFilter, recsUniverse])
 
-  // Use AI results if available, otherwise fall back to static mock data
-  const stocks = stockResults.length > 0 ? stockResults : (mode === "Top Picks" ? TOP_PICKS : BOTTOM_OF_CYCLE)
-  const filteredStocks = sectorFilter 
+  // …then auto-run ONCE for that scope (cache-first, exactly like a manual Run),
+  // after universe/mode reflect the incoming sector-card request.
+  useEffect(() => {
+    if (
+      sectorFilter &&
+      incomingUniverse &&
+      universe === incomingUniverse &&
+      mode === "Top Picks" &&
+      autoRunTriggeredRef.current !== sectorFilter
+    ) {
+      autoRunTriggeredRef.current = sectorFilter
+      void analysis.run()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sectorFilter, incomingUniverse, universe, mode])
+
+  const stocks = analysis.result ?? []
+  const filteredStocks = sectorFilter
     ? stocks.filter(s => s.sector.toLowerCase() === sectorFilter.toLowerCase())
     : stocks
-
-  const handleRunAnalysis = (forceRefresh = false) => {
-    runRecommendations(undefined, forceRefresh)
-  }
 
   const SOURCE_LABELS: Partial<Record<string, string>> = {
     market: "Market Analysis",
@@ -287,7 +274,7 @@ Return 6 stocks. Return ONLY valid JSON.`,
               )}
             </p>
           </div>
-          <button onClick={() => { clearSectorFilter(); setHasRun(false); }} className="text-xs font-medium text-primary hover:text-primary/80">
+          <button onClick={() => { clearSectorFilter(); autoRunTriggeredRef.current = null; }} className="text-xs font-medium text-primary hover:text-primary/80">
             × Clear
           </button>
         </div>
@@ -336,53 +323,44 @@ Return 6 stocks. Return ONLY valid JSON.`,
         />
       )}
 
-      {/* Cache Status / Mode Toggle - right above the action button */}
-      {hasRun ? (
-        <CacheStatusBar
-          freshness={cacheStatus.freshness}
-          lastUpdated={cacheStatus.lastUpdated}
-          isLive={isLive}
-          onRefresh={() => handleRunAnalysis(true)}
-          onToggleMode={() => setIsLive(!isLive)}
-        />
-      ) : (
-        <ModeToggle 
-          isLive={isLive} 
-          onToggle={() => setIsLive(!isLive)} 
-          cacheAge={cacheStatus.cacheAge}
-          freshness={cacheStatus.freshness}
-        />
-      )}
+      {/* Unified cache control: freshness + Live/Fast toggle + force-live Refresh */}
+      <CacheStatusBar
+        freshness={analysis.status.freshness}
+        lastUpdated={analysis.status.lastUpdated}
+        isLive={analysis.isLive}
+        onRefresh={analysis.refresh}
+        onToggleMode={analysis.toggleMode}
+      />
 
-      {/* Run Analysis Button */}
+      {/* Run / Re-run Analysis Button (cache-first) */}
       <PrimaryButton
-        onClick={() => handleRunAnalysis(hasRun)}
-        disabled={isLoading || shouldDisableRecommendationsRun(universeUnavailable, universeTouched)}
+        onClick={analysis.run}
+        disabled={analysis.isRunning || shouldDisableRecommendationsRun(universeUnavailable, universeTouched)}
         className="w-full"
       >
-        {isLoading ? (
+        {analysis.isRunning ? (
           <>
             <Loader2 className="size-4 animate-spin" />
             Finding recommendations...
           </>
-        ) : hasRun ? (
-          <>
-            <Search className="size-4" />
-            Re-analyse {sectorFilter ? sectorFilter : universe}
-          </>
-        ) : (
+        ) : analysis.isIdle ? (
           <>
             <Stars className="size-4" />
             Find Recommendations
+          </>
+        ) : (
+          <>
+            <Search className="size-4" />
+            Re-run {sectorFilter ? sectorFilter : universe}
           </>
         )}
       </PrimaryButton>
 
       {/* Error display */}
-      {error && (
+      {analysis.error && (
         <div className="p-3 rounded-lg bg-signal-red/10 border border-signal-red/20 flex items-start gap-2">
           <AlertCircle className="size-4 text-signal-red mt-0.5 shrink-0" />
-          <div className="text-sm text-signal-red">{error?.message}</div>
+          <div className="text-sm text-signal-red">{analysis.error.message}</div>
         </div>
       )}
 
@@ -390,7 +368,6 @@ Return 6 stocks. Return ONLY valid JSON.`,
       <div className="space-y-3">
         <p className="text-xs text-muted-foreground">
           {sectorFilter ? sectorFilter : universe} — {mode} · {new Date().toLocaleDateString('en-AU', { month: 'long', year: 'numeric' })}
-          {!hasRun && <span className="ml-1 opacity-60">(cached)</span>}
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           {filteredStocks.map((stock, i) => (

@@ -1,19 +1,19 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { useNavigation } from "../app-shell"
 import {
   PageHeader,
   Card,
   TrendBadge,
   PrimaryButton,
-  ModeToggle,
+  CacheStatusBar,
   TextToggle,
   type TrendSignal,
 } from "@transformotion/ui-primitives"
-import { ChevronDown, AlertCircle, RefreshCw } from "lucide-react"
+import { ChevronDown, AlertCircle, RefreshCw, TrendingUp } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { useCacheStatus, useClaude } from "@/lib/hooks"
+import { useScopedAnalysis } from "@/lib/hooks/use-scoped-analysis"
 import { Spinner } from "@transformotion/ui-primitives"
 
 interface Metal {
@@ -91,41 +91,18 @@ const METALS: Metal[] = [
 ]
 
 export function MetalsTab() {
-  const { navigateToAnalyser, getTabTextVisibility, setTabTextOverride, showExplanatoryText, defaultSearchMode, setTabCache, getTabCache } = useNavigation()
-  const [isLive, setIsLive] = useState(defaultSearchMode === "live")
-  const [, setHasRun] = useState(false)
-  const cachedMetals = getTabCache("metals")?.metals as Metal[] | null
-  const [metalResults, setMetalResults] = useState<Metal[]>(cachedMetals ?? [])
+  const { navigateToAnalyser, getTabTextVisibility, setTabTextOverride, showExplanatoryText } = useNavigation()
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set())
-  const cacheStatus = useCacheStatus("metals", "METALS")
-  
-  // Text visibility
-  const textVisible = getTabTextVisibility("metals")
-  const isTextOverride = showExplanatoryText !== textVisible
-  const toggleTextVisibility = () => setTabTextOverride("metals", !textVisible)
-  const toggleCardExpand = (symbol: string) => {
-    setExpandedCards(prev => {
-      const next = new Set(prev)
-      if (next.has(symbol)) next.delete(symbol)
-      else next.add(symbol)
-      return next
-    })
-  }
 
-  const { callClaude, isLoading: isAnalyzing, error } = useClaude<{ metals: Metal[] }>()
-
-  useEffect(() => {
-    setIsLive(defaultSearchMode === "live")
-  }, [defaultSearchMode])
-
-  const runAnalysis = async (forceRefresh = false) => {
-    const today = new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })
-    const result = await callClaude({
-      cacheKey: 'METALS',
-      forceRefresh,
-      onCacheMetadata: cacheStatus.markWritten,
-      webSearch: isLive,
-      prompt: `Provide precious metals spot price analysis with latest data for ${today}.
+  // Unified cache-first analysis (single constant scope — precious metals).
+  const analysis = useScopedAnalysis<Metal[]>({
+    surface: "metals",
+    scopeKey: "default",
+    buildRequest: (webSearch) => {
+      const today = new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })
+      return {
+        webSearch,
+        prompt: `Provide precious metals spot price analysis with latest data for ${today}.
 
 Return a JSON object with "metals" array for Gold, Silver, Platinum, and Palladium. Each should contain:
 - name: metal name
@@ -142,17 +119,26 @@ Return a JSON object with "metals" array for Gold, Silver, Platinum, and Palladi
 - analysis: 2-3 sentence analyst analysis with market catalysts
 
 Return ONLY valid JSON.`,
-      systemPrompt: "You are a precious metals analyst with access to real-time spot prices. Provide current prices and informed market analysis. Respond with raw JSON only. Do not use markdown code fences.",
-    })
+        systemPrompt: "You are a precious metals analyst with access to real-time spot prices. Provide current prices and informed market analysis. Respond with raw JSON only. Do not use markdown code fences.",
+      }
+    },
+    parse: (raw) => (raw as { metals?: Metal[] })?.metals ?? METALS,
+  })
 
-    if (result?.metals) {
-      setMetalResults(result.metals)
-      setTabCache("metals", { metals: result.metals })
-      setHasRun(true)
-    }
+  // Text visibility
+  const textVisible = getTabTextVisibility("metals")
+  const isTextOverride = showExplanatoryText !== textVisible
+  const toggleTextVisibility = () => setTabTextOverride("metals", !textVisible)
+  const toggleCardExpand = (symbol: string) => {
+    setExpandedCards(prev => {
+      const next = new Set(prev)
+      if (next.has(symbol)) next.delete(symbol)
+      else next.add(symbol)
+      return next
+    })
   }
 
-  const metalsToDisplay = metalResults.length > 0 ? metalResults : METALS
+  const metalsToDisplay = analysis.result ?? []
 
   return (
     <div className="p-4 space-y-4">
@@ -170,28 +156,29 @@ Return ONLY valid JSON.`,
         }
       />
 
-      {/* Compact cached/live status */}
-      <ModeToggle
-        isLive={isLive}
-        onToggle={() => setIsLive(!isLive)}
-        cacheAge={cacheStatus.cacheAge}
-        freshness={cacheStatus.freshness}
+      {/* Unified cache control: freshness + Live/Fast toggle + force-live Refresh */}
+      <CacheStatusBar
+        freshness={analysis.status.freshness}
+        lastUpdated={analysis.status.lastUpdated}
+        isLive={analysis.isLive}
+        onToggleMode={analysis.toggleMode}
+        onRefresh={analysis.refresh}
       />
 
-      {/* Primary CTA */}
+      {/* Primary CTA: Run / Re-run (cache-first) */}
       <PrimaryButton
-        onClick={() => runAnalysis(metalResults.length > 0)}
-        disabled={isAnalyzing}
-        icon={isAnalyzing ? undefined : RefreshCw}
+        onClick={analysis.run}
+        disabled={analysis.isRunning}
+        icon={analysis.isRunning ? undefined : analysis.isIdle ? TrendingUp : RefreshCw}
         className="w-full"
       >
-        {isAnalyzing ? (
+        {analysis.isRunning ? (
           <>
             <Spinner className="size-4" />
-            Refreshing metals...
+            Analysing metals...
           </>
         ) : (
-          "Refresh metals"
+          analysis.buttonLabel
         )}
       </PrimaryButton>
 
@@ -199,10 +186,10 @@ Return ONLY valid JSON.`,
       <p className="text-xs text-muted-foreground">Spot prices · {new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
 
       {/* Error display */}
-      {error && (
+      {analysis.error && (
         <div className="p-3 rounded-lg bg-signal-red/10 border border-signal-red/20 flex items-start gap-2">
           <AlertCircle className="size-4 text-signal-red mt-0.5 shrink-0" />
-          <div className="text-sm text-signal-red">{error?.message}</div>
+          <div className="text-sm text-signal-red">{analysis.error.message}</div>
         </div>
       )}
 

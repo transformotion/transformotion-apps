@@ -231,6 +231,16 @@ notification engine (#584) so the Market tab reads hit cache instead of running
 a live model call; the warm-write runs the SAME grounded computation as a live
 Market-tab run (identical-by-construction) and is gated by the #571 kill-switch.
 
+**Consume side** — all five AI tabs (Market, Recs, ETFs, Metals, Analyser) share
+the cache-first `useScopedAnalysis` hook (`lib/hooks/use-scoped-analysis.ts`,
+conforming to `contracts/stock-analyser/analysis-cache.behaviour.md`): idle on
+load/scope-change, **Run/Re-run reads the real cache first** (served with no
+model call when present & not past TTL via `isCacheExpired`), **Refresh** is the
+only force-live, and Live/Fast drives `webSearch`. The hook maps each tab's scope
+to its real key (`analysisRealCacheKey`: `market:{region}`→`MARKET#{region}`,
+`etfs`→`ETF#{market}`, `analyser`→`ANALYSIS#{ticker}`, `recs`→`RECS#…`,
+`metals`→`METALS`) — so the Market tab's Run consumes the #584 warm entry.
+
 | Attribute | Type | Notes |
 |---|---|---|
 | `accountId` (PK) | String | `SHARED` for market-wide data |
