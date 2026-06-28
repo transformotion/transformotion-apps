@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useEffect, useState } from "react"
+import React, { useState } from "react"
 import { useNavigation } from "../app-shell"
 import {
   PageHeader,
@@ -9,7 +9,6 @@ import {
   EmptyState,
   PrimaryButton,
   CacheStatusBar,
-  ModeToggle,
   TextToggle,
 } from "@transformotion/ui-primitives"
 import { Spinner } from "@transformotion/ui-primitives"
@@ -22,7 +21,7 @@ import {
   AlertCircle,
   Landmark,
 } from "lucide-react"
-import { useCacheStatus, useClaude } from "@/lib/hooks"
+import { useScopedAnalysis } from "@/lib/hooks/use-scoped-analysis"
 import { cn } from "@/lib/utils"
 import type { AnalysisRegion, PriceRange, PriceInterval } from "@transformotion/contracts/stock-analyser/types"
 // #535: the Market Analysis result model is now canonical (promoted out of this
@@ -43,7 +42,6 @@ import { createMarketSectorNavigationPayload } from "../recommendations-flow"
 import { stockSignalBadgeClassName } from "../status-badge"
 import { buildSectorSuppliedData } from "@/lib/analysis/market-analysis-grounding"
 import { createMarketAnalysisPrompt, MARKET_ANALYSIS_SYSTEM_PROMPT } from "@/lib/analysis/market-analysis-signals"
-import { dynamoCache } from "@/lib/services/cache/dynamo-ttl-cache"
 import { getConfig } from "@/lib/config"
 import { getStockAnalyserClient } from "@/lib/api"
 import { getMockOhlcvData } from "@/lib/services/ai/fixtures/ohlcv-data"
@@ -157,16 +155,41 @@ function SourceTag({ name }: { name: string }) {
 }
 
 export function MarketAnalysisTab() {
-  const { navigateToRecsWithSector, getTabTextVisibility, setTabTextOverride, showExplanatoryText, defaultSearchMode, setTabCache, getTabCache } = useNavigation()
-  const [isLive, setIsLive] = useState(defaultSearchMode === "live")
+  const { navigateToRecsWithSector, getTabTextVisibility, setTabTextOverride, showExplanatoryText } = useNavigation()
   const [region, setRegion] = useState<AnalysisRegion>("australia")
-  const cachedResult = getTabCache("market") as MarketAnalysisResult | null
-  const [hasResults, setHasResults] = useState(!!cachedResult)
-  const [result, setResult] = useState<MarketAnalysisResult | null>(cachedResult)
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set())
-  const cacheKey = `MARKET#${region}`
-  const cacheStatus = useCacheStatus("market", cacheKey)
-  
+
+  // Unified cache-first analysis, scoped by region (idle→Run; analysis-cache
+  // .behaviour.md). The scope key resolves to the REAL `MARKET#{region}` the #584
+  // warm job writes, so Run serves the warm entry with NO model call when fresh.
+  // Grounding + prompt run only on a real fetch (inside buildRequest), never on a
+  // cache hit; enrichment runs for both fetched AND cache-served data via parse().
+  const analysis = useScopedAnalysis<MarketAnalysisResult>({
+    surface: "market",
+    scopeKey: region,
+    buildRequest: async (webSearch) => {
+      const suppliedSectorData = await buildSectorSuppliedData(region, fetchClientSectorOhlcv).catch(() => "")
+      return {
+        webSearch,
+        prompt: createMarketAnalysisPrompt(region, suppliedSectorData),
+        systemPrompt: MARKET_ANALYSIS_SYSTEM_PROMPT,
+      }
+    },
+    parse: (raw) => {
+      const data = raw as MarketAnalysisResult | null
+      if (!data?.sectors) return null
+      return {
+        ...data,
+        sectors: data.sectors.map((sector) => ({
+          ...sector,
+          recommendationUniverse: resolveSectorUniverse(sector.bestExchange, region),
+          sourceRegion: region,
+        })),
+      }
+    },
+  })
+  const result = analysis.result
+
   // Text visibility
   const textVisible = getTabTextVisibility("market")
   const isTextOverride = showExplanatoryText !== textVisible
@@ -178,47 +201,6 @@ export function MarketAnalysisTab() {
       else next.add(key)
       return next
     })
-  }
-
-  const { callClaude, isLoading: isAnalyzing, error } = useClaude<MarketAnalysisResult>()
-
-  useEffect(() => {
-    setIsLive(defaultSearchMode === "live")
-  }, [defaultSearchMode])
-
-  const runAnalysis = async (forceRefresh = false) => {
-    // #535 Bucket-1 grounding: only when we will actually call the model (cache
-    // miss or forced refresh) fetch real sector OHLCV and feed it in as supplied
-    // data, so sector levels/returns are grounded in prices rather than searched.
-    // Skipped on a cache hit (the prompt is unused then).
-    const willCallModel = forceRefresh || (await dynamoCache.get<MarketAnalysisResult>(cacheKey)) === null
-    // Grounding is best-effort: a fetch/format failure must never block analysis.
-    // The OHLCV source is injected so the SAME builder runs server-side (#584).
-    const suppliedSectorData = willCallModel ? await buildSectorSuppliedData(region, fetchClientSectorOhlcv).catch(() => "") : ""
-    const data = await callClaude({
-      cacheKey,
-      forceRefresh,
-      onCacheMetadata: cacheStatus.markWritten,
-      webSearch: isLive,
-      // #584: prompt + system come from the shared market-analysis-signals module
-      // (the SINGLE source) so the daily warm-write === a live run by construction.
-      prompt: createMarketAnalysisPrompt(region, suppliedSectorData),
-      systemPrompt: MARKET_ANALYSIS_SYSTEM_PROMPT,
-    })
-
-    if (data) {
-      const enriched: MarketAnalysisResult = {
-        ...data,
-        sectors: (data.sectors ?? []).map((sector) => ({
-          ...sector,
-          recommendationUniverse: resolveSectorUniverse(sector.bestExchange, region),
-          sourceRegion: region,
-        })),
-      }
-      setResult(enriched)
-      setTabCache("market", enriched)
-      setHasResults(true)
-    }
   }
 
   return (
@@ -244,53 +226,42 @@ export function MarketAnalysisTab() {
         onChange={(label) => setRegion(regionFromLabel(label))}
       />
 
-      {/* Cache Status / Mode Toggle - right above the action button */}
-      {hasResults ? (
-        <CacheStatusBar
-          freshness={cacheStatus.freshness}
-          lastUpdated={cacheStatus.lastUpdated}
-          isLive={isLive}
-          onRefresh={() => runAnalysis(true)}
-          onToggleMode={() => setIsLive(!isLive)}
-        />
-      ) : (
-        <ModeToggle 
-          isLive={isLive} 
-          onToggle={() => setIsLive(!isLive)} 
-          cacheAge={cacheStatus.cacheAge}
-          freshness={cacheStatus.freshness}
-        />
-      )}
+      {/* Unified cache control: freshness + Live/Fast toggle + force-live Refresh */}
+      <CacheStatusBar
+        freshness={analysis.status.freshness}
+        lastUpdated={analysis.status.lastUpdated}
+        isLive={analysis.isLive}
+        onRefresh={analysis.refresh}
+        onToggleMode={analysis.toggleMode}
+      />
 
-      {/* Run Analysis Button */}
+      {/* Run / Re-run Analysis Button (cache-first) */}
       <PrimaryButton
-        onClick={() => runAnalysis(hasResults)}
-        disabled={isAnalyzing}
-        icon={hasResults ? RefreshCw : TrendingUp}
+        onClick={analysis.run}
+        disabled={analysis.isRunning}
+        icon={analysis.isRunning ? undefined : analysis.isIdle ? TrendingUp : RefreshCw}
         className="w-full"
       >
-        {isAnalyzing ? (
+        {analysis.isRunning ? (
           <>
             <Spinner className="size-4" />
             Analysing markets...
           </>
-        ) : hasResults ? (
-          "Re-analyse"
         ) : (
-          "Run Analysis"
+          analysis.buttonLabel
         )}
       </PrimaryButton>
 
       {/* Error display */}
-      {error && (
+      {analysis.error && (
         <div className="p-3 rounded-lg bg-signal-red/10 border border-signal-red/20 flex items-start gap-2">
           <AlertCircle className="size-4 text-signal-red mt-0.5 shrink-0" />
-          <div className="text-sm text-signal-red">{error?.message}</div>
+          <div className="text-sm text-signal-red">{analysis.error.message}</div>
         </div>
       )}
 
       {/* Results */}
-      {hasResults && result ? (
+      {result ? (
         <div className="space-y-6">
           {/* Date indicator */}
           <p className="text-xs text-muted-foreground">{REGION_LABELS[region]} · {new Date().toLocaleDateString('en-AU', { month: 'long', year: 'numeric' })}</p>
@@ -515,7 +486,7 @@ export function MarketAnalysisTab() {
           {/* Disclaimer */}
           <div className="pt-4 border-t border-border">
             <p className="text-xs text-muted-foreground">
-              AI-generated analysis · <span className={isLive ? "text-signal-green" : "text-muted-foreground"}>{isLive ? "Live mode" : "Cached mode"}</span>
+              AI-generated analysis · <span className={analysis.isLive ? "text-signal-green" : "text-muted-foreground"}>{analysis.isLive ? "Live mode" : "Cached mode"}</span>
             </p>
             <p className="text-xs text-muted-foreground">Not financial advice. Always consult a licensed financial adviser.</p>
           </div>

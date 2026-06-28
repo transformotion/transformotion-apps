@@ -96,50 +96,65 @@ describe("Stock Analyser cache freshness contracts", () => {
 
 describe("Stock Analyser cache freshness source wiring", () => {
   it("renders computed cache status on all seven data surfaces", () => {
+    // The five AI tabs are unified on the cache-first `useScopedAnalysis` hook
+    // (#consume): they render `analysis.status.*` (the hook derives it via
+    // useCacheStatus internally). Portfolio/Watchlist keep useDerivedCacheStatus.
     const surfaces = [
       {
         path: "components/stock-analyser/tabs/market-analysis-tab.tsx",
-        hook: 'useCacheStatus("market", cacheKey)',
-        ageProp: "cacheStatus.lastUpdated",
+        hook: "useScopedAnalysis<MarketAnalysisResult>",
+        freshnessProp: "analysis.status.freshness",
+        ageProp: "analysis.status.lastUpdated",
       },
       {
         path: "components/stock-analyser/tabs/recommendations-tab.tsx",
-        hook: 'useCacheStatus("recs", activeCacheKey)',
-        ageProp: "cacheStatus.lastUpdated",
+        hook: "useScopedAnalysis<Stock[]>",
+        freshnessProp: "analysis.status.freshness",
+        ageProp: "analysis.status.lastUpdated",
       },
       {
         path: "components/stock-analyser/tabs/analyser-tab.tsx",
-        hook: 'useCacheStatus("analyser", activeTicker ? `ANALYSIS#${activeTicker}` : null)',
-        ageProp: "cacheStatus.lastUpdated",
+        hook: "useScopedAnalysis<AnalysisResult>",
+        freshnessProp: "analysis.status.freshness",
+        ageProp: "analysis.status.lastUpdated",
       },
       {
         path: "components/stock-analyser/tabs/etfs-tab.tsx",
-        hook: 'useCacheStatus("etfs", cacheKey)',
-        ageProp: "cacheStatus.cacheAge",
+        hook: "useScopedAnalysis<ETF[]>",
+        freshnessProp: "analysis.status.freshness",
+        ageProp: "analysis.status.lastUpdated",
       },
       {
         path: "components/stock-analyser/tabs/metals-tab.tsx",
-        hook: 'useCacheStatus("metals", "METALS")',
-        ageProp: "cacheStatus.cacheAge",
+        hook: "useScopedAnalysis<Metal[]>",
+        freshnessProp: "analysis.status.freshness",
+        ageProp: "analysis.status.lastUpdated",
       },
       {
         path: "components/stock-analyser/tabs/portfolio-tab.tsx",
         hook: 'useDerivedCacheStatus("portfolio", aggregateMetadata)',
+        freshnessProp: "cacheStatus.freshness",
         ageProp: "cacheStatus.lastUpdated",
       },
       {
         path: "components/stock-analyser/tabs/watchlist-tab.tsx",
         hook: 'useDerivedCacheStatus("watchlist", aggregateMetadata)',
+        freshnessProp: "cacheStatus.freshness",
         ageProp: "cacheStatus.lastUpdated",
       },
     ]
 
-    for (const { path, hook, ageProp } of surfaces) {
+    for (const { path, hook, freshnessProp, ageProp } of surfaces) {
       const text = source(path)
       expect(text).toContain(hook)
-      expect(text).toContain("cacheStatus.freshness")
+      expect(text).toContain(freshnessProp)
       expect(text).toContain(ageProp)
     }
+
+    // The shared hook itself derives status from the real cache via useCacheStatus.
+    const hookSrc = source("lib/hooks/use-scoped-analysis.ts")
+    expect(hookSrc).toContain("useCacheStatus(surface, realKey)")
+    expect(hookSrc).toContain("cacheStatus.freshness")
   })
 
   it("keeps demo freshness strings and literal freshness props out of tab runtime code", () => {

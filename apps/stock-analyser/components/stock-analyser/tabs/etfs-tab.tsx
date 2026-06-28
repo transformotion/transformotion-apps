@@ -1,18 +1,18 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { useNavigation } from "../app-shell"
 import {
   PageHeader,
   SegmentedControl,
   Card,
-  ModeToggle,
+  CacheStatusBar,
   PrimaryButton,
   TextToggle,
 } from "@transformotion/ui-primitives"
-import { ChevronRight, ChevronDown, AlertCircle, RefreshCw } from "lucide-react"
+import { ChevronRight, ChevronDown, AlertCircle, RefreshCw, TrendingUp } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { useCacheStatus, useClaude } from "@/lib/hooks"
+import { useScopedAnalysis } from "@/lib/hooks/use-scoped-analysis"
 import { Spinner } from "@transformotion/ui-primitives"
 import { stockSignalBadgeClassName } from "../status-badge"
 
@@ -40,40 +40,16 @@ const ETFS: ETF[] = [
 ]
 
 export function ETFsTab() {
-  const { navigateToAnalyser, getTabTextVisibility, setTabTextOverride, showExplanatoryText, defaultSearchMode, setTabCache, getTabCache } = useNavigation()
-  const [isLive, setIsLive] = useState(defaultSearchMode === "live")
+  const { navigateToAnalyser, getTabTextVisibility, setTabTextOverride, showExplanatoryText } = useNavigation()
   const [market, setMarket] = useState<Market>("ASX")
-  const cachedEtfs = getTabCache("etfs")?.etfs as ETF[] | null
-  const [etfResults, setEtfResults] = useState<ETF[]>(cachedEtfs ?? [])
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set())
-  const cacheKey = `ETF#${market}`
-  const cacheStatus = useCacheStatus("etfs", cacheKey)
-  
-  // Text visibility
-  const textVisible = getTabTextVisibility("etfs")
-  const isTextOverride = showExplanatoryText !== textVisible
-  const toggleTextVisibility = () => setTabTextOverride("etfs", !textVisible)
-  const toggleCardExpand = (ticker: string) => {
-    setExpandedCards(prev => {
-      const next = new Set(prev)
-      if (next.has(ticker)) next.delete(ticker)
-      else next.add(ticker)
-      return next
-    })
-  }
 
-  const { callClaude, isLoading: isAnalyzing, error } = useClaude<{ etfs: ETF[] }>()
-
-  useEffect(() => {
-    setIsLive(defaultSearchMode === "live")
-  }, [defaultSearchMode])
-
-  const runAnalysis = async (forceRefresh = false) => {
-    const result = await callClaude({
-      cacheKey,
-      forceRefresh,
-      onCacheMetadata: cacheStatus.markWritten,
-      webSearch: isLive,
+  // Unified cache-first analysis, scoped by the selected market (ASX/US/Global).
+  const analysis = useScopedAnalysis<ETF[]>({
+    surface: "etfs",
+    scopeKey: market,
+    buildRequest: (webSearch) => ({
+      webSearch,
       prompt: `Provide ETF recommendations for the ${market} market.
 
 Return a JSON object with "etfs" array, each containing:
@@ -88,15 +64,24 @@ Return a JSON object with "etfs" array, each containing:
 
 Provide 6 ETFs. Return ONLY valid JSON.`,
       systemPrompt: "You are an ETF analyst providing recommendations. Provide realistic ETF picks with compelling investment theses and appropriate signals. Respond with raw JSON only. Do not use markdown code fences.",
-    })
+    }),
+    parse: (raw) => (raw as { etfs?: ETF[] })?.etfs ?? ETFS,
+  })
 
-    if (result?.etfs) {
-      setEtfResults(result.etfs)
-      setTabCache("etfs", { etfs: result.etfs })
-    }
+  // Text visibility
+  const textVisible = getTabTextVisibility("etfs")
+  const isTextOverride = showExplanatoryText !== textVisible
+  const toggleTextVisibility = () => setTabTextOverride("etfs", !textVisible)
+  const toggleCardExpand = (ticker: string) => {
+    setExpandedCards(prev => {
+      const next = new Set(prev)
+      if (next.has(ticker)) next.delete(ticker)
+      else next.add(ticker)
+      return next
+    })
   }
 
-  const etfsToDisplay = etfResults.length > 0 ? etfResults : ETFS
+  const etfsToDisplay = analysis.result ?? []
 
   // Always show the grid — fall back to static data if API hasn't run yet
 
@@ -123,28 +108,29 @@ Provide 6 ETFs. Return ONLY valid JSON.`,
         onChange={setMarket}
       />
 
-      {/* Compact cached/live status */}
-      <ModeToggle
-        isLive={isLive}
-        onToggle={() => setIsLive(!isLive)}
-        cacheAge={cacheStatus.cacheAge}
-        freshness={cacheStatus.freshness}
+      {/* Unified cache control: freshness + Live/Fast toggle + force-live Refresh */}
+      <CacheStatusBar
+        freshness={analysis.status.freshness}
+        lastUpdated={analysis.status.lastUpdated}
+        isLive={analysis.isLive}
+        onToggleMode={analysis.toggleMode}
+        onRefresh={analysis.refresh}
       />
 
-      {/* Primary CTA */}
+      {/* Primary CTA: Run / Re-run (cache-first) */}
       <PrimaryButton
-        onClick={() => runAnalysis(etfResults.length > 0)}
-        disabled={isAnalyzing}
-        icon={isAnalyzing ? undefined : RefreshCw}
+        onClick={analysis.run}
+        disabled={analysis.isRunning}
+        icon={analysis.isRunning ? undefined : analysis.isIdle ? TrendingUp : RefreshCw}
         className="w-full"
       >
-        {isAnalyzing ? (
+        {analysis.isRunning ? (
           <>
             <Spinner className="size-4" />
-            Refreshing ETF signals...
+            Analysing {market} ETFs...
           </>
         ) : (
-          "Refresh ETF signals"
+          analysis.buttonLabel
         )}
       </PrimaryButton>
 
@@ -152,10 +138,10 @@ Provide 6 ETFs. Return ONLY valid JSON.`,
       <p className="text-xs text-muted-foreground">{market} ETFs · {new Date().toLocaleDateString('en-AU', { month: 'long', year: 'numeric' })}</p>
 
       {/* Error display */}
-      {error && (
+      {analysis.error && (
         <div className="p-3 rounded-lg bg-signal-red/10 border border-signal-red/20 flex items-start gap-2">
           <AlertCircle className="size-4 text-signal-red mt-0.5 shrink-0" />
-          <div className="text-sm text-signal-red">{error?.message}</div>
+          <div className="text-sm text-signal-red">{analysis.error.message}</div>
         </div>
       )}
 

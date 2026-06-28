@@ -768,6 +768,8 @@ const RUN_REASON_LABEL: Record<NotificationOutcomeReason, string> = {
   "not-a-member": "Not a member",
   "lookup-error": "Lookup error",
   "no-actionable-transition": "No actionable change",
+  "send-failed": "Send failed",
+  "credit-balance": "AI credit too low",
 }
 
 /** Overall-run status chip styling (#573). */
