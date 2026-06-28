@@ -14,6 +14,7 @@ export {
 export { AiProviderError, AiProviderNonJsonError } from './types';
 export { callClaude, ClaudeProvider, stripAnthropicCitations } from './providers/claude';
 export { OpenAIProvider } from './providers/openai';
+export { STRUCTURED_OUTPUT_NAME, toOpenAiStrictSchema, toAnthropicInputSchema } from './structured-output';
 export { executeAsyncJob } from './async-job';
 export { createAiProxyHandler } from './handler';
 export { buildJobResultsRecord, writeJobResult } from './job-results';

@@ -46,6 +46,12 @@ import { SEND_LOG_TTL_SECONDS, writeSendLog } from './send-log';
 import { buildSectorSuppliedData, type SectorOhlcvFetcher } from '../../../lib/analysis/market-analysis-grounding';
 import { createMarketAnalysisPrompt, MARKET_ANALYSIS_SYSTEM_PROMPT } from '../../../lib/analysis/market-analysis-signals';
 import { ANALYSIS_REGIONS, type AnalysisRegion } from '@transformotion/contracts/stock-analyser/types';
+// #structured-output: canonical v0 schemas — CONSTRAIN provider output to valid
+// JSON instead of prompt-and-parse (the gpt-5.5 parse-error fix).
+import {
+  marketAnalysisResultJsonSchema,
+  stockAnalysisResultJsonSchema,
+} from '@transformotion/contracts/stock-analyser/structured-output';
 
 // removeUndefinedValues (#578): the safety net so a stray `undefined` (e.g. a
 // member with no email) can never throw mid-write and drop subsequent records.
@@ -408,6 +414,7 @@ function makeGenerateAnalysis(runtime: RuntimeEnv) {
         system: STOCK_ANALYSIS_SYSTEM_PROMPT,
         model: config.model,
         webSearch: true,
+        responseSchema: stockAnalysisResultJsonSchema,
       });
     } catch (err) {
       if (err instanceof AiProviderNonJsonError) {
@@ -584,6 +591,7 @@ function makeWarmMarketCache(runtime: RuntimeEnv): () => Promise<void> {
           system: MARKET_ANALYSIS_SYSTEM_PROMPT,
           model: config.model,
           webSearch: true,
+          responseSchema: marketAnalysisResultJsonSchema,
         });
         const data = parseMarketAnalysisProviderResult(result, region);
         await writeSharedMarketCache(runtime, region, data);
