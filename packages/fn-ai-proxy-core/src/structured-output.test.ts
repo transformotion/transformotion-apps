@@ -107,6 +107,66 @@ describe('OpenAIProvider structured output', () => {
     await provider.generate({ prompt: 'p' });
     expect(body!.text).toBeUndefined();
   });
+
+  it('Fast (no web search) sends one strict schema pass without web-search tools', async () => {
+    const bodies: Record<string, any>[] = [];
+    const provider = new OpenAIProvider({
+      openaiSecretName: 'openai-secret',
+      secretsManagerClient: secretClient('openai-key'),
+      fetchImpl: async (_url, init) => {
+        bodies.push(JSON.parse(String(init?.body)));
+        return jsonResponse({
+          output_text: '{"a":"fast","b":1,"nested":{"c":"x"}}',
+          model: 'gpt-5.5',
+          usage: { input_tokens: 2, output_tokens: 3, total_tokens: 5 },
+        });
+      },
+    });
+    const res = await provider.generate({ prompt: 'p', responseSchema: sampleSchema, webSearch: false });
+    expect(bodies.length).toBe(1);
+    expect(bodies[0].text.format.name).toBe(STRUCTURED_OUTPUT_NAME);
+    expect(bodies[0].tools).toBeUndefined();
+    expect(bodies[0].tool_choice).toBeUndefined();
+    expect(JSON.parse(res.content)).toEqual({ a: 'fast', b: 1, nested: { c: 'x' } });
+  });
+
+  it('Live (web search) uses TWO-PASS: web-search research then strict schema format', async () => {
+    const bodies: Record<string, any>[] = [];
+    const provider = new OpenAIProvider({
+      openaiSecretName: 'openai-secret',
+      secretsManagerClient: secretClient('openai-key'),
+      fetchImpl: async (_url, init) => {
+        const body = JSON.parse(String(init?.body));
+        bodies.push(body);
+        if (bodies.length === 1) {
+          return jsonResponse({
+            output_text: 'grounded current research about SpaceX being listed as SPCX',
+            model: 'gpt-5.5',
+            usage: { input_tokens: 10, output_tokens: 20, total_tokens: 30 },
+          });
+        }
+        return jsonResponse({
+          output_text: '{"a":"grounded","b":2,"nested":{"c":"spcx"}}',
+          model: 'gpt-5.5',
+          usage: { input_tokens: 4, output_tokens: 6, total_tokens: 10 },
+        });
+      },
+    });
+    const res = await provider.generate({ prompt: 'Analyse SpaceX', responseSchema: sampleSchema, webSearch: true });
+    expect(bodies.length).toBe(2);
+    expect(bodies[0].tools).toEqual([{ type: 'web_search' }]);
+    expect(bodies[0].tool_choice).toBe('required');
+    expect(bodies[0].text).toBeUndefined();
+    expect(bodies[1].tools).toBeUndefined();
+    expect(bodies[1].tool_choice).toBeUndefined();
+    expect(bodies[1].text.format.name).toBe(STRUCTURED_OUTPUT_NAME);
+    expect(String(bodies[1].input[0].content)).toContain('Analyse SpaceX');
+    expect(String(bodies[1].input[0].content)).toContain('grounded current research');
+    expect(JSON.parse(res.content)).toEqual({ a: 'grounded', b: 2, nested: { c: 'spcx' } });
+    expect(res.inputTokens).toBe(14);
+    expect(res.outputTokens).toBe(26);
+    expect(res.totalTokens).toBe(40);
+  });
 });
 
 describe('ClaudeProvider structured output', () => {
