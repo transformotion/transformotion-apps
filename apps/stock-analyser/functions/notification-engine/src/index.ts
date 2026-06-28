@@ -342,6 +342,34 @@ export function parseStockAnalysisProviderResult(
   }
 }
 
+export function parseMarketAnalysisProviderResult(
+  result: AiProviderResult,
+  region: AnalysisRegion,
+): unknown {
+  const rawOutput = result.content;
+  const strippedOutput = stripCodeFences(rawOutput);
+  try {
+    return JSON.parse(strippedOutput);
+  } catch (err) {
+    console.log(JSON.stringify({
+      message: 'notification-market-warm-model-output-unparseable',
+      region,
+      provider: result.provider,
+      model: result.model,
+      phase: 'market_warm_model_output_json_parse',
+      rawModelOutputPrefix: textPrefix(rawOutput),
+      rawModelOutputLength: rawOutput.length,
+      strippedModelOutputPrefix: textPrefix(strippedOutput),
+      strippedModelOutputLength: strippedOutput.length,
+      inputTokens: result.inputTokens,
+      outputTokens: result.outputTokens,
+      totalTokens: result.totalTokens,
+      err: err instanceof Error ? err.message : String(err),
+    }));
+    throw new Error(`market warm model output unparseable for ${region}`);
+  }
+}
+
 function makeAiProviderFactory(runtime: RuntimeEnv) {
   let cached: Promise<{ provider: AiProvider; config: ResolvedAiRuntimeConfig }> | null = null;
   return async () => {
@@ -557,7 +585,7 @@ function makeWarmMarketCache(runtime: RuntimeEnv): () => Promise<void> {
           model: config.model,
           webSearch: true,
         });
-        const data = JSON.parse(stripCodeFences(result.content));
+        const data = parseMarketAnalysisProviderResult(result, region);
         await writeSharedMarketCache(runtime, region, data);
         console.log(JSON.stringify({ message: 'notification-market-warm-ok', region }));
       } catch (err) {
