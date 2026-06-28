@@ -389,6 +389,24 @@ describe('notification send-log (#572)', () => {
     expect(recordSendLog).toHaveBeenCalledOnce(); // audit written despite the failure
   });
 
+  it('errored account still carries its accountName (#581) — name captured independently of processing', async () => {
+    // a03f9cd4-style: the account throws mid-processing (e.g. Claude credit), but
+    // its name must still be on the record — not lost, not a raw GUID fallback.
+    const run = await runNotificationEngine(deps({
+      listStockAnalyserMembers: vi.fn(async () => [
+        { accountId: 'acct-x', userId: 'u', email: 'u@x.com', appSlug: 'stock-analyser', role: 'member' },
+      ]),
+      readAccountName: vi.fn(async (id) => (id === 'acct-x' ? "Steve's Portfolio" : undefined)),
+      readPortfolio: vi.fn(async () => { throw new Error('claude API error: credit balance too low'); }),
+      readWatchlist: vi.fn(async () => []),
+    }));
+
+    const acct = run.sendLog.accounts.find((a) => a.accountId === 'acct-x')!;
+    expect(acct.status).toBe('failed');
+    expect(acct.error).toContain('credit balance');
+    expect(acct.accountName).toBe("Steve's Portfolio"); // NOT lost on error, NOT the GUID
+  });
+
   it('run-level failure: member listing throws → status failed, recorded, then rethrown', async () => {
     const recordSendLog = vi.fn(async (_run: SendLogRun) => undefined);
     await expect(runNotificationEngine(deps({

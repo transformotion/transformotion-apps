@@ -372,14 +372,12 @@ async function processAccount(
   deps: NotificationEngineDeps,
   resolveAnalysis: (ticker: string) => Promise<StockAnalysisResult>,
   accountId: string,
+  accountName: string | undefined,
   candidateMembers: MemberRow[],
   today: string,
   result: NotificationEngineResult,
   sendLog: SendLogRun,
 ): Promise<SendLogAccount> {
-  const accountName = deps.readAccountName
-    ? await deps.readAccountName(accountId).catch(() => undefined)
-    : undefined;
 
   const decisions = await evaluateRecipients(deps, accountId, candidateMembers);
   const eligible = decisions.filter((d) => d.eligible && d.recipient).map((d) => d.recipient!);
@@ -516,13 +514,19 @@ export async function runNotificationEngine(deps: NotificationEngineDeps): Promi
     sendLog.accountsEvaluated = grouped.size;
 
     for (const [accountId, candidateMembers] of grouped) {
+      // Resolve the display name HERE (#581), independently of processing — it's a
+      // separate best-effort lookup, so an errored account still records its name
+      // rather than falling back to a raw GUID in run-history.
+      const accountName = deps.readAccountName
+        ? await deps.readAccountName(accountId).catch(() => undefined)
+        : undefined;
       // Per-account guard (#572): one account's failure is RECORDED and downgrades
       // the run to `partial` — it never loses the whole run's audit record.
       try {
-        sendLog.accounts.push(await processAccount(deps, resolveAnalysis, accountId, candidateMembers, today, result, sendLog));
+        sendLog.accounts.push(await processAccount(deps, resolveAnalysis, accountId, accountName, candidateMembers, today, result, sendLog));
       } catch (err) {
         deps.log?.('notification-account-error', { accountId, err: String(err) });
-        sendLog.accounts.push({ accountId, status: 'failed', transitions: [], emailsSent: 0, memberOutcomes: [], error: String((err as Error)?.message ?? err) });
+        sendLog.accounts.push({ accountId, ...(accountName ? { accountName } : {}), status: 'failed', transitions: [], emailsSent: 0, memberOutcomes: [], error: String((err as Error)?.message ?? err) });
         sendLog.status = 'partial';
       }
     }
