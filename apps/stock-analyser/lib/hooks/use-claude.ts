@@ -21,6 +21,7 @@ import {
   type CacheMetadata,
 } from '../services/cache/dynamo-ttl-cache'
 import { authService } from '../services/auth'
+import { normaliseAnalysisErrorForDisplay } from './analysis-error'
 
 export interface ClaudeRequest {
   prompt: string
@@ -160,7 +161,7 @@ export function useClaude<T = unknown>(): UseClaudeReturn<T> {
       if (err instanceof Error && (err.name === 'AbortError' || err.message === 'Request aborted')) {
         return undefined as unknown as T
       }
-      const error = err instanceof Error ? err : new Error('Unknown error')
+      const error = normaliseAnalysisErrorForDisplay(err)
       setError(error)
       throw error
     } finally {

@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import { analysisRealCacheKey } from './analysis-cache-key'
+import {
+  ANALYSIS_NO_DATA_MESSAGE,
+  normaliseAnalysisErrorForDisplay,
+} from './analysis-error'
 
 // The v0 scope key ({surface}:{scopeKey}) must resolve to the SAME real server
 // cache keys the tabs + the #584 warm job use — otherwise a Run cache-MISSES the
@@ -34,5 +38,25 @@ describe('analysisRealCacheKey — scope → real server cache key (#584 consume
   it('distinct scopes never collide (own slot per scope)', () => {
     expect(analysisRealCacheKey('market', 'australia')).not.toBe(analysisRealCacheKey('market', 'us'))
     expect(analysisRealCacheKey('etfs', 'ASX')).not.toBe(analysisRealCacheKey('analyser', 'ASX'))
+  })
+})
+
+describe('normaliseAnalysisErrorForDisplay', () => {
+  it('maps provider no-data guard messages to user-facing copy', () => {
+    const openai = normaliseAnalysisErrorForDisplay(
+      new Error('OpenAI grounded research did not contain enough verifiable data for structured output'),
+    )
+    const claude = normaliseAnalysisErrorForDisplay(
+      new Error('Claude grounded research did not contain enough verifiable data for structured output'),
+    )
+
+    expect(openai.message).toBe(ANALYSIS_NO_DATA_MESSAGE)
+    expect(claude.message).toBe(ANALYSIS_NO_DATA_MESSAGE)
+  })
+
+  it('preserves unrelated analysis errors for the inline banner', () => {
+    const error = new Error('WSS job completion timeout')
+
+    expect(normaliseAnalysisErrorForDisplay(error)).toBe(error)
   })
 })

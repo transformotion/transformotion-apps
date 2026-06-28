@@ -9,6 +9,7 @@ import {
   type CacheFreshness,
   type StockAnalyserCacheSurface,
 } from "@transformotion/contracts/stock-analyser/cache-freshness"
+import { normaliseAnalysisErrorForDisplay } from "./analysis-error"
 import { analysisRealCacheKey } from "./analysis-cache-key"
 
 export { analysisRealCacheKey }
@@ -72,12 +73,13 @@ export function useScopedAnalysis<T>(
   const { surface, scopeKey, buildRequest, parse } = opts
   const { defaultSearchMode } = useNavigation()
   const realKey = analysisRealCacheKey(surface, scopeKey)
-  const { callClaude, isLoading, error } = useClaude<unknown>()
+  const { callClaude, isLoading } = useClaude<unknown>()
   const cacheStatus = useCacheStatus(surface, realKey)
 
   const [isLive, setIsLive] = useState(defaultSearchMode === "live")
   const [result, setResult] = useState<T | null>(null)
   const [resultScope, setResultScope] = useState<string | null>(null)
+  const [localError, setLocalError] = useState<Error | null>(null)
 
   // Idle whenever there is no result for the CURRENT scope — covers initial load
   // AND scope change, so the wrong scope's data is never shown.
@@ -86,29 +88,39 @@ export function useScopedAnalysis<T>(
   // Force a fetch per the toggle (the prompt/grounding only runs on this path,
   // never on a cache hit), write it back to the REAL cache, then render.
   const fetchAndStore = useCallback(async () => {
-    const request = await buildRequest(isLive)
-    const raw = await callClaude({ ...request, cacheKey: realKey, forceRefresh: true })
-    if (raw == null) return
-    const parsed = await parse(raw)
-    if (parsed != null) {
-      setResult(parsed)
-      setResultScope(scopeKey)
+    try {
+      setLocalError(null)
+      const request = await buildRequest(isLive)
+      const raw = await callClaude({ ...request, cacheKey: realKey, forceRefresh: true })
+      if (raw == null) return
+      const parsed = await parse(raw)
+      if (parsed != null) {
+        setResult(parsed)
+        setResultScope(scopeKey)
+      }
+    } catch (err) {
+      setLocalError(normaliseAnalysisErrorForDisplay(err))
     }
   }, [buildRequest, isLive, callClaude, realKey, parse, scopeKey])
 
   // Cache-first Run / Re-run: serve a present, non-expired REAL entry without a
   // model call; otherwise fetch.
   const run = useCallback(async () => {
-    const snapshot = await getCacheSnapshot<unknown>(realKey)
-    if (snapshot && !isCacheExpired({ cachedAt: snapshot.cachedAt, expiresAt: snapshot.expiresAt })) {
-      const parsed = await parse(snapshot.value)
-      if (parsed != null) {
-        setResult(parsed)
-        setResultScope(scopeKey)
-        return
+    try {
+      setLocalError(null)
+      const snapshot = await getCacheSnapshot<unknown>(realKey)
+      if (snapshot && !isCacheExpired({ cachedAt: snapshot.cachedAt, expiresAt: snapshot.expiresAt })) {
+        const parsed = await parse(snapshot.value)
+        if (parsed != null) {
+          setResult(parsed)
+          setResultScope(scopeKey)
+          return
+        }
       }
+      await fetchAndStore()
+    } catch (err) {
+      setLocalError(normaliseAnalysisErrorForDisplay(err))
     }
-    await fetchAndStore()
   }, [realKey, parse, scopeKey, fetchAndStore])
 
   // The only force-live path.
@@ -122,7 +134,7 @@ export function useScopedAnalysis<T>(
     result: isIdle ? null : result,
     isIdle,
     isRunning: isLoading,
-    error,
+    error: localError,
     buttonLabel: isIdle ? "Run Analysis" : "Re-run Analysis",
     isLive,
     toggleMode,
