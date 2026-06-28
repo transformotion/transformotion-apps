@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { APIGatewayProxyEvent } from 'aws-lambda';
-import { createHandler, type RunHistoryDeps } from './index';
+import { createHandler, mapAccount, type RunHistoryDeps } from './index';
 import type { NotificationRunSummary } from '@transformotion/contracts/stock-analyser/notification-run-history';
 
 // PIECE 1d — the REAL proof: per-viewer PAYLOAD SCOPING (not render). Per-member
@@ -62,6 +62,26 @@ async function run(groups: string, d: RunHistoryDeps, sub = 'viewer-1') {
 
 const acctOf = (view: { runs: Array<{ accounts: Array<{ accountId: string }> }> }, id: string) =>
   view.runs[0]?.accounts.find((a) => a.accountId === id);
+
+describe('notification run-history — account name fallback (#581)', () => {
+  const GUID = 'a03f9cd4-951f-463a-8b34-73c0f046e672';
+
+  it('a missing accountName never renders as a raw GUID — falls back to a readable label', () => {
+    const a = mapAccount({ accountId: GUID, status: 'failed', error: 'claude credit' });
+    expect(a.accountName).toBe('Unknown account');
+    expect(a.accountName).not.toContain(GUID);
+  });
+
+  it('a blank/whitespace accountName also falls back (never the GUID)', () => {
+    const a = mapAccount({ accountId: GUID, accountName: '   ', status: 'processed' });
+    expect(a.accountName).toBe('Unknown account');
+  });
+
+  it('a real accountName passes through unchanged', () => {
+    const a = mapAccount({ accountId: GUID, accountName: "Steve's Portfolio", status: 'failed' });
+    expect(a.accountName).toBe("Steve's Portfolio");
+  });
+});
 
 describe('notification run-history — payload scoping (#573)', () => {
   it('ADMIN-not-owner: SUMMARY-only for every account — member detail + transitions ABSENT from the payload', async () => {

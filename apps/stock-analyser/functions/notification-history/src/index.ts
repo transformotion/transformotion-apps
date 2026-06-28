@@ -60,13 +60,19 @@ function mapMemberOutcome(o: Record<string, unknown>): NotificationMemberOutcome
   };
 }
 
-function mapAccount(item: Record<string, unknown>): NotificationRunAccount {
+// Defence-in-depth (#581): never render a raw accountId (GUID) as the name. The
+// engine now captures the name even for errored accounts, but a genuinely-absent
+// name falls back to a readable label rather than the GUID.
+const UNKNOWN_ACCOUNT_NAME = 'Unknown account';
+
+export function mapAccount(item: Record<string, unknown>): NotificationRunAccount {
   const accountId = String(item['accountId'] ?? '');
   const transitions = Array.isArray(item['transitions']) ? item['transitions'] : [];
   const memberOutcomes = Array.isArray(item['memberOutcomes']) ? item['memberOutcomes'] : [];
+  const rawName = typeof item['accountName'] === 'string' ? item['accountName'].trim() : '';
   return {
     accountId,
-    accountName: typeof item['accountName'] === 'string' && item['accountName'] ? item['accountName'] : accountId,
+    accountName: rawName || UNKNOWN_ACCOUNT_NAME,
     accountStatus: mapAccountStatus(item['status']),
     transitions: transitions.map((t) => mapTransition(t as Record<string, unknown>)),
     emailsSent: Number(item['emailsSent'] ?? 0),
