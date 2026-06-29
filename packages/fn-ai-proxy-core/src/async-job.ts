@@ -108,6 +108,26 @@ export async function executeAsyncJob(job: AsyncJobEvent, options: AiProxyOption
       }).catch(writeErr => {
         console.error('[fn-ai-proxy-core] Failed to write async error status:', writeErr);
       });
+
+      // #607: notify the client on FAILURE too. The client waits for a
+      // `job_complete` WSS push before reading the job result, with a 10-minute
+      // timeout — a failure-without-push left it hanging for the full timeout.
+      // The error status is now durably written above, and the client's read path
+      // already surfaces a `status:'error'` result, so this wakes it in seconds.
+      // Best-effort: a push failure is logged, never rethrown.
+      if (job.connectionId && options.wsApiEndpoint) {
+        try {
+          await pushJobComplete({
+            endpoint: options.wsApiEndpoint,
+            connectionId: job.connectionId,
+            jobId: job.jobId,
+            client: options.apiGatewayManagementClient,
+          });
+        } catch (pushErr) {
+          console.warn('[fn-ai-proxy-core] WSS push (error path) failed:', (pushErr as Error).message);
+        }
+      }
+
       emitAiProxyTelemetry({
         eventName: 'ai_runtime_execution',
         appSlug: options.appSlug,
