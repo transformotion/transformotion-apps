@@ -689,6 +689,52 @@ describe('executeAsyncJob telemetry', () => {
     expect(serialized).not.toContain('anthropic-key');
     expect(serialized).not.toContain('account-1');
   });
+
+  it('notifies the client over WSS on FAILURE so it does not hang (#607)', async () => {
+    const writes: Array<Record<string, unknown>> = [];
+    const wssPushes: Array<{ ConnectionId?: string; Data?: Uint8Array }> = [];
+
+    await executeAsyncJob({
+      __asyncJob: true,
+      jobId: 'job-err',
+      accountId: 'account-1',
+      requestId: 'request-async-err',
+      prompt: 'p',
+      provider: 'claude',
+      model: 'claude-sonnet-4-6',
+      configurationSource: 'app_override',
+      maxTokens: 100,
+      connectionId: 'conn-1',
+    }, {
+      appSlug: 'stock-analyser',
+      jobResultsTable: 'job-results',
+      wsApiEndpoint: 'https://wss.example/dev',
+      anthropicSecretName: 'anthropic-secret',
+      secretsManagerClient: secretClient('anthropic-key'),
+      dynamoClient: {
+        send: async (command: { input?: { Item?: Record<string, unknown> } }) => {
+          if (command.input?.Item) writes.push(command.input.Item);
+          return {};
+        },
+      } as never,
+      apiGatewayManagementClient: {
+        send: async (command: { input?: { ConnectionId?: string; Data?: Uint8Array } }) => {
+          if (command.input) wssPushes.push(command.input);
+          return {};
+        },
+      } as never,
+      // Non-429 provider failure → straight to the error branch (no retry).
+      fetchImpl: async () => jsonResponse({ error: { message: 'boom', type: 'server_error' } }, 500),
+    });
+
+    // The error status is written...
+    expect(writes.at(-1)).toMatchObject({ data: { data: { status: 'error' } } });
+    // ...AND the client is notified so it wakes and reads the error (not a 10-min hang).
+    expect(wssPushes.length).toBe(1);
+    expect(wssPushes[0].ConnectionId).toBe('conn-1');
+    const pushed = JSON.parse(Buffer.from(wssPushes[0].Data!).toString('utf8'));
+    expect(pushed).toEqual({ type: 'job_complete', jobId: 'job-err' });
+  });
 });
 
 describe('secret cache compatibility', () => {
