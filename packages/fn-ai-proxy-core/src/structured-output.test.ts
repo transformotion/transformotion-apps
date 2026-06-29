@@ -179,7 +179,7 @@ describe('OpenAIProvider structured output', () => {
     });
     const res = await provider.generate({ prompt: 'Analyse SpaceX', responseSchema: sampleSchema, webSearch: true });
     expect(bodies.length).toBe(2);
-    expect(bodies[0].tools).toEqual([{ type: 'web_search' }]);
+    expect(bodies[0].tools).toEqual([{ type: 'web_search', search_context_size: 'low' }]);
     expect(bodies[0].tool_choice).toBe('required');
     expect(bodies[0].text).toBeUndefined();
     expect(String(bodies[0].input[0].content)).toContain('DATA_STATUS');
@@ -211,7 +211,7 @@ describe('OpenAIProvider structured output', () => {
     await expect(provider.generate({ prompt: 'Analyse ZZZZQX', responseSchema: sampleSchema, webSearch: true }))
       .rejects.toMatchObject({ errorClass: 'provider_bad_response', statusCode: 502 });
     expect(bodies.length).toBe(1);
-    expect(bodies[0].tools).toEqual([{ type: 'web_search' }]);
+    expect(bodies[0].tools).toEqual([{ type: 'web_search', search_context_size: 'low' }]);
   });
 });
 

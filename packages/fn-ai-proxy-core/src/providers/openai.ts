@@ -149,7 +149,14 @@ export class OpenAIProvider implements AiProvider {
 
     const withWebSearch = (requestBody: Record<string, unknown>): Record<string, unknown> => ({
       ...requestBody,
-      tools: [{ type: 'web_search' }],
+      // #609: cap web-search context to 'low'. Measurement (N=5/tier on Recs) showed
+      // 'medium' gave NO saving vs unset (~+5.5%, within noise), while 'low' averaged
+      // ~13% (median ~16%) fewer input tokens AND capped the expensive tail — with
+      // grounding intact (the SPCX recent-fact probe still returned correct current
+      // data at 'low'). `tool_choice` stays 'required': the dominant cost is search
+      // VOLUME, not per-search context, and lowering tool_choice risks the #601
+      // staleness regression (a separate lever, deliberately out of scope).
+      tools: [{ type: 'web_search', search_context_size: 'low' }],
       tool_choice: 'required',
     });
 
