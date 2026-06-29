@@ -36,6 +36,7 @@ import {
   STOCK_ANALYSIS_SYSTEM_PROMPT,
   type StockSignalMetric,
 } from "@/lib/analysis/stock-analysis-signals"
+import { buildTickerSuppliedData } from "@/lib/analysis/stock-analysis-grounding"
 
 interface AnalysisResult {
   ticker: string
@@ -85,23 +86,38 @@ export function AnalyserTab({
   const pendingRunRef = useRef<string | null>(null)
   const [chartRange, setChartRange] = useState<OhlcvRange>('1y')
 
+  // Computed cycle/technicals (GET /cycle/ohlcv). Declared before the analysis so
+  // `fetchLive` is in scope for `buildRequest` (which supplies the technicals in
+  // Live mode), and so it can also overlay the gauge below.
+  const { data: liveData, isLoading: isLoadingLive, error: liveError, fetch: fetchLive } = useCycleData()
+
   // Unified cache-first analysis, scoped by the analysed ticker.
   const analysis = useScopedAnalysis<AnalysisResult>({
     surface: "analyser",
     scopeKey: analysedTicker,
-    buildRequest: (webSearch) => ({
-      webSearch,
-      prompt: createStockAnalysisPrompt(analysedTicker),
-      systemPrompt: STOCK_ANALYSIS_SYSTEM_PROMPT,
-      surface: "analyser", // structured output — proxy resolves the canonical schema
-    }),
+    buildRequest: async (webSearch) => {
+      // #602: in Live mode, supply the REAL computed technicals (the same cycle
+      // data the gauge overlays) into the prompt so the two-pass research pass has
+      // authoritative technicals it cannot web-search. Without this, OpenAI
+      // hard-fails the integrity guard and Claude fabricates technicals that
+      // contradict the gauge. Best-effort: a failed/absent computation (e.g. a
+      // dataless ticker) supplies nothing and the analysis degrades honestly.
+      const supplied = webSearch
+        ? buildTickerSuppliedData(await fetchLive(analysedTicker).catch(() => null))
+        : ""
+      return {
+        webSearch,
+        prompt: createStockAnalysisPrompt(analysedTicker) + supplied,
+        systemPrompt: STOCK_ANALYSIS_SYSTEM_PROMPT,
+        surface: "analyser", // structured output — proxy resolves the canonical schema
+      }
+    },
     parse: (raw) => (raw ? normaliseStockAnalysisSignals(raw as AnalysisResult) : null),
   })
   const result = analysis.result
   const isAnalyzing = analysis.isRunning
   const isLive = analysis.isLive
 
-  const { data: liveData, isLoading: isLoadingLive, error: liveError, fetch: fetchLive } = useCycleData()
   const { data: ohlcvData, isLoading: isLoadingChart, fetch: fetchOhlcv } = useOhlcvData()
 
   // Submit a ticker for analysis (search box, quick picks, Enter, or nav). Sets
