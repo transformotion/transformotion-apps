@@ -137,6 +137,22 @@ and the AI proxy resolves it **server-side** to the canonical schema (via the
 app-supplied `structuredOutputSchemas` registry), keeping the schema off the
 wire. Recs is deferred to the #592 backend-engine contract.
 
+**Live two-pass technical grounding (#602).** The analyser schema requires
+COMPUTED technicals (RSI, MACD, cyclePosition, volumeTrend, …) that web search
+cannot ground — they are computed from price history, not published facts. In
+Live (web-search two-pass) mode the research pass would otherwise hard-fail the
+integrity guard or fabricate technicals that contradict the app's own cycle
+gauge and the other provider. So Live analyser calls **supply the real
+`computeCyclePosition` output** as a SUPPLIED-DATA block
+(`lib/analysis/stock-analysis-grounding.ts` `buildTickerSuppliedData` — the
+per-ticker analogue of Market's `buildSectorSuppliedData`): the interactive tab
+fetches `/cycle/ohlcv` and supplies it pre-call; the engine's per-ticker
+analysis computes it server-side. Web search still supplies the qualitative
+facts; computation supplies the technicals, so both providers emit identical,
+gauge-matching values. If OHLCV is genuinely absent (`computeCyclePosition`
+returns null for < 30 bars), NO block is supplied and the model degrades
+honestly (insufficient-data, never fabricated).
+
 ### Cache key conventions
 
 | Data | Cache key format | TTL |

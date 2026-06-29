@@ -44,6 +44,8 @@ import {
 } from './engine';
 import { SEND_LOG_TTL_SECONDS, writeSendLog } from './send-log';
 import { buildSectorSuppliedData, type SectorOhlcvFetcher } from '../../../lib/analysis/market-analysis-grounding';
+import { buildTickerSuppliedData, suppliedTechnicalsFromOhlcv } from '../../../lib/analysis/stock-analysis-grounding';
+import type { CycleInputs } from '../../../lib/cycle';
 import { createMarketAnalysisPrompt, MARKET_ANALYSIS_SYSTEM_PROMPT } from '../../../lib/analysis/market-analysis-signals';
 import { ANALYSIS_REGIONS, type AnalysisRegion } from '@transformotion/contracts/stock-analyser/types';
 // #structured-output: canonical v0 schemas — CONSTRAIN provider output to valid
@@ -405,12 +407,21 @@ function makeAiProviderFactory(runtime: RuntimeEnv) {
 
 function makeGenerateAnalysis(runtime: RuntimeEnv) {
   const providerFactory = makeAiProviderFactory(runtime);
+  const fetchFullOhlcv = makeServerFullOhlcvFetcher(runtime);
   return async (ticker: string, generationContext?: AnalysisGenerationContext): Promise<StockAnalysisResult> => {
     const { provider, config } = await providerFactory();
+    // #602: supply REAL computed technicals (RSI/MACD/cyclePosition/…) so the Live
+    // two-pass research pass has authoritative values it cannot web-search. This
+    // per-ticker call is webSearch:true + structured — the SAME shape that
+    // hard-failed the interactive analyser's integrity guard. Honest degradation:
+    // a dataless ticker (<30 bars) supplies nothing and never fabricates.
+    const suppliedTechnicals = buildTickerSuppliedData(
+      suppliedTechnicalsFromOhlcv(await fetchFullOhlcv(ticker).catch(() => null)),
+    );
     let result: Awaited<ReturnType<AiProvider['generate']>>;
     try {
       result = await provider.generate({
-        prompt: createStockAnalysisPrompt(ticker),
+        prompt: createStockAnalysisPrompt(ticker) + suppliedTechnicals,
         system: STOCK_ANALYSIS_SYSTEM_PROMPT,
         model: config.model,
         webSearch: true,
@@ -545,6 +556,35 @@ function makeServerOhlcvFetcher(runtime: RuntimeEnv): SectorOhlcvFetcher {
       const payload = res.Payload ? JSON.parse(Buffer.from(res.Payload).toString('utf8')) : null;
       const closes = (payload as { closes?: unknown } | null)?.closes;
       return Array.isArray(closes) ? (closes as number[]) : null;
+    } catch {
+      return null;
+    }
+  };
+}
+
+// Full OHLCV (closes/highs/volumes) for the #602 per-ticker technical grounding —
+// the SAME service-principal source as the sector fetcher, but returns every
+// series computeCyclePosition needs. Best-effort: any failure yields null and the
+// analysis supplies no technicals (honest degradation, never blocks the call).
+function makeServerFullOhlcvFetcher(runtime: RuntimeEnv): (ticker: string) => Promise<CycleInputs | null> {
+  return async (ticker) => {
+    try {
+      const res = await lambda.send(new InvokeCommand({
+        FunctionName: runtime.marketDataFunctionName,
+        InvocationType: 'RequestResponse',
+        Payload: Buffer.from(JSON.stringify({
+          servicePrincipal: 'stock-analyser-notification-engine',
+          operation: 'get-ohlcv',
+          ticker, range: '1y', interval: '1d',
+        })),
+      }));
+      if (res.FunctionError) return null;
+      const payload = res.Payload ? JSON.parse(Buffer.from(res.Payload).toString('utf8')) : null;
+      const { closes, highs, volumes } = (payload ?? {}) as Partial<CycleInputs>;
+      if (Array.isArray(closes) && Array.isArray(highs) && Array.isArray(volumes)) {
+        return { closes, highs, volumes };
+      }
+      return null;
     } catch {
       return null;
     }
