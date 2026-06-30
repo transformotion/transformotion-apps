@@ -223,23 +223,28 @@ async function subscribeViaWss<T>(
   )
 
   await new Promise<void>((resolve, reject) => {
-    const timeout = setTimeout(() => { ws.close(); reject(new Error('WSS job completion timeout')) }, 600_000)
-    const onAbort = () => { clearTimeout(timeout); ws.close(); reject(new Error('Request aborted')) }
+    let settled = false
+    const onAbort = () => fail('Request aborted')
+    // Single settle path so the timeout, abort, error, close, and success handlers
+    // can't double-settle (e.g. the success path's ws.close() also fires onclose).
+    const cleanup = () => { settled = true; clearTimeout(timeout); signal.removeEventListener('abort', onAbort) }
+    const fail = (message: string) => { if (settled) return; cleanup(); ws.close(); reject(new Error(message)) }
+    const succeed = () => { if (settled) return; cleanup(); ws.close(); resolve() }
+    const timeout = setTimeout(() => fail('WSS job completion timeout'), 600_000)
     signal.addEventListener('abort', onAbort, { once: true })
-    ws.onerror = () => { clearTimeout(timeout); signal.removeEventListener('abort', onAbort); reject(new Error('WSS connection failed during job')) }
-    ws.onclose = (evt) => {
-      if (!evt.wasClean) { clearTimeout(timeout); signal.removeEventListener('abort', onAbort); reject(new Error('WSS connection closed unexpectedly')) }
-    }
+    ws.onerror = () => fail('WSS connection failed during job')
+    // #614: a close BEFORE job_complete — clean OR unclean — must fail FAST, not hang.
+    // The previous handler ignored clean closes (wasClean=true), so a connection that
+    // closed cleanly before completion left this Promise pending for the full 600s
+    // timeout (the "Analysing…" hang). Reject on ANY close; a retry then serves the
+    // now-complete result via the cache-first run() path (no re-run, no cache-poll).
+    ws.onclose = (evt) =>
+      fail(evt.wasClean ? 'Connection closed before the analysis finished — please try again' : 'WSS connection closed unexpectedly')
     ws.onmessage = (evt) => {
       try {
         const msg = JSON.parse(evt.data as string) as { type: string }
-        if (msg.type === 'job_complete') {
-          clearTimeout(timeout)
-          signal.removeEventListener('abort', onAbort)
-          ws.close()
-          resolve()
-        }
-      } catch { /* ignore */ }
+        if (msg.type === 'job_complete') succeed()
+      } catch { /* ignore malformed messages */ }
     }
   })
 
