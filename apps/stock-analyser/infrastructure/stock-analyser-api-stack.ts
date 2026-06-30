@@ -337,6 +337,51 @@ export class StockAnalyserApiStack extends cdk.Stack {
       .addResource('claude')
       .addMethod('POST', new apigateway.LambdaIntegration(aiProxyFn, { proxy: true }), auth);
 
+    // M19 #592 — Recommendations engine (two-stage: propose candidates → fetch REAL
+    // OHLCV price → rank WITH the price → structured pick/watch/avoid). Async, because
+    // the two-pass Live flow (~60-105s) exceeds API Gateway's 29s limit: POST kicks the
+    // job + self-invokes (Event) + returns a jobId; the executor writes job-results and
+    // pushes job_complete over WSS — same pattern as the AI proxy.
+    const recommendationsFn = new lambdaNodejs.NodejsFunction(this, 'RecommendationsFn', {
+      functionName: `stock-analyser-recommendations-${stage}`,
+      entry: path.join(__dirname, '../functions/recommendations/src/index.ts'),
+      handler: 'handler',
+      runtime: lambda.Runtime.NODEJS_20_X,
+      timeout: cdk.Duration.seconds(600),
+      memorySize: 512,
+      environment: {
+        ANTHROPIC_SECRET_NAME: anthropicSecret.secretName,
+        OPENAI_SECRET_NAME: openaiSecret.secretName,
+        AI_CONFIG_TABLE: aiRuntimeConfigTable.tableName,
+        APP_AI_CONFIG_TABLE: settingsTable.tableName,
+        AI_FALLBACK_PROVIDER: 'claude',
+        AI_FALLBACK_MODEL: 'claude-sonnet-4-6',
+        JOB_RESULTS_TABLE: jobResultsTable.tableName,
+        MARKET_DATA_FUNCTION_NAME: marketDataFn.functionName,
+        SELF_FUNCTION_NAME: `stock-analyser-recommendations-${stage}`,
+        WS_API_ENDPOINT: wsApiEndpoint,
+      },
+      bundling,
+    });
+    anthropicSecret.grantRead(recommendationsFn);
+    openaiSecret.grantRead(recommendationsFn);
+    aiRuntimeConfigTable.grantReadData(recommendationsFn);
+    settingsTable.grantReadData(recommendationsFn);
+    jobResultsTable.grantReadWriteData(recommendationsFn);
+    marketDataFn.grantInvoke(recommendationsFn); // Stage-1 real prices (service-principal)
+    recommendationsFn.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['lambda:InvokeFunction'], // self-invoke for the async executor
+      resources: [`arn:aws:lambda:${this.region}:${this.account}:function:stock-analyser-recommendations-${stage}`],
+    }));
+    recommendationsFn.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['execute-api:ManageConnections'], // WSS job_complete push
+      resources: [`arn:aws:execute-api:${this.region}:${this.account}:${wsApiId}/${stage}/*`],
+    }));
+    this.api.root
+      .addResource('recommendations')
+      .addResource('run')
+      .addMethod('POST', new apigateway.LambdaIntegration(recommendationsFn, { proxy: true }), auth);
+
     const settingsFn = new lambdaNodejs.NodejsFunction(this, 'SettingsFn', {
       functionName: `stock-analyser-settings-${stage}`,
       entry: path.join(__dirname, '../functions/settings/src/index.ts'),
