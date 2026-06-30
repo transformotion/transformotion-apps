@@ -99,8 +99,16 @@ const apiHandler = withAuth(async ({ auth, account, event }) => {
 // ultimately hits, so warmed sector data === live. Authorization is the
 // dedicated least-privilege IAM caller (a read of SHARED market data); the
 // invoke is restricted to the notification-engine role.
+// Least-privilege service-principal callers permitted to read SHARED market data.
+// Each is restricted to its own dedicated IAM role at the invoke grant (#584, #592).
+const OHLCV_SERVICE_PRINCIPALS = [
+  'stock-analyser-notification-engine',
+  'stock-analyser-recommendations',
+] as const;
+type OhlcvServicePrincipal = (typeof OHLCV_SERVICE_PRINCIPALS)[number];
+
 interface ServicePrincipalOhlcvEvent {
-  servicePrincipal: 'stock-analyser-notification-engine';
+  servicePrincipal: OhlcvServicePrincipal;
   operation: 'get-ohlcv';
   ticker: string;
   range?: string;
@@ -111,7 +119,8 @@ function isServicePrincipalOhlcvEvent(event: unknown): event is ServicePrincipal
   const candidate = event as Partial<ServicePrincipalOhlcvEvent> | null;
   return (
     !!candidate &&
-    candidate.servicePrincipal === 'stock-analyser-notification-engine' &&
+    typeof candidate.servicePrincipal === 'string' &&
+    (OHLCV_SERVICE_PRINCIPALS as readonly string[]).includes(candidate.servicePrincipal) &&
     candidate.operation === 'get-ohlcv' &&
     typeof candidate.ticker === 'string'
   );
