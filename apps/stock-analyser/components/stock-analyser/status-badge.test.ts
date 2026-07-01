@@ -13,4 +13,10 @@ describe("stockSignalBadgeClassName", () => {
     expect(stockSignalBadgeClassName("HOLD")).toContain("bg-signal-amber")
     expect(stockSignalBadgeClassName("NEUTRAL")).toContain("bg-muted")
   })
+
+  it("maps the #592 recommendationSignal vocabulary (pick/watch/avoid)", () => {
+    expect(stockSignalBadgeClassName("pick")).toContain("bg-signal-green")
+    expect(stockSignalBadgeClassName("watch")).toContain("bg-signal-amber")
+    expect(stockSignalBadgeClassName("avoid")).toContain("bg-signal-red")
+  })
 })

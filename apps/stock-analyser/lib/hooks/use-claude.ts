@@ -14,7 +14,7 @@
 import { useState, useCallback, useRef } from 'react'
 import { getConfig } from '../config'
 import { getStockAnalyserClient, stockAnalyserClient } from '../api'
-import { mockMarketAnalysisResult } from '@transformotion/contracts/stock-analyser/mocks'
+import { mockMarketAnalysisResult, mockRunRecommendationsResponse } from '@transformotion/contracts/stock-analyser/mocks'
 import {
   getCacheSnapshot,
   setCacheSnapshot,
@@ -34,6 +34,13 @@ export interface ClaudeRequest {
    * model's output. Surfaces without a schema (etfs/metals/recs) omit it.
    */
   surface?: string
+  /**
+   * #592: async ENGINE start override. When set, subscribeViaWss POSTs `path` (with
+   * `body` + connectionId) to start the job instead of /api/claude — used by the
+   * runRecommendations engine (POST /recommendations/run). The rest of the WSS flow
+   * (wait for job_complete, read job-{jobId}) is unchanged. `prompt` is unused here.
+   */
+  jobStart?: { path: string; body: Record<string, unknown> }
   /**
    * DynamoDB cache key (e.g. 'MARKET#ASX', 'ANALYSIS#CBA.AX').
    * When provided: checks DynamoDB before calling Claude, saves result after.
@@ -215,12 +222,16 @@ async function subscribeViaWss<T>(
     }
   })
 
-  // Phase 2: start the job, then wait for job_complete notification
-  const { jobId } = await stockAnalyserClient.claudeAsyncStart(
-    { prompt: request.prompt, systemPrompt: request.systemPrompt, webSearch: request.webSearch, maxTokens: request.maxTokens, surface: request.surface },
-    connectionId,
-    signal,
-  )
+  // Phase 2: start the job, then wait for job_complete notification. #592: an engine
+  // surface (jobStart) POSTs its own route (e.g. /recommendations/run); everything else
+  // goes through the AI proxy at /api/claude. The completion + read path is identical.
+  const { jobId } = request.jobStart
+    ? await stockAnalyserClient.startJob(request.jobStart.path, request.jobStart.body, connectionId, signal)
+    : await stockAnalyserClient.claudeAsyncStart(
+        { prompt: request.prompt, systemPrompt: request.systemPrompt, webSearch: request.webSearch, maxTokens: request.maxTokens, surface: request.surface },
+        connectionId,
+        signal,
+      )
 
   await new Promise<void>((resolve, reject) => {
     let settled = false
@@ -296,6 +307,11 @@ async function mockClaudeCall<T>(
 
   if (signal.aborted) {
     throw new Error('Request aborted')
+  }
+
+  // #592: recommendations engine surface (no prompt) — return the canonical mock shortlist.
+  if (request.jobStart?.path === 'recommendations/run') {
+    return mockRunRecommendationsResponse as T
   }
 
   const prompt = request.prompt

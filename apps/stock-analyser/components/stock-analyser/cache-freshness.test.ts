@@ -108,7 +108,7 @@ describe("Stock Analyser cache freshness source wiring", () => {
       },
       {
         path: "components/stock-analyser/tabs/recommendations-tab.tsx",
-        hook: "useScopedAnalysis<Stock[]>",
+        hook: "useScopedAnalysis<Recommendation[]>",
         freshnessProp: "analysis.status.freshness",
         ageProp: "analysis.status.lastUpdated",
       },
