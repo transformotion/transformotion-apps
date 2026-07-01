@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { analysisRealCacheKey } from './analysis-cache-key'
+import { isFresherCacheEntry } from './cache-reconcile'
 import {
   ANALYSIS_NO_DATA_MESSAGE,
   normaliseAnalysisErrorForDisplay,
@@ -38,6 +39,29 @@ describe('analysisRealCacheKey — scope → real server cache key (#584 consume
   it('distinct scopes never collide (own slot per scope)', () => {
     expect(analysisRealCacheKey('market', 'australia')).not.toBe(analysisRealCacheKey('market', 'us'))
     expect(analysisRealCacheKey('etfs', 'ASX')).not.toBe(analysisRealCacheKey('analyser', 'ASX'))
+  })
+})
+
+describe('isFresherCacheEntry — reconcile a stale view against the server cache (#stale-view)', () => {
+  const future = Math.floor(Date.now() / 1000) + 3600
+  const past = Math.floor(Date.now() / 1000) - 1
+
+  it('serves a NEWER, non-expired entry that appeared after the fetch started', () => {
+    expect(isFresherCacheEntry({ cachedAt: 100 }, { cachedAt: 200, expiresAt: future })).toBe(true)
+  })
+
+  it('does NOT serve an entry that is not newer than what we started from', () => {
+    expect(isFresherCacheEntry({ cachedAt: 200 }, { cachedAt: 200, expiresAt: future })).toBe(false)
+    expect(isFresherCacheEntry({ cachedAt: 300 }, { cachedAt: 200, expiresAt: future })).toBe(false)
+  })
+
+  it('does NOT serve a newer-but-expired entry', () => {
+    expect(isFresherCacheEntry({ cachedAt: 100 }, { cachedAt: 200, expiresAt: past })).toBe(false)
+  })
+
+  it('handles a first-ever write (no prior entry) and a missing after-entry', () => {
+    expect(isFresherCacheEntry(null, { cachedAt: 200, expiresAt: future })).toBe(true)
+    expect(isFresherCacheEntry({ cachedAt: 100 }, null)).toBe(false)
   })
 })
 
