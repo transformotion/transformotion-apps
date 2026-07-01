@@ -157,6 +157,26 @@ gauge-matching values. If OHLCV is genuinely absent (`computeCyclePosition`
 returns null for < 30 bars), NO block is supplied and the model degrades
 honestly (insufficient-data, never fabricated).
 
+**Live MARKET grounding rubric + degrade (#601/market).** The Live two-pass
+`DATA_STATUS` availability check is REGION-appropriate for the `market` surface,
+not ticker-centric. `provider.generate` takes a `groundingKind` (`security`
+default | `market`); the AI proxy resolves `surface` → `groundingKind`
+server-side via the app-supplied `structuredOutputGroundingKinds` registry
+(`{ market: 'market' }` — the same server-side pattern as
+`structuredOutputSchemas`), and the notification-engine warm job passes
+`groundingKind: 'market'` directly. So the interactive Market tab and the warm
+`MARKET#{region}` cache share ONE grounding path and cannot diverge. Under the
+market rubric, Pass 1 assesses macro conditions (rates/inflation/growth) + a
+per-sector read (`buildSectorSuppliedData` supplies real sector-proxy OHLCV as
+authoritative), NOT tradable-instrument/price/RSI — applying the ticker rubric
+to a region wrongly declared UNAVAILABLE and hard-failed (the bug). If market
+grounding is still unavailable, the provider DEGRADES to a structured Fast pass
+over the supplied sector data instead of throwing 502 — Market Live grounds when
+it can, returns a structured result when it can't, never hard-errors. The #601
+hard-fail guard is PRESERVED for `security` grounding: an ungroundable ticker
+has no supplied fallback, so degrading there would fabricate analysis of a
+non-verifiable instrument (exactly what the guard exists to prevent).
+
 | Data | Cache key format | TTL |
 |---|---|---|
 | Market Analysis | `MARKET#{geography}` | 24h |

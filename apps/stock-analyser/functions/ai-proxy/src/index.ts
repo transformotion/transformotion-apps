@@ -7,6 +7,10 @@ export const handler = createAiProxyHandler({
   // schema here (server-side) and passes it to the provider as responseSchema, so
   // interactive tab calls (analyser/market) are schema-constrained like the engine.
   structuredOutputSchemas: stockAnalyserStructuredOutputSchemas,
+  // #601/market: the `market` surface analyses a REGION — its Live grounding pass uses
+  // the region rubric (macro + per-sector), not the ticker/instrument rubric, so
+  // interactive Market Live no longer wrongly declares UNAVAILABLE and hard-fails.
+  structuredOutputGroundingKinds: { market: 'market' },
   anthropicSecretName: process.env.ANTHROPIC_SECRET_NAME!,
   openaiSecretName: process.env.OPENAI_SECRET_NAME,
   aiConfigTableName: process.env.AI_CONFIG_TABLE,

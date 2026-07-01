@@ -153,6 +153,7 @@ export class ClaudeProvider implements AiProvider {
       maxTokens = 4000,
       webSearch = false,
       responseSchema,
+      groundingKind,
     } = request;
 
     if (!this.options.anthropicSecretName) {
@@ -193,12 +194,25 @@ export class ClaudeProvider implements AiProvider {
     // STRUCTURED OUTPUT + web search → TWO-PASS: a grounded research pass (web
     // search, free text), then a strict forced-tool formatting pass (no search).
     // Claude cannot combine forced tool-use with web_search in one call.
-    const research = await this.send(apiKey, this.buildBody({ model, maxTokens, prompt: buildGroundedResearchPrompt(prompt), system, webSearch: true }));
+    const research = await this.send(apiKey, this.buildBody({ model, maxTokens, prompt: buildGroundedResearchPrompt(prompt, groundingKind), system, webSearch: true }));
     const grounded = lastText(research);
-    if (!grounded) {
-      throw new AiProviderError('provider_bad_response', 502, false, 'No grounded research returned from the AI model');
-    }
-    if (groundedResearchIsUnavailable(grounded)) {
+    if (!grounded || groundedResearchIsUnavailable(grounded)) {
+      // DEGRADE, don't hard-fail — MARKET only (#601/market): a region carries SUPPLIED
+      // sector OHLCV, so a forced-tool Fast pass over the ORIGINAL prompt still has real
+      // data. For security/ticker grounding the #601 guard MUST still hard-fail — an
+      // ungroundable instrument has no supplied fallback and degrading would fabricate
+      // analysis of a non-verifiable ticker (what the guard exists to stop).
+      if (groundingKind === 'market') {
+        const fast = await this.send(apiKey, this.buildBody({ model, maxTokens, prompt, system, toolSchema: responseSchema }));
+        try {
+          return this.fromTool(fast, research.usage.input_tokens, research.usage.output_tokens, responseSchema);
+        } catch (err) {
+          if (err instanceof ClaudeStructuredOutputValidationError) {
+            throw new AiProviderError('provider_bad_response', 502, false, `Claude structured output failed validation: ${err.issues.slice(0, 8).join('; ')}`);
+          }
+          throw err;
+        }
+      }
       throw new AiProviderError('provider_bad_response', 502, false, 'Claude grounded research did not contain enough verifiable data for structured output');
     }
     let formatPrompt = this.buildFormatPrompt(prompt, grounded);

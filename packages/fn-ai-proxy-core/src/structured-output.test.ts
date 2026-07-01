@@ -4,6 +4,7 @@ import {
   GROUNDED_RESEARCH_AVAILABLE,
   GROUNDED_RESEARCH_UNAVAILABLE,
   STRUCTURED_OUTPUT_NAME,
+  buildGroundedResearchPrompt,
   toOpenAiStrictSchema,
   toAnthropicInputSchema,
   toAnthropicStrictInputSchema,
@@ -95,6 +96,22 @@ describe('structured-output schema shaping', () => {
     expect(groundedResearchIsUnavailable(`${GROUNDED_RESEARCH_UNAVAILABLE}\nNo data.`)).toBe(true);
     expect(groundedResearchIsUnavailable('{"DATA_STATUS":"UNAVAILABLE","reason":"No data"}')).toBe(true);
     expect(groundedResearchIsUnavailable(`${GROUNDED_RESEARCH_AVAILABLE}\nGrounded data.`)).toBe(false);
+  });
+
+  it('buildGroundedResearchPrompt uses the ticker rubric by default and the region rubric for market (#601)', () => {
+    const security = buildGroundedResearchPrompt('Analyse AAPL');
+    expect(security).toContain('verified active tradable instrument');
+    expect(security).toContain('DATA_STATUS');
+    expect(security).toContain('Analyse AAPL');
+
+    const market = buildGroundedResearchPrompt('Analyse the Australia market', 'market');
+    // Region rubric: macro + per-sector, explicitly NOT gated on tradable-instrument/RSI.
+    expect(market).toContain('MARKET/REGION analysis');
+    expect(market).toContain('per-sector read');
+    expect(market).toContain('Do NOT require a tradable instrument');
+    expect(market).not.toContain('verified active tradable instrument');
+    // Supplied sector data is treated as authoritative.
+    expect(market).toContain('SUPPLIED sector price data');
   });
 });
 
@@ -194,7 +211,47 @@ describe('OpenAIProvider structured output', () => {
     expect(res.totalTokens).toBe(40);
   });
 
-  it('Live fails before OpenAI format pass when grounded research is unavailable', async () => {
+  it('Live DEGRADES to a Fast strict pass (no hard-fail) when OpenAI grounded research is unavailable (#601/market)', async () => {
+    const bodies: Record<string, any>[] = [];
+    const provider = new OpenAIProvider({
+      openaiSecretName: 'openai-secret',
+      secretsManagerClient: secretClient('openai-key'),
+      fetchImpl: async (_url, init) => {
+        const body = JSON.parse(String(init?.body));
+        bodies.push(body);
+        if (bodies.length === 1) {
+          return jsonResponse({
+            output_text: `${GROUNDED_RESEARCH_UNAVAILABLE}\nWeb search thin, but supplied sector data is present.`,
+            model: 'gpt-5.5',
+            usage: { input_tokens: 10, output_tokens: 20, total_tokens: 30 },
+          });
+        }
+        return jsonResponse({
+          output_text: '{"a":"degraded","b":3,"nested":{"c":"fast"}}',
+          model: 'gpt-5.5',
+          usage: { input_tokens: 4, output_tokens: 6, total_tokens: 10 },
+        });
+      },
+    });
+    const res = await provider.generate({ prompt: 'Analyse the Australia market', responseSchema: sampleSchema, webSearch: true, groundingKind: 'market' });
+    // Two passes: research (web search) then a DEGRADE Fast strict pass over the ORIGINAL prompt.
+    expect(bodies.length).toBe(2);
+    expect(bodies[0].tools).toEqual([{ type: 'web_search' }]);
+    // Research prompt carried the region rubric.
+    expect(String(bodies[0].input[0].content)).toContain('MARKET/REGION analysis');
+    // Fast fallback: strict schema, NO web search, ORIGINAL prompt (carries supplied sector data).
+    expect(bodies[1].tools).toBeUndefined();
+    expect(bodies[1].tool_choice).toBeUndefined();
+    expect(bodies[1].text.format.name).toBe(STRUCTURED_OUTPUT_NAME);
+    expect(String(bodies[1].input[0].content)).toContain('Analyse the Australia market');
+    expect(String(bodies[1].input[0].content)).not.toContain('DATA_STATUS');
+    expect(JSON.parse(res.content)).toEqual({ a: 'degraded', b: 3, nested: { c: 'fast' } });
+    // Prior research-pass tokens are still accounted for.
+    expect(res.inputTokens).toBe(14);
+    expect(res.outputTokens).toBe(26);
+  });
+
+  it('Live still HARD-FAILS for SECURITY grounding when research is unavailable (#601 guard preserved)', async () => {
     const bodies: Record<string, any>[] = [];
     const provider = new OpenAIProvider({
       openaiSecretName: 'openai-secret',
@@ -208,9 +265,10 @@ describe('OpenAIProvider structured output', () => {
         });
       },
     });
+    // Default groundingKind is 'security' → no supplied fallback → must hard-fail, not fabricate.
     await expect(provider.generate({ prompt: 'Analyse ZZZZQX', responseSchema: sampleSchema, webSearch: true }))
       .rejects.toMatchObject({ errorClass: 'provider_bad_response', statusCode: 502 });
-    expect(bodies.length).toBe(1);
+    expect(bodies.length).toBe(1);                            // no degrade pass ran
     expect(bodies[0].tools).toEqual([{ type: 'web_search' }]);
   });
 });
@@ -298,7 +356,44 @@ describe('ClaudeProvider structured output', () => {
     expect(res.outputTokens).toBe(27);
   });
 
-  it('Live fails before Claude format pass when grounded research is unavailable', async () => {
+  it('Live DEGRADES to a forced-tool Fast pass (no hard-fail) when Claude grounded research is unavailable (#601/market)', async () => {
+    const bodies: Record<string, any>[] = [];
+    const provider = new ClaudeProvider({
+      anthropicSecretName: 'anthropic-secret',
+      secretsManagerClient: secretClient('anthropic-key'),
+      fetchImpl: async (_url, init) => {
+        const b = JSON.parse(String(init?.body));
+        bodies.push(b);
+        if (bodies.length === 1) {
+          return jsonResponse({
+            content: [{ type: 'text', text: `${GROUNDED_RESEARCH_UNAVAILABLE}\nWeb search thin, but supplied sector data is present.` }],
+            model: 'claude-sonnet-4-6',
+            usage: { input_tokens: 10, output_tokens: 20 },
+          });
+        }
+        return jsonResponse({
+          content: [{ type: 'tool_use', name: STRUCTURED_OUTPUT_NAME, input: { a: 'degraded', b: 3, nested: { c: 'fast' } } }],
+          model: 'claude-sonnet-4-6',
+          usage: { input_tokens: 4, output_tokens: 6 },
+        });
+      },
+    });
+    const res = await provider.generate({ prompt: 'Analyse the Australia market', responseSchema: sampleSchema, webSearch: true, groundingKind: 'market' });
+    // Two passes: research (web search) then a DEGRADE forced-tool Fast pass over the ORIGINAL prompt.
+    expect(bodies.length).toBe(2);
+    expect(bodies[0].tools[0].type).toBe('web_search_20250305');
+    expect(String(bodies[0].messages[0].content)).toContain('MARKET/REGION analysis');
+    // Fast fallback: forced tool, NO web search, ORIGINAL prompt (carries supplied sector data).
+    expect(bodies[1].tool_choice).toEqual({ type: 'tool', name: STRUCTURED_OUTPUT_NAME });
+    expect(bodies[1].tools.some((t: any) => t.type === 'web_search_20250305')).toBe(false);
+    expect(String(bodies[1].messages[0].content)).toContain('Analyse the Australia market');
+    expect(String(bodies[1].messages[0].content)).not.toContain('DATA_STATUS');
+    expect(JSON.parse(res.content)).toEqual({ a: 'degraded', b: 3, nested: { c: 'fast' } });
+    expect(res.inputTokens).toBe(14);
+    expect(res.outputTokens).toBe(26);
+  });
+
+  it('Live still HARD-FAILS for SECURITY grounding when research is unavailable (#601 guard preserved)', async () => {
     const bodies: Record<string, any>[] = [];
     const provider = new ClaudeProvider({
       anthropicSecretName: 'anthropic-secret',
@@ -312,9 +407,10 @@ describe('ClaudeProvider structured output', () => {
         });
       },
     });
+    // Default groundingKind is 'security' → no supplied fallback → must hard-fail, not fabricate.
     await expect(provider.generate({ prompt: 'Analyse ZZZZQX', responseSchema: sampleSchema, webSearch: true }))
       .rejects.toMatchObject({ errorClass: 'provider_bad_response', statusCode: 502 });
-    expect(bodies.length).toBe(1);
+    expect(bodies.length).toBe(1);                            // no degrade pass ran
     expect(bodies[0].tools[0].type).toBe('web_search_20250305');
   });
 });

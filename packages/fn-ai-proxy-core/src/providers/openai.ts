@@ -113,6 +113,7 @@ export class OpenAIProvider implements AiProvider {
       maxTokens = 4000,
       webSearch = false,
       responseSchema,
+      groundingKind,
     } = request;
 
     const apiKey = await getOpenAIApiKey({
@@ -177,18 +178,30 @@ export class OpenAIProvider implements AiProvider {
     // Live structured output: two-pass. Pass 1 performs real hosted web search
     // for current grounding; pass 2 formats that grounded content into the
     // strict schema without another search.
+    const researchPrompt = buildGroundedResearchPrompt(prompt, groundingKind);
     const researchInput = system
       ? [
           { role: 'system', content: system },
-          { role: 'user', content: buildGroundedResearchPrompt(prompt) },
+          { role: 'user', content: researchPrompt },
         ]
-      : [{ role: 'user', content: buildGroundedResearchPrompt(prompt) }];
+      : [{ role: 'user', content: researchPrompt }];
     const research = await this.send(apiKey, model, withWebSearch(buildRequestBody(researchInput)));
     const grounded = extractOpenAIText(research);
-    if (!grounded) {
-      throw new AiProviderError('provider_bad_response', 502, false, 'No grounded research returned from the AI model');
-    }
-    if (groundedResearchIsUnavailable(grounded)) {
+    if (!grounded || groundedResearchIsUnavailable(grounded)) {
+      // DEGRADE, don't hard-fail — MARKET only (#601/market): a region carries SUPPLIED
+      // sector OHLCV, so a Fast structured pass over the ORIGINAL prompt still has real
+      // data. Market Live grounds when it can, returns a structured result when it can't,
+      // never hard-errors. For security/ticker grounding the #601 guard MUST still
+      // hard-fail — an ungroundable instrument has no supplied fallback, and degrading
+      // would fabricate analysis of a non-verifiable ticker (what the guard exists to stop).
+      if (groundingKind === 'market') {
+        const fast = await this.send(apiKey, model, buildRequestBody(input, responseSchema));
+        const fastContent = extractOpenAIText(fast);
+        if (!fastContent) {
+          throw new AiProviderError('provider_bad_response', 502, false, 'No text content returned from the AI model');
+        }
+        return this.toResult(fast, fastContent, model, research.usage?.input_tokens ?? 0, research.usage?.output_tokens ?? 0);
+      }
       throw new AiProviderError('provider_bad_response', 502, false, 'OpenAI grounded research did not contain enough verifiable data for structured output');
     }
 

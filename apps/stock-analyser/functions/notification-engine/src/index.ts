@@ -632,6 +632,9 @@ function makeWarmMarketCache(runtime: RuntimeEnv): () => Promise<void> {
           model: config.model,
           webSearch: true,
           responseSchema: marketAnalysisResultJsonSchema,
+          // #601/market: region grounding rubric (macro + sectors) — same shared logic as
+          // the interactive path, so warm + interactive can't diverge.
+          groundingKind: 'market',
         });
         const data = parseMarketAnalysisProviderResult(result, region);
         await writeSharedMarketCache(runtime, region, data);

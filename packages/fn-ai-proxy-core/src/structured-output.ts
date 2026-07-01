@@ -96,12 +96,27 @@ export function toAnthropicStrictInputSchema(schema: unknown): SchemaObject {
   return out;
 }
 
-export function buildGroundedResearchPrompt(originalPrompt: string): string {
+/**
+ * What KIND of thing the Live research pass is grounding — determines the
+ * DATA_STATUS availability rubric.
+ *  - `security` (default): a single tradable instrument (the Analyser). Availability
+ *    requires a verified active instrument + current price/change + technical context.
+ *  - `market`: a market REGION (Market Analysis). Availability is REGION-appropriate —
+ *    current macro + per-sector reads — NOT tradable-instrument/price/RSI. Applying the
+ *    security rubric to a region wrongly declares UNAVAILABLE (the #601/market bug).
+ */
+export type GroundingKind = 'security' | 'market';
+
+export function buildGroundedResearchPrompt(originalPrompt: string, kind: GroundingKind = 'security'): string {
+  const availabilityRubric =
+    kind === 'market'
+      ? 'This is a MARKET/REGION analysis, NOT a single tradable instrument. Enough evidence means current MACRO conditions for the region (interest-rate direction, inflation, growth/activity) AND a per-sector read (how each major/mapped sector is faring, with relevant current events). Do NOT require a tradable instrument, a single price/change, or RSI/technical readings — those do not apply to a region. Where SUPPLIED sector price data is included in the request, treat it as authoritative and base each sector read on it.'
+      : 'For ticker/security analysis, enough evidence includes a verified active tradable instrument, current price/change, and enough price/volume/technical context to support the technical fields.';
   return (
     'Use current web search to collect grounded evidence for every required field in this structured-output Live request. ' +
     'Do not infer facts from ticker conventions, naming patterns, stale memory, or generic market behaviour. ' +
-    `Begin the response with exactly one status line: "${GROUNDED_RESEARCH_AVAILABLE}" if current search results identify the target and provide enough reliable evidence to populate the required fields, or "${GROUNDED_RESEARCH_UNAVAILABLE}" if any required field would need guessing. ` +
-    'For ticker/security analysis, enough evidence includes a verified active tradable instrument, current price/change, and enough price/volume/technical context to support the technical fields. ' +
+    `Begin the response with exactly one status line: "${GROUNDED_RESEARCH_AVAILABLE}" if current search results (and any supplied data) provide enough reliable evidence to populate the required fields, or "${GROUNDED_RESEARCH_UNAVAILABLE}" if any required field would need guessing. ` +
+    availabilityRubric + ' ' +
     'If unavailable, explain what is missing and do not invent placeholder or numeric technicals.\n\n' +
     `Original request:\n${originalPrompt}`
   );
