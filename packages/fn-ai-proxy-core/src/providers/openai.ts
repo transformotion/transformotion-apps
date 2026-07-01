@@ -195,6 +195,14 @@ export class OpenAIProvider implements AiProvider {
       // hard-fail — an ungroundable instrument has no supplied fallback, and degrading
       // would fabricate analysis of a non-verifiable ticker (what the guard exists to stop).
       if (groundingKind === 'market') {
+        // Observability (#601/market): mark when market Live degraded to the Fast pass, so
+        // "did this fall back?" is answerable from CloudWatch (the response looks normal).
+        console.warn(JSON.stringify({
+          eventName: 'ai_market_grounding_degraded',
+          provider: 'openai',
+          model,
+          reason: grounded ? 'research_unavailable' : 'research_empty',
+        }));
         const fast = await this.send(apiKey, model, buildRequestBody(input, responseSchema));
         const fastContent = extractOpenAIText(fast);
         if (!fastContent) {

@@ -41,7 +41,7 @@ import {
 import { createMarketSectorNavigationPayload } from "../recommendations-flow"
 import { stockSignalBadgeClassName } from "../status-badge"
 import { buildSectorSuppliedData } from "@/lib/analysis/market-analysis-grounding"
-import { createMarketAnalysisPrompt, MARKET_ANALYSIS_SYSTEM_PROMPT } from "@/lib/analysis/market-analysis-signals"
+import { createMarketAnalysisPrompt, MARKET_ANALYSIS_SYSTEM_PROMPT, MARKET_ANALYSIS_MAX_TOKENS } from "@/lib/analysis/market-analysis-signals"
 import { getConfig } from "@/lib/config"
 import { getStockAnalyserClient } from "@/lib/api"
 import { getMockOhlcvData } from "@/lib/services/ai/fixtures/ohlcv-data"
@@ -174,6 +174,10 @@ export function MarketAnalysisTab() {
         prompt: createMarketAnalysisPrompt(region, suppliedSectorData),
         systemPrompt: MARKET_ANALYSIS_SYSTEM_PROMPT,
         surface: "market", // structured output — proxy resolves the canonical schema
+        // #601/market: give the grounded research pass room for macro + all sectors — at
+        // the 4000 default it truncated for content-heavy regions (US macro dropped).
+        // Same constant the warm job uses, so warm + interactive stay identical.
+        maxTokens: MARKET_ANALYSIS_MAX_TOKENS,
       }
     },
     parse: (raw) => {
