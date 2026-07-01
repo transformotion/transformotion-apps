@@ -11,8 +11,10 @@ import {
 } from "@transformotion/contracts/stock-analyser/cache-freshness"
 import { normaliseAnalysisErrorForDisplay } from "./analysis-error"
 import { analysisRealCacheKey } from "./analysis-cache-key"
+import { isFresherCacheEntry } from "./cache-reconcile"
 
 export { analysisRealCacheKey }
+export { isFresherCacheEntry }
 
 /**
  * Runtime port of the v0 unified cache-first analysis pattern
@@ -75,6 +77,7 @@ export function useScopedAnalysis<T>(
   const realKey = analysisRealCacheKey(surface, scopeKey)
   const { callClaude, isLoading } = useClaude<unknown>()
   const cacheStatus = useCacheStatus(surface, realKey)
+  const { markWritten, ttlSeconds } = cacheStatus
 
   const [isLive, setIsLive] = useState(defaultSearchMode === "live")
   const [result, setResult] = useState<T | null>(null)
@@ -91,17 +94,34 @@ export function useScopedAnalysis<T>(
     try {
       setLocalError(null)
       const request = await buildRequest(isLive)
-      const raw = await callClaude({ ...request, cacheKey: realKey, forceRefresh: true })
+      const before = await getCacheSnapshot<unknown>(realKey)
+      let raw: unknown
+      try {
+        raw = await callClaude({ ...request, cacheKey: realKey, forceRefresh: true })
+      } catch (err) {
+        // #stale-view: the async WSS completion can fail (a socket close racing
+        // job_complete) even though the run's result reached the shared cache. Rather
+        // than stranding stale data behind an error, reconcile against the server cache:
+        // if a NEWER, non-expired entry has appeared, serve it instead of erroring.
+        const after = await getCacheSnapshot<unknown>(realKey)
+        if (!isFresherCacheEntry(before, after)) throw err
+        raw = after.value
+      }
       if (raw == null) return
       const parsed = await parse(raw)
       if (parsed != null) {
         setResult(parsed)
         setResultScope(scopeKey)
       }
+      // #freshness: reflect the just-written cache so the status bar flips to
+      // FRESH/"just now" — useCacheStatus otherwise only re-reads its metadata on
+      // mount / scope change, so an in-place re-run left the stale mount-time value.
+      const now = Math.floor(Date.now() / 1000)
+      markWritten({ cachedAt: now, expiresAt: now + ttlSeconds })
     } catch (err) {
       setLocalError(normaliseAnalysisErrorForDisplay(err))
     }
-  }, [buildRequest, isLive, callClaude, realKey, parse, scopeKey])
+  }, [buildRequest, isLive, callClaude, realKey, parse, scopeKey, markWritten, ttlSeconds])
 
   // Cache-first Run / Re-run: serve a present, non-expired REAL entry without a
   // model call; otherwise fetch.
