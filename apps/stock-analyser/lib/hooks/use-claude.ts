@@ -233,35 +233,38 @@ async function subscribeViaWss<T>(
         signal,
       )
 
-  await new Promise<void>((resolve, reject) => {
+  const outcome = await new Promise<'completed' | 'closed'>((resolve, reject) => {
     let settled = false
     const onAbort = () => fail('Request aborted')
     // Single settle path so the timeout, abort, error, close, and success handlers
     // can't double-settle (e.g. the success path's ws.close() also fires onclose).
     const cleanup = () => { settled = true; clearTimeout(timeout); signal.removeEventListener('abort', onAbort) }
     const fail = (message: string) => { if (settled) return; cleanup(); ws.close(); reject(new Error(message)) }
-    const succeed = () => { if (settled) return; cleanup(); ws.close(); resolve() }
+    const settle = (value: 'completed' | 'closed') => { if (settled) return; cleanup(); ws.close(); resolve(value) }
     const timeout = setTimeout(() => fail('WSS job completion timeout'), 600_000)
     signal.addEventListener('abort', onAbort, { once: true })
-    ws.onerror = () => fail('WSS connection failed during job')
-    // #614: a close BEFORE job_complete — clean OR unclean — must fail FAST, not hang.
-    // The previous handler ignored clean closes (wasClean=true), so a connection that
-    // closed cleanly before completion left this Promise pending for the full 600s
-    // timeout (the "Analysing…" hang). Reject on ANY close; a retry then serves the
-    // now-complete result via the cache-first run() path (no re-run, no cache-poll).
-    ws.onclose = (evt) =>
-      fail(evt.wasClean ? 'Connection closed before the analysis finished — please try again' : 'WSS connection closed unexpectedly')
+    // #614 + #residual: a close/error BEFORE job_complete is NOT fatal and must NOT hang.
+    // #614 fixed the 600s "Analysing…" hang by never leaving this Promise pending on a
+    // close. We keep that (settle immediately), but instead of erroring we resolve
+    // 'closed' and RECOVER in Phase 3 by polling the job record — the job keeps running
+    // server-side and writes a terminal status durably, so the push being missed no
+    // longer strands the user. The poll is bounded, so a genuinely stuck job still ends
+    // in a clear error, never a hang. Abort/timeout still reject.
+    ws.onerror = () => settle('closed')
+    ws.onclose = () => settle('closed')
     ws.onmessage = (evt) => {
       try {
         const msg = JSON.parse(evt.data as string) as { type: string }
-        if (msg.type === 'job_complete') succeed()
+        if (msg.type === 'job_complete') settle('completed')
       } catch { /* ignore malformed messages */ }
     }
   })
 
-  // Phase 3: read the completed job result from DynamoDB cache
-  const item = await getStockAnalyserClient().getCache(`job-${jobId}`)
-  const jobStatus = parseCachedJson<{ status: string; content?: string; message?: string }>(item.data)
+  // Phase 3: read the completed job result. On 'completed' a single read normally
+  // suffices; a short poll absorbs any read-after-write lag after the push. On 'closed'
+  // (push missed) we poll longer — the job is still finishing — bounded so a stuck job
+  // ends in a clear error rather than hanging.
+  const jobStatus = await pollJobStatus(jobId, signal, outcome === 'completed' ? 15_000 : 180_000)
   if (jobStatus.status === 'complete' && jobStatus.content) {
     try {
       return JSON.parse(stripCodeFences(jobStatus.content)) as T
@@ -275,7 +278,44 @@ async function subscribeViaWss<T>(
   if (jobStatus.status === 'error') {
     throw Object.assign(new Error(jobStatus.message || 'Job failed'), { __jobError: true })
   }
-  throw new Error('Job result was not complete after WSS notification')
+  throw new Error('Connection closed before the analysis finished — please try again')
+}
+
+interface JobStatusRecord { status: string; content?: string; message?: string }
+
+/** Read the async job record (job-{jobId}). It exists from job creation ('pending'), so this does not 404 mid-run. */
+async function readJobStatus(jobId: string): Promise<JobStatusRecord> {
+  const item = await getStockAnalyserClient().getCache(`job-${jobId}`)
+  return parseCachedJson<JobStatusRecord>(item.data)
+}
+
+/**
+ * #residual: poll the job record until it reaches a terminal state (complete/error),
+ * bounded by `deadlineMs`. Recovers the result when the `job_complete` WSS push is
+ * missed (socket closed before it arrived) — the executor still writes a terminal
+ * status durably. Bounded so a stuck job ends in a clear error rather than hanging.
+ */
+async function pollJobStatus(jobId: string, signal: AbortSignal, deadlineMs: number): Promise<JobStatusRecord> {
+  const deadline = Date.now() + deadlineMs
+  for (;;) {
+    if (signal.aborted) throw new Error('Request aborted')
+    let status: JobStatusRecord | null = null
+    try {
+      status = await readJobStatus(jobId)
+    } catch { /* record not yet readable — keep polling until the deadline */ }
+    if (status && (status.status === 'complete' || status.status === 'error')) return status
+    if (Date.now() >= deadline) {
+      throw new Error('Connection closed before the analysis finished — please try again')
+    }
+    await sleepWithAbort(3_000, signal)
+  }
+}
+
+function sleepWithAbort(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(resolve, ms)
+    signal.addEventListener('abort', () => { clearTimeout(timer); reject(new Error('Request aborted')) }, { once: true })
+  })
 }
 
 /** Strip markdown code fences that Claude occasionally wraps around JSON responses. */
