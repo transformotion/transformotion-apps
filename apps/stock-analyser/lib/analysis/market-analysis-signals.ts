@@ -34,6 +34,19 @@ export const MARKET_ANALYSIS_SYSTEM_PROMPT =
   "You are a senior market strategist. Provide institutional-quality sector rotation analysis grounded in authoritative, attributable sources. For every macro indicator and sector card, name the authoritative source you relied on (exchanges, central banks, regulators, established financial press) and never base figures on social media, forums, or unattributed aggregators. Respond with raw JSON only. Do not use markdown code fences.";
 
 /**
+ * Output-token budget for the Market Analysis Live two-pass (#601/market). The
+ * Pass-1 grounded RESEARCH pass must cover BOTH region macro AND every mapped
+ * sector; at the provider default (4000) that research truncated for
+ * content-heavy regions (e.g. US), dropping the macro section entirely and
+ * leaving sectors with bare proxy returns (macro cards read "Grounded research
+ * incomplete"). 12000 gives the research pass room to reach macro + all sectors,
+ * and the format pass still fits well under it. BOTH call sites (the #584 warm
+ * job and the interactive Market tab) MUST pass this so warm + interactive stay
+ * identical.
+ */
+export const MARKET_ANALYSIS_MAX_TOKENS = 12000;
+
+/**
  * Build the Market Analysis prompt for a region. `suppliedSectorData` is the
  * #535 Bucket-1 grounding block (real sector OHLCV summary), or `''` when a
  * region has no proxies — both callers MUST pass the same grounding so the

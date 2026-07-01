@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- asserting dynamic provider request/response JSON bodies */
-import { describe, expect, it, beforeEach } from 'vitest';
+import { describe, expect, it, beforeEach, vi } from 'vitest';
 import {
   GROUNDED_RESEARCH_AVAILABLE,
   GROUNDED_RESEARCH_UNAVAILABLE,
@@ -233,7 +233,11 @@ describe('OpenAIProvider structured output', () => {
         });
       },
     });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const res = await provider.generate({ prompt: 'Analyse the Australia market', responseSchema: sampleSchema, webSearch: true, groundingKind: 'market' });
+    // Observability: the degrade emits an ai_market_grounding_degraded marker.
+    expect(warn.mock.calls.some(c => String(c[0]).includes('ai_market_grounding_degraded'))).toBe(true);
+    warn.mockRestore();
     // Two passes: research (web search) then a DEGRADE Fast strict pass over the ORIGINAL prompt.
     expect(bodies.length).toBe(2);
     expect(bodies[0].tools).toEqual([{ type: 'web_search' }]);

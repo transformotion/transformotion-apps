@@ -46,7 +46,7 @@ import { SEND_LOG_TTL_SECONDS, writeSendLog } from './send-log';
 import { buildSectorSuppliedData, type SectorOhlcvFetcher } from '../../../lib/analysis/market-analysis-grounding';
 import { buildTickerSuppliedData, suppliedTechnicalsFromOhlcv } from '../../../lib/analysis/stock-analysis-grounding';
 import type { CycleInputs } from '../../../lib/cycle';
-import { createMarketAnalysisPrompt, MARKET_ANALYSIS_SYSTEM_PROMPT } from '../../../lib/analysis/market-analysis-signals';
+import { createMarketAnalysisPrompt, MARKET_ANALYSIS_SYSTEM_PROMPT, MARKET_ANALYSIS_MAX_TOKENS } from '../../../lib/analysis/market-analysis-signals';
 import { ANALYSIS_REGIONS, type AnalysisRegion } from '@transformotion/contracts/stock-analyser/types';
 // #structured-output: canonical v0 schemas — CONSTRAIN provider output to valid
 // JSON instead of prompt-and-parse (the gpt-5.5 parse-error fix).
@@ -635,6 +635,9 @@ function makeWarmMarketCache(runtime: RuntimeEnv): () => Promise<void> {
           // #601/market: region grounding rubric (macro + sectors) — same shared logic as
           // the interactive path, so warm + interactive can't diverge.
           groundingKind: 'market',
+          // #601/market: give the grounded research pass room for macro + all sectors — at
+          // the 4000 default it truncated for content-heavy regions (US macro dropped).
+          maxTokens: MARKET_ANALYSIS_MAX_TOKENS,
         });
         const data = parseMarketAnalysisProviderResult(result, region);
         await writeSharedMarketCache(runtime, region, data);

@@ -175,7 +175,13 @@ over the supplied sector data instead of throwing 502 — Market Live grounds wh
 it can, returns a structured result when it can't, never hard-errors. The #601
 hard-fail guard is PRESERVED for `security` grounding: an ungroundable ticker
 has no supplied fallback, so degrading there would fabricate analysis of a
-non-verifiable instrument (exactly what the guard exists to prevent).
+non-verifiable instrument (exactly what the guard exists to prevent). Both market
+call sites pass `MARKET_ANALYSIS_MAX_TOKENS` (12000) — the Pass-1 grounded
+research must cover region macro AND every mapped sector, and at the 4000
+provider default that research truncated for content-heavy regions (US macro
+dropped to "Grounded research incomplete", sectors fell back to bare proxy
+returns). A `console.warn` `ai_market_grounding_degraded` event marks when the
+market degrade path fires, so a fallback is visible in CloudWatch.
 
 | Data | Cache key format | TTL |
 |---|---|---|
