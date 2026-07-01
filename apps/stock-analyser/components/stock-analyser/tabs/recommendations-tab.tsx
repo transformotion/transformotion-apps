@@ -11,17 +11,17 @@ import {
   PrimaryButton,
   CacheStatusBar,
   TextToggle,
-  type Verdict,
-  type CycleStage,
 } from "@transformotion/ui-primitives"
 import { ChevronRight, ChevronDown, Search, Loader2, Stars, AlertCircle } from "lucide-react"
 import { useScopedAnalysis } from "@/lib/hooks/use-scoped-analysis"
 import { cn } from "@/lib/utils"
-import { getStockAnalyserClient } from "@/lib/api"
-import { getConfig } from "@/lib/config"
-import { getMockOhlcvData } from "@/lib/services/ai/fixtures/ohlcv-data"
-import { latestPriceFromOhlcv } from "@/lib/market-data"
 import type { RecommendationUniverse } from "@transformotion/contracts/stock-analyser/types"
+import {
+  RECOMMENDATION_SIGNAL_LABELS,
+  type Recommendation,
+  type RecommendationMode,
+  type RunRecommendationsResponse,
+} from "@transformotion/contracts/stock-analyser/recommendations"
 import {
   RECOMMENDATION_UNIVERSES,
   REGION_LABELS,
@@ -36,109 +36,16 @@ import { stockSignalBadgeClassName } from "../status-badge"
 
 type Mode = "Top Picks" | "Bottom of Cycle"
 
-interface Stock {
-  ticker: string
-  company: string
-  sector: string
-  subcategory: string
-  // Price/change are overlaid from REAL market data (OHLCV), not the AI — and are
-  // null when no live quote resolves (delisted/unknown ticker). The UI shows "—".
-  price: number | null
-  change: number | null
-  verdict: Verdict
-  cyclePosition: number
-  cycleStage: CycleStage
-  conviction: boolean
-  analysis: string
-  bestExchange: string
+// Display mode → canonical RecommendationMode for the engine request.
+const MODE_TO_CANONICAL: Record<Mode, RecommendationMode> = {
+  "Top Picks": "top-picks",
+  "Bottom of Cycle": "bottom-of-cycle",
 }
 
-/**
- * Overlay the REAL current price/change (market data / OHLCV) onto a recommended
- * stock — the AI's own `price`/`change` are NOT trusted for display (#468: price
- * from market data, not the AI). Best-effort: a ticker with no resolvable quote
- * (e.g. a delisted symbol like OZL.AX) leaves both null, and the card shows "—".
- * Mirrors `overlayLivePrice` in portfolio-service; keyed by the model's (already
- * Yahoo-suffixed) ticker — NOT `normaliseTicker`, which would ASX-ify US codes.
- */
-async function overlayStockPrice(stock: Stock): Promise<Stock> {
-  try {
-    const ticker = stock.ticker.trim()
-    const ohlcv = getConfig().ai.provider === 'mock'
-      ? getMockOhlcvData(ticker, '1mo', '1d')
-      : await getStockAnalyserClient().getOhlcvData(ticker, '1mo', '1d')
-    const { price, change } = latestPriceFromOhlcv(ohlcv)
-    return { ...stock, price, change }
-  } catch {
-    return { ...stock, price: null, change: null }
-  }
-}
-
-const TOP_PICKS: Stock[] = [
-  { 
-    ticker: "WDS.AX", company: "Woodside Energy Group Limited", sector: "Energy", subcategory: "Oil & Gas",
-    price: 33.85, change: 2.2, verdict: "BUY", cyclePosition: 35, cycleStage: "early", conviction: true, bestExchange: "ASX",
-    analysis: "Scarborough project is 94% complete targeting first LNG in Q4 2026 with strong cash flows expected. Louisiana LNG project targeting first production in 2029 positions the company for significant growth in global LNG demand."
-  },
-  { 
-    ticker: "STO.AX", company: "Santos Limited", sector: "Energy", subcategory: "Oil & Gas",
-    price: 7.45, change: 10.0, verdict: "BUY", cyclePosition: 28, cycleStage: "early", conviction: true, bestExchange: "ASX",
-    analysis: "Pikka Phase 1 project targeting first oil in 2026 will significantly increase production capacity. Current market capitalization of 25.5 billion with strong dividend yield of 4.43% supported by elevated energy prices."
-  },
-  { 
-    ticker: "ALD.AX", company: "Ampol Limited", sector: "Energy", subcategory: "Refining",
-    price: 34.20, change: 21.3, verdict: "BUY", cyclePosition: 42, cycleStage: "mid", conviction: false, bestExchange: "ASX",
-    analysis: "Strong financial results with Group RCOP EBITDA of 1.4 billion and manageable leverage ratio of 2.3 times. Diesel and jet fuel demand remains strong as key profit drivers for the business."
-  },
-  { 
-    ticker: "AGL.AX", company: "AGL Energy Limited", sector: "Energy", subcategory: "Utilities",
-    price: 9.84, change: 2.0, verdict: "HOLD", cyclePosition: 52, cycleStage: "mid", conviction: false, bestExchange: "ASX",
-    analysis: "Development pipeline expanded to 11.3 GW with better-than-anticipated battery performance providing transition value. Asset transitions and evolving policy settings create execution risks despite improved earnings stability."
-  },
-  { 
-    ticker: "ORG.AX", company: "Origin Energy Limited", sector: "Energy", subcategory: "Utilities",
-    price: 8.75, change: 16.0, verdict: "BUY", cyclePosition: 38, cycleStage: "early", conviction: true, bestExchange: "ASX",
-    analysis: "Leading Australia's renewable transition with significant battery storage projects coming online through 2025. Positioned as key beneficiary of clean energy buildout while maintaining income from existing assets."
-  },
-  { 
-    ticker: "PDN.AX", company: "Paladin Energy Limited", sector: "Energy", subcategory: "Uranium",
-    price: 0.82, change: 7.0, verdict: "BUY", cyclePosition: 32, cycleStage: "early", conviction: false, bestExchange: "ASX",
-    analysis: "Langer Heinrich Mine in Namibia operational with renewed global interest in nuclear power as low-emission energy source. Rising uranium demand and long-term price support provide strong fundamentals for growth."
-  },
-]
-
-const BOTTOM_OF_CYCLE: Stock[] = [
-  { 
-    ticker: "STO.AX", company: "Santos Limited", sector: "Energy", subcategory: "Oil & Gas",
-    price: 6.85, change: -2.15, verdict: "BUY", cyclePosition: 15, cycleStage: "early", conviction: true, bestExchange: "ASX",
-    analysis: "Direct beneficiary of oil crisis with strong pricing power and cash generation. Trading at compressed valuation after recent selloff presents compelling entry point for long-term investors."
-  },
-  { 
-    ticker: "ORG.AX", company: "Origin Energy", sector: "Energy", subcategory: "Utilities",
-    price: 8.42, change: -1.85, verdict: "BUY", cyclePosition: 18, cycleStage: "early", conviction: true, bestExchange: "ASX",
-    analysis: "Oversold on China growth fears with supply constraints supporting commodity prices. Renewable energy transition creates significant upside as energy transition accelerates globally."
-  },
-  { 
-    ticker: "REA.AX", company: "REA Group", sector: "Real Estate", subcategory: "Digital Platforms",
-    price: 185.20, change: -0.45, verdict: "BUY", cyclePosition: 22, cycleStage: "early", conviction: false, bestExchange: "ASX",
-    analysis: "Leading property portal with defensive characteristics valuable in stagflationary environment. Positioned to benefit from eventual property market recovery with strong digital moat."
-  },
-  { 
-    ticker: "APX.AX", company: "Appen Limited", sector: "Technology", subcategory: "AI Data Services",
-    price: 2.15, change: -3.50, verdict: "BUY", cyclePosition: 8, cycleStage: "early", conviction: true, bestExchange: "ASX",
-    analysis: "Critical AI training data provider at inflection point of AI adoption cycle. Extreme selloff creates opportunity as enterprise AI spending accelerates through 2026."
-  },
-  { 
-    ticker: "Z1P.AX", company: "Zip Co", sector: "Technology", subcategory: "Fintech",
-    price: 0.85, change: -2.80, verdict: "BUY", cyclePosition: 12, cycleStage: "early", conviction: false, bestExchange: "ASX",
-    analysis: "BNPL operator at cycle trough offering recovery potential as consumer sentiment improves. Strategic partnerships and cost management provide path to profitability."
-  },
-  { 
-    ticker: "MYR.AX", company: "Myer Holdings", sector: "Consumer Discretionary", subcategory: "Retail",
-    price: 0.78, change: -1.50, verdict: "BUY", cyclePosition: 10, cycleStage: "early", conviction: false, bestExchange: "ASX",
-    analysis: "Deeply depressed valuation with management focused on operational efficiency and inventory optimization. Consumer discretionary cycle turn could unlock significant value."
-  },
-]
+// #592: recommendations are produced by the runRecommendations ENGINE (two-stage:
+// propose → real OHLCV price → rank WITH the price). The engine already overlays the
+// real price/change (#468), so the thin-UI renders its output verbatim — no client-side
+// price overlay and no hardcoded fixtures.
 
 export function RecommendationsTab() {
   const { navigateToAnalyser, sectorFilter, recsUniverse, recsSourceRegion, recsSource, clearSectorFilter, navigateTo, getTabTextVisibility, setTabTextOverride, showExplanatoryText } = useNavigation()
@@ -153,40 +60,26 @@ export function RecommendationsTab() {
   // Unified cache-first analysis. Scope = universe + mode (+ sector when arriving
   // from a Market Analysis sector card), so each distinct query has its own cache
   // slot and changing ANY dimension reverts the tab to idle.
-  const analysis = useScopedAnalysis<Stock[]>({
+  const analysis = useScopedAnalysis<Recommendation[]>({
     surface: "recs",
     scopeKey: `${universe}|${mode}${sectorFilter ? `|${sectorFilter}` : ""}`,
+    // Thin caller: kick the runRecommendations ENGINE (POST /recommendations/run) via
+    // the async WSS start seam; searchMode follows the Live/Fast toggle. The engine
+    // returns finished, price-overlaid recommendations — the UI renders them verbatim.
     buildRequest: (webSearch) => ({
+      prompt: "",
       webSearch,
-      prompt: `Provide stock recommendations for the ${universe} universe${sectorFilter ? ` in the ${sectorFilter} sector` : ''}.
-Mode: ${mode}
-
-Return a JSON object with "stocks" array, each containing:
-- ticker: ticker symbol (e.g., "WDS.AX" for ASX)
-- company: full company name
-- sector: sector classification
-- subcategory: subcategory within sector (e.g., "Oil & Gas", "Refining")
-- price: current price (number)
-- change: daily change percentage (number)
-- verdict: one of "BUY", "SELL", "HOLD", "NEUTRAL"
-- cyclePosition: 0-100 representing position in market cycle
-- cycleStage: one of "early", "mid", "late", "peak"
-- conviction: boolean indicating high conviction pick
-- analysis: 2-3 sentence detailed analysis of the stock thesis
-- bestExchange: which exchange is best for this stock (ASX, NASDAQ, NYSE, FTSE, etc)
-
-${mode === "Top Picks" ? "Focus on stocks with strong momentum and bullish signals." : "Focus on stocks at the bottom of their cycle with recovery potential."}
-
-Return 6 stocks. Return ONLY valid JSON.`,
-      systemPrompt: "You are a stock analyst providing recommendations. Provide realistic stock picks with compelling analysis and appropriate cycle positions. Respond with raw JSON only. Do not use markdown code fences.",
+      jobStart: {
+        path: "recommendations/run",
+        body: {
+          universe,
+          mode: MODE_TO_CANONICAL[mode],
+          ...(sectorFilter ? { sector: sectorFilter } : {}),
+          searchMode: webSearch ? "live" : "fast",
+        },
+      },
     }),
-    // Overlay real market-data prices over the AI numbers (runtime real-data
-    // layer), for BOTH fetched and cache-served stocks via one path.
-    parse: async (raw) => {
-      const stocks = (raw as { stocks?: Stock[] })?.stocks
-      if (!stocks) return mode === "Top Picks" ? TOP_PICKS : BOTTOM_OF_CYCLE
-      return Promise.all(stocks.map(overlayStockPrice))
-    },
+    parse: (raw) => (raw as RunRecommendationsResponse | null)?.recommendations ?? [],
   })
 
   // Text visibility
@@ -385,23 +278,19 @@ Return 6 stocks. Return ONLY valid JSON.`,
                       <p className="text-xs text-muted-foreground leading-tight mt-0.5">{stock.company}</p>
                       <p className="text-[11px] text-muted-foreground mt-1">{stock.sector} · {stock.subcategory}</p>
                     </div>
-                    <span className={cn(stockSignalBadgeClassName(stock.verdict), "shrink-0 ml-2")}>
-                      {stock.verdict}
+                    <span className={cn(stockSignalBadgeClassName(stock.recommendationSignal), "shrink-0 ml-2")}>
+                      {RECOMMENDATION_SIGNAL_LABELS[stock.recommendationSignal]}
                     </span>
                   </div>
 
-                  {/* Price section — real market-data overlay; "—" when no quote resolves */}
+                  {/* Price section — REAL price/change overlaid by the engine (#468). */}
                   <div className="flex items-baseline gap-2">
                     <span className="text-lg font-semibold text-foreground">
-                      {stock.price !== null ? `$${stock.price.toFixed(2)}` : "—"}
+                      ${stock.price.toFixed(2)}
                     </span>
-                    {stock.change !== null ? (
-                      <span className={cn("text-xs font-semibold", stock.change >= 0 ? "text-signal-green" : "text-signal-red")}>
-                        {stock.change >= 0 ? "+" : ""}{stock.change.toFixed(1)}%
-                      </span>
-                    ) : (
-                      <span className="text-xs font-semibold text-muted-foreground">—</span>
-                    )}
+                    <span className={cn("text-xs font-semibold", stock.change >= 0 ? "text-signal-green" : "text-signal-red")}>
+                      {stock.change >= 0 ? "+" : ""}{stock.change.toFixed(1)}%
+                    </span>
                   </div>
 
                   {/* Analysis text - conditionally visible or expandable */}

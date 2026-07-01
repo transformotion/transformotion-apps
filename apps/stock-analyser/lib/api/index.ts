@@ -113,4 +113,9 @@ export const stockAnalyserClient = {
   claudeAsyncStart(req: Omit<ClaudeProxyRequest, 'asyncMode'> & { surface?: string }, connectionId?: string, signal?: AbortSignal): Promise<{ jobId: string }> {
     return http().post('api/claude', { ...req, asyncMode: true, ...(connectionId ? { connectionId, appName: 'stock-analyser' } : {}) }, signal)
   },
+  // #592: generic async-engine job start (e.g. POST /recommendations/run). Returns a
+  // jobId; the WSS completion + job-{jobId} read path is shared with claudeAsyncStart.
+  startJob(path: string, body: Record<string, unknown>, connectionId?: string, signal?: AbortSignal): Promise<{ jobId: string }> {
+    return http().post(path, { ...body, ...(connectionId ? { connectionId, appName: 'stock-analyser' } : {}) }, signal)
+  },
 }
