@@ -85,6 +85,11 @@ export function createAiProxyHandler(options: AiProxyOptions) {
     const responseSchema = surface && options.structuredOutputSchemas
       ? options.structuredOutputSchemas[surface]
       : undefined;
+    // #601/market: the Live grounding rubric for this surface — e.g. 'market' for Market
+    // Analysis (region macro + per-sector, not ticker technicals). Absent → 'security'.
+    const groundingKind = surface && options.structuredOutputGroundingKinds
+      ? options.structuredOutputGroundingKinds[surface]
+      : undefined;
 
     if (!prompt?.trim()) {
       throw badRequest('prompt is required');
@@ -131,6 +136,7 @@ export function createAiProxyHandler(options: AiProxyOptions) {
         maxTokens,
         webSearch,
         ...(responseSchema !== undefined ? { responseSchema } : {}),
+        ...(groundingKind ? { groundingKind } : {}),
         ...(connectionId ? { connectionId } : {}),
       };
 
@@ -154,6 +160,7 @@ export function createAiProxyHandler(options: AiProxyOptions) {
         maxTokens,
         webSearch,
         responseSchema,
+        groundingKind,
       });
       emitAiProxyTelemetry({
         eventName: 'ai_runtime_execution',

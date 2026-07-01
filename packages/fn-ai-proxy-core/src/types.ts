@@ -88,6 +88,13 @@ export interface AiProxyOptions {
    * one app's surfaces.
    */
   structuredOutputSchemas?: Record<string, unknown>;
+  /**
+   * #601/market: per-surface Live grounding rubric, keyed by `surface`. Surfaces
+   * analysing a REGION (e.g. `market`) set `'market'` so the research pass assesses
+   * macro + per-sector availability instead of the default ticker/instrument rubric.
+   * Absent surface → `'security'`.
+   */
+  structuredOutputGroundingKinds?: Record<string, import('./structured-output').GroundingKind>;
 }
 
 export interface AiProxyRequest {
@@ -122,6 +129,13 @@ export interface AiProviderRequest {
    * provider. See contracts/stock-analyser/structured-output.behaviour.md.
    */
   responseSchema?: unknown;
+  /**
+   * #601/market: which DATA_STATUS availability rubric the Live grounding (research)
+   * pass uses — `security` (default, ticker/instrument) or `market` (region: macro +
+   * per-sector, not tradable-instrument/RSI). Only affects the structured + webSearch
+   * two-pass. See `buildGroundedResearchPrompt`.
+   */
+  groundingKind?: import('./structured-output').GroundingKind;
 }
 
 export interface AiProviderResult {
