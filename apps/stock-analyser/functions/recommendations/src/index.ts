@@ -164,29 +164,6 @@ interface CandidateProposal {
   subcategory: string;
 }
 
-const candidatesSchema = {
-  type: 'object',
-  properties: {
-    candidates: {
-      type: 'array',
-      minItems: 1,
-      items: {
-        type: 'object',
-        properties: {
-          ticker: { type: 'string' },
-          company: { type: 'string' },
-          sector: { type: 'string' },
-          subcategory: { type: 'string' },
-        },
-        required: ['ticker', 'company', 'sector', 'subcategory'],
-        additionalProperties: false,
-      },
-    },
-  },
-  required: ['candidates'],
-  additionalProperties: false,
-} as const;
-
 function proposePrompt(req: RunRecommendationsRequest): string {
   const focus =
     req.mode === 'top-picks'
@@ -195,8 +172,9 @@ function proposePrompt(req: RunRecommendationsRequest): string {
   return (
     `Propose ${CANDIDATE_COUNT} candidate stocks to consider for a "${RECOMMENDATION_MODE_LABELS[req.mode]}" shortlist ` +
     `in the ${req.universe} universe${req.sector ? ` focused on the ${req.sector} sector` : ''}, ${focus}. ` +
-    `Use tickers in that universe's convention (e.g. "WDS.AX" for ASX). For each candidate return ticker, company, ` +
-    `sector, and subcategory. Only propose candidates; do not rank or judge them yet. Return ONLY valid JSON.`
+    `Use tickers in that universe's convention (e.g. "WDS.AX" for ASX). Only propose candidates; do not rank or judge ` +
+    `them yet. Return a JSON object with a "candidates" array; each item has ticker, company, sector, and subcategory. ` +
+    `Return ONLY valid JSON.`
   );
 }
 
@@ -234,13 +212,14 @@ async function executeRecsJob(job: RecsJobEvent, runtime: RuntimeEnv): Promise<v
     const { provider, config } = await makeProvider(runtime);
     const webSearch = job.request.searchMode === 'live';
 
-    // Pass 1 — propose candidates.
+    // Pass 1 — propose candidates. FREE-TEXT so a Live proposal is a single web-search
+    // call (the reliable free-text path), not the fragile structured-Live two-pass
+    // (research→format). searchMode-driven: Live grounds fresh candidates via web search.
     const proposal = await provider.generate({
       prompt: proposePrompt(job.request),
       system: SYSTEM_PROMPT,
       model: config.model,
       webSearch,
-      responseSchema: candidatesSchema,
     });
     const candidates = (parseJsonContent<{ candidates?: CandidateProposal[] }>(proposal.content).candidates ?? [])
       .filter((c) => c?.ticker);
@@ -259,12 +238,15 @@ async function executeRecsJob(job: RecsJobEvent, runtime: RuntimeEnv): Promise<v
     if (priced.length === 0) {
       await writeStatus({ status: 'error', message: 'No candidate had resolvable market-data prices.' });
     } else {
-      // Pass 2 — rank WITH the supplied real prices (structured).
+      // Pass 2 — rank WITH the supplied real prices. STRUCTURED (strict recs schema) +
+      // single-pass (Fast, no web search) for reliable output: the grounded inputs are
+      // already in hand (fresh Live candidates from pass 1 + REAL prices), so ranking
+      // needs no own search — and structured+Live would re-enter the fragile two-pass.
       const ranked = await provider.generate({
         prompt: rankPrompt(job.request, priced),
         system: SYSTEM_PROMPT,
         model: config.model,
-        webSearch,
+        webSearch: false,
         responseSchema: recommendationsResultJsonSchema,
       });
       const modelOutputs = parseJsonContent<{ recommendations?: RecommendationModelOutput[] }>(ranked.content).recommendations ?? [];
