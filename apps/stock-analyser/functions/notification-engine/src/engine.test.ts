@@ -488,6 +488,35 @@ describe('notification send-log (#572)', () => {
     expect(run.sendLog.accounts.length).toBeGreaterThan(0); // accounts still processed
   });
 
+  it('warms the ETF caches ONCE per run — not per account, AFTER the kill-switch gate (#594)', async () => {
+    const warmEtfsCache = vi.fn(async () => undefined);
+    await runNotificationEngine(deps({
+      listStockAnalyserMembers: vi.fn(async () => [
+        { ...activeMember, accountId: 'acct-a', userId: 'user-a' },
+        { ...activeMember, accountId: 'acct-b', userId: 'user-b' },
+      ]),
+      warmEtfsCache,
+    }));
+    expect(warmEtfsCache).toHaveBeenCalledTimes(1); // once per run, regardless of 2 accounts
+  });
+
+  it('does NOT warm the ETF caches when the kill-switch is OFF (#594 inside the #571 gate)', async () => {
+    const warmEtfsCache = vi.fn(async () => undefined);
+    const run = await runNotificationEngine(deps({
+      readEngineEnabled: vi.fn(async () => false),
+      warmEtfsCache,
+    }));
+    expect(warmEtfsCache).not.toHaveBeenCalled(); // whole batch no-ops when OFF
+    expect(run.sendLog.note).toBe('engine-disabled');
+  });
+
+  it('an ETF-warming failure is best-effort — it does not abort the notification run (#594)', async () => {
+    const warmEtfsCache = vi.fn(async () => { throw new Error('all markets failed'); });
+    const run = await runNotificationEngine(deps({ warmEtfsCache }));
+    expect(warmEtfsCache).toHaveBeenCalledOnce();
+    expect(run.sendLog.accounts.length).toBeGreaterThan(0); // accounts still processed
+  });
+
   it('cross-account tripwire: flags a member outcome that is not a member of the account', async () => {
     const log = vi.fn();
     const account: SendLogAccount = {

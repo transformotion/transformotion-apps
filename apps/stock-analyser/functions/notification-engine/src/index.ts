@@ -56,6 +56,7 @@ import {
   stockAnalysisResultJsonSchema,
 } from '@transformotion/contracts/stock-analyser/structured-output';
 import { RECOMMENDATION_MODE_LABELS } from '@transformotion/contracts/stock-analyser/recommendations';
+import { ETF_MARKETS } from '@transformotion/contracts/stock-analyser/etfs';
 
 // removeUndefinedValues (#578): the safety net so a stray `undefined` (e.g. a
 // member with no email) can never throw mid-write and drop subsequent records.
@@ -86,6 +87,8 @@ interface RuntimeEnv {
   marketDataFunctionName: string;
   // #595: recommendations Lambda, async-invoked to smart-warm RECS# for enter sectors.
   recommendationsFunctionName: string;
+  // #594: etfs Lambda, async-invoked to warm ETF#{market} for each market.
+  etfsFunctionName: string;
   anthropicSecretName: string;
   openaiSecretName?: string;
   aiConfigTableName?: string;
@@ -117,6 +120,7 @@ function env(): RuntimeEnv {
     analysisCacheFunctionName: requireEnv('ANALYSIS_CACHE_FUNCTION_NAME'),
     marketDataFunctionName: requireEnv('MARKET_DATA_FUNCTION_NAME'),
     recommendationsFunctionName: requireEnv('RECOMMENDATIONS_FUNCTION_NAME'),
+    etfsFunctionName: requireEnv('ETFS_FUNCTION_NAME'),
     anthropicSecretName: requireEnv('ANTHROPIC_SECRET_NAME'),
     openaiSecretName: process.env.OPENAI_SECRET_NAME,
     aiConfigTableName: process.env.AI_CONFIG_TABLE,
@@ -708,6 +712,32 @@ function makeWarmMarketCache(runtime: RuntimeEnv): () => Promise<void> {
   };
 }
 
+// ── #594 warm ETF#{market} for EVERY market, ONCE per job run ─────────────────────
+// Async-invoke the runEtfs engine (#626 — the SAME engine a live ETF tab run uses) for
+// each market; it SHARED-writes ETF#{market}. NO smart-filter: ETFs have no enter-gate
+// equivalent, so all 3 markets warm every run. The cacheKey is byte-identical to what
+// the live tab reads (analysisRealCacheKey → `ETF#{market}`), so the warm is consumed on
+// Run. Per-market isolation: a dispatch failure is logged, never thrown.
+async function warmEtfsForAllMarkets(runtime: RuntimeEnv): Promise<void> {
+  for (const market of ETF_MARKETS) {
+    const cacheKey = `ETF#${market}`;
+    try {
+      await lambda.send(new InvokeCommand({
+        FunctionName: runtime.etfsFunctionName,
+        InvocationType: 'Event',
+        Payload: Buffer.from(JSON.stringify({
+          __warmEtfs: true,
+          request: { market, searchMode: 'live' },
+          cacheKey,
+        })),
+      }));
+      console.log(JSON.stringify({ message: 'notification-etfs-warm-dispatched', market, cacheKey }));
+    } catch (err) {
+      console.log(JSON.stringify({ message: 'notification-etfs-warm-dispatch-error', market, cacheKey, err: String(err) }));
+    }
+  }
+}
+
 export function createDependencies(runtime: RuntimeEnv = env()): NotificationEngineDeps {
   return {
     today: todayUtc,
@@ -715,6 +745,7 @@ export function createDependencies(runtime: RuntimeEnv = env()): NotificationEng
     newRunId: () => randomUUID(),
     readEngineEnabled: () => readEngineEnabled(runtime),
     warmMarketCache: makeWarmMarketCache(runtime),
+    warmEtfsCache: () => warmEtfsForAllMarkets(runtime),
     readAccountName: (accountId) => readAccountName(runtime, accountId),
     recordSendLog: (run) => recordSendLog(runtime, run),
     listStockAnalyserMembers: () => listStockAnalyserMembers(runtime),

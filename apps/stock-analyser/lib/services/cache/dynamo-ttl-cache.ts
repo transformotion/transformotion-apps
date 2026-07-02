@@ -24,15 +24,17 @@ const TTL_SECONDS: Record<string, number> = {
   MARKET:   STOCK_ANALYSER_CACHE_TTL_SECONDS.market,
   RECS:     STOCK_ANALYSER_CACHE_TTL_SECONDS.recs,
   ETF:      STOCK_ANALYSER_CACHE_TTL_SECONDS.etfs,
-  ETFS:     STOCK_ANALYSER_CACHE_TTL_SECONDS.etfs,
   METALS:   STOCK_ANALYSER_CACHE_TTL_SECONDS.metals,
   ANALYSIS: STOCK_ANALYSER_CACHE_TTL_SECONDS.analyser,
   CYCLE:    8 * 3600,
 }
 const DEFAULT_TTL = STOCK_ANALYSER_CACHE_TTL_SECONDS.analyser
 
-// Cache types whose data is shared across all accounts
-const SHARED_TYPES = new Set(['MARKET', 'ETFS', 'RECS', 'METALS', 'ANALYSIS', 'CYCLE'])
+// Cache types whose data is shared across all accounts.
+// #594: the ETF cache key is `ETF#{market}` (prefix `ETF`), not `ETFS` — the stale
+// `ETFS` entry never matched, so live ETF writes went out with shared:false (the
+// analysis-cache SHARED_PREFIXES override forced SHARED server-side, masking it).
+const SHARED_TYPES = new Set(['MARKET', 'ETF', 'RECS', 'METALS', 'ANALYSIS', 'CYCLE'])
 
 export type CacheMetadata = Pick<AnalysisCacheEntry, 'cachedAt' | 'expiresAt'>
 export interface CacheSnapshot<T> extends CacheMetadata {

@@ -75,16 +75,20 @@ function normaliseItem(item: Record<string, unknown>) {
 // Key prefixes whose data is shared across all accounts — always write to SHARED partition.
 // This overrides the client's `shared` flag so a misbehaving client can't pollute the
 // per-account partition with data that should be global.
-const SHARED_PREFIXES = ['MARKET', 'ETFS', 'RECS', 'METALS', 'ANALYSIS', 'CYCLE'];
+// #594: the ETF cache key is `ETF#{market}` (prefix `ETF`), NOT `ETFS` — the old `ETFS`
+// entry never matched a real key, so scheduled ETF# writes were rejected as non-SHARED.
+const SHARED_PREFIXES = ['MARKET', 'ETF', 'RECS', 'METALS', 'ANALYSIS', 'CYCLE'];
 
 // Service principals allowed to write SHARED cache entries. The notification-engine
-// warms MARKET#/ANALYSIS# (#584); #595 adds the recommendations engine, which warms the
-// RECS# it flagged 'enter'. Both write ONLY SHARED-prefixed keys (enforced below), via
-// the same additive service-principal pattern — access is by explicit function identity.
+// warms MARKET#/ANALYSIS# (#584); #595 adds the recommendations engine (warms the RECS#
+// it flagged 'enter'); #594 adds the etfs engine (warms ETF#{market} for each market).
+// All write ONLY SHARED-prefixed keys (enforced below), via the same additive
+// service-principal pattern — access is by explicit function identity.
 const ALLOWED_SERVICE_PRINCIPALS = [
   'stock-analyser-notification-engine',
   'stock-analyser-recommendations',
   'stock-analyser-metals',
+  'stock-analyser-etfs',
 ] as const;
 type AllowedServicePrincipal = (typeof ALLOWED_SERVICE_PRINCIPALS)[number];
 
