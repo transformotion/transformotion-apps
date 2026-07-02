@@ -119,6 +119,7 @@ export function AnalyserTab({
   const isLive = analysis.isLive
 
   const { data: ohlcvData, isLoading: isLoadingChart, fetch: fetchOhlcv } = useOhlcvData()
+  const marketDataTicker = analysedTicker || result?.ticker || ""
 
   // Submit a ticker for analysis (search box, quick picks, Enter, or nav). Sets
   // the scope to the ticker, then runs cache-first once the scope is committed.
@@ -154,19 +155,19 @@ export function AnalyserTab({
 
   // Fetch live OHLCV cycle data whenever live mode is active and we have a result.
   useEffect(() => {
-    if (analysis.isLive && result?.ticker) {
-      fetchLive(result.ticker)
+    if (analysis.isLive && result?.ticker && marketDataTicker) {
+      fetchLive(marketDataTicker)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [analysis.isLive, result?.ticker])
+  }, [analysis.isLive, result?.ticker, marketDataTicker])
 
   // Fetch price chart data whenever ticker or selected range changes.
   useEffect(() => {
-    if (result?.ticker) {
-      fetchOhlcv(result.ticker, chartRange)
+    if (result?.ticker && marketDataTicker) {
+      fetchOhlcv(marketDataTicker, chartRange)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [result?.ticker, chartRange])
+  }, [result?.ticker, marketDataTicker, chartRange])
 
   const handleBack = () => {
     if (source) {
