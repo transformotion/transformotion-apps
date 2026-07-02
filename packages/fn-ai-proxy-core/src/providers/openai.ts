@@ -150,7 +150,12 @@ export class OpenAIProvider implements AiProvider {
 
     const withWebSearch = (requestBody: Record<string, unknown>): Record<string, unknown> => ({
       ...requestBody,
-      tools: [{ type: 'web_search' }],
+      // #609: cap hosted web_search ingestion at the LOW context tier. OpenAI defaults to
+      // the largest tier, and the ingested web content dominates Live input-token cost.
+      // The N=5 measurement in PR #613 found 'low' the only tier with a real saving
+      // (~13-16%); 'medium' was +5.5% (noise). Applies to ALL Live web-search surfaces
+      // (Market, Analyser, Recs, per-ticker engine) via this shared helper.
+      tools: [{ type: 'web_search', search_context_size: 'low' }],
       tool_choice: 'required',
     });
 

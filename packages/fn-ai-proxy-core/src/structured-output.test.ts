@@ -196,7 +196,7 @@ describe('OpenAIProvider structured output', () => {
     });
     const res = await provider.generate({ prompt: 'Analyse SpaceX', responseSchema: sampleSchema, webSearch: true });
     expect(bodies.length).toBe(2);
-    expect(bodies[0].tools).toEqual([{ type: 'web_search' }]);
+    expect(bodies[0].tools).toEqual([{ type: 'web_search', search_context_size: 'low' }]);
     expect(bodies[0].tool_choice).toBe('required');
     expect(bodies[0].text).toBeUndefined();
     expect(String(bodies[0].input[0].content)).toContain('DATA_STATUS');
@@ -240,7 +240,7 @@ describe('OpenAIProvider structured output', () => {
     warn.mockRestore();
     // Two passes: research (web search) then a DEGRADE Fast strict pass over the ORIGINAL prompt.
     expect(bodies.length).toBe(2);
-    expect(bodies[0].tools).toEqual([{ type: 'web_search' }]);
+    expect(bodies[0].tools).toEqual([{ type: 'web_search', search_context_size: 'low' }]);
     // Research prompt carried the region rubric.
     expect(String(bodies[0].input[0].content)).toContain('MARKET/REGION analysis');
     // Fast fallback: strict schema, NO web search, ORIGINAL prompt (carries supplied sector data).
@@ -273,7 +273,7 @@ describe('OpenAIProvider structured output', () => {
     await expect(provider.generate({ prompt: 'Analyse ZZZZQX', responseSchema: sampleSchema, webSearch: true }))
       .rejects.toMatchObject({ errorClass: 'provider_bad_response', statusCode: 502 });
     expect(bodies.length).toBe(1);                            // no degrade pass ran
-    expect(bodies[0].tools).toEqual([{ type: 'web_search' }]);
+    expect(bodies[0].tools).toEqual([{ type: 'web_search', search_context_size: 'low' }]);
   });
 });
 
