@@ -208,6 +208,16 @@ describe("Stock Analyser cache freshness source wiring", () => {
     expect(settings).toContain("disabled={!isDirty || invalid || loading || saving}")
   })
 
+  it("uses the submitted ticker, not the AI-returned ticker, for Analyser market-data fetches", () => {
+    const analyser = source("components/stock-analyser/tabs/analyser-tab.tsx")
+
+    expect(analyser).toContain('const marketDataTicker = analysedTicker || result?.ticker || ""')
+    expect(analyser).toContain("fetchLive(marketDataTicker)")
+    expect(analyser).toContain("fetchOhlcv(marketDataTicker, chartRange)")
+    expect(analyser).not.toContain("fetchLive(result.ticker)")
+    expect(analyser).not.toContain("fetchOhlcv(result.ticker, chartRange)")
+  })
+
   it("matches the v0 cache freshness card visual contract", () => {
     const settings = source("components/stock-analyser/tabs/settings-tab.tsx")
 
