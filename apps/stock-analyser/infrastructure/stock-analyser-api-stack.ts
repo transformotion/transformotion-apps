@@ -416,6 +416,7 @@ export class StockAnalyserApiStack extends cdk.Stack {
         JOB_RESULTS_TABLE: jobResultsTable.tableName,
         SELF_FUNCTION_NAME: `stock-analyser-metals-${stage}`,
         ANALYSIS_CACHE_FUNCTION_NAME: cacheFn.functionName,
+        ANALYSIS_CACHE_TABLE: analysisCacheTable.tableName,
         WS_API_ENDPOINT: wsApiEndpoint,
       },
       bundling,
@@ -427,6 +428,15 @@ export class StockAnalyserApiStack extends cdk.Stack {
     settingsTable.grantReadData(metalsFn);
     jobResultsTable.grantReadWriteData(metalsFn);
     cacheFn.grantInvoke(metalsFn); // SHARED METALS cache write (service-principal)
+    metalsFn.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['dynamodb:GetItem', 'dynamodb:PutItem', 'dynamodb:Query'],
+      resources: [analysisCacheTable.tableArn],
+      conditions: {
+        'ForAllValues:StringEquals': {
+          'dynamodb:LeadingKeys': ['SHARED'],
+        },
+      },
+    }));
     metalsFn.addToRolePolicy(new iam.PolicyStatement({
       actions: ['lambda:InvokeFunction'], // self-invoke for the async executor
       resources: [`arn:aws:lambda:${this.region}:${this.account}:function:stock-analyser-metals-${stage}`],

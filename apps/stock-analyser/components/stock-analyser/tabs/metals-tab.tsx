@@ -100,8 +100,6 @@ export function MetalsTab() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {metalsToDisplay.map((metal, i) => {
-          const pricePosition = ((metal.spotPrice - metal.week52Low) / (metal.week52High - metal.week52Low)) * 100
-
           return (
             <Card
               key={metal.symbol}
@@ -127,40 +125,37 @@ export function MetalsTab() {
                   </p>
                 </div>
 
-                <div>
-                  <div className="h-1 bg-signal-green/60 rounded-full relative mb-2">
-                    <div
-                      className="absolute top-0 bottom-0 w-0.5 rounded-full bg-background"
-                      style={{ left: `${Math.min(Math.max(pricePosition, 0), 100)}%` }}
-                    />
+                <div className="grid grid-cols-4 gap-2 text-[11px] text-muted-foreground">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider mb-0.5">AUD Spot</p>
+                    <p className="font-semibold text-foreground">A${metal.audSpotPrice.toLocaleString("en-AU")}</p>
                   </div>
-
-                  <div className="grid grid-cols-4 gap-2 text-[11px] text-muted-foreground">
-                    <div>
-                      <p className="text-[10px] uppercase tracking-wider mb-0.5">52w High</p>
-                      <p className="font-semibold text-foreground">US${metal.week52High.toLocaleString()}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] uppercase tracking-wider mb-0.5">52w Low</p>
-                      <p className="font-semibold text-foreground">US${metal.week52Low.toLocaleString()}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] uppercase tracking-wider mb-0.5">Today</p>
-                      <p className={cn("font-semibold", metal.todayChange >= 0 ? "text-signal-red" : "text-signal-green")}>
-                        {metal.todayChange >= 0 ? "+" : ""}{metal.todayChange.toFixed(2)}%
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider mb-0.5">30d Change</p>
+                    {metal.change30d === null ? (
+                      <p className="font-semibold text-muted-foreground">&mdash;</p>
+                    ) : (
+                      <p className={cn("font-semibold", metal.change30d >= 0 ? "text-signal-red" : "text-signal-green")}>
+                        {metal.change30d >= 0 ? "+" : ""}{metal.change30d.toFixed(1)}%
                       </p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] uppercase tracking-wider mb-0.5">Signal</p>
-                      <p className={cn(
-                        "font-semibold capitalize",
-                        metal.signal === "BULL" ? "text-signal-green" :
-                          metal.signal === "BEAR" ? "text-signal-red" :
-                            "text-signal-amber",
-                      )}>
-                        {metal.signal.toLowerCase()}
-                      </p>
-                    </div>
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider mb-0.5">Today</p>
+                    <p className={cn("font-semibold", metal.todayChange >= 0 ? "text-signal-red" : "text-signal-green")}>
+                      {metal.todayChange >= 0 ? "+" : ""}{metal.todayChange.toFixed(2)}%
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider mb-0.5">Signal</p>
+                    <p className={cn(
+                      "font-semibold capitalize",
+                      metal.signal === "BULL" ? "text-signal-green" :
+                        metal.signal === "BEAR" ? "text-signal-red" :
+                          "text-signal-amber",
+                    )}>
+                      {metal.signal.toLowerCase()}
+                    </p>
                   </div>
                 </div>
 

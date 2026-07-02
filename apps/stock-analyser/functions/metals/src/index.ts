@@ -3,14 +3,16 @@
  *
  * Metals was historically a client-side free-text call where the model authored
  * both prices and the signal. This engine fixes that shape:
- *   1. fetch REAL metals.dev feed data for XAU/XAG/XPT/XPD;
- *   2. supply those numbers to the model;
- *   3. accept only structured signal/outlook output from the model;
- *   4. overlay the real feed data for the finished response.
+ *   1. fetch REAL metals.dev latest feed data for XAU/XAG/XPT/XPD;
+ *   2. compute AUD spot, daily/YTD/30-day changes from that feed plus stored
+ *      close/baseline rows;
+ *   3. supply those numbers to the model;
+ *   4. accept only structured signal/outlook output from the model;
+ *   5. overlay the real feed data for the finished response.
  */
 import { randomUUID } from 'crypto';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { InvokeCommand, LambdaClient } from '@aws-sdk/client-lambda';
 import {
   withAuth,
@@ -46,8 +48,10 @@ const APP_SLUG = 'stock-analyser';
 const METALS_CACHE_KEY = 'METALS';
 const METALS_TTL_SECONDS = STOCK_ANALYSER_CACHE_TTL_SECONDS.metals;
 const METALS_DEV_BASE_URL = 'https://api.metals.dev/v1';
-const METALS_HISTORY_DAYS = 365;
-const METALS_DEV_MAX_RANGE_DAYS = 30;
+const METALS_CLOSES_PREFIX = 'METALS_CLOSES#';
+const METALS_BASELINE_PREFIX = 'METALS_BASELINE#';
+const METALS_CLOSES_TTL_SECONDS = 400 * 24 * 60 * 60;
+const SHARED_ACCOUNT_ID = 'SHARED';
 
 const lambda = new LambdaClient({});
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -70,6 +74,7 @@ interface RuntimeEnv {
   fallbackModel: string;
   selfFunctionName: string;
   analysisCacheFunctionName: string;
+  analysisCacheTable: string;
   wsApiEndpoint: string;
 }
 
@@ -85,6 +90,7 @@ function env(): RuntimeEnv {
     fallbackModel: process.env.AI_FALLBACK_MODEL ?? 'claude-sonnet-4-6',
     selfFunctionName: requireEnv('SELF_FUNCTION_NAME'),
     analysisCacheFunctionName: requireEnv('ANALYSIS_CACHE_FUNCTION_NAME'),
+    analysisCacheTable: requireEnv('ANALYSIS_CACHE_TABLE'),
     wsApiEndpoint: requireEnv('WS_API_ENDPOINT'),
   };
 }
@@ -122,14 +128,15 @@ async function makeProvider(runtime: RuntimeEnv): Promise<{ provider: AiProvider
   };
 }
 
-interface MetalPoint {
+interface MetalCloseSet {
   date: string;
-  values: Record<MetalSymbol, number>;
+  closes: Record<MetalSymbol, number>;
+  audRate?: number;
 }
 
-export interface HistoryRange {
-  startDate: string;
-  endDate: string;
+interface LatestFeed {
+  spot: Record<MetalSymbol, number>;
+  audRate: number;
 }
 
 function dateOnly(date: Date): Date {
@@ -146,20 +153,6 @@ function formatDate(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
-export function buildHistoryRanges(end = new Date(), historyDays = METALS_HISTORY_DAYS): HistoryRange[] {
-  const ranges: HistoryRange[] = [];
-  const floor = addDays(dateOnly(end), -historyDays);
-  let cursorEnd = dateOnly(end);
-
-  while (cursorEnd >= floor) {
-    const cursorStart = new Date(Math.max(addDays(cursorEnd, -(METALS_DEV_MAX_RANGE_DAYS - 1)).getTime(), floor.getTime()));
-    ranges.unshift({ startDate: formatDate(cursorStart), endDate: formatDate(cursorEnd) });
-    cursorEnd = addDays(cursorStart, -1);
-  }
-
-  return ranges;
-}
-
 function round(value: number, decimals = 2): number {
   const factor = 10 ** decimals;
   return Math.round(value * factor) / factor;
@@ -170,10 +163,19 @@ function pctChange(current: number, previous: number): number {
   return round(((current - previous) / previous) * 100, 2);
 }
 
+function isPositiveNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0;
+}
+
 function readNumber(value: unknown, label: string): number {
   const n = Number(value);
   if (!Number.isFinite(n)) throw new Error(`metals.dev returned invalid ${label}`);
   return n;
+}
+
+function readOptionalNumber(value: unknown, label: string): number | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
+  return readNumber(value, label);
 }
 
 function metalValuesFromMetalsObject(source: unknown): Record<MetalSymbol, number> {
@@ -208,64 +210,192 @@ function buildMetalsUrl(path: 'latest' | 'timeseries', apiKey: string, params: R
   return url;
 }
 
-async function fetchMetalsDevFeed(runtime: RuntimeEnv, now = new Date()): Promise<Record<MetalSymbol, MetalFeedData>> {
-  const apiKey = await getSecretApiKey({ secretName: runtime.metalsSecretName }, 'Metals.dev');
+function closeKey(date: string): string {
+  return `${METALS_CLOSES_PREFIX}${date}`;
+}
 
+function baselineKey(year: number): string {
+  return `${METALS_BASELINE_PREFIX}${year}`;
+}
+
+function toEpochSeconds(date: Date): number {
+  return Math.floor(date.getTime() / 1000);
+}
+
+function cacheExpiry(now: Date): number {
+  return toEpochSeconds(now) + METALS_CLOSES_TTL_SECONDS;
+}
+
+function parseStoredJson<T>(item: Record<string, unknown> | undefined): T | null {
+  if (!item) return null;
+  const raw = item.data;
+  if (typeof raw === 'string') return JSON.parse(raw) as T;
+  if (raw && typeof raw === 'object') return raw as T;
+  return null;
+}
+
+async function readCacheJson<T>(runtime: RuntimeEnv, cacheKey: string): Promise<T | null> {
+  const result = await ddb.send(new GetCommand({
+    TableName: runtime.analysisCacheTable,
+    Key: { accountId: SHARED_ACCOUNT_ID, cacheKey },
+  }));
+  return parseStoredJson<T>(result.Item);
+}
+
+async function writeCacheJson(runtime: RuntimeEnv, cacheKey: string, dataType: string, data: unknown, now = new Date()): Promise<void> {
+  await ddb.send(new PutCommand({
+    TableName: runtime.analysisCacheTable,
+    Item: {
+      accountId: SHARED_ACCOUNT_ID,
+      cacheKey,
+      data: JSON.stringify(data),
+      cachedAt: now.toISOString(),
+      dataType,
+      mode: 'live',
+      expiresAt: cacheExpiry(now),
+    },
+  }));
+}
+
+async function hasStoredCloses(runtime: RuntimeEnv): Promise<boolean> {
+  const result = await ddb.send(new QueryCommand({
+    TableName: runtime.analysisCacheTable,
+    KeyConditionExpression: 'accountId = :accountId AND begins_with(cacheKey, :prefix)',
+    ExpressionAttributeValues: {
+      ':accountId': SHARED_ACCOUNT_ID,
+      ':prefix': METALS_CLOSES_PREFIX,
+    },
+    Limit: 1,
+  }));
+  return (result.Items?.length ?? 0) > 0;
+}
+
+async function readMostRecentCloseBefore(runtime: RuntimeEnv, date: string): Promise<MetalCloseSet | null> {
+  const result = await ddb.send(new QueryCommand({
+    TableName: runtime.analysisCacheTable,
+    KeyConditionExpression: 'accountId = :accountId AND cacheKey BETWEEN :start AND :end',
+    ExpressionAttributeValues: {
+      ':accountId': SHARED_ACCOUNT_ID,
+      ':start': `${METALS_CLOSES_PREFIX}0000-00-00`,
+      ':end': closeKey(formatDate(addDays(new Date(`${date}T00:00:00.000Z`), -1))),
+    },
+    ScanIndexForward: false,
+    Limit: 1,
+  }));
+  return parseStoredJson<MetalCloseSet>(result.Items?.[0]);
+}
+
+async function writeClose(runtime: RuntimeEnv, close: MetalCloseSet, now = new Date()): Promise<void> {
+  await writeCacheJson(runtime, closeKey(close.date), 'metals-closes', close, now);
+}
+
+function readAudRate(source: unknown): number {
+  const currencies = (source as { currencies?: Record<string, unknown> }).currencies;
+  const audRate = readNumber(currencies?.AUD, 'AUD currency rate');
+  if (audRate <= 0) throw new Error('metals.dev returned invalid AUD currency rate');
+  return audRate;
+}
+
+function audSpotFromUsd(usdSpot: number, audRate: number): number {
+  // metals.dev latest returns USD per AUD in currencies.AUD; invert to AUD/oz.
+  return usdSpot / audRate;
+}
+
+async function fetchLatestFeed(apiKey: string): Promise<LatestFeed> {
   const latestRaw = await fetchJson(buildMetalsUrl('latest', apiKey));
   const latestMetals = (latestRaw as { metals?: unknown }).metals;
   if (!latestMetals || typeof latestMetals !== 'object') {
     throw new Error('metals.dev latest response did not include a metals object');
   }
-  const latest = metalValuesFromMetalsObject(latestMetals);
+  return {
+    spot: metalValuesFromMetalsObject(latestMetals),
+    audRate: readAudRate(latestRaw),
+  };
+}
 
-  const points: MetalPoint[] = [];
-  for (const range of buildHistoryRanges(now)) {
-    const historyRaw = await fetchJson(buildMetalsUrl('timeseries', apiKey, {
-      start_date: range.startDate,
-      end_date: range.endDate,
-    }));
-    const rates = (historyRaw as { rates?: Record<string, { metals?: unknown }> }).rates;
-    if (!rates || typeof rates !== 'object') continue;
-    Object.entries(rates).forEach(([date, entry]) => {
-      if (entry?.metals) {
-        points.push({ date, values: metalValuesFromMetalsObject(entry.metals) });
-      }
-    });
-  }
+async function fetchTimeseries(apiKey: string, startDate: string, endDate: string): Promise<MetalCloseSet[]> {
+  const historyRaw = await fetchJson(buildMetalsUrl('timeseries', apiKey, {
+    start_date: startDate,
+    end_date: endDate,
+  }));
+  const rates = (historyRaw as { rates?: Record<string, { metals?: unknown; currencies?: Record<string, unknown> }> }).rates;
+  if (!rates || typeof rates !== 'object') return [];
 
-  if (points.length === 0) throw new Error('metals.dev history response did not include any usable points');
-  points.sort((a, b) => a.date.localeCompare(b.date));
+  return Object.entries(rates)
+    .filter(([, entry]) => !!entry?.metals)
+    .map(([date, entry]) => ({
+      date,
+      closes: metalValuesFromMetalsObject(entry.metals),
+      audRate: readOptionalNumber(entry.currencies?.AUD, `AUD currency rate for ${date}`),
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
 
-  return buildFeedData(latest, points, now);
+async function seedRecentClosesIfEmpty(runtime: RuntimeEnv, apiKey: string, now = new Date()): Promise<void> {
+  if (await hasStoredCloses(runtime)) return;
+  const endDate = formatDate(dateOnly(now));
+  const startDate = formatDate(addDays(dateOnly(now), -30));
+  const closes = await fetchTimeseries(apiKey, startDate, endDate);
+  await Promise.all(closes.map((close) => writeClose(runtime, close, now)));
+}
+
+async function ensureYtdBaseline(runtime: RuntimeEnv, apiKey: string, now = new Date()): Promise<MetalCloseSet> {
+  const currentYear = dateOnly(now).getUTCFullYear();
+  const key = baselineKey(currentYear);
+  const existing = await readCacheJson<MetalCloseSet>(runtime, key);
+  if (existing) return existing;
+
+  const baselineDate = `${currentYear - 1}-12-31`;
+  const closes = await fetchTimeseries(apiKey, baselineDate, baselineDate);
+  const baseline = closes[0];
+  if (!baseline) throw new Error(`metals.dev did not return a usable YTD baseline for ${baselineDate}`);
+  await writeCacheJson(runtime, key, 'metals-ytd-baseline', baseline, now);
+  return baseline;
+}
+
+async function fetchMetalsDevFeed(runtime: RuntimeEnv, now = new Date()): Promise<Record<MetalSymbol, MetalFeedData>> {
+  const apiKey = await getSecretApiKey({ secretName: runtime.metalsSecretName }, 'Metals.dev');
+  const latest = await fetchLatestFeed(apiKey);
+  await seedRecentClosesIfEmpty(runtime, apiKey, now);
+
+  const today = formatDate(dateOnly(now));
+  const [priorClose, close30d, ytdBaseline] = await Promise.all([
+    readMostRecentCloseBefore(runtime, today),
+    readCacheJson<MetalCloseSet>(runtime, closeKey(formatDate(addDays(dateOnly(now), -30)))),
+    ensureYtdBaseline(runtime, apiKey, now),
+  ]);
+
+  await writeClose(runtime, { date: today, closes: latest.spot, audRate: latest.audRate }, now);
+  return buildFeedData(latest.spot, latest.audRate, priorClose, close30d, ytdBaseline);
 }
 
 export function buildFeedData(
   latest: Record<MetalSymbol, number>,
-  history: MetalPoint[],
-  now = new Date(),
+  audRate: number,
+  priorClose: MetalCloseSet | null,
+  close30d: MetalCloseSet | null,
+  ytdBaseline: MetalCloseSet,
 ): Record<MetalSymbol, MetalFeedData> {
-  const ytdFloor = `${dateOnly(now).getUTCFullYear()}-01-01`;
   const result = {} as Record<MetalSymbol, MetalFeedData>;
 
   METAL_IDENTITIES.forEach(({ symbol }) => {
     if (!Number.isFinite(latest[symbol]) || latest[symbol] <= 0) {
       throw new Error(`metals.dev returned invalid latest spot for ${symbol}`);
     }
-    const values = history
-      .map((point) => ({ date: point.date, value: point.values[symbol] }))
-      .filter((point) => Number.isFinite(point.value) && point.value > 0);
-    if (values.length === 0) throw new Error(`No usable metals.dev history for ${symbol}`);
-
-    const prior = [...values].reverse().find((point) => point.value !== latest[symbol]) ?? values[values.length - 1];
-    const ytdBase = values.find((point) => point.date >= ytdFloor) ?? values[0];
-    const allValues = [...values.map((point) => point.value), latest[symbol]];
+    const decimals = symbol === 'XAG/USD' ? 4 : 3;
+    const prior = priorClose?.closes[symbol];
+    const thirtyDay = close30d?.closes[symbol];
+    const ytdBase = ytdBaseline.closes[symbol];
+    if (!Number.isFinite(ytdBase) || ytdBase <= 0) {
+      throw new Error(`No usable metals.dev YTD baseline for ${symbol}`);
+    }
 
     result[symbol] = {
-      spotPrice: round(latest[symbol], symbol === 'XAG/USD' ? 4 : 3),
-      todayChange: pctChange(latest[symbol], prior.value),
-      ytdChange: pctChange(latest[symbol], ytdBase.value),
-      week52High: round(Math.max(...allValues), symbol === 'XAG/USD' ? 4 : 3),
-      week52Low: round(Math.min(...allValues), symbol === 'XAG/USD' ? 4 : 3),
+      spotPrice: round(latest[symbol], decimals),
+      audSpotPrice: round(audSpotFromUsd(latest[symbol], audRate), decimals),
+      todayChange: isPositiveNumber(prior) ? pctChange(latest[symbol], prior) : 0,
+      ytdChange: pctChange(latest[symbol], ytdBase),
+      change30d: isPositiveNumber(thirtyDay) ? pctChange(latest[symbol], thirtyDay) : null,
     };
   });
 
@@ -280,15 +410,19 @@ function parseJsonContent<T>(content: string): T {
 function metalsPrompt(feed: Record<MetalSymbol, MetalFeedData>): string {
   const supplied = METAL_IDENTITIES.map(({ name, symbol }) => {
     const data = feed[symbol];
+    const change30d = data.change30d === null
+      ? '30d unavailable (insufficient stored closes)'
+      : `30d ${data.change30d >= 0 ? '+' : ''}${data.change30d}%`;
     return (
-      `- ${symbol} (${name}): spot USD ${data.spotPrice}/oz; today ${data.todayChange >= 0 ? '+' : ''}${data.todayChange}%; ` +
-      `YTD ${data.ytdChange >= 0 ? '+' : ''}${data.ytdChange}%; 52-week range USD ${data.week52Low}-${data.week52High}/oz`
+      `- ${symbol} (${name}): spot USD ${data.spotPrice}/oz; spot AUD ${data.audSpotPrice}/oz; ` +
+      `today ${data.todayChange >= 0 ? '+' : ''}${data.todayChange}%; ` +
+      `YTD ${data.ytdChange >= 0 ? '+' : ''}${data.ytdChange}%; ${change30d}`
     );
   }).join('\n');
 
   return (
     'Assess the four precious metals using ONLY the supplied real feed data below. ' +
-    'For each metal, assign signal BULL, NEUTRAL, or BEAR and write a concise outlook grounded in the supplied spot, daily change, YTD change, and 52-week range. ' +
+    'For each metal, assign signal BULL, NEUTRAL, or BEAR and write a concise outlook grounded in the supplied USD/AUD spot, daily change, YTD change, and 30-day change when available. ' +
     'Do NOT author, estimate, or repeat any extra prices or numeric fields in the JSON output; the engine overlays the real feed data separately.\n\n' +
     `SUPPLIED METALS.DEV FEED DATA:\n${supplied}\n\n` +
     'Return a JSON object with a "metals" array. Each item must contain symbol, signal, and outlook only. Include exactly one item for each symbol: XAU/USD, XAG/USD, XPT/USD, XPD/USD. Return ONLY valid JSON.'

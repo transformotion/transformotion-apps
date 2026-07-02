@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { MetalFeedData, MetalModelOutput, MetalSymbol } from '@transformotion/contracts/stock-analyser/metals';
 import { STOCK_ANALYSER_CACHE_TTL_SECONDS } from '@transformotion/contracts/stock-analyser/cache-freshness';
-import { buildFeedData, buildHistoryRanges, mergeMetalsResult } from './index';
+import { buildFeedData, mergeMetalsResult } from './index';
 
 vi.mock('@aws-sdk/client-dynamodb', () => ({
   DynamoDBClient: vi.fn(),
@@ -9,6 +9,9 @@ vi.mock('@aws-sdk/client-dynamodb', () => ({
 
 vi.mock('@aws-sdk/lib-dynamodb', () => ({
   DynamoDBDocumentClient: { from: vi.fn(() => ({})) },
+  GetCommand: class { constructor(public readonly input: unknown) {} },
+  PutCommand: class { constructor(public readonly input: unknown) {} },
+  QueryCommand: class { constructor(public readonly input: unknown) {} },
 }));
 
 vi.mock('@aws-sdk/client-lambda', () => ({
@@ -32,49 +35,61 @@ vi.mock('@transformotion/fn-ai-proxy-core', () => ({
 }));
 
 describe('runMetals engine helpers', () => {
-  it('chunks metals.dev history calls within the 30-day API limit', () => {
-    const ranges = buildHistoryRanges(new Date('2026-07-02T00:00:00.000Z'));
-
-    expect(ranges).toHaveLength(13);
-    expect(ranges[0]).toEqual({ startDate: '2025-07-02', endDate: '2025-07-07' });
-    expect(ranges.at(-1)).toEqual({ startDate: '2026-06-03', endDate: '2026-07-02' });
-    for (const range of ranges) {
-      const days = (Date.parse(range.endDate) - Date.parse(range.startDate)) / 86_400_000;
-      expect(days).toBeLessThanOrEqual(29);
-    }
-  });
-
-  it('derives today, YTD, and 52-week metrics from feed data', () => {
+  it('derives USD spot, AUD spot, today, YTD, and 30-day metrics from latest plus stored closes', () => {
     const latest = {
       'XAU/USD': 120,
       'XAG/USD': 60,
       'XPT/USD': 900,
       'XPD/USD': 700,
     } satisfies Record<MetalSymbol, number>;
+    const priorClose = {
+      date: '2026-07-01',
+      closes: { 'XAU/USD': 115, 'XAG/USD': 55, 'XPT/USD': 875, 'XPD/USD': 750 },
+    };
+    const close30d = {
+      date: '2026-06-02',
+      closes: { 'XAU/USD': 100, 'XAG/USD': 50, 'XPT/USD': 800, 'XPD/USD': 900 },
+    };
+    const baseline = {
+      date: '2025-12-31',
+      closes: { 'XAU/USD': 110, 'XAG/USD': 40, 'XPT/USD': 850, 'XPD/USD': 800 },
+    };
 
-    const history = [
-      { date: '2025-07-02', values: { 'XAU/USD': 100, 'XAG/USD': 40, 'XPT/USD': 800, 'XPD/USD': 900 } },
-      { date: '2026-01-02', values: { 'XAU/USD': 110, 'XAG/USD': 50, 'XPT/USD': 850, 'XPD/USD': 800 } },
-      { date: '2026-07-01', values: { 'XAU/USD': 115, 'XAG/USD': 55, 'XPT/USD': 875, 'XPD/USD': 750 } },
-    ];
-
-    const feed = buildFeedData(latest, history, new Date('2026-07-02T00:00:00.000Z'));
+    const feed = buildFeedData(latest, 0.5, priorClose, close30d, baseline);
 
     expect(feed['XAU/USD']).toEqual({
       spotPrice: 120,
+      audSpotPrice: 240,
       todayChange: 4.35,
       ytdChange: 9.09,
-      week52High: 120,
-      week52Low: 100,
+      change30d: 20,
     } satisfies MetalFeedData);
+  });
+
+  it('keeps 30-day change nullable until enough close history exists', () => {
+    const latest = {
+      'XAU/USD': 120,
+      'XAG/USD': 60,
+      'XPT/USD': 900,
+      'XPD/USD': 700,
+    } satisfies Record<MetalSymbol, number>;
+    const baseline = {
+      date: '2025-12-31',
+      closes: { 'XAU/USD': 110, 'XAG/USD': 40, 'XPT/USD': 850, 'XPD/USD': 800 },
+    };
+
+    const feed = buildFeedData(latest, 0.5, null, null, baseline);
+
+    expect(feed['XAU/USD'].todayChange).toBe(0);
+    expect(feed['XAU/USD'].change30d).toBeNull();
   });
 
   it('overlays feed-owned numbers and model-owned signal/outlook only', () => {
     const feed = {
-      'XAU/USD': { spotPrice: 120, todayChange: 4.35, ytdChange: 9.09, week52High: 120, week52Low: 100 },
-      'XAG/USD': { spotPrice: 60, todayChange: 9.09, ytdChange: 20, week52High: 60, week52Low: 40 },
-      'XPT/USD': { spotPrice: 900, todayChange: 2.86, ytdChange: 5.88, week52High: 900, week52Low: 800 },
-      'XPD/USD': { spotPrice: 700, todayChange: -6.67, ytdChange: -12.5, week52High: 900, week52Low: 700 },
+      'XAU/USD': { spotPrice: 120, audSpotPrice: 240, todayChange: 4.35, ytdChange: 9.09, change30d: 20 },
+      'XAG/USD': { spotPrice: 60, audSpotPrice: 120, todayChange: 9.09, ytdChange: 50, change30d: 20 },
+      'XPT/USD': { spotPrice: 900, audSpotPrice: 1800, todayChange: 2.86, ytdChange: 5.88, change30d: 12.5 },
+      'XPD/USD': { spotPrice: 700, audSpotPrice: 1400, todayChange: -6.67, ytdChange: -12.5, change30d: -22.22 },
     } satisfies Record<MetalSymbol, MetalFeedData>;
     const modelOutputs = [
       { symbol: 'XAU/USD', signal: 'BULL', outlook: 'Gold outlook.' },
@@ -90,10 +105,13 @@ describe('runMetals engine helpers', () => {
       name: 'Gold',
       perthMintTicker: 'PMGOLD.AX',
       spotPrice: 120,
-      week52Low: 100,
+      audSpotPrice: 240,
+      change30d: 20,
       signal: 'BULL',
       outlook: 'Gold outlook.',
     });
+    expect(result.metals[0]).not.toHaveProperty('week52Low');
+    expect(result.metals[0]).not.toHaveProperty('week52High');
     expect(STOCK_ANALYSER_CACHE_TTL_SECONDS.metals).toBe(86_400);
   });
 });
