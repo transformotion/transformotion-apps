@@ -1,9 +1,11 @@
-type StockSignal = "BUY" | "ENTER" | "HOLD" | "WATCH" | "SELL" | "EXIT" | "NEUTRAL" | string
+type StockSignal = "BUY" | "enter" | "ENTER" | "HOLD" | "WATCH" | "SELL" | "EXIT" | "NEUTRAL" | string
 
 export function stockSignalBadgeClassName(signal: StockSignal): string {
   // Includes the #592 recommendationSignal vocabulary (lowercase): pick (positive) /
   // watch (neutral) / avoid (caution), mapped to the same badge-tone families.
-  const tone = signal === "BUY" || signal === "ENTER" || signal === "pick"
+  // #593: Market sector `signal` uses lower-case "enter" (green); "BUY" kept for
+  // ETFs + any legacy/stale MARKET# cache entry still carrying the old value.
+  const tone = signal === "BUY" || signal === "ENTER" || signal === "enter" || signal === "pick"
     ? "bg-signal-green text-white"
     : signal === "SELL" || signal === "EXIT" || signal === "avoid"
       ? "bg-signal-red text-white"

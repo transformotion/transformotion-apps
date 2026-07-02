@@ -7,6 +7,12 @@ describe("stockSignalBadgeClassName", () => {
     expect(stockSignalBadgeClassName("ENTER")).toContain("bg-signal-green")
   })
 
+  it("#593: maps the Market sector `enter` value (lower-case) to green", () => {
+    // The contract value is lower-case `enter` (SectorSignalDirection = enter|HOLD|EXIT);
+    // the CSS `uppercase` on the badge still renders it as ENTER.
+    expect(stockSignalBadgeClassName("enter")).toContain("bg-signal-green")
+  })
+
   it("preserves negative, hold, and neutral badge treatments", () => {
     expect(stockSignalBadgeClassName("SELL")).toContain("bg-signal-red")
     expect(stockSignalBadgeClassName("EXIT")).toContain("bg-signal-red")
