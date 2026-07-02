@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { ChevronDown, AlertCircle, RefreshCw, TrendingUp } from "lucide-react"
+import { ChevronDown, AlertCircle, RefreshCw, TrendingUp, Coins } from "lucide-react"
 import {
   PageHeader,
   Card,
@@ -10,6 +10,7 @@ import {
   CacheStatusBar,
   TextToggle,
   Spinner,
+  EmptyState,
 } from "@transformotion/ui-primitives"
 import type { Metal, RunMetalsResponse } from "@transformotion/contracts/stock-analyser/metals"
 import { useNavigation } from "../app-shell"
@@ -53,7 +54,6 @@ export function MetalsTab() {
       <PageHeader
         title="Precious Metals"
         subtitle="Spot prices and signals"
-        titleClassName="font-display uppercase tracking-wide"
         action={
           <TextToggle
             visible={textVisible}
@@ -98,23 +98,30 @@ export function MetalsTab() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {metalsToDisplay.map((metal, i) => {
-          return (
-            <Card
-              key={metal.symbol}
-              animationDelay={i * 80}
-              interactive
-              onClick={() => navigateToAnalyser(metal.perthMintTicker, "metals")}
-            >
-              <div className="space-y-3">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h3 className="font-display text-base font-semibold tracking-wide text-foreground">{metal.name}</h3>
-                    <p className="text-xs text-muted-foreground">{metal.symbol}</p>
+      {analysis.isIdle ? (
+        <EmptyState
+          icon={Coins}
+          title="No analysis yet"
+          description={`Tap ${analysis.buttonLabel} to see precious metals spot prices and signals.`}
+        />
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {metalsToDisplay.map((metal, i) => {
+            return (
+              <Card
+                key={metal.symbol}
+                animationDelay={i * 80}
+                interactive
+                onClick={() => navigateToAnalyser(metal.perthMintTicker, "metals")}
+              >
+                <div className="space-y-3">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h3 className="font-display text-lg font-semibold tracking-wide text-foreground">{metal.name}</h3>
+                      <p className="text-xs text-muted-foreground">{metal.symbol}</p>
+                    </div>
+                    <TrendBadge trend={metal.signal} />
                   </div>
-                  <TrendBadge trend={metal.signal} />
-                </div>
 
                 <div>
                   <p className="text-2xl font-bold text-foreground">
@@ -185,17 +192,16 @@ export function MetalsTab() {
                   </button>
                 )}
 
-                <div className="flex items-center justify-between pt-2 border-t border-border">
-                  <span className="text-xs text-muted-foreground">{metal.perthMintTicker}</span>
-                  <span className="text-xs text-primary flex items-center gap-1">
-                    Analyse <ChevronDown className="size-3 rotate-[-90deg]" />
-                  </span>
+                  <div className="flex items-center gap-1 text-primary text-xs font-medium pt-1 group">
+                    <span>Analyse {metal.perthMintName} ({metal.perthMintTicker})</span>
+                    <ChevronDown className="size-3 group-hover:translate-y-0.5 transition-transform rotate-[-90deg]" />
+                  </div>
                 </div>
-              </div>
-            </Card>
-          )
-        })}
-      </div>
+              </Card>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
