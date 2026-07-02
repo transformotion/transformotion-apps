@@ -390,6 +390,48 @@ export class StockAnalyserApiStack extends cdk.Stack {
       .addResource('run')
       .addMethod('POST', new apigateway.LambdaIntegration(recommendationsFn, { proxy: true }), auth);
 
+    // #626 runEtfs — same async two-stage (propose → real price → rank) pattern as
+    // recommendations; market-keyed (ASX/US/Global), no warm write.
+    const etfsFn = new lambdaNodejs.NodejsFunction(this, 'EtfsFn', {
+      functionName: `stock-analyser-etfs-${stage}`,
+      entry: path.join(__dirname, '../functions/etfs/src/index.ts'),
+      handler: 'handler',
+      runtime: lambda.Runtime.NODEJS_20_X,
+      timeout: cdk.Duration.seconds(600),
+      memorySize: 512,
+      environment: {
+        ANTHROPIC_SECRET_NAME: anthropicSecret.secretName,
+        OPENAI_SECRET_NAME: openaiSecret.secretName,
+        AI_CONFIG_TABLE: aiRuntimeConfigTable.tableName,
+        APP_AI_CONFIG_TABLE: settingsTable.tableName,
+        AI_FALLBACK_PROVIDER: 'claude',
+        AI_FALLBACK_MODEL: 'claude-sonnet-4-6',
+        JOB_RESULTS_TABLE: jobResultsTable.tableName,
+        MARKET_DATA_FUNCTION_NAME: marketDataFn.functionName,
+        SELF_FUNCTION_NAME: `stock-analyser-etfs-${stage}`,
+        WS_API_ENDPOINT: wsApiEndpoint,
+      },
+      bundling,
+    });
+    anthropicSecret.grantRead(etfsFn);
+    openaiSecret.grantRead(etfsFn);
+    aiRuntimeConfigTable.grantReadData(etfsFn);
+    settingsTable.grantReadData(etfsFn);
+    jobResultsTable.grantReadWriteData(etfsFn);
+    marketDataFn.grantInvoke(etfsFn); // Stage-1 real prices (service-principal)
+    etfsFn.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['lambda:InvokeFunction'], // self-invoke for the async executor
+      resources: [`arn:aws:lambda:${this.region}:${this.account}:function:stock-analyser-etfs-${stage}`],
+    }));
+    etfsFn.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['execute-api:ManageConnections'], // WSS job_complete push
+      resources: [`arn:aws:execute-api:${this.region}:${this.account}:${wsApiId}/${stage}/*`],
+    }));
+    this.api.root
+      .addResource('etfs')
+      .addResource('run')
+      .addMethod('POST', new apigateway.LambdaIntegration(etfsFn, { proxy: true }), auth);
+
     const settingsFn = new lambdaNodejs.NodejsFunction(this, 'SettingsFn', {
       functionName: `stock-analyser-settings-${stage}`,
       entry: path.join(__dirname, '../functions/settings/src/index.ts'),

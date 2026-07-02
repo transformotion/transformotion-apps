@@ -15,57 +15,29 @@ import { cn } from "@/lib/utils"
 import { useScopedAnalysis } from "@/lib/hooks/use-scoped-analysis"
 import { Spinner } from "@transformotion/ui-primitives"
 import { stockSignalBadgeClassName } from "../status-badge"
-
-type Market = "ASX" | "US" | "Global"
-type Category = "All" | "Index" | "Sector" | "Bond" | "Thematic" | "Property"
-
-interface ETF {
-  ticker: string
-  name: string
-  category: Category
-  price: number
-  change: number
-  signal: "BUY" | "HOLD" | "SELL"
-  expenseRatio: number
-  analysis: string
-}
-
-const ETFS: ETF[] = [
-  { ticker: "VAS.AX", name: "Vanguard Australian Shares Index ETF", category: "Index", price: 107.67, change: 2.22, signal: "BUY", expenseRatio: 0.10, analysis: "Core Australian equity exposure tracking the S&P/ASX 300 with excellent diversification across 300+ companies. Ultra-low 0.10% expense ratio makes it highly cost-effective for long-term investing." },
-  { ticker: "VGS.AX", name: "Vanguard MSCI Index International Shares ETF", category: "Index", price: 147.20, change: 108, signal: "BUY", expenseRatio: 0.18, analysis: "Provides diversified global exposure across 22 developed markets with 1,284+ holdings despite 73.6% US weighting. Low 0.18% expense ratio offers cost-effective international diversification for Australian investors." },
-  { ticker: "NDQ.AX", name: "BetaShares NASDAQ 100 ETF", category: "Sector", price: 52.89, change: 1.40, signal: "BUY", expenseRatio: 0.48, analysis: "Pure-play technology exposure to the NASDAQ 100's largest non-financial companies with strong 12.26% annual returns. The 0.48% expense ratio is reasonable for concentrated tech growth exposure." },
-  { ticker: "VAP.AX", name: "Vanguard Australian Property Securities Index ETF", category: "Property", price: 88.02, change: 0.41, signal: "HOLD", expenseRatio: 0.23, analysis: "Solid property exposure tracking S&P/ASX 300 A-REIT Index across retail, office and industrial sectors with good liquidity. However, -3.51% annual return reflects ongoing interest rate pressures, though 0.23% MER remains competitive." },
-  { ticker: "IAF.AX", name: "iShares Core Composite Bond ETF", category: "Bond", price: 101.06, change: -0.14, signal: "BUY", expenseRatio: 0.15, analysis: "Premier defensive allocation with $3.58B assets tracking Bloomberg AusBond Composite Index covering government and corporate bonds. Market-leading 0.15% expense ratio and tight 0.03% spreads provide excellent cost efficiency." },
-  { ticker: "IVV.AX", name: "iShares S&P 500 AUD ETF", category: "Index", price: 64.85, change: 1.29, signal: "BUY", expenseRatio: 0.04, analysis: "Pure S&P 500 exposure capturing America's largest companies with strong market performance and excellent liquidity. At 0.04% expense ratio, it's among the cheapest ways to access US large-cap equity growth." },
-]
+import { ETF_MARKETS, type Etf, type EtfMarket, type RunEtfsResponse } from "@transformotion/contracts/stock-analyser/etfs"
 
 export function ETFsTab() {
   const { navigateToAnalyser, getTabTextVisibility, setTabTextOverride, showExplanatoryText } = useNavigation()
-  const [market, setMarket] = useState<Market>("ASX")
+  const [market, setMarket] = useState<EtfMarket>("ASX")
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set())
 
-  // Unified cache-first analysis, scoped by the selected market (ASX/US/Global).
-  const analysis = useScopedAnalysis<ETF[]>({
+  // Thin caller of the #626 runEtfs engine (mirrors Recommendations): a cache-first
+  // run (#590) starts the server-owned engine, which does propose → REAL OHLCV price →
+  // rank; the tab renders the finished shortlist. It does not generate the signal or
+  // author the price.
+  const analysis = useScopedAnalysis<Etf[]>({
     surface: "etfs",
     scopeKey: market,
     buildRequest: (webSearch) => ({
+      prompt: "",
       webSearch,
-      prompt: `Provide ETF recommendations for the ${market} market.
-
-Return a JSON object with "etfs" array, each containing:
-- ticker: ticker symbol (e.g., "VAS.AX")
-- name: full ETF name
-- category: one of "Index", "Sector", "Bond", "Thematic", "Property"
-- price: current price (number)
-- change: daily change percentage (number)
-- signal: one of "BUY", "HOLD", "SELL", "NEUTRAL"
-- expenseRatio: expense ratio as decimal (e.g., 0.10 for 0.10%)
-- analysis: 2-3 sentence investment thesis including expense ratio, asset size/holdings, and why to consider
-
-Provide 6 ETFs. Return ONLY valid JSON.`,
-      systemPrompt: "You are an ETF analyst providing recommendations. Provide realistic ETF picks with compelling investment theses and appropriate signals. Respond with raw JSON only. Do not use markdown code fences.",
+      jobStart: {
+        path: "etfs/run",
+        body: { market, searchMode: webSearch ? "live" : "fast" },
+      },
     }),
-    parse: (raw) => (raw as { etfs?: ETF[] })?.etfs ?? ETFS,
+    parse: (raw) => (raw as RunEtfsResponse | null)?.etfs ?? null,
   })
 
   // Text visibility
@@ -82,8 +54,6 @@ Provide 6 ETFs. Return ONLY valid JSON.`,
   }
 
   const etfsToDisplay = analysis.result ?? []
-
-  // Always show the grid — fall back to static data if API hasn't run yet
 
   return (
     <div className="p-4 space-y-4">
@@ -103,7 +73,7 @@ Provide 6 ETFs. Return ONLY valid JSON.`,
 
       {/* Market selector (secondary filter) */}
       <SegmentedControl
-        options={["ASX", "US", "Global"] as Market[]}
+        options={[...ETF_MARKETS]}
         value={market}
         onChange={setMarket}
       />
@@ -162,8 +132,8 @@ Provide 6 ETFs. Return ONLY valid JSON.`,
                     <p className="mt-0.5 font-display text-xs font-medium leading-tight tracking-wide text-muted-foreground">{etf.name}</p>
                     <p className="text-[11px] text-muted-foreground mt-1">{etf.category}</p>
                   </div>
-                  <span className={cn(stockSignalBadgeClassName(etf.signal), "shrink-0 ml-2")}>
-                    {etf.signal}
+                  <span className={cn(stockSignalBadgeClassName(etf.recommendationSignal), "shrink-0 ml-2")}>
+                    {etf.recommendationSignal}
                   </span>
                 </div>
 
