@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { useNavigation } from "../app-shell"
+import { ChevronDown, AlertCircle, RefreshCw, TrendingUp } from "lucide-react"
 import {
   PageHeader,
   Card,
@@ -9,128 +9,36 @@ import {
   PrimaryButton,
   CacheStatusBar,
   TextToggle,
-  type TrendSignal,
+  Spinner,
 } from "@transformotion/ui-primitives"
-import { ChevronDown, AlertCircle, RefreshCw, TrendingUp } from "lucide-react"
+import type { Metal, RunMetalsResponse } from "@transformotion/contracts/stock-analyser/metals"
+import { useNavigation } from "../app-shell"
 import { cn } from "@/lib/utils"
 import { useScopedAnalysis } from "@/lib/hooks/use-scoped-analysis"
-import { Spinner } from "@transformotion/ui-primitives"
-
-interface Metal {
-  name: string
-  symbol: string
-  ticker: string
-  price: number
-  ytdChange: number
-  todayChange: number
-  signal: TrendSignal
-  weekLow: number
-  weekHigh: number
-  perthMintTicker: string
-  perthMintName: string
-  analysis: string
-}
-
-const METALS: Metal[] = [
-  { 
-    name: "Gold", 
-    symbol: "XAU/USD", 
-    ticker: "PMGOLD.AX",
-    price: 4754, 
-    ytdChange: 14.2,
-    todayChange: -1.19,
-    signal: "NEUTRAL", 
-    weekLow: 3873, 
-    weekHigh: 5200, 
-    perthMintTicker: "PMGOLD.AX",
-    perthMintName: "Perth Mint Gold",
-    analysis: "Elevated geopolitical tensions from US-Iran conflict and Strait of Hormuz blockade continue driving safe-haven demand, though inflation concerns limit central bank rate cuts. Trading range of $4,400–$5,200 expected with bulls targeting $5,000+ amid continued central bank purchases."
-  },
-  { 
-    name: "Silver", 
-    symbol: "XAG/USD", 
-    ticker: "ETPMAG.AX",
-    price: 74.78, 
-    ytdChange: 67.5,
-    todayChange: -3.81,
-    signal: "BULL", 
-    weekLow: 41.60, 
-    weekHigh: 89.20, 
-    perthMintTicker: "ETPMAG.AX",
-    perthMintName: "Perth Mint Silver",
-    analysis: "Strongest performer among precious metals with energy security driving solar demand acceleration. Industrial headwinds may create volatility but structural energy transition and relative undervaluation versus gold maintain long-term bullish outlook."
-  },
-  { 
-    name: "Platinum", 
-    symbol: "XPT/USD", 
-    ticker: "ETPMPT.AX",
-    price: 2048, 
-    ytdChange: 81.4,
-    todayChange: -2.29,
-    signal: "BULL", 
-    weekLow: 1120, 
-    weekHigh: 2180, 
-    perthMintTicker: "ETPMPT.AX",
-    perthMintName: "Perth Mint Platinum",
-    analysis: "Trading at historic discount to gold despite supply constraints and deficit conditions. Expected to benefit from elevated lease rates and EV adoption catalysts via hydrogen fuel cells as low-emission energy source with jewelry demand upsides in China."
-  },
-  { 
-    name: "Palladium", 
-    symbol: "XPD/USD", 
-    ticker: "ETPMPD.AX",
-    price: 1250, 
-    ytdChange: -15.3,
-    todayChange: -2.1,
-    signal: "NEUTRAL", 
-    weekLow: 950, 
-    weekHigh: 1650, 
-    perthMintTicker: "ETPMPD.AX",
-    perthMintName: "Perth Mint Palladium",
-    analysis: "Facing structural headwinds from EV adoption reducing catalytic converter demand and Russian supply normalization. Limited by substitution toward platinum and weakening automotive cycle outlook, though some recovery potential if industrial demand stabilizes."
-  },
-]
 
 export function MetalsTab() {
   const { navigateToAnalyser, getTabTextVisibility, setTabTextOverride, showExplanatoryText } = useNavigation()
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set())
 
-  // Unified cache-first analysis (single constant scope — precious metals).
   const analysis = useScopedAnalysis<Metal[]>({
     surface: "metals",
     scopeKey: "default",
-    buildRequest: (webSearch) => {
-      const today = new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })
-      return {
-        webSearch,
-        prompt: `Provide precious metals spot price analysis with latest data for ${today}.
-
-Return a JSON object with "metals" array for Gold, Silver, Platinum, and Palladium. Each should contain:
-- name: metal name
-- symbol: trading symbol with currency (e.g., "XAU/USD")
-- ticker: Perth Mint product ticker (e.g., "PMGOLD.AX")
-- price: current spot price in USD (number, e.g., 4754 for $4,754/oz)
-- ytdChange: year-to-date change percentage (number, e.g., 14.2)
-- todayChange: today's change percentage (number, e.g., -1.19)
-- signal: one of "BULL", "NEUTRAL", "BEAR"
-- weekLow: 52-week low price (number)
-- weekHigh: 52-week high price (number)
-- perthMintTicker: Perth Mint ETF ticker
-- perthMintName: Perth Mint product name
-- analysis: 2-3 sentence analyst analysis with market catalysts
-
-Return ONLY valid JSON.`,
-        systemPrompt: "You are a precious metals analyst with access to real-time spot prices. Provide current prices and informed market analysis. Respond with raw JSON only. Do not use markdown code fences.",
-      }
-    },
-    parse: (raw) => (raw as { metals?: Metal[] })?.metals ?? METALS,
+    buildRequest: (webSearch) => ({
+      prompt: "",
+      webSearch,
+      jobStart: {
+        path: "metals/run",
+        body: { searchMode: webSearch ? "live" : "fast" },
+      },
+    }),
+    parse: (raw) => (raw as RunMetalsResponse | null)?.metals ?? null,
   })
 
-  // Text visibility
   const textVisible = getTabTextVisibility("metals")
   const isTextOverride = showExplanatoryText !== textVisible
   const toggleTextVisibility = () => setTabTextOverride("metals", !textVisible)
   const toggleCardExpand = (symbol: string) => {
-    setExpandedCards(prev => {
+    setExpandedCards((prev) => {
       const next = new Set(prev)
       if (next.has(symbol)) next.delete(symbol)
       else next.add(symbol)
@@ -142,7 +50,6 @@ Return ONLY valid JSON.`,
 
   return (
     <div className="p-4 space-y-4">
-      {/* Header */}
       <PageHeader
         title="Precious Metals"
         subtitle="Spot prices and signals"
@@ -156,7 +63,6 @@ Return ONLY valid JSON.`,
         }
       />
 
-      {/* Unified cache control: freshness + Live/Fast toggle + force-live Refresh */}
       <CacheStatusBar
         freshness={analysis.status.freshness}
         lastUpdated={analysis.status.lastUpdated}
@@ -165,7 +71,6 @@ Return ONLY valid JSON.`,
         onRefresh={analysis.refresh}
       />
 
-      {/* Primary CTA: Run / Re-run (cache-first) */}
       <PrimaryButton
         onClick={analysis.run}
         disabled={analysis.isRunning}
@@ -182,10 +87,10 @@ Return ONLY valid JSON.`,
         )}
       </PrimaryButton>
 
-      {/* Date indicator */}
-      <p className="text-xs text-muted-foreground">Spot prices · {new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+      <p className="text-xs text-muted-foreground">
+        Spot prices - {new Date().toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" })}
+      </p>
 
-      {/* Error display */}
       {analysis.error && (
         <div className="p-3 rounded-lg bg-signal-red/10 border border-signal-red/20 flex items-start gap-2">
           <AlertCircle className="size-4 text-signal-red mt-0.5 shrink-0" />
@@ -193,113 +98,99 @@ Return ONLY valid JSON.`,
         </div>
       )}
 
-      {/* Metal Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {metalsToDisplay.map((metal, i) => {
-            const pricePosition = ((metal.price - metal.weekLow) / (metal.weekHigh - metal.weekLow)) * 100
-            
-            return (
-              <Card
-                key={metal.symbol}
-                animationDelay={i * 80}
-                interactive
-                onClick={() => navigateToAnalyser(metal.perthMintTicker, "metals")}
-              >
-                <div className="space-y-3">
-                  {/* Header: Name + Signal */}
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h3 className="font-display text-base font-semibold tracking-wide text-foreground">{metal.name}</h3>
-                      <p className="text-xs text-muted-foreground">{metal.symbol}</p>
-                    </div>
-                    <TrendBadge trend={metal.signal} />
-                  </div>
-
-                  {/* Price section */}
+        {metalsToDisplay.map((metal, i) => {
+          return (
+            <Card
+              key={metal.symbol}
+              animationDelay={i * 80}
+              interactive
+              onClick={() => navigateToAnalyser(metal.perthMintTicker, "metals")}
+            >
+              <div className="space-y-3">
+                <div className="flex items-start justify-between">
                   <div>
-                    <p className="text-2xl font-bold text-foreground">
-                      US${metal.price.toLocaleString('en-US')}
-                    </p>
-                    <p className={cn("text-sm font-semibold", metal.ytdChange >= 0 ? "text-signal-red" : "text-signal-green")}>
-                      {metal.ytdChange >= 0 ? "+" : ""}{metal.ytdChange.toFixed(1)}% YTD
-                    </p>
+                    <h3 className="font-display text-base font-semibold tracking-wide text-foreground">{metal.name}</h3>
+                    <p className="text-xs text-muted-foreground">{metal.symbol}</p>
                   </div>
+                  <TrendBadge trend={metal.signal} />
+                </div>
 
-                  {/* Price range bar with visual indicator */}
+                <div>
+                  <p className="text-2xl font-bold text-foreground">
+                    US${metal.spotPrice.toLocaleString("en-US")}
+                  </p>
+                  <p className={cn("text-sm font-semibold", metal.ytdChange >= 0 ? "text-signal-red" : "text-signal-green")}>
+                    {metal.ytdChange >= 0 ? "+" : ""}{metal.ytdChange.toFixed(1)}% YTD
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-4 gap-2 text-[11px] text-muted-foreground">
                   <div>
-                    <div className="h-1 bg-signal-green/60 rounded-full relative mb-2">
-                      <div 
-                        className="absolute top-0 bottom-0 w-0.5 rounded-full bg-background"
-                        style={{ left: `${Math.min(Math.max(pricePosition, 0), 100)}%` }}
-                      />
-                    </div>
-                    
-                    {/* 52-week stats */}
-                    <div className="grid grid-cols-4 gap-2 text-[11px] text-muted-foreground">
-                      <div>
-                        <p className="text-[10px] uppercase tracking-wider mb-0.5">52w High</p>
-                        <p className="font-semibold text-foreground">US${metal.weekHigh.toLocaleString()}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] uppercase tracking-wider mb-0.5">52w Low</p>
-                        <p className="font-semibold text-foreground">US${metal.weekLow.toLocaleString()}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] uppercase tracking-wider mb-0.5">Today</p>
-                        <p className={cn("font-semibold", metal.todayChange >= 0 ? "text-signal-red" : "text-signal-green")}>
-                          {metal.todayChange >= 0 ? "+" : ""}{metal.todayChange.toFixed(2)}%
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] uppercase tracking-wider mb-0.5">Signal</p>
-                        <p className={cn(
-                          "font-semibold capitalize",
-                          metal.signal === "BULL" ? "text-signal-green" :
-                          metal.signal === "BEAR" ? "text-signal-red" :
-                          "text-signal-amber"
-                        )}>
-                          {metal.signal.toLowerCase()}
-                        </p>
-                      </div>
-                    </div>
+                    <p className="text-[10px] uppercase tracking-wider mb-0.5">AUD Spot</p>
+                    <p className="font-semibold text-foreground">A${metal.audSpotPrice.toLocaleString("en-AU")}</p>
                   </div>
-
-                  {/* Analysis text - conditionally visible or expandable */}
-                  {(textVisible || expandedCards.has(metal.symbol)) && (
-                    <p className="text-xs text-muted-foreground leading-relaxed border-t border-border pt-3">
-                      {metal.analysis}
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider mb-0.5">30d Change</p>
+                    {metal.change30d === null ? (
+                      <p className="font-semibold text-muted-foreground">&mdash;</p>
+                    ) : (
+                      <p className={cn("font-semibold", metal.change30d >= 0 ? "text-signal-red" : "text-signal-green")}>
+                        {metal.change30d >= 0 ? "+" : ""}{metal.change30d.toFixed(1)}%
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider mb-0.5">Today</p>
+                    <p className={cn("font-semibold", metal.todayChange >= 0 ? "text-signal-red" : "text-signal-green")}>
+                      {metal.todayChange >= 0 ? "+" : ""}{metal.todayChange.toFixed(2)}%
                     </p>
-                  )}
-
-                  {/* Expand button when text is hidden */}
-                  {!textVisible && !expandedCards.has(metal.symbol) && (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); toggleCardExpand(metal.symbol) }}
-                      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors py-1 border-t border-border pt-3"
-                    >
-                      <ChevronDown className="size-3" />
-                      <span>Show analysis</span>
-                    </button>
-                  )}
-
-                  {/* Collapse button when expanded manually */}
-                  {!textVisible && expandedCards.has(metal.symbol) && (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); toggleCardExpand(metal.symbol) }}
-                      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors py-1"
-                    >
-                      <ChevronDown className="size-3 rotate-180" />
-                      <span>Hide analysis</span>
-                    </button>
-                  )}
-
-                  {/* Analyse footer */}
-                  <div className="flex items-center justify-between pt-2 border-t border-border">
-                    <span className="text-xs text-muted-foreground">{metal.perthMintTicker}</span>
-                    <span className="text-xs text-primary flex items-center gap-1">
-                      Analyse <ChevronDown className="size-3 rotate-[-90deg]" />
-                    </span>
                   </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider mb-0.5">Signal</p>
+                    <p className={cn(
+                      "font-semibold capitalize",
+                      metal.signal === "BULL" ? "text-signal-green" :
+                        metal.signal === "BEAR" ? "text-signal-red" :
+                          "text-signal-amber",
+                    )}>
+                      {metal.signal.toLowerCase()}
+                    </p>
+                  </div>
+                </div>
+
+                {(textVisible || expandedCards.has(metal.symbol)) && (
+                  <p className="text-xs text-muted-foreground leading-relaxed border-t border-border pt-3">
+                    {metal.outlook}
+                  </p>
+                )}
+
+                {!textVisible && !expandedCards.has(metal.symbol) && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); toggleCardExpand(metal.symbol) }}
+                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors py-1 border-t border-border pt-3"
+                  >
+                    <ChevronDown className="size-3" />
+                    <span>Show analysis</span>
+                  </button>
+                )}
+
+                {!textVisible && expandedCards.has(metal.symbol) && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); toggleCardExpand(metal.symbol) }}
+                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors py-1"
+                  >
+                    <ChevronDown className="size-3 rotate-180" />
+                    <span>Hide analysis</span>
+                  </button>
+                )}
+
+                <div className="flex items-center justify-between pt-2 border-t border-border">
+                  <span className="text-xs text-muted-foreground">{metal.perthMintTicker}</span>
+                  <span className="text-xs text-primary flex items-center gap-1">
+                    Analyse <ChevronDown className="size-3 rotate-[-90deg]" />
+                  </span>
+                </div>
               </div>
             </Card>
           )

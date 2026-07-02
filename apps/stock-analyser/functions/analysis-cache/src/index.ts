@@ -87,6 +87,7 @@ const SHARED_PREFIXES = ['MARKET', 'ETF', 'RECS', 'METALS', 'ANALYSIS', 'CYCLE']
 const ALLOWED_SERVICE_PRINCIPALS = [
   'stock-analyser-notification-engine',
   'stock-analyser-recommendations',
+  'stock-analyser-metals',
   'stock-analyser-etfs',
 ] as const;
 type AllowedServicePrincipal = (typeof ALLOWED_SERVICE_PRINCIPALS)[number];
