@@ -70,6 +70,8 @@ interface RuntimeEnv {
   marketDataFunctionName: string;
   selfFunctionName: string;
   wsApiEndpoint: string;
+  // #594: analysis-cache Lambda for the warm SHARED ETF# write (service-principal).
+  analysisCacheFunctionName: string;
 }
 
 function env(): RuntimeEnv {
@@ -84,8 +86,11 @@ function env(): RuntimeEnv {
     marketDataFunctionName: requireEnv('MARKET_DATA_FUNCTION_NAME'),
     selfFunctionName: requireEnv('SELF_FUNCTION_NAME'),
     wsApiEndpoint: requireEnv('WS_API_ENDPOINT'),
+    analysisCacheFunctionName: requireEnv('ANALYSIS_CACHE_FUNCTION_NAME'),
   };
 }
+
+const ETFS_TTL_SECONDS = 48 * 60 * 60; // matches the ETF# cache convention (48h)
 
 // ── Self-invoked async job event ────────────────────────────────────────────────
 interface EtfsJobEvent {
@@ -97,6 +102,18 @@ interface EtfsJobEvent {
 }
 function isEtfsJobEvent(event: unknown): event is EtfsJobEvent {
   return !!event && (event as EtfsJobEvent).__etfsJob === true;
+}
+
+// ── #594 warm event (from the notification-engine, service-principal) ─────────────
+// Runs the SAME engine core a live tab run does, then SHARED-writes ETF#{market}
+// instead of a per-job result + WSS push. No accountId/connectionId — it's a cache warm.
+interface WarmEtfsEvent {
+  __warmEtfs: true;
+  request: RunEtfsRequest;
+  cacheKey: string; // e.g. ETF#ASX
+}
+function isWarmEtfsEvent(event: unknown): event is WarmEtfsEvent {
+  return !!event && (event as WarmEtfsEvent).__warmEtfs === true;
 }
 
 // ── AI provider ────────────────────────────────────────────────────────────────
@@ -197,70 +214,82 @@ function parseJsonContent<T>(content: string): T {
   return JSON.parse(stripped) as T;
 }
 
-// ── Engine ───────────────────────────────────────────────────────────────────────
+// ── Engine core (reused by the async job AND the #594 warm path) ─────────────────
+interface ComputeResult {
+  response: RunEtfsResponse;
+  provider: string;
+  model: string;
+  usage: { inputTokens: number; outputTokens: number };
+}
+
+// Propose → real-price → rank. Throws on a hard failure (incl. no priced candidate).
+async function computeEtfs(request: RunEtfsRequest, runtime: RuntimeEnv): Promise<ComputeResult> {
+  const { provider, config } = await makeProvider(runtime);
+  const webSearch = request.searchMode === 'live';
+
+  // Pass 1 — propose candidates. FREE-TEXT so a Live proposal is a single web-search
+  // call (the reliable free-text path), not the fragile structured-Live two-pass.
+  const proposal = await provider.generate({
+    prompt: proposePrompt(request),
+    system: SYSTEM_PROMPT,
+    model: config.model,
+    webSearch,
+  });
+  const candidates = (parseJsonContent<{ candidates?: EtfCandidate[] }>(proposal.content).candidates ?? [])
+    .filter((c) => c?.ticker);
+
+  // Stage 1 — real prices; drop candidates without a resolvable price (the contract's
+  // Etf.price is required, never model-authored).
+  const priced = (
+    await Promise.all(
+      candidates.map(async (c): Promise<PricedCandidate | null> => {
+        const q = await fetchPrice(runtime, c.ticker.trim());
+        return q ? { ...c, price: q.price, change: q.change } : null;
+      }),
+    )
+  ).filter((c): c is PricedCandidate => c !== null);
+
+  if (priced.length === 0) {
+    throw new Error('No candidate ETF had resolvable market-data prices.');
+  }
+
+  // Pass 2 — rank WITH the supplied real prices. STRUCTURED (strict etfs schema) +
+  // single-pass (Fast, no web search): the grounded inputs are already in hand (fresh
+  // Live candidates + REAL prices), so ranking needs no own search.
+  const ranked = await provider.generate({
+    prompt: rankPrompt(request, priced),
+    system: SYSTEM_PROMPT,
+    model: config.model,
+    webSearch: false,
+    responseSchema: etfsResultJsonSchema,
+  });
+  const modelOutputs = parseJsonContent<{ etfs?: EtfModelOutput[] }>(ranked.content).etfs ?? [];
+
+  // Overlay the real price/change onto each ranked ETF; keep only those we priced.
+  const priceByTicker = new Map(priced.map((c) => [c.ticker.toUpperCase(), c]));
+  const etfs: Etf[] = modelOutputs
+    .map((m): Etf | null => {
+      const p = priceByTicker.get(m.ticker?.toUpperCase?.() ?? '');
+      return p ? { ...m, price: p.price, change: p.change } : null;
+    })
+    .filter((e): e is Etf => e !== null);
+
+  return {
+    response: { etfs, generatedAt: new Date().toISOString() },
+    provider: config.provider,
+    model: config.model,
+    usage: { inputTokens: proposal.inputTokens + ranked.inputTokens, outputTokens: proposal.outputTokens + ranked.outputTokens },
+  };
+}
+
+// ── Async job: compute → write job result + WSS push (the live tab path) ─────────
 async function executeEtfsJob(job: EtfsJobEvent, runtime: RuntimeEnv): Promise<void> {
   const writeStatus = (payload: Record<string, unknown>) =>
     writeJobResult({ tableName: runtime.jobResultsTable, accountId: job.accountId, jobId: job.jobId, payload, client: ddb });
 
   try {
-    const { provider, config } = await makeProvider(runtime);
-    const webSearch = job.request.searchMode === 'live';
-
-    // Pass 1 — propose candidates. FREE-TEXT so a Live proposal is a single web-search
-    // call (the reliable free-text path), not the fragile structured-Live two-pass.
-    const proposal = await provider.generate({
-      prompt: proposePrompt(job.request),
-      system: SYSTEM_PROMPT,
-      model: config.model,
-      webSearch,
-    });
-    const candidates = (parseJsonContent<{ candidates?: EtfCandidate[] }>(proposal.content).candidates ?? [])
-      .filter((c) => c?.ticker);
-
-    // Stage 1 — real prices; drop candidates without a resolvable price (the contract's
-    // Etf.price is required, never model-authored).
-    const priced = (
-      await Promise.all(
-        candidates.map(async (c): Promise<PricedCandidate | null> => {
-          const q = await fetchPrice(runtime, c.ticker.trim());
-          return q ? { ...c, price: q.price, change: q.change } : null;
-        }),
-      )
-    ).filter((c): c is PricedCandidate => c !== null);
-
-    if (priced.length === 0) {
-      await writeStatus({ status: 'error', message: 'No candidate ETF had resolvable market-data prices.' });
-    } else {
-      // Pass 2 — rank WITH the supplied real prices. STRUCTURED (strict etfs schema) +
-      // single-pass (Fast, no web search): the grounded inputs are already in hand (fresh
-      // Live candidates + REAL prices), so ranking needs no own search.
-      const ranked = await provider.generate({
-        prompt: rankPrompt(job.request, priced),
-        system: SYSTEM_PROMPT,
-        model: config.model,
-        webSearch: false,
-        responseSchema: etfsResultJsonSchema,
-      });
-      const modelOutputs = parseJsonContent<{ etfs?: EtfModelOutput[] }>(ranked.content).etfs ?? [];
-
-      // Overlay the real price/change onto each ranked ETF; keep only those we priced.
-      const priceByTicker = new Map(priced.map((c) => [c.ticker.toUpperCase(), c]));
-      const etfs: Etf[] = modelOutputs
-        .map((m): Etf | null => {
-          const p = priceByTicker.get(m.ticker?.toUpperCase?.() ?? '');
-          return p ? { ...m, price: p.price, change: p.change } : null;
-        })
-        .filter((e): e is Etf => e !== null);
-
-      const response: RunEtfsResponse = { etfs, generatedAt: new Date().toISOString() };
-      await writeStatus({
-        status: 'complete',
-        content: JSON.stringify(response),
-        provider: config.provider,
-        model: config.model,
-        usage: { inputTokens: proposal.inputTokens + ranked.inputTokens, outputTokens: proposal.outputTokens + ranked.outputTokens },
-      });
-    }
+    const { response, provider, model, usage } = await computeEtfs(job.request, runtime);
+    await writeStatus({ status: 'complete', content: JSON.stringify(response), provider, model, usage });
   } catch (err) {
     await writeStatus({ status: 'error', message: err instanceof Error ? err.message : 'ETFs engine failed' }).catch(() => undefined);
   }
@@ -272,6 +301,39 @@ async function executeEtfsJob(job: EtfsJobEvent, runtime: RuntimeEnv): Promise<v
     } catch (pushErr) {
       console.warn('[etfs] WSS push failed:', (pushErr as Error).message);
     }
+  }
+}
+
+// ── #594 warm: compute (SAME engine as live) → SHARED-write ETF#{cacheKey} ────────
+async function writeSharedEtfsCache(runtime: RuntimeEnv, cacheKey: string, data: unknown): Promise<void> {
+  const res = await lambda.send(new InvokeCommand({
+    FunctionName: runtime.analysisCacheFunctionName,
+    InvocationType: 'RequestResponse',
+    Payload: Buffer.from(JSON.stringify({
+      servicePrincipal: 'stock-analyser-etfs',
+      operation: 'put-shared-cache',
+      cacheKey,
+      data,
+      ttlSeconds: ETFS_TTL_SECONDS,
+      mode: 'live',
+      type: 'etfs',
+    })),
+  }));
+  if (res.FunctionError) {
+    const payload = res.Payload ? Buffer.from(res.Payload).toString('utf8') : '';
+    throw new Error(`etfs cache service-principal write failed: ${res.FunctionError} ${payload}`);
+  }
+}
+
+async function executeWarmEtfs(event: WarmEtfsEvent, runtime: RuntimeEnv): Promise<void> {
+  try {
+    const { response } = await computeEtfs(event.request, runtime);
+    await writeSharedEtfsCache(runtime, event.cacheKey, response);
+    console.log(JSON.stringify({ message: 'etfs-warm-ok', cacheKey: event.cacheKey, count: response.etfs.length }));
+  } catch (err) {
+    // Per-scope isolation: a warm failure is logged, never thrown (one market must not
+    // affect others; the live tab still computes on demand).
+    console.log(JSON.stringify({ message: 'etfs-warm-error', cacheKey: event.cacheKey, err: String(err) }));
   }
 }
 
@@ -304,6 +366,10 @@ const apiHandler = withAuth(async ({ auth, account, event }) => {
 });
 
 export const handler = async (event: unknown): Promise<unknown> => {
+  if (isWarmEtfsEvent(event)) {
+    await executeWarmEtfs(event, env());
+    return { statusCode: 200 };
+  }
   if (isEtfsJobEvent(event)) {
     await executeEtfsJob(event, env());
     return { statusCode: 200 };

@@ -80,6 +80,13 @@ export interface NotificationEngineDeps {
    * engine-OFF run does NO market warming. Optional so unit tests can omit it.
    */
   warmMarketCache?: () => Promise<void>;
+  /**
+   * #594: warm the ETF caches (`ETF#{market}` for each market) by async-invoking
+   * the runEtfs engine. Runs ONCE per job execution, AFTER the kill-switch gate and
+   * after the market warm, so an engine-OFF run does NO ETF warming. Optional so
+   * unit tests can omit it.
+   */
+  warmEtfsCache?: () => Promise<void>;
 }
 
 export interface NotificationEngineResult {
@@ -529,6 +536,15 @@ export async function runNotificationEngine(deps: NotificationEngineDeps): Promi
       await deps.warmMarketCache?.();
     } catch (err) {
       deps.log?.('notification-market-warm-error', { err: String(err) });
+    }
+
+    // #594: warm the ETF#{market} caches (all 3 markets) AFTER the market warm and
+    // under the same kill-switch gate. Independent best-effort concern: an ETF
+    // warming failure must never abort the notification run (or the market warm).
+    try {
+      await deps.warmEtfsCache?.();
+    } catch (err) {
+      deps.log?.('notification-etfs-warm-error', { err: String(err) });
     }
 
     const today = deps.today();
