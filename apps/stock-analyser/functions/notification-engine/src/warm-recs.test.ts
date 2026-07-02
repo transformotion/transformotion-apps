@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { selectEnterSectorsToWarm } from './index';
+import { selectEnterSectorsToWarm, recsWarmCacheKey } from './index';
 import { resolveSectorUniverse } from '../../../lib/analysis/sector-universe';
 
 const sec = (sector: string, signal: string, cyclePosition: number, bestExchange = 'ASX') =>
@@ -29,12 +29,16 @@ describe('#595 selectEnterSectorsToWarm — which Recs scopes to warm', () => {
 });
 
 describe('#595 warmed RECS# cacheKey is identical-to-live', () => {
-  it('RECS#{universe|top-picks|sector}, universe resolved from bestExchange + region', () => {
-    // US region: NYSE → Dow (alias); matches what the live tab would read.
-    expect(`RECS#${resolveSectorUniverse('NYSE', 'us')}|top-picks|Financials`).toBe('RECS#Dow|top-picks|Financials');
-    // AU region: ASX → ASX.
-    expect(`RECS#${resolveSectorUniverse('ASX', 'australia')}|top-picks|Materials`).toBe('RECS#ASX|top-picks|Materials');
-    // UK region: unknown exchange falls back to the region default (FTSE).
-    expect(`RECS#${resolveSectorUniverse('???', 'uk')}|top-picks|Energy`).toBe('RECS#FTSE|top-picks|Energy');
+  // The live Recs tab scopeKey uses the DISPLAY mode label "Top Picks" (recommendations-tab
+  // useState<Mode>("Top Picks")), NOT the canonical 'top-picks'. The warm key MUST match it.
+  it('uses the DISPLAY mode label "Top Picks" (not canonical) so it matches a live read', () => {
+    expect(recsWarmCacheKey('ASX', 'Energy')).toBe('RECS#ASX|Top Picks|Energy');
+  });
+
+  it('universe resolved from bestExchange + region (identical-to-live)', () => {
+    expect(recsWarmCacheKey(resolveSectorUniverse('NYSE', 'us'), 'Financials')).toBe('RECS#Dow|Top Picks|Financials');
+    expect(recsWarmCacheKey(resolveSectorUniverse('ASX', 'australia'), 'Materials')).toBe('RECS#ASX|Top Picks|Materials');
+    // UK: unknown exchange → region default (FTSE).
+    expect(recsWarmCacheKey(resolveSectorUniverse('???', 'uk'), 'Real Estate & REITs')).toBe('RECS#FTSE|Top Picks|Real Estate & REITs');
   });
 });
