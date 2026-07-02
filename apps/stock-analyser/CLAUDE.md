@@ -30,6 +30,7 @@ React + TypeScript + Tailwind CSS.
 | Auth model, groups, tokens, middleware | [/docs/architecture/auth.md](/docs/architecture/auth.md) |
 | DynamoDB table schemas | [/docs/architecture/data.md](/docs/architecture/data.md) |
 | CDK stacks, Lambda names | [/docs/architecture/cdk.md](/docs/architecture/cdk.md) |
+| Cache, daily warm job & notifications (operating reference) | [/docs/caching-and-warming.md](/docs/caching-and-warming.md) |
 | URL routing, CloudFront, deploy triggers | [/docs/architecture/urls-and-deploy.md](/docs/architecture/urls-and-deploy.md) |
 | Stock Analyser API contracts and types | Authored in `transformotion-apps-b8/contracts/stock-analyser/`; consumed here from generated read-only [/v0-reference/contracts/stock-analyser/](/v0-reference/contracts/stock-analyser/) |
 | Migration invariants from HTML version | [apps/stock-analyser/MIGRATION_INVARIANTS.md](./MIGRATION_INVARIANTS.md) |
