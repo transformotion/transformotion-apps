@@ -39,12 +39,16 @@ describe("Stock Analyser cache freshness contracts", () => {
     expect(deriveCacheFreshness({ cachedAt, expiresAt, now: expiresAt + 1 }).freshness).toBe("outdated")
   })
 
-  it("classifies 2h and 48h TTL entries", () => {
+  it("classifies 24h and 48h TTL entries", () => {
+    // metals TTL is 24h (b8 #80 raised it from 2h); etfs TTL is 48h. Classify each
+    // against the default 25/75 policy on its own TTL.
     const cachedAt = 2_000
     const metalsExpiry = cachedAt + STOCK_ANALYSER_CACHE_TTL_SECONDS.metals
     const etfsExpiry = cachedAt + STOCK_ANALYSER_CACHE_TTL_SECONDS.etfs
 
-    expect(deriveCacheFreshness({ cachedAt, expiresAt: metalsExpiry, now: cachedAt + 45 * 60 }).freshness).toBe("recent")
+    // metals @24h: 10h elapsed ≈ 42% → recent (25–75% band).
+    expect(deriveCacheFreshness({ cachedAt, expiresAt: metalsExpiry, now: cachedAt + 10 * 60 * 60 }).freshness).toBe("recent")
+    // etfs @48h: 40h elapsed ≈ 83% → stale (75–100% band).
     expect(deriveCacheFreshness({ cachedAt, expiresAt: etfsExpiry, now: cachedAt + 40 * 60 * 60 }).freshness).toBe("stale")
   })
 
@@ -120,7 +124,7 @@ describe("Stock Analyser cache freshness source wiring", () => {
       },
       {
         path: "components/stock-analyser/tabs/etfs-tab.tsx",
-        hook: "useScopedAnalysis<ETF[]>",
+        hook: "useScopedAnalysis<Etf[]>",
         freshnessProp: "analysis.status.freshness",
         ageProp: "analysis.status.lastUpdated",
       },

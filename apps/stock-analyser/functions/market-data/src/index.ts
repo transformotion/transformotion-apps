@@ -104,6 +104,7 @@ const apiHandler = withAuth(async ({ auth, account, event }) => {
 const OHLCV_SERVICE_PRINCIPALS = [
   'stock-analyser-notification-engine',
   'stock-analyser-recommendations',
+  'stock-analyser-etfs', // #626 runEtfs Stage-1 real-price fetch
 ] as const;
 type OhlcvServicePrincipal = (typeof OHLCV_SERVICE_PRINCIPALS)[number];
 
