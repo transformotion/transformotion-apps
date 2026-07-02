@@ -72,8 +72,8 @@ Return a JSON object with the following fields:
 
   - sector: sector name — one of: Financials, Materials, Energy, Healthcare, Technology, Industrials, Consumer Discretionary, Real Estate & REITs
 
-  - signal: "BUY" / "HOLD" / "EXIT"
-    The overall recommendation, synthesising cycle position, valuation, and momentum.
+  - signal: exactly one of "enter" / "HOLD" / "EXIT" — use these exact strings ("enter" is lower-case, the other two upper-case).
+    The overall sector action: "enter" = enter / overweight, "HOLD" = maintain, "EXIT" = exit / reduce. Synthesise cycle position, valuation, and momentum.
 
   - cyclePosition: integer 0–100
     Where the sector sits in its economic cycle.
