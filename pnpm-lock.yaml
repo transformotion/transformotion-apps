@@ -1200,6 +1200,9 @@ importers:
       typescript:
         specifier: '*'
         version: 5.7.3
+      vitest:
+        specifier: ^3
+        version: 3.2.4(@types/node@22.19.17)(jsdom@29.1.1)(lightningcss@1.32.0)
 
   apps/stock-analyser/functions/ai-proxy:
     dependencies:

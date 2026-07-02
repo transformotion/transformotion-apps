@@ -2,6 +2,35 @@ import YahooFinance from 'yahoo-finance2';
 
 const yf = new YahooFinance();
 
+type ChartInterval = '1d' | '1wk' | '1mo';
+
+interface YahooChartQuote {
+  date?: Date | string | null;
+  open?: number | null;
+  high?: number | null;
+  low?: number | null;
+  close?: number | null;
+  volume?: number | null;
+}
+
+interface YahooChartResult {
+  meta?: {
+    currency?: string | null;
+    symbol?: string;
+    exchangeName?: string;
+  };
+  quotes?: YahooChartQuote[];
+}
+
+interface ValidYahooChartQuote {
+  date: Date | string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume?: number | null;
+}
+
 export interface FetchedOhlcv {
   dates:   string[];
   opens:   number[];
@@ -20,25 +49,93 @@ const RANGE_TO_PERIOD: Record<string, () => Date> = {
   'max': () => new Date('2000-01-01'),
 };
 
+function isPositiveNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0;
+}
+
+function isValidQuote(q: YahooChartQuote): q is ValidYahooChartQuote {
+  return (
+    q.date != null &&
+    isPositiveNumber(q.open) &&
+    isPositiveNumber(q.high) &&
+    isPositiveNumber(q.low) &&
+    isPositiveNumber(q.close)
+  );
+}
+
+function validQuotes(result: YahooChartResult): ValidYahooChartQuote[] {
+  return (result.quotes ?? []).filter(isValidQuote);
+}
+
+function isAxTicker(ticker: string): boolean {
+  return ticker.toUpperCase().endsWith('.AX');
+}
+
+function isNullCurrencyValidationError(err: unknown): boolean {
+  const candidate = err as {
+    name?: unknown;
+    errors?: Array<{
+      instancePath?: unknown;
+      message?: unknown;
+      data?: unknown;
+    }>;
+  };
+
+  return (
+    candidate.name === 'FailedYahooValidationError' &&
+    Array.isArray(candidate.errors) &&
+    candidate.errors.some(error =>
+      error.instancePath === '/meta/currency' &&
+      error.data === null &&
+      typeof error.message === 'string' &&
+      error.message.includes('Expected a string')
+    )
+  );
+}
+
+function withAudCurrency(result: YahooChartResult): YahooChartResult {
+  return {
+    ...result,
+    meta: {
+      ...result.meta,
+      currency: 'AUD',
+    },
+  };
+}
+
+async function readYahooChart(
+  ticker: string,
+  options: { period1: Date; interval: ChartInterval },
+): Promise<YahooChartResult> {
+  try {
+    return await yf.chart(ticker, options) as YahooChartResult;
+  } catch (err) {
+    if (!isAxTicker(ticker) || !isNullCurrencyValidationError(err)) {
+      throw err;
+    }
+
+    // PMGOLD.AX currently returns valid OHLCV but `meta.currency: null`, which
+    // yahoo-finance2 rejects. Accept only that narrow .AX/null-currency case.
+    const unvalidated = await yf.chart(ticker, options, { validateResult: false }) as YahooChartResult;
+    if (unvalidated.meta?.currency !== null || validQuotes(unvalidated).length === 0) {
+      throw err;
+    }
+
+    return withAudCurrency(unvalidated);
+  }
+}
+
 export async function fetchOhlcv(ticker: string, range: string, interval: string): Promise<FetchedOhlcv> {
   const period1 = (RANGE_TO_PERIOD[range] ?? RANGE_TO_PERIOD['1y'])();
-  const result = await yf.chart(ticker, { period1, interval: interval as '1d' | '1wk' | '1mo' });
-  const quotes = result.quotes ?? [];
-
-  const valid = quotes.filter(q =>
-    q.date != null &&
-    q.open != null && (q.open as number) > 0 &&
-    q.high != null && (q.high as number) > 0 &&
-    q.low  != null && (q.low  as number) > 0 &&
-    q.close != null && (q.close as number) > 0
-  );
+  const result = await readYahooChart(ticker, { period1, interval: interval as ChartInterval });
+  const valid = validQuotes(result);
 
   return {
     dates:   valid.map(q => (q.date instanceof Date ? q.date.toISOString().split('T')[0] : String(q.date))),
-    opens:   valid.map(q => q.open   as number),
-    highs:   valid.map(q => q.high   as number),
-    lows:    valid.map(q => q.low    as number),
-    closes:  valid.map(q => q.close  as number),
+    opens:   valid.map(q => q.open),
+    highs:   valid.map(q => q.high),
+    lows:    valid.map(q => q.low),
+    closes:  valid.map(q => q.close),
     volumes: valid.map(q => (q.volume ?? 0) as number),
   };
 }
