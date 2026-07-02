@@ -77,8 +77,18 @@ function normaliseItem(item: Record<string, unknown>) {
 // per-account partition with data that should be global.
 const SHARED_PREFIXES = ['MARKET', 'ETFS', 'RECS', 'METALS', 'ANALYSIS', 'CYCLE'];
 
+// Service principals allowed to write SHARED cache entries. The notification-engine
+// warms MARKET#/ANALYSIS# (#584); #595 adds the recommendations engine, which warms the
+// RECS# it flagged 'enter'. Both write ONLY SHARED-prefixed keys (enforced below), via
+// the same additive service-principal pattern — access is by explicit function identity.
+const ALLOWED_SERVICE_PRINCIPALS = [
+  'stock-analyser-notification-engine',
+  'stock-analyser-recommendations',
+] as const;
+type AllowedServicePrincipal = (typeof ALLOWED_SERVICE_PRINCIPALS)[number];
+
 interface ServicePrincipalCacheWriteEvent {
-  servicePrincipal: 'stock-analyser-notification-engine';
+  servicePrincipal: AllowedServicePrincipal;
   operation: 'put-shared-cache';
   cacheKey: string;
   data: unknown;
@@ -99,7 +109,7 @@ function isServicePrincipalCacheWriteEvent(event: unknown): event is ServicePrin
   const candidate = event as Partial<ServicePrincipalCacheWriteEvent> | null;
   return (
     !!candidate &&
-    candidate.servicePrincipal === 'stock-analyser-notification-engine' &&
+    ALLOWED_SERVICE_PRINCIPALS.includes(candidate.servicePrincipal as AllowedServicePrincipal) &&
     candidate.operation === 'put-shared-cache'
   );
 }

@@ -47,6 +47,7 @@ import { buildSectorSuppliedData, type SectorOhlcvFetcher } from '../../../lib/a
 import { buildTickerSuppliedData, suppliedTechnicalsFromOhlcv } from '../../../lib/analysis/stock-analysis-grounding';
 import type { CycleInputs } from '../../../lib/cycle';
 import { createMarketAnalysisPrompt, MARKET_ANALYSIS_SYSTEM_PROMPT, MARKET_ANALYSIS_MAX_TOKENS } from '../../../lib/analysis/market-analysis-signals';
+import { resolveSectorUniverse } from '../../../lib/analysis/sector-universe';
 import { ANALYSIS_REGIONS, type AnalysisRegion } from '@transformotion/contracts/stock-analyser/types';
 // #structured-output: canonical v0 schemas — CONSTRAIN provider output to valid
 // JSON instead of prompt-and-parse (the gpt-5.5 parse-error fix).
@@ -82,6 +83,8 @@ interface RuntimeEnv {
   accountsTable: string;
   analysisCacheFunctionName: string;
   marketDataFunctionName: string;
+  // #595: recommendations Lambda, async-invoked to smart-warm RECS# for enter sectors.
+  recommendationsFunctionName: string;
   anthropicSecretName: string;
   openaiSecretName?: string;
   aiConfigTableName?: string;
@@ -112,6 +115,7 @@ function env(): RuntimeEnv {
     accountsTable: requireEnv('ACCOUNTS_TABLE'),
     analysisCacheFunctionName: requireEnv('ANALYSIS_CACHE_FUNCTION_NAME'),
     marketDataFunctionName: requireEnv('MARKET_DATA_FUNCTION_NAME'),
+    recommendationsFunctionName: requireEnv('RECOMMENDATIONS_FUNCTION_NAME'),
     anthropicSecretName: requireEnv('ANTHROPIC_SECRET_NAME'),
     openaiSecretName: process.env.OPENAI_SECRET_NAME,
     aiConfigTableName: process.env.AI_CONFIG_TABLE,
@@ -614,6 +618,49 @@ async function writeSharedMarketCache(runtime: RuntimeEnv, region: AnalysisRegio
   }
 }
 
+// ── #595 smart-warm Recs for the sectors Market flagged 'enter' ──────────────────
+const WARM_RECS_MODE = 'top-picks' as const;
+const WARM_RECS_CAP = 3; // top-N enter sectors per region — bounds daily recs cost (≤12/run)
+
+interface WarmMarketSector { sector: string; signal: string; cyclePosition: number; bestExchange: string }
+
+// Pure: the enter-flagged sectors to warm — top-N by cyclePosition ASCENDING (0 = early
+// cycle = strongest entry per the market rubric), NOT parse order. Exported for tests.
+export function selectEnterSectorsToWarm(sectors: WarmMarketSector[], cap = WARM_RECS_CAP): WarmMarketSector[] {
+  return sectors
+    .filter((s) => s.signal === 'enter')
+    .sort((a, b) => a.cyclePosition - b.cyclePosition)
+    .slice(0, cap);
+}
+
+// After a region's Market warm SUCCEEDS, async-invoke the Recs engine (the SAME engine a
+// live tab run uses) to warm RECS#{universe|top-picks|sector} for each enter sector.
+// Per-scope isolation: a dispatch failure is logged, never thrown. No enter sectors → no
+// invokes (correct, not an error). A failed/degraded Market warm never reaches here (this
+// runs only after the successful write, inside the region try), so its Recs are skipped.
+async function warmRecsForRegion(runtime: RuntimeEnv, region: AnalysisRegion, marketData: unknown): Promise<void> {
+  const sectors = (marketData as { sectors?: WarmMarketSector[] } | null)?.sectors;
+  if (!Array.isArray(sectors)) return;
+  for (const sec of selectEnterSectorsToWarm(sectors)) {
+    const universe = resolveSectorUniverse(sec.bestExchange, region);
+    const cacheKey = `RECS#${universe}|${WARM_RECS_MODE}|${sec.sector}`;
+    try {
+      await lambda.send(new InvokeCommand({
+        FunctionName: runtime.recommendationsFunctionName,
+        InvocationType: 'Event',
+        Payload: Buffer.from(JSON.stringify({
+          __warmRecs: true,
+          request: { universe, mode: WARM_RECS_MODE, sector: sec.sector, searchMode: 'live' },
+          cacheKey,
+        })),
+      }));
+      console.log(JSON.stringify({ message: 'notification-recs-warm-dispatched', region, cacheKey }));
+    } catch (err) {
+      console.log(JSON.stringify({ message: 'notification-recs-warm-dispatch-error', region, cacheKey, err: String(err) }));
+    }
+  }
+}
+
 // Warm MARKET#{region} for EVERY region, ONCE per job run. Each region is the
 // SAME grounded computation the live Market tab runs (shared prompt + system +
 // grounding) → the warm-write is identical-to-live by construction. Per-region
@@ -642,6 +689,8 @@ function makeWarmMarketCache(runtime: RuntimeEnv): () => Promise<void> {
         const data = parseMarketAnalysisProviderResult(result, region);
         await writeSharedMarketCache(runtime, region, data);
         console.log(JSON.stringify({ message: 'notification-market-warm-ok', region }));
+        // #595: fan out Recs warming for the sectors this region flagged 'enter'.
+        await warmRecsForRegion(runtime, region, data);
       } catch (err) {
         console.log(JSON.stringify({ message: 'notification-market-warm-region-error', region, err: String(err) }));
       }

@@ -10,6 +10,15 @@ import {
 // Relative (not `@/`) so the vitest graph — which has no `@/` alias — resolves it.
 import { REGION_LABELS } from "../../lib/analysis/market-analysis-signals"
 
+// Universe-resolution moved to the backend-safe lib so the #595 warm job resolves a
+// sector's universe IDENTICALLY to the UI (the warmed RECS# key must match a live read).
+export {
+  isRecommendationUniverse,
+  normaliseUniverse,
+  defaultUniverseForRegion,
+  resolveSectorUniverse,
+} from "../../lib/analysis/sector-universe"
+
 export {
   ANALYSIS_REGIONS,
   RECOMMENDATION_UNIVERSES,
@@ -25,44 +34,4 @@ const REGION_LABEL_TO_REGION = Object.fromEntries(
 
 export function regionFromLabel(label: string): AnalysisRegion {
   return REGION_LABEL_TO_REGION[label] ?? "global"
-}
-
-export function isRecommendationUniverse(value: unknown): value is RecommendationUniverse {
-  return typeof value === "string" && (RECOMMENDATION_UNIVERSES as readonly string[]).includes(value)
-}
-
-const UNIVERSE_ALIASES: Record<string, RecommendationUniverse> = {
-  ASX: "ASX",
-  NASDAQ: "NASDAQ",
-  DOW: "Dow",
-  "DOW JONES": "Dow",
-  DJIA: "Dow",
-  "S&P 500": "Dow",
-  SP500: "Dow",
-  NYSE: "Dow",
-  FTSE: "FTSE",
-  "FTSE 100": "FTSE",
-  LSE: "FTSE",
-}
-
-export function normaliseUniverse(
-  raw: string | null | undefined,
-  region: AnalysisRegion,
-): RecommendationUniverse | null {
-  if (!raw) return null
-  const candidates: readonly RecommendationUniverse[] = REGION_TO_RECOMMENDATION_UNIVERSES[region]
-  const direct = isRecommendationUniverse(raw) ? raw : null
-  const mapped = direct ?? UNIVERSE_ALIASES[raw.trim().toUpperCase()] ?? null
-  return mapped && candidates.includes(mapped) ? mapped : null
-}
-
-export function defaultUniverseForRegion(region: AnalysisRegion): RecommendationUniverse {
-  return REGION_TO_RECOMMENDATION_UNIVERSES[region][0]
-}
-
-export function resolveSectorUniverse(
-  rawExchange: string | null | undefined,
-  region: AnalysisRegion,
-): RecommendationUniverse {
-  return normaliseUniverse(rawExchange, region) ?? defaultUniverseForRegion(region)
 }
