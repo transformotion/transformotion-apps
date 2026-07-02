@@ -107,6 +107,20 @@ function isMetalsJobEvent(event: unknown): event is MetalsJobEvent {
   return !!event && (event as MetalsJobEvent).__metalsJob === true;
 }
 
+// ── #627 warm event (from the notification-engine, service-principal) ─────────────
+// Runs the SAME engine core a live tab run does, then SHARED-writes the METALS key via
+// the existing writeSharedMetalsCache service-principal path — instead of a per-job
+// result + WSS push. No accountId/connectionId — it's a cache warm. The engine-internal
+// METALS_CLOSES#/METALS_BASELINE# feed-history rows are written by computeMetals exactly
+// as on the live path (direct-write, by design — see #637).
+interface WarmMetalsEvent {
+  __warmMetals: true;
+  request: RunMetalsRequest;
+}
+function isWarmMetalsEvent(event: unknown): event is WarmMetalsEvent {
+  return !!event && (event as WarmMetalsEvent).__warmMetals === true;
+}
+
 async function makeProvider(runtime: RuntimeEnv): Promise<{ provider: AiProvider; config: ResolvedAiRuntimeConfig }> {
   const config = await resolveAiRuntimeConfig({
     appSlug: APP_SLUG,
@@ -531,6 +545,19 @@ async function executeMetalsJob(job: MetalsJobEvent, runtime: RuntimeEnv): Promi
   }
 }
 
+// ── #627 warm: compute (SAME engine as live) → SHARED-write METALS ────────────────
+async function executeWarmMetals(event: WarmMetalsEvent, runtime: RuntimeEnv): Promise<void> {
+  try {
+    const { response } = await computeMetals(event.request, runtime);
+    await writeSharedMetalsCache(runtime, response, event.request.searchMode);
+    console.log(JSON.stringify({ message: 'metals-warm-ok', count: response.metals.length }));
+  } catch (err) {
+    // Per-scope isolation: a warm failure is logged, never thrown (the live tab still
+    // computes on demand).
+    console.log(JSON.stringify({ message: 'metals-warm-error', err: String(err) }));
+  }
+}
+
 const apiHandler = withAuth(async ({ auth, account, event }) => {
   saData.read(auth, account.accountId);
 
@@ -559,6 +586,10 @@ const apiHandler = withAuth(async ({ auth, account, event }) => {
 });
 
 export const handler = async (event: unknown): Promise<unknown> => {
+  if (isWarmMetalsEvent(event)) {
+    await executeWarmMetals(event, env());
+    return { statusCode: 200 };
+  }
   if (isMetalsJobEvent(event)) {
     await executeMetalsJob(event, env());
     return { statusCode: 200 };
