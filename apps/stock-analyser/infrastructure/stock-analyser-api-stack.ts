@@ -249,6 +249,9 @@ export class StockAnalyserApiStack extends cdk.Stack {
         // #595: async-invoke the recommendations engine to smart-warm RECS# for enter
         // sectors. Name string (recommendationsFn is defined later); grant added below.
         RECOMMENDATIONS_FUNCTION_NAME: `stock-analyser-recommendations-${stage}`,
+        // #594: async-invoke the etfs engine to warm ETF#{market} for each market.
+        // Name string (etfsFn is defined later); grant added below.
+        ETFS_FUNCTION_NAME: `stock-analyser-etfs-${stage}`,
         ANTHROPIC_SECRET_NAME: anthropicSecret.secretName,
         OPENAI_SECRET_NAME: openaiSecret.secretName,
         AI_CONFIG_TABLE: aiRuntimeConfigTable.tableName,
@@ -391,7 +394,8 @@ export class StockAnalyserApiStack extends cdk.Stack {
       .addMethod('POST', new apigateway.LambdaIntegration(recommendationsFn, { proxy: true }), auth);
 
     // #626 runEtfs — same async two-stage (propose → real price → rank) pattern as
-    // recommendations; market-keyed (ASX/US/Global), no warm write.
+    // recommendations; market-keyed (ASX/US/Global). #594 adds a warm branch: a
+    // service-principal event from the notification engine SHARED-writes ETF#{market}.
     const etfsFn = new lambdaNodejs.NodejsFunction(this, 'EtfsFn', {
       functionName: `stock-analyser-etfs-${stage}`,
       entry: path.join(__dirname, '../functions/etfs/src/index.ts'),
@@ -409,6 +413,8 @@ export class StockAnalyserApiStack extends cdk.Stack {
         JOB_RESULTS_TABLE: jobResultsTable.tableName,
         MARKET_DATA_FUNCTION_NAME: marketDataFn.functionName,
         SELF_FUNCTION_NAME: `stock-analyser-etfs-${stage}`,
+        // #594: analysis-cache Lambda for the warm SHARED ETF# write.
+        ANALYSIS_CACHE_FUNCTION_NAME: cacheFn.functionName,
         WS_API_ENDPOINT: wsApiEndpoint,
       },
       bundling,
@@ -419,6 +425,9 @@ export class StockAnalyserApiStack extends cdk.Stack {
     settingsTable.grantReadData(etfsFn);
     jobResultsTable.grantReadWriteData(etfsFn);
     marketDataFn.grantInvoke(etfsFn); // Stage-1 real prices (service-principal)
+    cacheFn.grantInvoke(etfsFn); // #594: SHARED ETF# warm write (service-principal)
+    // #594: the notification-engine (defined earlier) async-invokes this engine to warm ETFs.
+    etfsFn.grantInvoke(notificationEngineFn);
     etfsFn.addToRolePolicy(new iam.PolicyStatement({
       actions: ['lambda:InvokeFunction'], // self-invoke for the async executor
       resources: [`arn:aws:lambda:${this.region}:${this.account}:function:stock-analyser-etfs-${stage}`],
