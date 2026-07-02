@@ -517,6 +517,35 @@ describe('notification send-log (#572)', () => {
     expect(run.sendLog.accounts.length).toBeGreaterThan(0); // accounts still processed
   });
 
+  it('warms the Metals cache ONCE per run — not per account, AFTER the kill-switch gate (#627)', async () => {
+    const warmMetalsCache = vi.fn(async () => undefined);
+    await runNotificationEngine(deps({
+      listStockAnalyserMembers: vi.fn(async () => [
+        { ...activeMember, accountId: 'acct-a', userId: 'user-a' },
+        { ...activeMember, accountId: 'acct-b', userId: 'user-b' },
+      ]),
+      warmMetalsCache,
+    }));
+    expect(warmMetalsCache).toHaveBeenCalledTimes(1); // once per run, regardless of 2 accounts
+  });
+
+  it('does NOT warm the Metals cache when the kill-switch is OFF (#627 inside the #571 gate)', async () => {
+    const warmMetalsCache = vi.fn(async () => undefined);
+    const run = await runNotificationEngine(deps({
+      readEngineEnabled: vi.fn(async () => false),
+      warmMetalsCache,
+    }));
+    expect(warmMetalsCache).not.toHaveBeenCalled(); // whole batch no-ops when OFF
+    expect(run.sendLog.note).toBe('engine-disabled');
+  });
+
+  it('a Metals-warming failure is best-effort — it does not abort the notification run (#627)', async () => {
+    const warmMetalsCache = vi.fn(async () => { throw new Error('metals feed failed'); });
+    const run = await runNotificationEngine(deps({ warmMetalsCache }));
+    expect(warmMetalsCache).toHaveBeenCalledOnce();
+    expect(run.sendLog.accounts.length).toBeGreaterThan(0); // accounts still processed
+  });
+
   it('cross-account tripwire: flags a member outcome that is not a member of the account', async () => {
     const log = vi.fn();
     const account: SendLogAccount = {

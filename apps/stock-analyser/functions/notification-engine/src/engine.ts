@@ -87,6 +87,13 @@ export interface NotificationEngineDeps {
    * unit tests can omit it.
    */
   warmEtfsCache?: () => Promise<void>;
+  /**
+   * #627: warm the Metals cache (the single global `METALS` key) by async-invoking
+   * the runMetals engine. Runs ONCE per job execution, AFTER the kill-switch gate and
+   * after the ETF warm, so an engine-OFF run does NO Metals warming. Optional so unit
+   * tests can omit it.
+   */
+  warmMetalsCache?: () => Promise<void>;
 }
 
 export interface NotificationEngineResult {
@@ -545,6 +552,15 @@ export async function runNotificationEngine(deps: NotificationEngineDeps): Promi
       await deps.warmEtfsCache?.();
     } catch (err) {
       deps.log?.('notification-etfs-warm-error', { err: String(err) });
+    }
+
+    // #627: warm the METALS cache AFTER the ETF warm and under the same kill-switch
+    // gate. Independent best-effort concern: a Metals warm failure must never abort the
+    // notification run (or the market/ETF warms).
+    try {
+      await deps.warmMetalsCache?.();
+    } catch (err) {
+      deps.log?.('notification-metals-warm-error', { err: String(err) });
     }
 
     const today = deps.today();

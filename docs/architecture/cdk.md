@@ -224,19 +224,23 @@ branch is JWT-less but reachable only by the granted engine role; the
 authenticated API path keeps its `requireAccountData` gate (so the handler-authz
 check still passes via `saData.read`).
 
-#595 (smart-warm Recs) and #594 (warm ETFs): after the market warm, still inside
-the #571 kill-switch gate, the engine async-invokes two app engines (the SAME
-engines the live tabs run) to warm their SHARED caches. #595 fans out to
-`stock-analyser-recommendations-{stage}` for the top-3 `enter`-flagged sectors
-per region (`RECS#`); #594 fans out to `stock-analyser-etfs-{stage}` once per
-market (ASX/US/Global → `ETF#{market}`, no smart-filter). Each engine SHARED-writes
-via the analysis-cache service-principal invoke (`RECS`/`ETF` are `SHARED_PREFIXES`
-keys, and each engine is on the analysis-cache `ALLOWED_SERVICE_PRINCIPALS`
-allowlist), so the engine role gains `lambda:InvokeFunction` on both engines
-(`RECOMMENDATIONS_FUNCTION_NAME` / `ETFS_FUNCTION_NAME` env vars) and each engine
-gains `lambda:InvokeFunction` on the analysis-cache Lambda plus its
+#595 (smart-warm Recs), #594 (warm ETFs), and #627 (warm Metals): after the
+market warm, still inside the #571 kill-switch gate, the engine async-invokes the
+app engines (the SAME engines the live tabs run) to warm their SHARED caches. #595
+fans out to `stock-analyser-recommendations-{stage}` for the top-3 `enter`-flagged
+sectors per region (`RECS#`); #594 fans out to `stock-analyser-etfs-{stage}` once
+per market (ASX/US/Global → `ETF#{market}`, no smart-filter); #627 invokes
+`stock-analyser-metals-{stage}` once (Metals is a single global `METALS` key — no
+fan-out). Each engine SHARED-writes via the analysis-cache service-principal invoke
+(`RECS`/`ETF`/`METALS` are `SHARED_PREFIXES` keys, and each engine is on the
+analysis-cache `ALLOWED_SERVICE_PRINCIPALS` allowlist), so the engine role gains
+`lambda:InvokeFunction` on each engine (`RECOMMENDATIONS_FUNCTION_NAME` /
+`ETFS_FUNCTION_NAME` / `METALS_FUNCTION_NAME` env vars) and each engine gains
+`lambda:InvokeFunction` on the analysis-cache Lambda plus its
 `ANALYSIS_CACHE_FUNCTION_NAME` env var. Dispatch is fire-and-forget (`Event`
-invoke) with per-scope isolation — one warm failing never aborts the run.
+invoke) with per-scope isolation — one warm failing never aborts the run. (The
+Metals engine also keeps its own direct-write `METALS_CLOSES#`/`METALS_BASELINE#`
+feed-history rows, outside the service-principal path by design — see #637.)
 
 ## Adding a new app's CDK stacks
 
