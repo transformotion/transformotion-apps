@@ -55,6 +55,7 @@ import {
   marketAnalysisResultJsonSchema,
   stockAnalysisResultJsonSchema,
 } from '@transformotion/contracts/stock-analyser/structured-output';
+import { RECOMMENDATION_MODE_LABELS } from '@transformotion/contracts/stock-analyser/recommendations';
 
 // removeUndefinedValues (#578): the safety net so a stray `undefined` (e.g. a
 // member with no email) can never throw mid-write and drop subsequent records.
@@ -619,10 +620,19 @@ async function writeSharedMarketCache(runtime: RuntimeEnv, region: AnalysisRegio
 }
 
 // ── #595 smart-warm Recs for the sectors Market flagged 'enter' ──────────────────
-const WARM_RECS_MODE = 'top-picks' as const;
+const WARM_RECS_MODE = 'top-picks' as const;               // canonical — the engine request
+const WARM_RECS_MODE_LABEL = RECOMMENDATION_MODE_LABELS[WARM_RECS_MODE]; // 'Top Picks' — the cache key
 const WARM_RECS_CAP = 3; // top-N enter sectors per region — bounds daily recs cost (≤12/run)
 
 interface WarmMarketSector { sector: string; signal: string; cyclePosition: number; bestExchange: string }
+
+// The warmed RECS# key MUST be byte-identical to what a live tab reads. The live Recs
+// tab's scopeKey uses the DISPLAY mode label ("Top Picks"), NOT the canonical mode
+// ('top-picks', which it only uses in the engine request body). Using the canonical here
+// silently cache-misses. Exported so a test pins the identical-to-live shape.
+export function recsWarmCacheKey(universe: string, sector: string): string {
+  return `RECS#${universe}|${WARM_RECS_MODE_LABEL}|${sector}`;
+}
 
 // Pure: the enter-flagged sectors to warm — top-N by cyclePosition ASCENDING (0 = early
 // cycle = strongest entry per the market rubric), NOT parse order. Exported for tests.
@@ -643,7 +653,7 @@ async function warmRecsForRegion(runtime: RuntimeEnv, region: AnalysisRegion, ma
   if (!Array.isArray(sectors)) return;
   for (const sec of selectEnterSectorsToWarm(sectors)) {
     const universe = resolveSectorUniverse(sec.bestExchange, region);
-    const cacheKey = `RECS#${universe}|${WARM_RECS_MODE}|${sec.sector}`;
+    const cacheKey = recsWarmCacheKey(universe, sec.sector);
     try {
       await lambda.send(new InvokeCommand({
         FunctionName: runtime.recommendationsFunctionName,
