@@ -14,7 +14,7 @@
 import { useState, useCallback, useRef } from 'react'
 import { getConfig } from '../config'
 import { getStockAnalyserClient, stockAnalyserClient } from '../api'
-import { mockMarketAnalysisResult, mockRunRecommendationsResponse } from '@transformotion/contracts/stock-analyser/mocks'
+import { mockMarketAnalysisResult, mockRunMetalsResponse, mockRunRecommendationsResponse } from '@transformotion/contracts/stock-analyser/mocks'
 import {
   getCacheSnapshot,
   setCacheSnapshot,
@@ -31,7 +31,8 @@ export interface ClaudeRequest {
   /**
    * Structured-output surface ('analyser' | 'market'). Forwarded to the proxy,
    * which resolves it server-side to the canonical schema and constrains the
-   * model's output. Surfaces without a schema (etfs/metals/recs) omit it.
+   * model's output. Engine surfaces (recs/metals) omit it and enforce their
+   * schema inside the backend engine.
    */
   surface?: string
   /**
@@ -352,6 +353,11 @@ async function mockClaudeCall<T>(
   // #592: recommendations engine surface (no prompt) — return the canonical mock shortlist.
   if (request.jobStart?.path === 'recommendations/run') {
     return mockRunRecommendationsResponse as T
+  }
+
+  // #627: metals engine surface (no prompt) — return the canonical feed-overlaid mock.
+  if (request.jobStart?.path === 'metals/run') {
+    return mockRunMetalsResponse as T
   }
 
   const prompt = request.prompt

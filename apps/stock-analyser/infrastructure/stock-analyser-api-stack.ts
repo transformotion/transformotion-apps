@@ -210,6 +210,9 @@ export class StockAnalyserApiStack extends cdk.Stack {
     const openaiSecret = secretsmanager.Secret.fromSecretNameV2(
       this, 'OpenAIApiKey', `${stage}/openai/api-key`,
     );
+    const metalsSecret = secretsmanager.Secret.fromSecretNameV2(
+      this, 'MetalsApiKey', `${stage}/metals/api-key`,
+    );
     const aiRuntimeConfigTable = dynamodb.Table.fromTableName(
       this,
       'AiRuntimeConfigTable',
@@ -389,6 +392,53 @@ export class StockAnalyserApiStack extends cdk.Stack {
       .addResource('recommendations')
       .addResource('run')
       .addMethod('POST', new apigateway.LambdaIntegration(recommendationsFn, { proxy: true }), auth);
+
+    // M19 #627 — Metals engine. Fetches real metals.dev feed data for the fixed
+    // XAU/XAG/XPT/XPD universe, then asks AI only for signal/outlook via the
+    // canonical structured-output schema. Async to reuse the existing WSS/job
+    // completion path and to absorb feed/provider latency without API Gateway
+    // timeout risk.
+    const metalsFn = new lambdaNodejs.NodejsFunction(this, 'MetalsFn', {
+      functionName: `stock-analyser-metals-${stage}`,
+      entry: path.join(__dirname, '../functions/metals/src/index.ts'),
+      handler: 'handler',
+      runtime: lambda.Runtime.NODEJS_20_X,
+      timeout: cdk.Duration.seconds(300),
+      memorySize: 512,
+      environment: {
+        METALS_SECRET_NAME: metalsSecret.secretName,
+        ANTHROPIC_SECRET_NAME: anthropicSecret.secretName,
+        OPENAI_SECRET_NAME: openaiSecret.secretName,
+        AI_CONFIG_TABLE: aiRuntimeConfigTable.tableName,
+        APP_AI_CONFIG_TABLE: settingsTable.tableName,
+        AI_FALLBACK_PROVIDER: 'claude',
+        AI_FALLBACK_MODEL: 'claude-sonnet-4-6',
+        JOB_RESULTS_TABLE: jobResultsTable.tableName,
+        SELF_FUNCTION_NAME: `stock-analyser-metals-${stage}`,
+        ANALYSIS_CACHE_FUNCTION_NAME: cacheFn.functionName,
+        WS_API_ENDPOINT: wsApiEndpoint,
+      },
+      bundling,
+    });
+    metalsSecret.grantRead(metalsFn);
+    anthropicSecret.grantRead(metalsFn);
+    openaiSecret.grantRead(metalsFn);
+    aiRuntimeConfigTable.grantReadData(metalsFn);
+    settingsTable.grantReadData(metalsFn);
+    jobResultsTable.grantReadWriteData(metalsFn);
+    cacheFn.grantInvoke(metalsFn); // SHARED METALS cache write (service-principal)
+    metalsFn.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['lambda:InvokeFunction'], // self-invoke for the async executor
+      resources: [`arn:aws:lambda:${this.region}:${this.account}:function:stock-analyser-metals-${stage}`],
+    }));
+    metalsFn.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['execute-api:ManageConnections'], // WSS job_complete push
+      resources: [`arn:aws:execute-api:${this.region}:${this.account}:${wsApiId}/${stage}/*`],
+    }));
+    this.api.root
+      .addResource('metals')
+      .addResource('run')
+      .addMethod('POST', new apigateway.LambdaIntegration(metalsFn, { proxy: true }), auth);
 
     const settingsFn = new lambdaNodejs.NodejsFunction(this, 'SettingsFn', {
       functionName: `stock-analyser-settings-${stage}`,

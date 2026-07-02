@@ -67,4 +67,29 @@ describe('analysis-cache service-principal SHARED write branch', () => {
 
     expect(sendMock).not.toHaveBeenCalled();
   });
+
+  it('allows the metals engine to write only the fixed METALS shared cache key', async () => {
+    sendMock.mockResolvedValueOnce({});
+    const { handler } = await import('./index');
+
+    await handler({
+      servicePrincipal: 'stock-analyser-metals',
+      operation: 'put-shared-cache',
+      cacheKey: 'METALS',
+      data: { metals: [] },
+      ttlSeconds: 86_400,
+      mode: 'live',
+      type: 'metals',
+    }, {} as never);
+
+    expect(sendMock.mock.calls[0]?.[0].input).toMatchObject({
+      Item: {
+        accountId: 'SHARED',
+        cacheKey: 'METALS',
+        data: JSON.stringify({ metals: [] }),
+        dataType: 'metals',
+        mode: 'live',
+      },
+    });
+  });
 });

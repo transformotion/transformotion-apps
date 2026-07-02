@@ -56,6 +56,7 @@ Current state after #366/#386: Stock Analyser owns its REST API Gateway, AI prox
 | `stock-analyser-settings-{stage}` | `apps/stock-analyser/functions/settings` | `GET/PATCH /settings`, `GET /ai-config`, `PUT/DELETE /ai-config/override`, `GET/PUT /cache-freshness`, `GET/PUT /notification-config`, `GET/PUT /notification-consent`, `GET/PUT /notification-engine-config` (#571 kill-switch; PUT site/app-admin) |
 | `stock-analyser-ai-proxy-{stage}` | `apps/stock-analyser/functions/ai-proxy` | `POST /api/claude` |
 | `stock-analyser-recommendations-{stage}` | `apps/stock-analyser/functions/recommendations` | `POST /recommendations/run` (M19 #592 async two-stage engine: propose candidates → real OHLCV price → rank WITH price → structured `pick`/`watch`/`avoid`. Self-invokes for the async executor; writes `job-*` results + pushes `job_complete` over WSS — the thin-UI reads it via the shared WSS/cache path. Also handles a #595 warm event (service-principal, from the notification engine): runs the SAME engine core and SHARED-writes `RECS#{universe\|top-picks\|sector}`) |
+| `stock-analyser-metals-{stage}` | `apps/stock-analyser/functions/metals` | `POST /metals/run` (M19 #627 async Metals engine: fetches real metals.dev feed data for XAU/XAG/XPT/XPD, asks AI only for structured `BULL`/`NEUTRAL`/`BEAR` signal + outlook, overlays feed-owned spot/today/YTD/52-week data, writes `job-*` results + pushes `job_complete`, and SHARED-writes `METALS`) |
 | `stock-analyser-notification-engine-{stage}` | `apps/stock-analyser/functions/notification-engine` | EventBridge scheduled (daily, no HTTP route). Warms the market-wide cache `MARKET#{region}` (#584), then #595 smart-warms Recs for the top-3 `enter`-flagged sectors per region (ranked by cyclePosition; async-fans-out to the recommendations engine which SHARED-writes `RECS#`), AND runs notification transitions/sends — all gated by the #571 kill-switch |
 | `stock-analyser-notification-history-{stage}` | `apps/stock-analyser/functions/notification-history` | `GET /notification-history` (#573 run-history; server-scoped per viewer) |
 | `transformotion-cycle-check-{stage}` | `apps/stock-analyser/functions/cycle-check` | EventBridge scheduled (no HTTP route) |
@@ -188,7 +189,7 @@ market degrade path fires, so a fallback is visible in CloudWatch.
 | Market Analysis | `MARKET#{geography}` | 24h |
 | Recommendations | `RECS#{universe}#{mode}#{sector?}` | 24h |
 | ETFs | `ETF#{market}` | 48h |
-| Metals | `METALS` | 2h |
+| Metals | `METALS` | 24h |
 | Stock Analysis | `ANALYSIS#{ticker}` | 24h |
 | Portfolio enrichment | `ANALYSIS#{ticker}` | 24h |
 | Watchlist enrichment | `ANALYSIS#{ticker}` | 24h |

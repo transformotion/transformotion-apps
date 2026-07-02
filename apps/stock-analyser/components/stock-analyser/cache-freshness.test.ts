@@ -39,12 +39,12 @@ describe("Stock Analyser cache freshness contracts", () => {
     expect(deriveCacheFreshness({ cachedAt, expiresAt, now: expiresAt + 1 }).freshness).toBe("outdated")
   })
 
-  it("classifies 2h and 48h TTL entries", () => {
+  it("classifies metals 24h and ETFs 48h TTL entries", () => {
     const cachedAt = 2_000
     const metalsExpiry = cachedAt + STOCK_ANALYSER_CACHE_TTL_SECONDS.metals
     const etfsExpiry = cachedAt + STOCK_ANALYSER_CACHE_TTL_SECONDS.etfs
 
-    expect(deriveCacheFreshness({ cachedAt, expiresAt: metalsExpiry, now: cachedAt + 45 * 60 }).freshness).toBe("recent")
+    expect(deriveCacheFreshness({ cachedAt, expiresAt: metalsExpiry, now: cachedAt + 45 * 60 }).freshness).toBe("fresh")
     expect(deriveCacheFreshness({ cachedAt, expiresAt: etfsExpiry, now: cachedAt + 40 * 60 * 60 }).freshness).toBe("stale")
   })
 

@@ -153,6 +153,9 @@ Stock Analyser owns:
 - AI job results table: `stock-analyser.job-results-{stage}`
 - Notification state table: `stock-analyser.notification-state-{stage}`
 - AI runtime Lambda: `stock-analyser-ai-proxy-{stage}`
+- Metals engine Lambda: `stock-analyser-metals-{stage}`, invoked by
+  `POST /metals/run`; fetches metals.dev feed data and writes shared `METALS`
+  cache entries through `transformotion-analysis-cache-{stage}`
 - Background notification Lambda: `stock-analyser-notification-engine-{stage}`,
   invoked daily by EventBridge
 - AI runtime selection: app override -> platform default -> env fallback, using
