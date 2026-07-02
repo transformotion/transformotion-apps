@@ -1,4 +1,4 @@
-﻿name: Deploy â€” Migration Utilities
+﻿name: Deploy — Migration Utilities
 
 on:
   push:
@@ -45,7 +45,7 @@ env:
 
 jobs:
   deploy-dev:
-    name: Migration Utilities â†’ Dev
+    name: Migration Utilities → Dev
     runs-on: ubuntu-latest
     if: (github.event_name == 'push' && github.ref_name == 'develop') || (github.event_name == 'workflow_call' && inputs.target == 'dev') || (github.event_name == 'workflow_dispatch' && inputs.target == 'dev')
     environment: dev
@@ -71,12 +71,12 @@ jobs:
           role-to-assume: ${{ env.ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: CDK Deploy â€” Migration Utilities stack (dev)
+      - name: CDK Deploy — Migration Utilities stack (dev)
         working-directory: infrastructure
         run: pnpm exec cdk deploy --app 'npx ts-node --prefer-ts-exts bin/migration-utilities.ts' 'TransformotionDev-MigrationsApi' --require-approval never
 
   deploy-prod:
-    name: Migration Utilities â†’ Prod
+    name: Migration Utilities → Prod
     runs-on: ubuntu-latest
     if: (github.event_name == 'push' && github.ref_name == 'main') || (github.event_name == 'workflow_call' && inputs.target == 'prod') || (github.event_name == 'workflow_dispatch' && inputs.target == 'prod')
     environment: prod
@@ -101,6 +101,6 @@ jobs:
           role-to-assume: ${{ env.ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: CDK Deploy â€” Migration Utilities stack (prod)
+      - name: CDK Deploy — Migration Utilities stack (prod)
         working-directory: infrastructure
         run: pnpm exec cdk deploy --app 'npx ts-node --prefer-ts-exts bin/migration-utilities.ts' 'TransformotionProd-MigrationsApi' --require-approval never

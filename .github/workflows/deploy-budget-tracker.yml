@@ -1,4 +1,4 @@
-﻿name: Deploy â€” Budget Tracker
+﻿name: Deploy — Budget Tracker
 
 on:
   push:
@@ -58,7 +58,7 @@ env:
 
 jobs:
   deploy-dev:
-    name: Budget Tracker â†’ Dev
+    name: Budget Tracker → Dev
     runs-on: ubuntu-latest
     if: (github.event_name == 'push' && github.ref_name == 'develop') || (github.event_name == 'workflow_call' && inputs.target == 'dev') || (github.event_name == 'workflow_dispatch' && inputs.target == 'dev')
     environment: dev
@@ -103,7 +103,7 @@ jobs:
           role-to-assume: ${{ env.ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: CDK Deploy â€” Budget Tracker stacks (dev)
+      - name: CDK Deploy — Budget Tracker stacks (dev)
         working-directory: infrastructure
         run: pnpm exec cdk deploy --app 'npx ts-node --prefer-ts-exts bin/budget-tracker.ts' 'TransformotionDev-BudgetTrackerTables' 'TransformotionDev-BudgetTrackerWs' 'TransformotionDev-BudgetTrackerApi' --require-approval never
 
@@ -141,7 +141,7 @@ jobs:
             --output text)
           if [ -z "$CP_URL" ] || [ "$CP_URL" = "None" ]; then
             echo "ERROR: ControlPlaneApiUrl missing/empty on TransformotionDev-LaunchpadControlPlane."
-            echo "Refusing to build with an empty NEXT_PUBLIC_LAUNCHPAD_CONTROL_PLANE_API_URL â€”"
+            echo "Refusing to build with an empty NEXT_PUBLIC_LAUNCHPAD_CONTROL_PLANE_API_URL —"
             echo "active-account and no-access logic would silently fall back to claims/error."
             exit 1
           fi
@@ -182,7 +182,7 @@ jobs:
             "/api/budget/v1/settings"
 
   deploy-prod:
-    name: Budget Tracker â†’ Prod
+    name: Budget Tracker → Prod
     runs-on: ubuntu-latest
     if: (github.event_name == 'push' && github.ref_name == 'main') || (github.event_name == 'workflow_call' && inputs.target == 'prod') || (github.event_name == 'workflow_dispatch' && inputs.target == 'prod')
     environment: prod
@@ -227,7 +227,7 @@ jobs:
           role-to-assume: ${{ env.ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: CDK Deploy â€” Budget Tracker stacks (prod)
+      - name: CDK Deploy — Budget Tracker stacks (prod)
         working-directory: infrastructure
         run: pnpm exec cdk deploy --app 'npx ts-node --prefer-ts-exts bin/budget-tracker.ts' 'TransformotionProd-BudgetTrackerTables' 'TransformotionProd-BudgetTrackerWs' 'TransformotionProd-BudgetTrackerApi' --require-approval never
 
@@ -265,7 +265,7 @@ jobs:
             --output text)
           if [ -z "$CP_URL" ] || [ "$CP_URL" = "None" ]; then
             echo "ERROR: ControlPlaneApiUrl missing/empty on TransformotionProd-LaunchpadControlPlane."
-            echo "Refusing to build with an empty NEXT_PUBLIC_LAUNCHPAD_CONTROL_PLANE_API_URL â€”"
+            echo "Refusing to build with an empty NEXT_PUBLIC_LAUNCHPAD_CONTROL_PLANE_API_URL —"
             echo "active-account and no-access logic would silently fall back to claims/error."
             exit 1
           fi

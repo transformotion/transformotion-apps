@@ -1,4 +1,4 @@
-﻿name: Deploy â€” Stock Analyser
+﻿name: Deploy — Stock Analyser
 
 on:
   push:
@@ -57,7 +57,7 @@ env:
 
 jobs:
   deploy-dev:
-    name: Stock Analyser â†’ Dev
+    name: Stock Analyser → Dev
     runs-on: ubuntu-latest
     if: (github.event_name == 'push' && github.ref_name == 'develop') || (github.event_name == 'workflow_call' && inputs.target == 'dev') || (github.event_name == 'workflow_dispatch' && inputs.target == 'dev')
     environment: dev
@@ -101,7 +101,7 @@ jobs:
           role-to-assume: ${{ env.ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: CDK Deploy â€” Stock Analyser stacks (dev)
+      - name: CDK Deploy — Stock Analyser stacks (dev)
         working-directory: infrastructure
         run: pnpm exec cdk deploy --app 'npx ts-node --prefer-ts-exts bin/stock-analyser.ts' 'TransformotionDev-StockAnalyserTables' 'TransformotionDev-StockAnalyserWs' 'TransformotionDev-StockAnalyserApi' --require-approval never
 
@@ -151,7 +151,7 @@ jobs:
             --output text)
           if [ -z "$CP_URL" ] || [ "$CP_URL" = "None" ]; then
             echo "ERROR: ControlPlaneApiUrl missing/empty on TransformotionDev-LaunchpadControlPlane."
-            echo "Refusing to build with an empty NEXT_PUBLIC_LAUNCHPAD_CONTROL_PLANE_API_URL â€”"
+            echo "Refusing to build with an empty NEXT_PUBLIC_LAUNCHPAD_CONTROL_PLANE_API_URL —"
             echo "active-account and no-access logic would silently fall back to claims/error."
             exit 1
           fi
@@ -192,7 +192,7 @@ jobs:
             "/portfolio"
 
   deploy-prod:
-    name: Stock Analyser â†’ Prod
+    name: Stock Analyser → Prod
     runs-on: ubuntu-latest
     if: (github.event_name == 'push' && github.ref_name == 'main') || (github.event_name == 'workflow_call' && inputs.target == 'prod') || (github.event_name == 'workflow_dispatch' && inputs.target == 'prod')
     environment: prod
@@ -236,7 +236,7 @@ jobs:
           role-to-assume: ${{ env.ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: CDK Deploy â€” Stock Analyser stacks (prod)
+      - name: CDK Deploy — Stock Analyser stacks (prod)
         working-directory: infrastructure
         run: pnpm exec cdk deploy --app 'npx ts-node --prefer-ts-exts bin/stock-analyser.ts' 'TransformotionProd-StockAnalyserTables' 'TransformotionProd-StockAnalyserWs' 'TransformotionProd-StockAnalyserApi' --require-approval never
 
@@ -286,7 +286,7 @@ jobs:
             --output text)
           if [ -z "$CP_URL" ] || [ "$CP_URL" = "None" ]; then
             echo "ERROR: ControlPlaneApiUrl missing/empty on TransformotionProd-LaunchpadControlPlane."
-            echo "Refusing to build with an empty NEXT_PUBLIC_LAUNCHPAD_CONTROL_PLANE_API_URL â€”"
+            echo "Refusing to build with an empty NEXT_PUBLIC_LAUNCHPAD_CONTROL_PLANE_API_URL —"
             echo "active-account and no-access logic would silently fall back to claims/error."
             exit 1
           fi

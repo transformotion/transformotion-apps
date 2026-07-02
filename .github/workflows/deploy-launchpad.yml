@@ -1,4 +1,4 @@
-﻿name: Deploy â€” Launchpad
+﻿name: Deploy — Launchpad
 
 on:
   push:
@@ -51,7 +51,7 @@ env:
 
 jobs:
   deploy-dev:
-    name: Launchpad â†’ Dev
+    name: Launchpad → Dev
     runs-on: ubuntu-latest
     if: (github.event_name == 'push' && github.ref_name == 'develop') || (github.event_name == 'workflow_call' && inputs.target == 'dev') || (github.event_name == 'workflow_dispatch' && inputs.target == 'dev')
     environment: dev
@@ -162,7 +162,7 @@ jobs:
             "launchpad"
 
   deploy-prod:
-    name: Launchpad â†’ Prod
+    name: Launchpad → Prod
     runs-on: ubuntu-latest
     if: (github.event_name == 'push' && github.ref_name == 'main') || (github.event_name == 'workflow_call' && inputs.target == 'prod') || (github.event_name == 'workflow_dispatch' && inputs.target == 'prod')
     environment: prod

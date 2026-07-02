@@ -4,8 +4,8 @@ This document describes how the Transformotion Apps platform is built: what it
 is for, how decisions get made, how documents relate, where code lives, and
 how work flows through the team.
 
-It is the operating substrate for everything else. New contributors â€” human
-or Claude â€” read this first. Existing contributors return to it when a
+It is the operating substrate for everything else. New contributors — human
+or Claude — read this first. Existing contributors return to it when a
 question arises about where something belongs, who owns it, or how a change
 should be sequenced.
 
@@ -27,26 +27,26 @@ evaluated against these. A change that does not serve any goal needs
 justification; a change that improves one goal at the cost of another must
 make the trade-off visible.
 
-- **Goal 1 â€” Work on one app without affecting another.** Code-level
+- **Goal 1 — Work on one app without affecting another.** Code-level
   isolation (no cross-app imports), build-level isolation (per-app
   typecheck, lint, test), deployment-level isolation (path-filtered
   workflows, independent stack composition). The presence of any app's
   code inside another app's tree is a Goal-1 violation regardless of
   whether the imports are clean.
 
-- **Goal 2 â€” Deploy a new app without affecting existing ones.** The
+- **Goal 2 — Deploy a new app without affecting existing ones.** The
   platform supports a canonical "shape of an app" that new apps can adopt
   without reinventing infrastructure, contracts, or boilerplate. Adding
   an app does not require modifying existing apps' code, infrastructure,
   or deploy pipelines.
 
-- **Goal 3 â€” Platform cohesion.** Update once, reuse everywhere, monitor
+- **Goal 3 — Platform cohesion.** Update once, reuse everywhere, monitor
   as a platform. Concerns shared across apps (auth, observability, UI
   primitives, configuration patterns) live in canonical locations and are
   consumed rather than copied. Cross-app monitoring exists at the
   platform level, not just per-app.
 
-- **Goal 4 â€” Invite people in based on the permissions model.** The
+- **Goal 4 — Invite people in based on the permissions model.** The
   multi-dimensional permission model (app access **derives from account
   membership**, with Cognito groups maintained as a projection of that
   membership; account membership and role via DynamoDB) is the canonical
@@ -128,7 +128,7 @@ PRs that also change the code they describe.
 
 **Trajectory documents** describe what work is happening, in what order,
 and toward what end. They change whenever scope shifts, but the change is
-visible â€” a PR that revises the plan revises this document in the same PR.
+visible — a PR that revises the plan revises this document in the same PR.
 
 **Operational documents** describe how the team works. They change when
 ways of working change. Changes are themselves PRs.
@@ -150,7 +150,7 @@ ways of working change. Changes are themselves PRs.
 | Contracts package | `/packages/contracts/` | Normative | The actual contracts: TypeScript shapes, API endpoints, data models, state management, typed mocks, and behavioural notes. | Per-app team |
 | Agent guide | `/AGENTS.md` and `/apps/<app>/AGENTS.md` | Operational | Canonical AI-agent operating guidance. Required at root and for every app. Minimum per-app content: app's purpose, key entry points, app-specific conventions, app-specific gotchas, sync flow if v0-driven. | Root / per-app team |
 | Claude Code mirror | `/CLAUDE.md` and `/apps/<app>/CLAUDE.md` | Operational | Claude Code compatibility mirror for the corresponding AGENTS.md file. Must remain semantically equivalent; changes to one without the other are governance drift. | Root / per-app team |
-| Architectural inventory | `/docs/architecture/inventory.md` | Normative (living document) | The current-state inventory of the platform â€” what is true about code, infrastructure, and operating state right now. Updated as state changes per the discipline rule (Section 2.1). Findings carry status tags including **Resolved by M*N* / PR #*N*** and **Superseded by [reference]** for living-document use. | Steve |
+| Architectural inventory | `/docs/architecture/inventory.md` | Normative (living document) | The current-state inventory of the platform — what is true about code, infrastructure, and operating state right now. Updated as state changes per the discipline rule (Section 2.1). Findings carry status tags including **Resolved by M*N* / PR #*N*** and **Superseded by [reference]** for living-document use. | Steve |
 
 Documents that have been superseded live in `/docs/archive/` with a header
 noting the supersession date and the document that replaced them.
@@ -185,13 +185,13 @@ the architecture documents.
 
 ```
 /
-â”œâ”€â”€ apps/                  # User-facing applications, including launchpad
-â”œâ”€â”€ platform/              # Platform-owned deployable artefacts (Lambdas, CDK)
-â”œâ”€â”€ packages/              # Shared code consumed by 2+ apps or platform
-â”œâ”€â”€ packages/contracts/    # Canonical contracts package
-â”œâ”€â”€ docs/                  # Documentation (architecture, archive, inventory)
-â”œâ”€â”€ scripts/               # Repository-level scripts (e.g., sync-v0.sh)
-â””â”€â”€ infrastructure/        # CDK app entrypoint only; stacks live with their owners
+├── apps/                  # User-facing applications, including launchpad
+├── platform/              # Platform-owned deployable artefacts (Lambdas, CDK)
+├── packages/              # Shared code consumed by 2+ apps or platform
+├── packages/contracts/    # Canonical contracts package
+├── docs/                  # Documentation (architecture, archive, inventory)
+├── scripts/               # Repository-level scripts (e.g., sync-v0.sh)
+└── infrastructure/        # CDK app entrypoint only; stacks live with their owners
 ```
 
 ### 3.2 The `apps/` directory
@@ -202,35 +202,35 @@ infrastructure.
 
 ```
 apps/
-â”œâ”€â”€ launchpad/             # The platform shell â€” sign-in, app tile rendering
-â”œâ”€â”€ stock-analyser/        # Stock Signal Analyser
-â”œâ”€â”€ budget-tracker/        # Budget Tracker
-â””â”€â”€ <future-app>/
+├── launchpad/             # The platform shell — sign-in, app tile rendering
+├── stock-analyser/        # Stock Signal Analyser
+├── budget-tracker/        # Budget Tracker
+└── <future-app>/
 ```
 
 Launchpad is treated as an app. It consumes platform services through
 packages like any other app. It owns the platform shell UI (sign-in flow,
 tile rendering, account switcher) but not the platform substrate (auth
-substrate, multi-tenancy services, account-resolution Lambdas â€” these live
+substrate, multi-tenancy services, account-resolution Lambdas — these live
 in `platform/` or `packages/`).
 
 Each app has the following internal structure:
 
 ```
 apps/<app>/
-â”œâ”€â”€ app/                   # Next.js routing
-â”œâ”€â”€ components/            # App-specific React components
-â”œâ”€â”€ lib/                   # App-specific TypeScript modules
-â”œâ”€â”€ stores/                # App-specific Zustand stores (auth, domain state)
-â”œâ”€â”€ functions/             # App-specific Lambda handlers
-â”œâ”€â”€ infrastructure/        # App-specific CDK stacks
-â”œâ”€â”€ contracts/             # Forbidden â€” see Section 2.3 (contracts root only)
-â”œâ”€â”€ public/                # Static assets
-â”œâ”€â”€ AGENTS.md              # Canonical per-app agent guide (required)
-â”œâ”€â”€ CLAUDE.md              # Claude Code compatibility mirror (required)
-â”œâ”€â”€ README.md              # Per-app human-readable overview
-â”œâ”€â”€ package.json
-â””â”€â”€ tsconfig.json
+├── app/                   # Next.js routing
+├── components/            # App-specific React components
+├── lib/                   # App-specific TypeScript modules
+├── stores/                # App-specific Zustand stores (auth, domain state)
+├── functions/             # App-specific Lambda handlers
+├── infrastructure/        # App-specific CDK stacks
+├── contracts/             # Forbidden — see Section 2.3 (contracts root only)
+├── public/                # Static assets
+├── AGENTS.md              # Canonical per-app agent guide (required)
+├── CLAUDE.md              # Claude Code compatibility mirror (required)
+├── README.md              # Per-app human-readable overview
+├── package.json
+└── tsconfig.json
 ```
 
 Tests are co-located with the code they test (`foo.ts` next to
@@ -251,12 +251,12 @@ The rule for what goes in `platform/` versus `packages/`:
 
 ```
 platform/
-â”œâ”€â”€ functions/             # Platform Lambda handlers
-â”‚   â”œâ”€â”€ auth/              # Auth-related Lambdas (account-provisioning, pre-token-generation, forgot-provider, invitations)
-â”‚   â”œâ”€â”€ accounts/          # Account management Lambda
-â”‚   â”œâ”€â”€ claude-proxy/      # Anthropic API proxy
-â”‚   â””â”€â”€ user/              # Platform user data Lambda
-â””â”€â”€ infrastructure/        # Platform CDK stacks (Network, Auth, AuthApi, PlatformTables, PlatformApi)
+├── functions/             # Platform Lambda handlers
+│   ├── auth/              # Auth-related Lambdas (account-provisioning, pre-token-generation, forgot-provider, invitations)
+│   ├── accounts/          # Account management Lambda
+│   ├── claude-proxy/      # Anthropic API proxy
+│   └── user/              # Platform user data Lambda
+└── infrastructure/        # Platform CDK stacks (Network, Auth, AuthApi, PlatformTables, PlatformApi)
 ```
 
 ### 3.4 The `packages/` directory
@@ -275,29 +275,29 @@ auth/session behaviour, or app-specific UI.
 
 ```
 packages/
-â”œâ”€â”€ api-client/            # Typed HTTP client for the platform API gateway
-â”œâ”€â”€ auth-client/           # Cognito and mock auth service implementations
-â”œâ”€â”€ budget-domain/         # Budget Tracker domain types and pure helpers
-â”œâ”€â”€ fn-claude-proxy-core/  # Shared Claude proxy mechanics for app-owned proxy Lambdas
-â”œâ”€â”€ lambda-middleware/     # Shared withAuth/withAuthOnly wrappers and helpers
-â”œâ”€â”€ rate-limit-middleware/ # Shared DynamoDB-backed rate-limit helpers
-â”œâ”€â”€ runtime-config/        # Runtime profile + provider resolution helpers (selectProvider, resolveProfile, normaliseCrossAppUrl, createConfig, config sub-types)
-â”œâ”€â”€ cdk-constructs/        # Shared CDK constructs (the shared construct library)
-â”œâ”€â”€ ui/                    # UI packages, organised by concern (see below)
-â””â”€â”€ <other-concern>/
+├── api-client/            # Typed HTTP client for the platform API gateway
+├── auth-client/           # Cognito and mock auth service implementations
+├── budget-domain/         # Budget Tracker domain types and pure helpers
+├── fn-claude-proxy-core/  # Shared Claude proxy mechanics for app-owned proxy Lambdas
+├── lambda-middleware/     # Shared withAuth/withAuthOnly wrappers and helpers
+├── rate-limit-middleware/ # Shared DynamoDB-backed rate-limit helpers
+├── runtime-config/        # Runtime profile + provider resolution helpers (selectProvider, resolveProfile, normaliseCrossAppUrl, createConfig, config sub-types)
+├── cdk-constructs/        # Shared CDK constructs (the shared construct library)
+├── ui/                    # UI packages, organised by concern (see below)
+└── <other-concern>/
 ```
 
 UI packages are organised under `packages/ui/`. This is purely
-organisational â€” `packages/ui/` is not itself a package. Each UI concern is
+organisational — `packages/ui/` is not itself a package. Each UI concern is
 a separate package:
 
 ```
 packages/ui/
-â”œâ”€â”€ primitives/            # Radix-primitive wrappers (button, input, card, etc.)
-â”œâ”€â”€ forms/                 # Form components and hooks
-â”œâ”€â”€ app-shell/             # Layout, navigation, header, footer
-â”œâ”€â”€ auth-ui/               # Sign-in flow, account switcher, etc.
-â””â”€â”€ <other-ui-concern>/
+├── primitives/            # Radix-primitive wrappers (button, input, card, etc.)
+├── forms/                 # Form components and hooks
+├── app-shell/             # Layout, navigation, header, footer
+├── auth-ui/               # Sign-in flow, account switcher, etc.
+└── <other-ui-concern>/
 ```
 
 The decision rule for "should this go in a package?" is in Section 3.6.
@@ -398,7 +398,7 @@ The emergency reconciliation note must include:
 - contract reconciliation PR or issue link
 - expected reconciliation deadline
 - validation plan
-### 3.6 The decision rule â€” where new code lives
+### 3.6 The decision rule — where new code lives
 
 When a new piece of code is written, the question is: does it go in
 `apps/<app>/`, `platform/`, or `packages/`?
@@ -467,13 +467,13 @@ This document records only the file location convention.
 
 Branches use prefixes by source:
 
-- `claude-code/<descriptive-name>` â€” Claude-Code-driven work. The most
+- `claude-code/<descriptive-name>` — Claude-Code-driven work. The most
   common case.
-- `v0/<descriptive-name>` â€” v0-pushed branches synced from
+- `v0/<descriptive-name>` — v0-pushed branches synced from
   `transformotion-apps-b8`.
-- `<author>/<descriptive-name>` â€” Manual branches authored by a human
+- `<author>/<descriptive-name>` — Manual branches authored by a human
   contributor.
-- `feature/<name>` and `fix/<name>` â€” Acceptable but not preferred;
+- `feature/<name>` and `fix/<name>` — Acceptable but not preferred;
   prefer the source-prefixed form above.
 
 The descriptive name uses kebab-case and describes the *change*, not the
@@ -532,11 +532,11 @@ applies.
 ### 4.4 Issues, milestones, and the GitHub Project
 
 Every actionable unit of work is an issue. Bug, feature, refactor,
-documentation update â€” each gets an issue.
+documentation update — each gets an issue.
 
 **Before filing: check for existing coverage.** Search GitHub for the
 problem or feature before opening a new issue. A surprising number of
-issues get filed twice â€” once when the problem is first noticed, once
+issues get filed twice — once when the problem is first noticed, once
 when it surfaces again later and the earlier issue wasn't closed because
 the work landed on `develop`, not `main` (see Section 4.2). Use
 `gh issue list --search "<keyword>"` or the GitHub search UI. If a
@@ -547,13 +547,13 @@ than filing a new one.
 is filed, not later. If the work fits into the current numbered
 milestone, attach it there. If it belongs in a future milestone, attach
 it to that milestone. If it is genuinely unsequenced, attach it to the
-"Backlog â€” unsequenced items" milestone (see Section 4.9). An issue
+"Backlog — unsequenced items" milestone (see Section 4.9). An issue
 without a milestone is invisible to the project board's roadmap view and
 accumulates into the stale-open debt that periodic audits have to clean
 up. There is no valid reason to leave an issue unmilestoned.
 
 Issues belong to a milestone. Milestones map to `PLAN.md` milestones
-(M-setup, M0â€“M14, plus the "Backlog â€” unsequenced items" milestone).
+(M-setup, M0–M14, plus the "Backlog — unsequenced items" milestone).
 The first issue of each milestone is a "kickoff" issue capturing the
 preconditions for the milestone to start; subsequent issues reference
 the kickoff issue as parent.
@@ -565,7 +565,7 @@ gating issues from milestone Mn-1.
 
 **The GitHub Project lives at the organisation level:**
 [github.com/orgs/transformotion/projects/1](https://github.com/orgs/transformotion/projects/1)
-â€” "Platform development".
+— "Platform development".
 
 The Project provides views over issues and PRs:
 
@@ -577,7 +577,7 @@ The Status field has five options that drive the kanban columns:
 
 | Status | Meaning |
 |---|---|
-| **Backlog** | Issue raised but not yet prioritised. Typical state for items in the "Backlog â€” unsequenced items" milestone. |
+| **Backlog** | Issue raised but not yet prioritised. Typical state for items in the "Backlog — unsequenced items" milestone. |
 | **Todo** | Prioritised (in a numbered milestone), not yet started. |
 | **In Progress** | Actively being worked. |
 | **In Review** | A PR linked to the issue is open, awaiting review or CI. |
@@ -598,10 +598,10 @@ Deployment and validation remain part of the work.
 
 The Backlog/Todo distinction matters: an issue in a numbered milestone
 has been prioritised by the act of being placed in that milestone, so
-it sits at Todo; an issue in the "Backlog â€” unsequenced items"
+it sits at Todo; an issue in the "Backlog — unsequenced items"
 milestone has not been prioritised yet, so it sits at Backlog. An
 unsequenced issue can be triaged into Todo state without yet being
-promoted to a numbered milestone â€” that signals "next backlog item to
+promoted to a numbered milestone — that signals "next backlog item to
 pick up" without committing to a specific milestone.
 
 Project automation rules are configured to:
@@ -616,38 +616,38 @@ This automation is not the final authority for deploy-affecting work. If
 automation moves a card to Done before required deployment or runtime
 validation is complete, move it back to In Review until validation passes.
 
-**Issue filing with a numbered milestone â€” set Status to Todo immediately.** The automation always defaults to Backlog regardless of which milestone is attached. When you file an issue and attach it to a numbered milestone, also set its Project Status to Todo at the same time â€” manually, via the issue sidebar or the Project board. Leaving it at Backlog contradicts the milestone assignment (numbered milestones are prioritised by definition) and makes the roadmap view inaccurate, because the roadmap filters on Status.
+**Issue filing with a numbered milestone — set Status to Todo immediately.** The automation always defaults to Backlog regardless of which milestone is attached. When you file an issue and attach it to a numbered milestone, also set its Project Status to Todo at the same time — manually, via the issue sidebar or the Project board. Leaving it at Backlog contradicts the milestone assignment (numbered milestones are prioritised by definition) and makes the roadmap view inaccurate, because the roadmap filters on Status.
 
 Milestone completion percentage updates automatically as issues close.
 A 100%-closed percentage is a progress signal, **not** the definition of done:
 a milestone is complete only when its in-scope features function end-to-end and
-its deferrals are reconciled â€” see Section 4.4.1 (functional completion + the
+its deferrals are reconciled — see Section 4.4.1 (functional completion + the
 deferral ledger).
 
-**Roadmap view behaviour.** The Roadmap view positions items by date. The project has no custom target-date fields, so positioning falls back to the built-in `Closed` date â€” meaning open issues have no timeline position and do not appear in the date range the view is currently showing. For forward-looking tracking of active work, use the Kanban view (Status-based), which shows open issues regardless of date. The Roadmap view is most useful as a "what shipped when" retrospective in this project's current configuration. If you need open issues to appear on the roadmap at a specific point in time, add a custom `Target date` field to the project and populate it.
+**Roadmap view behaviour.** The Roadmap view positions items by date. The project has no custom target-date fields, so positioning falls back to the built-in `Closed` date — meaning open issues have no timeline position and do not appear in the date range the view is currently showing. For forward-looking tracking of active work, use the Kanban view (Status-based), which shows open issues regardless of date. The Roadmap view is most useful as a "what shipped when" retrospective in this project's current configuration. If you need open issues to appear on the roadmap at a specific point in time, add a custom `Target date` field to the project and populate it.
 
 **Milestone pairing rule:** Numbered milestones in `PLAN.md` and
 GitHub Milestones are paired. Creating or removing a numbered
 milestone in `PLAN.md` requires creating or closing the corresponding
 GitHub milestone in the same PR. The discipline rule (Section 2.1)
-applies â€” `PLAN.md` is a normative document and the GitHub state it
+applies — `PLAN.md` is a normative document and the GitHub state it
 references is part of what the document describes.
 
 **Milestone content pairing rule:** GitHub Milestone descriptions
 mirror `PLAN.md` milestone content (Purpose, Outcome, Goals served,
 Gate, Dependencies). When `PLAN.md` content for a milestone changes,
 the corresponding GitHub Milestone description is updated in the
-same PR. Descriptions don't auto-sync â€” they are part of what the
+same PR. Descriptions don't auto-sync — they are part of what the
 PR landing the change is responsible for.
 
 **Milestone close convention:** Milestones close when their in-scope work is
 functionally complete (Section 4.4.1 Rule A) AND their deferral ledger is
-reconciled (Rule D) â€” not merely when the issue-closure percentage reaches 100%.
+reconciled (Rule D) — not merely when the issue-closure percentage reaches 100%.
 Closure is a manual step (GitHub doesn't auto-close milestones). The PR landing
 the final issue's resolution may include the milestone closure as a follow-up
 step, or it may be done as a separate small action immediately after. Either is
 acceptable; what matters is that closed milestones disappear from the active list
-once their work is genuinely complete â€” features functioning, deferrals homed.
+once their work is genuinely complete — features functioning, deferrals homed.
 
 **Bootstrap exception:** Milestones whose work establishes the
 issue-tracking infrastructure itself (notably M-setup) are exempt
@@ -658,48 +658,48 @@ by merged PRs, rather than by issue closures. This exception applies
 only to bootstrap milestones; subsequent milestones follow the
 standard pattern.
 
-For the close-time disciplines â€” manually closing issues that landed on
+For the close-time disciplines — manually closing issues that landed on
 `develop`, closing parent trackers when all children close, and the
-periodic audit that catches what slips through â€” see Section 4.5.
+periodic audit that catches what slips through — see Section 4.5.
 
 ### 4.4.1 Milestone definition of done and deferral discipline
 
-A milestone's completion percentage (Section 4.4) counts closed issues â€” it is a
+A milestone's completion percentage (Section 4.4) counts closed issues — it is a
 progress signal, **not** the definition of done. Merged PRs and closed issues do
 not by themselves mean a milestone is complete: a PR can deliver nothing, and a
-closed issue can have shipped a stub. M11's pending-invitations failure â€” a
+closed issue can have shipped a stub. M11's pending-invitations failure — a
 feature "delivered" by merged PRs that never functioned end-to-end, because a
-deferral came due and nobody revisited it â€” is why these four rules exist.
+deferral came due and nobody revisited it — is why these four rules exist.
 
-**Rule A â€” Functional completion.** A milestone is COMPLETE only when its
-in-scope features FUNCTION end-to-end, VERIFIED against the working artifact â€” a
+**Rule A — Functional completion.** A milestone is COMPLETE only when its
+in-scope features FUNCTION end-to-end, VERIFIED against the working artifact — a
 real run, the feature actually doing the thing, in the environment that owns it.
 "PRs merged" and "issues closed" are not completion; completion is the feature
 working, observed. For deploy-affecting work this means verified *after*
 deployment against the live surface (consistent with the Done lifecycle in
 Section 4.4), never at PR merge.
 
-**Rule B â€” No homeless deferral.** A CUT or deferred item is legitimate only when
-it is recorded with both (1) a NAMED HOME â€” a specific milestone or a tracked
-GitHub issue that owns it â€” and (2) its trigger condition (what must become true
+**Rule B — No homeless deferral.** A CUT or deferred item is legitimate only when
+it is recorded with both (1) a NAMED HOME — a specific milestone or a tracked
+GitHub issue that owns it — and (2) its trigger condition (what must become true
 for it to come due). Deferring to "Phase N", "later", or "until X ships" with no
 tracked owner is PROHIBITED. A disposition list (Section 8.A) or a PR
 "documented seams" section that defers an item must name where it lives next. An
-un-homed deferral is a defect in the PR, the same class as a missing Â§2.1 doc
+un-homed deferral is a defect in the PR, the same class as a missing §2.1 doc
 update.
 
-**Rule C â€” Trigger review.** When a deferral's trigger condition is met (e.g.
+**Rule C — Trigger review.** When a deferral's trigger condition is met (e.g.
 "bundles shipped"), the items deferred against that trigger MUST be reviewed for
 whether they are now due. The contributor who satisfies a trigger owns checking
-what it unblocks â€” search the named home for items gated on it. A met trigger
+what it unblocks — search the named home for items gated on it. A met trigger
 with un-reviewed dependents is how a deferral silently rots into a gap.
 
-**Rule D â€” Close requires a deferral ledger.** Closing a milestone (Section 4.4
+**Rule D — Close requires a deferral ledger.** Closing a milestone (Section 4.4
 close convention) requires reconciling EVERY item that milestone deferred: each
 is either (a) done and verified (Rule A), or (b) rehomed to a named owner
-(Rule B) â€” a specific later milestone or tracked issue. No milestone closes with
+(Rule B) — a specific later milestone or tracked issue. No milestone closes with
 un-homed deferrals of its own scope. The close-out PR or close action records the
-ledger â€” for each deferred item, its disposition (done / rehomed-to-#NNN). A 100%
+ledger — for each deferred item, its disposition (done / rehomed-to-#NNN). A 100%
 issue-closure percentage does **not** authorise closure if the ledger is
 incomplete.
 
@@ -710,16 +710,16 @@ at the moment work is completed, and periodically as a standing audit.
 
 **Manually close issues when the closing PR merges to `develop`.** As
 described in Section 4.2, `Closes #N` in a PR body does not auto-close
-the issue when the PR merges to `develop` â€” auto-close only fires on
+the issue when the PR merges to `develop` — auto-close only fires on
 `main`. This is a predictable source of stale-open accumulation. The
 discipline: when a PR merges to `develop`, close the issues it resolves
-immediately â€” with a comment stating which PR closed them. Do not wait
+immediately — with a comment stating which PR closed them. Do not wait
 for `develop` to reach `main`; that merge may not happen for weeks, and
 by then the context is lost. The comment is the audit trail: it records
 why the issue closed and links back to the work.
 
 **Close parent trackers when all their children close.** A tracker
-issue â€” one whose purpose is to group related child issues â€” has done
+issue — one whose purpose is to group related child issues — has done
 its job when all its children are closed. It should close at that
 point, with a comment summarising the completed scope and citing the
 closing children. Leaving parent trackers open after their children
@@ -728,7 +728,7 @@ rule: when you close the last issue in a set tracked by a parent,
 check the parent and close it too.
 
 Worked example from M7: issue #253 was a parent tracker for five
-deduplication-gate issues (#290â€“#294). When #294 (the last child)
+deduplication-gate issues (#290–#294). When #294 (the last child)
 closed, #253 was checked, confirmed all five children were closed, and
 closed with a comment listing them. Without the discipline, #253 would
 have remained open indefinitely.
@@ -737,13 +737,13 @@ have remained open indefinitely.
 disciplines, issues accumulate. Run a close-out audit at every
 milestone boundary:
 
-1. `gh issue list --milestone "<closed-milestone>" --state open` â€”
+1. `gh issue list --milestone "<closed-milestone>" --state open` —
    any open issues against a just-closed milestone should have been
    closed when the milestone closed. Inspect each: work done but
    not closed (close with comment), or genuinely outstanding (move to
    the appropriate open milestone).
 
-2. `gh issue list --state open --search "no:milestone"` â€” issues
+2. `gh issue list --state open --search "no:milestone"` — issues
    without a milestone violate the at-filing rule (see above). Attach
    each to the appropriate milestone.
 
@@ -775,7 +775,7 @@ the way code problems can be.
 ### 4.7 Updating the architectural inventory
 
 The architectural inventory at `docs/architecture/inventory.md` is a
-living document â€” findings are updated as state changes, not appended
+living document — findings are updated as state changes, not appended
 as separate notes.
 
 When a PR addresses an inventory finding, the PR updates the finding
@@ -801,7 +801,7 @@ findings the inventory didn't have) add them to the relevant section
 with appropriate status tags.
 
 The inventory is one of the documents that PRs are most likely to
-touch over the platform's lifetime. Updates are normal â€” not a
+touch over the platform's lifetime. Updates are normal — not a
 sign of drift.
 
 ### 4.8 Commit messages
@@ -819,7 +819,7 @@ messages are convenience.
 `PLAN.md`'s "Beyond M14" section lists items scoped but not yet
 sequenced into numbered milestones. Each such item has a corresponding
 GitHub Issue, and those issues belong to a milestone called "Backlog
-â€” unsequenced items" so they remain visible in the GitHub Project
+— unsequenced items" so they remain visible in the GitHub Project
 rather than disappearing into "no milestone."
 
 The Backlog milestone is a holding area, not a deliverable. It has no
@@ -837,7 +837,7 @@ yet sequenced; they leave it when:
 
 The bidirectional rule: `PLAN.md` references and GitHub issues are
 paired. Items being added to `PLAN.md`'s "Beyond M*N*" section without
-a corresponding GitHub Issue is a documentation gap â€” the `PLAN.md`
+a corresponding GitHub Issue is a documentation gap — the `PLAN.md`
 text references a thing that isn't tracked anywhere actionable. Either
 the item gets a tracked issue in the Backlog milestone, or the
 `PLAN.md` reference gets removed.
@@ -860,19 +860,19 @@ The pattern that works:
 
 1. **New stack first.** Deploy the stack that gains the resource. The new resource exists; new exports get created.
 2. **Consumer stack with `--exclusively`.** Deploy the stack whose CFN template references those exports (typically PlatformApiStack for route registrations). Use `cdk deploy <stack-name> --exclusively` so CDK does NOT cascade into dependent stacks. The consumer picks up the new exports; old export references drop out.
-3. **Old stack last.** Deploy the stack that loses the resource. By this point, the old exports are no longer referenced â€” CFN can clean them up.
+3. **Old stack last.** Deploy the stack that loses the resource. By this point, the old exports are no longer referenced — CFN can clean them up.
 
 Without `--exclusively` in step 2, `cdk deploy` cascades into the old stack's redeploy, which fails because the old stack's exports are still being referenced by the consumer's *previous* CFN template (the one that hasn't redeployed yet). `--exclusively` breaks that loop.
 
-This pattern applies to any cross-stack resource move â€” not just Lambdas. Table moves, IAM role moves, gateway resource moves all hit the same mechanic.
+This pattern applies to any cross-stack resource move — not just Lambdas. Table moves, IAM role moves, gateway resource moves all hit the same mechanic.
 
 Worked example: M6 #176 relocated the budget-migrate Lambda from BudgetTrackerApiStack to MigrationsApiStack. The deploy sequence was:
 
-1. `cdk deploy TransformotionDev-MigrationsApi` â€” creates the new Lambda; exports its ARN
-2. `cdk deploy TransformotionDev-Api --exclusively` â€” Platform's CFN gets the new route registration with the new Lambda ARN; old route registration drops out
-3. `cdk deploy TransformotionDev-BudgetTrackerApi` â€” old MigrateFn definition removed; old Lambda ARN export disappears (no longer referenced)
+1. `cdk deploy TransformotionDev-MigrationsApi` — creates the new Lambda; exports its ARN
+2. `cdk deploy TransformotionDev-Api --exclusively` — Platform's CFN gets the new route registration with the new Lambda ARN; old route registration drops out
+3. `cdk deploy TransformotionDev-BudgetTrackerApi` — old MigrateFn definition removed; old Lambda ARN export disappears (no longer referenced)
 
-If step 2 had run without `--exclusively`, CDK would have tried to redeploy BudgetTrackerApiStack as part of the cascade, which still had the export reference at that point â€” failure.
+If step 2 had run without `--exclusively`, CDK would have tried to redeploy BudgetTrackerApiStack as part of the cascade, which still had the export reference at that point — failure.
 
 ---
 ## 5. Architectural patterns
@@ -899,7 +899,7 @@ This separation serves two concrete needs:
 
 2. **Physical-layer flexibility.** Decisions about where data physically lives are encapsulated. A cache currently in DynamoDB could move to Redis later; only the data-access layer changes. Business logic doesn't know and doesn't care.
 
-The layered architecture applies broadly. All data access goes through domain interfaces â€” both client-side and server-side. New code conforms; existing non-conforming code is migrated.
+The layered architecture applies broadly. All data access goes through domain interfaces — both client-side and server-side. New code conforms; existing non-conforming code is migrated.
 
 ### 5.2 Domain interfaces and implementations
 
@@ -907,22 +907,22 @@ The layered architecture applies broadly. All data access goes through domain in
 
 **Implementations** of a domain interface live in the data-access layer. Each implementation is named for its physical store. Examples:
 
-- `DynamoTransactionRepository` â€” implements `TransactionRepository` against DynamoDB
-- `LocalStorageTransactionRepository` â€” implements `TransactionRepository` against browser localStorage
-- `HttpTransactionRepository` â€” implements `TransactionRepository` by calling a platform API
-- `DynamoTTLCacheService` â€” implements `CacheService` against DynamoDB with TTL semantics
+- `DynamoTransactionRepository` — implements `TransactionRepository` against DynamoDB
+- `LocalStorageTransactionRepository` — implements `TransactionRepository` against browser localStorage
+- `HttpTransactionRepository` — implements `TransactionRepository` by calling a platform API
+- `DynamoTTLCacheService` — implements `CacheService` against DynamoDB with TTL semantics
 
 The implementation name makes the physical store explicit. A reader can tell at a glance where data goes.
 
-Multiple implementations of the same domain interface coexist. A single domain interface (`TransactionRepository`) typically has at least two implementations â€” one for v0 (localStorage) and one for production (HTTP-via-ApiClient on client-side, DynamoDB on server-side). They never conflict because only one is wired in at a time.
+Multiple implementations of the same domain interface coexist. A single domain interface (`TransactionRepository`) typically has at least two implementations — one for v0 (localStorage) and one for production (HTTP-via-ApiClient on client-side, DynamoDB on server-side). They never conflict because only one is wired in at a time.
 
 ### 5.3 Implementation selection
 
 The decision of which implementation gets wired in is made at the environment layer, not at runtime. Implementations are selected by configuration; nothing flips during execution.
 
-**Client-side selection: build-time config.** The build mode (`MODE` in Vite, equivalent in Next.js) determines which implementation is bundled. Production builds include only the production implementation; v0 builds include only the mock implementation. The unused implementation is tree-shaken out â€” production bundles do not carry mock code.
+**Client-side selection: build-time config.** The build mode (`MODE` in Vite, equivalent in Next.js) determines which implementation is bundled. Production builds include only the production implementation; v0 builds include only the mock implementation. The unused implementation is tree-shaken out — production bundles do not carry mock code.
 
-The build-time config is typically driven by an environment variable like `NEXT_PUBLIC_RUNTIME_PROFILE`, set per build environment. The variable is consumed at the module level where the implementation is wired into the domain interface. See Â§5.8 for the canonical pattern documentation.
+The build-time config is typically driven by an environment variable like `NEXT_PUBLIC_RUNTIME_PROFILE`, set per build environment. The variable is consumed at the module level where the implementation is wired into the domain interface. See §5.8 for the canonical pattern documentation.
 
 **Server-side selection: deployment-time config via CDK.** Lambdas receive their physical-store choice via environment variables defined in their CDK stack definition. A Lambda using `CacheService` reads (for example) `CACHE_BACKEND=dynamodb` at startup and wires the corresponding implementation.
 
@@ -932,25 +932,25 @@ The shared principle: the implementation choice is an environment concern, not a
 
 ### 5.4 Domain interface naming conventions
 
-Domain interface names are store-agnostic â€” they describe what is being accessed, not where it lives. Two naming patterns apply, distinguished by what the interface abstracts.
+Domain interface names are store-agnostic — they describe what is being accessed, not where it lives. Two naming patterns apply, distinguished by what the interface abstracts.
 
-**Repository pattern** â€” for interfaces that abstract a collection of entities. The consuming code thinks of the data as "entities in a collection we look up, save, modify, delete." Operations are CRUD-shaped: `findById`, `findAll`, `save`, `delete`, etc.
+**Repository pattern** — for interfaces that abstract a collection of entities. The consuming code thinks of the data as "entities in a collection we look up, save, modify, delete." Operations are CRUD-shaped: `findById`, `findAll`, `save`, `delete`, etc.
 
 Repository names end with `Repository`. Examples:
 
-- `TransactionRepository` â€” operations on transactions
-- `WatchlistRepository` â€” operations on watchlists
-- `AccountRepository` â€” operations on accounts
+- `TransactionRepository` — operations on transactions
+- `WatchlistRepository` — operations on watchlists
+- `AccountRepository` — operations on accounts
 
-**Service pattern** â€” for interfaces that abstract a capability rather than a collection. The consuming code thinks of the data as something it invokes operations on, but the operations don't map cleanly to CRUD on identifiable entities. Examples include caches (key-value memoisation, not entity collections), email sending (a capability, not a thing), and orchestration utilities.
+**Service pattern** — for interfaces that abstract a capability rather than a collection. The consuming code thinks of the data as something it invokes operations on, but the operations don't map cleanly to CRUD on identifiable entities. Examples include caches (key-value memoisation, not entity collections), email sending (a capability, not a thing), and orchestration utilities.
 
 Service names end with `Service`. Examples:
 
-- `CacheService` â€” cache reads/writes by key
-- `EmailService` â€” sending email
-- `RateLimiterService` â€” rate-limit decisions
+- `CacheService` — cache reads/writes by key
+- `EmailService` — sending email
+- `RateLimiterService` — rate-limit decisions
 
-**A practical test for which pattern applies.** Try writing the interface signature in your head. If the operations naturally include `findById`, `getAll`, `save`, `delete` operating on entities with identity â€” it's a Repository. If the operations are whatever-makes-sense for the capability without that CRUD shape â€” it's a Service.
+**A practical test for which pattern applies.** Try writing the interface signature in your head. If the operations naturally include `findById`, `getAll`, `save`, `delete` operating on entities with identity — it's a Repository. If the operations are whatever-makes-sense for the capability without that CRUD shape — it's a Service.
 
 Where an interface seems to fit neither cleanly, the test usually reveals which way to lean. Force-fitting a poorly-matched name confuses readers; if neither pattern fits well, write down what the interface actually does and the right name usually emerges.
 
@@ -961,8 +961,8 @@ Logical entities (commonly called "tables", though the policy applies regardless
 **The rule:** `{scope}.{entity}-{stage}`
 
 - `scope` is one of:
-  - `platform` â€” for tables used by multiple apps or by platform infrastructure
-  - An app slug (`stock-analyser`, `budget-tracker`, `launchpad`, etc.) â€” for tables owned by a single app
+  - `platform` — for tables used by multiple apps or by platform infrastructure
+  - An app slug (`stock-analyser`, `budget-tracker`, `launchpad`, etc.) — for tables owned by a single app
 - `.` separates scope from entity
 - `entity` describes what the table holds (`accounts`, `transactions`, `analysis-cache`, etc.)
 - `-` separates entity from stage
@@ -970,11 +970,11 @@ Logical entities (commonly called "tables", though the policy applies regardless
 
 All components are lowercase. Multi-word components within `scope` and `entity` use hyphens (`stock-analyser`, `analysis-cache`).
 
-**Scope is categorical, not stylistic.** A table prefixed `platform.` is platform-scoped â€” used by multiple apps or by platform infrastructure. A table prefixed `stock-analyser.` is app-scoped â€” owned by stock-analyser, accessed by stock-analyser Lambdas only. The categorisation matters because IAM grants follow scope: platform-scoped tables grant access to platform-eligible Lambdas; app-scoped tables grant access only to that app's Lambdas.
+**Scope is categorical, not stylistic.** A table prefixed `platform.` is platform-scoped — used by multiple apps or by platform infrastructure. A table prefixed `stock-analyser.` is app-scoped — owned by stock-analyser, accessed by stock-analyser Lambdas only. The categorisation matters because IAM grants follow scope: platform-scoped tables grant access to platform-eligible Lambdas; app-scoped tables grant access only to that app's Lambdas.
 
 The policy applies to all logical tables regardless of physical storage backend. DynamoDB, Redis, or other future storage choices follow the same naming convention.
 
-The policy does not apply to other AWS resources (S3 buckets, SQS queues, Lambda function names) â€” those follow their own conventions or CDK defaults.
+The policy does not apply to other AWS resources (S3 buckets, SQS queues, Lambda function names) — those follow their own conventions or CDK defaults.
 
 **No reserved prefixes** beyond the ones already in use. Future expansion can add reserved prefixes if needed; over-specifying now is premature.
 
@@ -989,27 +989,27 @@ budget-tracker.transactions-{stage}    # app-scoped to budget-tracker
 budget-tracker.rules-{stage}           # app-scoped to budget-tracker
 ```
 
-Existing tables that don't conform are migrated to canonical form. No grandfathering â€” the rule is universal.
+Existing tables that don't conform are migrated to canonical form. No grandfathering — the rule is universal.
 
 ### 5.6 Auth model
 
-Auth follows the same layered architecture as data access. The platform's auth concerns â€” JWT claim consumption, authorization decisions, cross-Lambda trust â€” apply the patterns documented in 5.1 through 5.4 to a different domain.
+Auth follows the same layered architecture as data access. The platform's auth concerns — JWT claim consumption, authorization decisions, cross-Lambda trust — apply the patterns documented in 5.1 through 5.4 to a different domain.
 
 **Helper interface in `packages/lambda-middleware/`.** All Lambda handlers use the canonical helper interface for auth concerns. The interface has two layers:
 
-- **Middleware wrappers** (`middleware.ts`) â€” `withAuth(handler)` provides JWT plus account context; `withAuthOnly(handler)` provides JWT without account context (for routes that operate on the user themselves rather than account-scoped data). Both internally call `extractAuthClaims` to read raw claims; consumers do not import `extractAuthClaims` directly.
-- **Claim-based helpers** (`auth.ts`) â€” `requireAppAccess`, `requireAnyAppAccess`, `requireSiteAdmin`. These operate on the typed `auth` object provided by the wrappers and throw 403 on authorization failure.
-- **Policy layer** (`policy.ts`, M16 D9) â€” `requireAccountData(appSlug)` for app-data routes (`.read` = claims-only, viewer passes; `.write` = claims + live members row, viewer denied) and `requireAccountAdmin(...)` for supervisory/ownership routes. There is no site-admin data bypass. The former `requireAccountAccess` / `requireAccountOwner` helpers were deleted in M16 Phase 5.
+- **Middleware wrappers** (`middleware.ts`) — `withAuth(handler)` provides JWT plus account context; `withAuthOnly(handler)` provides JWT without account context (for routes that operate on the user themselves rather than account-scoped data). Both internally call `extractAuthClaims` to read raw claims; consumers do not import `extractAuthClaims` directly.
+- **Claim-based helpers** (`auth.ts`) — `requireAppAccess`, `requireAnyAppAccess`, `requireSiteAdmin`. These operate on the typed `auth` object provided by the wrappers and throw 403 on authorization failure.
+- **Policy layer** (`policy.ts`, M16 D9) — `requireAccountData(appSlug)` for app-data routes (`.read` = claims-only, viewer passes; `.write` = claims + live members row, viewer denied) and `requireAccountAdmin(...)` for supervisory/ownership routes. There is no site-admin data bypass. The former `requireAccountAccess` / `requireAccountOwner` helpers were deleted in M16 Phase 5.
 
 The full interface and per-helper semantics are documented in `auth.md`.
 
-**JWT-claim consumption is layered.** Raw claim reads occur only in the middleware layer (`packages/lambda-middleware/`). Business-logic Lambdas access claims via the typed `auth` object provided by `withAuth` / `withAuthOnly`, using documented helpers when authorization decisions are needed. New Lambdas never read claims directly â€” that is the middleware layer's responsibility.
+**JWT-claim consumption is layered.** Raw claim reads occur only in the middleware layer (`packages/lambda-middleware/`). Business-logic Lambdas access claims via the typed `auth` object provided by `withAuth` / `withAuthOnly`, using documented helpers when authorization decisions are needed. New Lambdas never read claims directly — that is the middleware layer's responsibility.
 
 This is a layering rule of the same shape as 5.1's data-access architecture. The middleware layer encapsulates raw-claim concerns; business logic operates on typed values. Direct claim access in business-logic code is non-conforming and migrates to helper-mediated access.
 
-**Cross-Lambda trust uses Pattern B with strict constraints.** When one platform Lambda invokes another (currently only `budget-ai â†’ claude-proxy`), the receiving Lambda does not validate JWT signatures itself. Trust comes from IAM scope strictly limiting which callers can invoke. The caller propagates JWT claims via a synthetic event; the receiver reads them as if validated.
+**Cross-Lambda trust uses Pattern B with strict constraints.** When one platform Lambda invokes another (currently only `budget-ai → claude-proxy`), the receiving Lambda does not validate JWT signatures itself. Trust comes from IAM scope strictly limiting which callers can invoke. The caller propagates JWT claims via a synthetic event; the receiver reads them as if validated.
 
-This is consistent with the platform's general edge-validation posture (API Gateway validates at the edge; claim-reading helpers trust prior validation). Pattern A â€” per-hop JWT re-validation â€” would create an asymmetric posture inside the platform and adds operational complexity without proportionate benefit at the platform's current threat model (single trust domain, all Lambdas under common operational control).
+This is consistent with the platform's general edge-validation posture (API Gateway validates at the edge; claim-reading helpers trust prior validation). Pattern A — per-hop JWT re-validation — would create an asymmetric posture inside the platform and adds operational complexity without proportionate benefit at the platform's current threat model (single trust domain, all Lambdas under common operational control).
 
 The pattern is permitted only with the following constraints, all binding:
 
@@ -1019,7 +1019,7 @@ The pattern is permitted only with the following constraints, all binding:
 
 If the platform's threat model changes (third-party Lambda code, multi-tenant Lambda deployment), Pattern B would be reconsidered.
 
-**Client-side auth follows the same layered architecture as data access.** A domain interface (`AuthService`) lives in contracts. Implementations are named for what they wrap: `CognitoAuthService` (production) and `MockAuthService` (v0). Selection is build-time per 5.3. Components, services, and hooks access claim-derived data only via the `AuthService` interface â€” never by reading JWT claims directly. Frontend treatment of auth is symmetric to Lambda treatment: typed access via interface; raw access only in the implementation layer.
+**Client-side auth follows the same layered architecture as data access.** A domain interface (`AuthService`) lives in contracts. Implementations are named for what they wrap: `CognitoAuthService` (production) and `MockAuthService` (v0). Selection is build-time per 5.3. Components, services, and hooks access claim-derived data only via the `AuthService` interface — never by reading JWT claims directly. Frontend treatment of auth is symmetric to Lambda treatment: typed access via interface; raw access only in the implementation layer.
 
 ### 5.7 Contracts
 
@@ -1169,7 +1169,7 @@ const authProvider = selectProvider({
 });
 ```
 
-**Call site discipline.** Each app's `lib/config/index.ts` is the canonical resolution point â€” it calls `selectProvider` once at app startup, stores the resolved values in the config object (e.g., `config.auth.provider`), and downstream factories receive the resolved value as a parameter rather than reading env vars directly. This keeps runtime decisions centralised, testable, and visible.
+**Call site discipline.** Each app's `lib/config/index.ts` is the canonical resolution point — it calls `selectProvider` once at app startup, stores the resolved values in the config object (e.g., `config.auth.provider`), and downstream factories receive the resolved value as a parameter rather than reading env vars directly. This keeps runtime decisions centralised, testable, and visible.
 
 **Relationship to Section 5.3.** Section 5.3 (Implementation selection) covers the architectural pattern of having multiple implementations behind a domain interface. Section 5.8 covers the specific env var semantics and resolution mechanism. The two work together: 5.3 establishes the pattern; 5.8 defines how the choice is made.
 
@@ -1177,7 +1177,7 @@ const authProvider = selectProvider({
 
 ## 6. Utility categories and conventions
 
-Some code in this repository is not part of the running platform's architecture. It is tooling â€” utilities that solve specific operational concerns. These utilities live as their own peer categories at the repository root, alongside `apps/`, `packages/`, and `platform/`.
+Some code in this repository is not part of the running platform's architecture. It is tooling — utilities that solve specific operational concerns. These utilities live as their own peer categories at the repository root, alongside `apps/`, `packages/`, and `platform/`.
 
 This section documents the principle and the specific utility categories currently established.
 
@@ -1202,7 +1202,7 @@ When a piece of code fits all three criteria, it belongs in a utility category, 
 - One Lambda per migration; each instance runs once per user
 - Named for what it does, not for the technology underneath
 
-The category as a whole is permanent. Individual utilities are not â€” each runs once for each user, then sits in the repository as documentation, replay capability, or reference for future similar migrations.
+The category as a whole is permanent. Individual utilities are not — each runs once for each user, then sits in the repository as documentation, replay capability, or reference for future similar migrations.
 
 **Repo structure.**
 
@@ -1250,8 +1250,8 @@ Utility categories that need AWS infrastructure carry their own CDK stacks at `<
 
 Utility infrastructure is a peer to `platform/infrastructure/`, not a child of it. The two are conceptually distinct:
 
-- `platform/infrastructure/` holds infrastructure for the running platform â€” API stacks, table stacks, auth stacks
-- `<category>/infrastructure/` holds infrastructure for utilities â€” separate stacks, owned by the utility category
+- `platform/infrastructure/` holds infrastructure for the running platform — API stacks, table stacks, auth stacks
+- `<category>/infrastructure/` holds infrastructure for utilities — separate stacks, owned by the utility category
 
 The same separation principle that keeps the running platform's code out of utility directories also keeps the running platform's infrastructure out of utility infrastructure directories.
 
@@ -1320,7 +1320,7 @@ they describe before reading the rest of the description.
 The pattern is: a PR's stated scope is auth-related, but the diff also
 contains "drift cleanup" that touches unrelated repositories. The
 cleanup might be correct, but it is out of scope, and "scope creep is
-fine when it happens to be correct" is not a rule we operate by â€” "scope
+fine when it happens to be correct" is not a rule we operate by — "scope
 creep gets caught regardless" is.
 
 The audit mechanism is to read the diff, not the description, and verify
@@ -1336,7 +1336,7 @@ resolution is to identify which of the four goals (Section 1.1) each
 option serves, which it costs, and whether the v0 constraint (Section
 1.2) is preserved.
 
-A change that does not serve any goal needs justification â€” not a
+A change that does not serve any goal needs justification — not a
 prohibition, but a forced rationale. A change that improves one goal at
 the cost of another must make the trade-off visible in the PR or issue.
 
@@ -1351,16 +1351,16 @@ Packages in `/packages/` that are consumed directly from source (via
 use bare specifiers for internal imports:
 
 ```typescript
-// Correct â€” source-reference package
+// Correct — source-reference package
 import type { Transaction } from "./contracts";
 
-// Wrong â€” correct only for published ESM packages with compiled dist/
+// Wrong — correct only for published ESM packages with compiled dist/
 import type { Transaction } from "./contracts.js";
 ```
 
 The `.js` extension is the ESM convention for *published packages* where
 the emitted `.js` files exist in `dist/`. In source-reference packages
-there are no `.js` files; `tsc --noEmit` resolves `.js` â†’ `.ts` via
+there are no `.js` files; `tsc --noEmit` resolves `.js` → `.ts` via
 `moduleResolution: "bundler"` and passes, but Turbopack does not apply
 that mapping and fails with a module-not-found error at build time.
 
@@ -1374,7 +1374,7 @@ every internal import in that package uses a bare specifier.
 
 `typescript.ignoreBuildErrors: true` in `next.config.mjs` suppresses all
 TypeScript errors from `next build`. It is an escape hatch for situations
-where a build must ship despite known errors â€” not a setting to leave in
+where a build must ship despite known errors — not a setting to leave in
 place. The specific risk: it hides regressions introduced by subsequent
 changes.
 
@@ -1384,7 +1384,7 @@ If you are tempted to add it, the required steps are:
 2. Open a GitHub Issue documenting each error, its root cause, and the
    remediation plan.
 3. Add the setting with a comment that references the issue: e.g.,
-   `// ignoreBuildErrors: true â€” tracked in #NNN`.
+   `// ignoreBuildErrors: true — tracked in #NNN`.
 4. Set a gate in PLAN.md: the setting must be removed before the relevant
    milestone closes.
 
@@ -1395,7 +1395,7 @@ is the expected outcome when stabilisation is done correctly.
 
 ### 7.6 Lambda-to-Lambda interface contracts must be verified against the target handler's actual API
 
-When one Lambda invokes another (e.g., `budget-ai` â†’ `claude-proxy`),
+When one Lambda invokes another (e.g., `budget-ai` → `claude-proxy`),
 the request body field names and response shape must match the *target
 Lambda's handler code*, not the documentation or prior mental model.
 
@@ -1404,9 +1404,9 @@ does not recognise, the target silently ignores them, returns an error,
 and the caller's middleware wraps it as a 500. All three bugs in the
 AI Review Lambda (PR #229) followed this pattern:
 
-- `max_tokens` sent, `maxTokens` expected â†’ request rejected silently
-- `messages: [...]` sent, `prompt: string` expected â†’ request rejected silently
-- Response parsed as content-blocks array, actual response was a string â†’ TypeError at runtime
+- `max_tokens` sent, `maxTokens` expected → request rejected silently
+- `messages: [...]` sent, `prompt: string` expected → request rejected silently
+- Response parsed as content-blocks array, actual response was a string → TypeError at runtime
 
 The rule: whenever a Lambda calls another Lambda directly (not via HTTP),
 read the target Lambda's handler source before writing the invocation
@@ -1419,7 +1419,7 @@ The `budget-tracker.settings` table is a key-value store where each
 `settingKey` corresponds to a field in `BudgetSettings`. When a field is
 removed from `BudgetSettings` (and therefore from the Lambda's
 `SETTING_KEYS` whitelist), the corresponding DynamoDB rows do not delete
-themselves â€” they remain in the table, invisible to the application but
+themselves — they remain in the table, invisible to the application but
 present in every full scan.
 
 When removing a field from `BudgetSettings`, the required steps are:
@@ -1447,7 +1447,7 @@ If a prompt says "diagnose only," that instruction applies until the user explic
 
 When in doubt: surface findings, ask, wait. Asking adds at most a few seconds; assuming costs trust and produces work that has to be reviewed retroactively for whether it should have happened at all.
 
-This pattern was surfaced in M6 when CC, after thorough diagnosis of a rules PATCH bug, proceeded directly to implementation, commit, push, and PR â€” all without the user's authorization, despite an explicit "diagnose only" instruction. The fix itself was correct; the boundary violation that produced it was not.
+This pattern was surfaced in M6 when CC, after thorough diagnosis of a rules PATCH bug, proceeded directly to implementation, commit, push, and PR — all without the user's authorization, despite an explicit "diagnose only" instruction. The fix itself was correct; the boundary violation that produced it was not.
 
 ### 7.9 Architecturally clean wins ties
 
@@ -1470,7 +1470,7 @@ propagates a shared concern (e.g., a config object, a construct
 reference) through every consumer versus one that emits the concern
 once and lets consumers read it directly (e.g., via CloudFormation
 exports, env vars, or a canonical config file), choose the emission
-pattern â€” it is structurally cleaner because each consumer is
+pattern — it is structurally cleaner because each consumer is
 independently deployable and independently testable.
 
 This rule was established in M7 / issue #346 when choosing between
@@ -1485,7 +1485,7 @@ platform on every platform stack change.
 
 ---
 
-## 8. Working Agreement â€” scope provenance and decision discipline
+## 8. Working Agreement — scope provenance and decision discipline
 
 This section codifies process lessons from the M11/M16 account-lifecycle
 milestone. It is normative and applies to all phase work.
@@ -1494,22 +1494,22 @@ Every feature, endpoint, or UI surface built in a phase MUST carry a
 **provenance tag**, recorded in the phase brief and the PR body, *before*
 implementation:
 
-- **prototyped** â€” it exists in the v0 prototype (cite the screen or behaviour).
-- **contracted** â€” it is defined in the m16/m17 contracts (cite the type, route,
+- **prototyped** — it exists in the v0 prototype (cite the screen or behaviour).
+- **contracted** — it is defined in the m16/m17 contracts (cite the type, route,
   or `behaviour.md` clause).
-- **net-new** â€” neither.
+- **net-new** — neither.
 
 **Rules.**
 
 1. **No net-new work inside a phase.** If an item is net-new, STOP and raise it as
-   a backlog issue â€” do not build it as part of phase work. Net-new may enter the
-   build path only via the normal route: prototype in v0 â†’ promote to contract â†’
+   a backlog issue — do not build it as part of phase work. Net-new may enter the
+   build path only via the normal route: prototype in v0 → promote to contract →
    implement. The owner may explicitly fast-track, but only as a recorded,
    deliberate exception.
 2. **Sub-questions never legitimise an unscoped parent.** Before resolving a detail
    question about a feature (e.g. "should `deleteAccount` block or cascade?"),
    confirm the feature itself is prototyped or contracted. If the parent has no
-   provenance, the parent is the issue â€” raise it; do not answer the sub-question.
+   provenance, the parent is the issue — raise it; do not answer the sub-question.
 3. **Per-phase gap analysis precedes wiring.** Before a phase's implementation
    begins, enumerate the phase's needs against the prototype/contract coverage as a
    single gap list. Anything the phase needs that is not covered is resolved (or
@@ -1529,26 +1529,26 @@ reviewers reject untagged or net-new-tagged phase work. These rules are mirrored
 the project custom instructions that govern the chat-side design partner, since the
 same drift originates there.
 
-### 8.A â€” v0 is the design of record (reproduction, not re-decision)
+### 8.A — v0 is the design of record (reproduction, not re-decision)
 
 The rules above govern whether work is in scope. This subsection governs how a
 prototyped surface is built: the v0 prototype is the settled design, and wire-up
 reproduces it rather than re-deciding it.
 
-**v0 is the authoritative source of truth for the UI** â€” layout, markup,
+**v0 is the authoritative source of truth for the UI** — layout, markup,
 structure, class names, controls, and copy. This is the same reason the
 contracts are owned by v0: design and shape originate in v0, and runtime
 consumes them. Runtime's job is to **wire the backend to the v0 surface and its
-contracts â€” not to design, restyle, re-arrange, or re-word UI**. Every UI change
+contracts — not to design, restyle, re-arrange, or re-word UI**. Every UI change
 (layout, control, copy, styling) originates in v0 and reaches runtime via the
-v0 change â†’ contract/sync path, **never the reverse**. A UI difference between
+v0 change → contract/sync path, **never the reverse**. A UI difference between
 runtime and v0 is a runtime defect to reconcile toward v0, not a v0 gap to
-backfill from runtime â€” unless the owner has explicitly declared runtime ahead
+backfill from runtime — unless the owner has explicitly declared runtime ahead
 for that surface.
 
 1. Settled v0 decisions are read from v0, not re-raised. Where the prototype
    shows how a surface looks or behaves, that is binding. At wire-up a question
-   the prototype already answers is answered by consulting the prototype â€” it
+   the prototype already answers is answered by consulting the prototype — it
    does not return to the owner. Re-opening a v0-settled decision during wiring
    is the failure this rule exists to prevent.
 
@@ -1561,41 +1561,41 @@ for that surface.
 
 3. The two gates are independent. The four-way classification in AGENTS.md
    (contract-changing / non-contract polish / runtime-only / emergency) tests
-   contract-SHAPE drift. The provenance gate (Â§8 rule 1) tests whether the
+   contract-SHAPE drift. The provenance gate (§8 rule 1) tests whether the
    behaviour/UX exists in v0 or contract at all. Passing the first does not
    discharge the second. "Runtime-only / no v0 impact" justifies only changes to
-   HOW an already-agreed contract or prototype is implemented â€” never the
+   HOW an already-agreed contract or prototype is implemented — never the
    introduction of behaviour or UX absent from both. (Phase 6 delete-account
    changed no shape yet introduced a whole feature; parked as #447 by this gate,
    not the shape gate.)
 
 4. Presentation is ported verbatim; only persistence is rebuilt. The earlier
    framing of "rebuild the surface" applies to the **data/persistence layer
-   only** (v0's mock store â†’ live services), and that framing was being
-   over-read as licence to re-create the markup. It is not. **Presentation â€”
-   JSX structure, element arrangement, class names, controls, and copy â€” is
+   only** (v0's mock store → live services), and that framing was being
+   over-read as licence to re-create the markup. It is not. **Presentation —
+   JSX structure, element arrangement, class names, controls, and copy — is
    PORTED VERBATIM, not re-derived.** The mechanical procedure: start from the
    v0 component as the literal baseline and change ONLY (a) import paths (v0
-   module paths â†’ runtime package paths) and (b) the data/persistence source
-   (mock â†’ live service/contract). Everything else is copied byte-for-byte.
+   module paths → runtime package paths) and (b) the data/persistence source
+   (mock → live service/contract). Everything else is copied byte-for-byte.
    Re-styling, re-arranging, re-wording, or re-implementing the markup is itself
-   a deviation. Every deviation â€” added, removed, or changed control, layout, or
-   copy â€” MUST appear in the PR body as a provenance-tagged disposition list
+   a deviation. Every deviation — added, removed, or changed control, layout, or
+   copy — MUST appear in the PR body as a provenance-tagged disposition list
    (keep / cut / disable + reason); **net-new or layout/copy deviations stop and
    are raised in v0 first, not built runtime-side.** Reference example: PR #446
    (member-management), whose "Control disposition (every v0 control)" table is
-   the canonical form â€” including a net-new affordance flagged as "KEEP (added)".
+   the canonical form — including a net-new affordance flagged as "KEEP (added)".
 
 5. Disposition list plus visual diff. The disposition list captures INTENDED
-   deviation; it does not catch SILENT drift â€” wrong data rendered, a projection
+   deviation; it does not catch SILENT drift — wrong data rendered, a projection
    left unwired, styling not carried (e.g. a greeting showing a username where v0
    shows displayName). A UI-bearing rebuild PR for a prototyped surface therefore
    also carries a visual diff against the v0 surface. Disposition list = intent;
    visual diff = result; both required.
 
 6. Real-world seams. Where a v0 surface mocks a real-world mechanism it cannot
-   embody â€” email delivery, an inbox, SMS, an external IdP screen, a payment
-   page â€” v0 is canonical for the experience UP TO the seam, and the real
+   embody — email delivery, an inbox, SMS, an external IdP screen, a payment
+   page — v0 is canonical for the experience UP TO the seam, and the real
    mechanism replaces the mock AT the seam. The mocked stand-in is explicitly NOT
    a surface to reproduce. The experience v0 proves around the seam still binds:
    what the user can do, the post-seam surface (e.g. the redemption screen after
@@ -1605,7 +1605,7 @@ for that surface.
    the click, real email beyond"), not asserted during wire-up by whoever is
    building.
 
-The gap analysis (Â§8 rule 3) remains the front gate; it now also enumerates
+The gap analysis (§8 rule 3) remains the front gate; it now also enumerates
 real-world seams and expected rebuild deviations, up front.
 
 ---
@@ -1620,8 +1620,8 @@ different resolution path.
 | Tag | Meaning |
 |---|---|
 | **Confirmed** | Verified against current code or runtime evidence in this work or attached verification reports. |
-| **Inferred** | Derived from code patterns, prior conversation history, or surrounding evidence â€” but not directly verified. |
-| **Status uncertain â€” verify** | Known to have been planned, may or may not have landed; not safe to treat as either pending or done without checking. |
+| **Inferred** | Derived from code patterns, prior conversation history, or surrounding evidence — but not directly verified. |
+| **Status uncertain — verify** | Known to have been planned, may or may not have landed; not safe to treat as either pending or done without checking. |
 | **Stale-by-decision** | The divergence is the result of a deliberate choice to retire or replace something; cleanup is sequenced. |
 | **Aspirational-never-built** | Documented as intent, no implementation has caught up. |
 | **Deferred** | Scaffolded with intent to complete, paused for reasons orthogonal to whether it should exist. |
@@ -1653,10 +1653,10 @@ archived document carries a header at the top:
 
 Currently archived:
 
-- `docs/archive/DEVELOPMENT_PLAN.md` â€” superseded by `/PLAN.md`. The
+- `docs/archive/DEVELOPMENT_PLAN.md` — superseded by `/PLAN.md`. The
   earlier-plan record. Section 9 (auth model) is wholly superseded by
   `docs/architecture/auth.md`.
-- `docs/archive/STABILISATION_FREEZE.md` â€” superseded jointly by
+- `docs/archive/STABILISATION_FREEZE.md` — superseded jointly by
   `/PLAN.md` (the phase-plan portions) and this document (the discipline
   rules and decision log).
 
@@ -1667,7 +1667,7 @@ PLAN.md's documentation reconciliation milestone (Stage 0c).
 
 ## 11. Changing this document
 
-This document is itself operational â€” changes to ways of working are made
+This document is itself operational — changes to ways of working are made
 by changing this document, in PRs.
 
 Changes to Section 1 (goals and v0 constraint) are major operating
@@ -1681,7 +1681,7 @@ relevant code reorganisation and ratified through the architecture
 decision process.
 
 Changes to Section 4 (workflow), Section 7 (operating principles), and
-Section 8 (Working Agreement â€” scope provenance and decision discipline)
+Section 8 (Working Agreement — scope provenance and decision discipline)
 are made when ways of working change. The change itself is a PR and goes
 through normal review.
 

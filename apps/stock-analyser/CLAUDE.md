@@ -55,10 +55,10 @@ Current state after #366/#386: Stock Analyser owns its REST API Gateway, AI prox
 | `transformotion-analysis-cache-{stage}` | `apps/stock-analyser/functions/analysis-cache` | `GET/PUT/DELETE /analysis-cache/{key}` |
 | `stock-analyser-settings-{stage}` | `apps/stock-analyser/functions/settings` | `GET/PATCH /settings`, `GET /ai-config`, `PUT/DELETE /ai-config/override`, `GET/PUT /cache-freshness`, `GET/PUT /notification-config`, `GET/PUT /notification-consent`, `GET/PUT /notification-engine-config` (#571 kill-switch; PUT site/app-admin) |
 | `stock-analyser-ai-proxy-{stage}` | `apps/stock-analyser/functions/ai-proxy` | `POST /api/claude` |
-| `stock-analyser-recommendations-{stage}` | `apps/stock-analyser/functions/recommendations` | `POST /recommendations/run` (M19 #592 async two-stage engine: propose candidates â†’ real OHLCV price â†’ rank WITH price â†’ structured `pick`/`watch`/`avoid`. Self-invokes for the async executor; writes `job-*` results + pushes `job_complete` over WSS â€” the thin-UI reads it via the shared WSS/cache path. Also handles a #595 warm event (service-principal, from the notification engine): runs the SAME engine core and SHARED-writes `RECS#{universe\|top-picks\|sector}`) |
-| `stock-analyser-etfs-{stage}` | `apps/stock-analyser/functions/etfs` | `POST /etfs/run` (M19 #626 async two-stage engine: propose ETF candidates â†’ real OHLCV price â†’ rank WITH price â†’ structured `pick`/`watch`/`avoid`; `expenseRatio` model-authored. Self-invokes for the async executor; writes `job-*` results + pushes `job_complete` over WSS. Also handles a #594 warm event (service-principal, from the notification engine): runs the SAME engine core and SHARED-writes `ETF#{market}`) |
+| `stock-analyser-recommendations-{stage}` | `apps/stock-analyser/functions/recommendations` | `POST /recommendations/run` (M19 #592 async two-stage engine: propose candidates → real OHLCV price → rank WITH price → structured `pick`/`watch`/`avoid`. Self-invokes for the async executor; writes `job-*` results + pushes `job_complete` over WSS — the thin-UI reads it via the shared WSS/cache path. Also handles a #595 warm event (service-principal, from the notification engine): runs the SAME engine core and SHARED-writes `RECS#{universe\|top-picks\|sector}`) |
+| `stock-analyser-etfs-{stage}` | `apps/stock-analyser/functions/etfs` | `POST /etfs/run` (M19 #626 async two-stage engine: propose ETF candidates → real OHLCV price → rank WITH price → structured `pick`/`watch`/`avoid`; `expenseRatio` model-authored. Self-invokes for the async executor; writes `job-*` results + pushes `job_complete` over WSS. Also handles a #594 warm event (service-principal, from the notification engine): runs the SAME engine core and SHARED-writes `ETF#{market}`) |
 | `stock-analyser-metals-{stage}` | `apps/stock-analyser/functions/metals` | `POST /metals/run` (M19 #627 async Metals engine: fetches real metals.dev feed data for XAU/XAG/XPT/XPD, asks AI only for structured `BULL`/`NEUTRAL`/`BEAR` signal + outlook, overlays feed-owned USD/AUD spot plus today/YTD/30-day changes, stores rolling close/baseline rows under `SHARED`, writes `job-*` results + pushes `job_complete`, and SHARED-writes `METALS`) |
-| `stock-analyser-notification-engine-{stage}` | `apps/stock-analyser/functions/notification-engine` | EventBridge scheduled (daily, no HTTP route). Warms the market-wide cache `MARKET#{region}` (#584), then #595 smart-warms Recs for the top-3 `enter`-flagged sectors per region (ranked by cyclePosition; async-fans-out to the recommendations engine which SHARED-writes `RECS#`), then #594 warms `ETF#{market}` for all 3 markets (async-fans-out to the etfs engine which SHARED-writes `ETF#`), AND runs notification transitions/sends â€” all gated by the #571 kill-switch |
+| `stock-analyser-notification-engine-{stage}` | `apps/stock-analyser/functions/notification-engine` | EventBridge scheduled (daily, no HTTP route). Warms the market-wide cache `MARKET#{region}` (#584), then #595 smart-warms Recs for the top-3 `enter`-flagged sectors per region (ranked by cyclePosition; async-fans-out to the recommendations engine which SHARED-writes `RECS#`), then #594 warms `ETF#{market}` for all 3 markets (async-fans-out to the etfs engine which SHARED-writes `ETF#`), AND runs notification transitions/sends — all gated by the #571 kill-switch |
 | `stock-analyser-notification-history-{stage}` | `apps/stock-analyser/functions/notification-history` | `GET /notification-history` (#573 run-history; server-scoped per viewer) |
 | `transformotion-cycle-check-{stage}` | `apps/stock-analyser/functions/cycle-check` | EventBridge scheduled (no HTTP route) |
 | `transformotion-cycle-data-{stage}` | `apps/stock-analyser/functions/cycle-data` | `GET /cycle/ohlcv?ticker=` |
@@ -85,31 +85,31 @@ All Lambda handlers use helpers from `packages/lambda-middleware`. App-data rout
 ```typescript
 const saData = requireAccountData('stock-analyser');             // module scope
 
-saData.read(auth, accountId);                                    // read tier â€” claims only, viewer passes
-await saData.write(auth, accountId, membershipLoader);          // write tier â€” claims + live members row, viewer denied
+saData.read(auth, accountId);                                    // read tier — claims only, viewer passes
+await saData.write(auth, accountId, membershipLoader);          // write tier — claims + live members row, viewer denied
 requireAccountAdmin(/* owner / manager / supervisory guards */); // supervisory & ownership ops
 requireSiteAdmin(auth);                                          // platform admin ops only
 ```
 
-Construct `requireAccountData('stock-analyser')` at module scope, then call `.read` on GET branches and `.write` (with a `dynamoMembershipLoader`) before each mutation. There is **no site-admin data bypass** â€” membership is the only grant of data authority. Per-user rows within an account (settings preferences, D12) use `.read` for the owner's own writes. `requireAccountAccess` and `requireAccountOwner` were **deleted** in M16 Phase 5. Do not call `requireGroup` directly. See [auth.md](/docs/architecture/auth.md) and [route-classification-m16.md](/docs/architecture/route-classification-m16.md).
+Construct `requireAccountData('stock-analyser')` at module scope, then call `.read` on GET branches and `.write` (with a `dynamoMembershipLoader`) before each mutation. There is **no site-admin data bypass** — membership is the only grant of data authority. Per-user rows within an account (settings preferences, D12) use `.read` for the owner's own writes. `requireAccountAccess` and `requireAccountOwner` were **deleted** in M16 Phase 5. Do not call `requireGroup` directly. See [auth.md](/docs/architecture/auth.md) and [route-classification-m16.md](/docs/architecture/route-classification-m16.md).
 
 ## Service layer and data contracts
 
-The app uses a service-adaptor pattern: components call service methods â†’ service handles mock vs real internally. Components never check provider flags directly.
+The app uses a service-adaptor pattern: components call service methods → service handles mock vs real internally. Components never check provider flags directly.
 
 Contracted service/API shapes are authored in `packages/contracts/` and consumed through `@transformotion/contracts`. Update the package first or in the same PR, then run `pnpm check:contracts`.
 
 Key service methods currently covered by the Stock Analyser contract set:
 - `portfolioService.getHoldings()` / `saveHoldings()` / `enrichHoldings()`
 - `watchlistService.getItems()` / `saveItems()`
-- `useClaude()` hook â€” POST to `/api/claude` + async polling pattern
+- `useClaude()` hook — POST to `/api/claude` + async polling pattern
 
 ### Claude AI pattern
 
 The `useClaude<T>()` hook handles the full async request cycle via Stock Analyser-owned runtime:
 1. Open SA WSS (`NEXT_PUBLIC_SA_WSS_URL`) with Cognito ID token and `?app=stock-analyser`
-2. Send `{ action: 'init' }` â†’ receive `{ type: 'connected', connectionId }`
-3. POST to `/api/claude` with prompt + `connectionId` â†’ returns `jobId`
+2. Send `{ action: 'init' }` → receive `{ type: 'connected', connectionId }`
+3. POST to `/api/claude` with prompt + `connectionId` → returns `jobId`
 4. Receive `{ type: 'job_complete' }` push on the WebSocket when the job finishes
 5. Read result from `/analysis-cache/job-{jobId}` and return typed result
 
@@ -120,8 +120,8 @@ See `apps/stock-analyser/docs/claude-ai-pattern.md` for usage examples and confi
 Stock Analyser AI goes through `useClaude<T>()` or `callClaudeAPI<T>()` in `lib/hooks/use-claude.ts`.
 
 1. Add mock fixture data to `lib/services/ai/fixtures/index.ts` (keyword-keyed, returned by `getMockResponse()`)
-2. The `MockAIService` at `lib/services/ai/mock-ai.ts` uses `getMockResponse()` â€” no change needed unless the interface changes
-3. `ClaudeAIService` at `lib/services/ai/claude-ai.ts` delegates to `callClaudeAPI` â€” no change needed for new prompts
+2. The `MockAIService` at `lib/services/ai/mock-ai.ts` uses `getMockResponse()` — no change needed unless the interface changes
+3. `ClaudeAIService` at `lib/services/ai/claude-ai.ts` delegates to `callClaudeAPI` — no change needed for new prompts
 4. Mock flag is `config.ai.provider === 'mock'` (set via `NEXT_PUBLIC_AI_OVERRIDE` / `NEXT_PUBLIC_RUNTIME_PROFILE`). Do not check `config.features.useMockData` for AI branching.
 
 ### Structured output (schema-constrained JSON)
@@ -142,13 +142,13 @@ app-supplied `structuredOutputSchemas` registry), keeping the schema off the
 wire. Recs is deferred to the #592 backend-engine contract.
 
 **Live two-pass technical grounding (#602).** The analyser schema requires
-COMPUTED technicals (RSI, MACD, cyclePosition, volumeTrend, â€¦) that web search
-cannot ground â€” they are computed from price history, not published facts. In
+COMPUTED technicals (RSI, MACD, cyclePosition, volumeTrend, …) that web search
+cannot ground — they are computed from price history, not published facts. In
 Live (web-search two-pass) mode the research pass would otherwise hard-fail the
 integrity guard or fabricate technicals that contradict the app's own cycle
 gauge and the other provider. So Live analyser calls **supply the real
 `computeCyclePosition` output** as a SUPPLIED-DATA block
-(`lib/analysis/stock-analysis-grounding.ts` `buildTickerSuppliedData` â€” the
+(`lib/analysis/stock-analysis-grounding.ts` `buildTickerSuppliedData` — the
 per-ticker analogue of Market's `buildSectorSuppliedData`): the interactive tab
 fetches `/cycle/ohlcv` and supplies it pre-call; the engine's per-ticker
 analysis computes it server-side. Web search still supplies the qualitative
@@ -160,23 +160,23 @@ honestly (insufficient-data, never fabricated).
 **Live MARKET grounding rubric + degrade (#601/market).** The Live two-pass
 `DATA_STATUS` availability check is REGION-appropriate for the `market` surface,
 not ticker-centric. `provider.generate` takes a `groundingKind` (`security`
-default | `market`); the AI proxy resolves `surface` â†’ `groundingKind`
+default | `market`); the AI proxy resolves `surface` → `groundingKind`
 server-side via the app-supplied `structuredOutputGroundingKinds` registry
-(`{ market: 'market' }` â€” the same server-side pattern as
+(`{ market: 'market' }` — the same server-side pattern as
 `structuredOutputSchemas`), and the notification-engine warm job passes
 `groundingKind: 'market'` directly. So the interactive Market tab and the warm
 `MARKET#{region}` cache share ONE grounding path and cannot diverge. Under the
 market rubric, Pass 1 assesses macro conditions (rates/inflation/growth) + a
 per-sector read (`buildSectorSuppliedData` supplies real sector-proxy OHLCV as
-authoritative), NOT tradable-instrument/price/RSI â€” applying the ticker rubric
+authoritative), NOT tradable-instrument/price/RSI — applying the ticker rubric
 to a region wrongly declared UNAVAILABLE and hard-failed (the bug). If market
 grounding is still unavailable, the provider DEGRADES to a structured Fast pass
-over the supplied sector data instead of throwing 502 â€” Market Live grounds when
+over the supplied sector data instead of throwing 502 — Market Live grounds when
 it can, returns a structured result when it can't, never hard-errors. The #601
 hard-fail guard is PRESERVED for `security` grounding: an ungroundable ticker
 has no supplied fallback, so degrading there would fabricate analysis of a
 non-verifiable instrument (exactly what the guard exists to prevent). Both market
-call sites pass `MARKET_ANALYSIS_MAX_TOKENS` (12000) â€” the Pass-1 grounded
+call sites pass `MARKET_ANALYSIS_MAX_TOKENS` (12000) — the Pass-1 grounded
 research must cover region macro AND every mapped sector, and at the 4000
 provider default that research truncated for content-heavy regions (US macro
 dropped to "Grounded research incomplete", sectors fell back to bare proxy
@@ -199,7 +199,7 @@ market degrade path fires, so a fallback is visible in CloudWatch.
 ## Cycle computation
 
 ### Fast mode (Standard)
-Claude estimates `cyclePosition` (0â€“100), `cycleStage`, RSI divergence,
+Claude estimates `cyclePosition` (0–100), `cycleStage`, RSI divergence,
 MACD momentum, and volume trend signals as part of the stock analysis
 prompt. No OHLCV data is fetched; the values are AI-synthesised.
 
@@ -213,7 +213,7 @@ The computed values overlay the AI estimates in `FullCycleGauge`. On 503 or
 error the component falls back to the AI estimates with a "Live mode
 unavailable" notice.
 
-Both paths use the same `FullCycleGauge` component â€” do not modify it.
+Both paths use the same `FullCycleGauge` component — do not modify it.
 
 ## Migration invariants (Phase 4)
 
@@ -244,7 +244,7 @@ Required env vars marked `[REQUIRED]` in `.env.example` must be set before the d
 | Variable | Purpose |
 |---|---|
 | `NEXT_PUBLIC_STOCK_ANALYSER_COGNITO_CLIENT_ID` | Cognito app client for this app (GitHub Actions variable) |
-| `NEXT_PUBLIC_COGNITO_CLIENT_ID` | Generic runtime name for the Cognito client ID â€” set in `.env.local` for local dev |
+| `NEXT_PUBLIC_COGNITO_CLIENT_ID` | Generic runtime name for the Cognito client ID — set in `.env.local` for local dev |
 | `NEXT_PUBLIC_COGNITO_USER_POOL_ID` | Shared Cognito user pool ID |
 | `NEXT_PUBLIC_COGNITO_DOMAIN` | Hosted UI domain |
 | `NEXT_PUBLIC_RUNTIME_PROFILE` | `mock` (default; local development) or `live` (deployed environments). Determines defaults for auth, data, AI, and future concerns. See root `AGENTS.md` for the design map. |
@@ -255,8 +255,8 @@ Required env vars marked `[REQUIRED]` in `.env.example` must be set before the d
 
 ## Known constraints
 
-- `eslint-plugin-boundaries` enforces no cross-app imports â€” do not import from `apps/budget-tracker/`.
+- `eslint-plugin-boundaries` enforces no cross-app imports — do not import from `apps/budget-tracker/`.
 
 ## Deploy isolation (M7)
 
-M7 deploy-isolation work is complete as of PRs #346, #348, #350, #351. This app has its own CDK entrypoint (`infrastructure/bin/stock-analyser.ts`) and deploy workflow (`deploy-stock-analyser.yml`). Changes to `apps/stock-analyser/**` trigger only this workflow â€” no cascade, no cross-app deploys.
+M7 deploy-isolation work is complete as of PRs #346, #348, #350, #351. This app has its own CDK entrypoint (`infrastructure/bin/stock-analyser.ts`) and deploy workflow (`deploy-stock-analyser.yml`). Changes to `apps/stock-analyser/**` trigger only this workflow — no cascade, no cross-app deploys.
