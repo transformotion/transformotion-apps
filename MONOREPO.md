@@ -27,6 +27,7 @@ transformotion-apps/
       AGENTS.md / CLAUDE.md
   packages/                        Shared libraries used by apps/Lambdas
     brand-tokens/                  Compile-time Transformotion brand tokens
+    contracts/                     Canonical contract source and specs
   platform/
     infrastructure/                Neutral substrate CDK stacks only
     AGENTS.md / CLAUDE.md
@@ -34,7 +35,6 @@ transformotion-apps/
     bin/                           CDK entrypoints per owner
   migration-utilities/
     infrastructure/                Migration utility API stack
-  contracts/                       Normative contracts by scope
   docs/architecture/               Current architecture documentation
   migration-artifacts/             Historical data fixtures
 ```
@@ -48,6 +48,7 @@ transformotion-apps/
 | Stock Analyser | REST API, WSS API, AI runtime, app tables, frontend, deployment |
 | Budget Tracker | REST API, WSS API, AI runtime, app tables, frontend, deployment |
 | Migration Utilities | Migration API and migration-specific infrastructure |
+| Contracts package | API/data/WSS/cache/runtime contract source in `packages/contracts` |
 
 Platform does not own auth-domain resources, app runtime resources, app APIs,
 shared WSS, or shared AI runtime.

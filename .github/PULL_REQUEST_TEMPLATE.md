@@ -8,38 +8,39 @@ Choose one:
 
 - [ ] Contract-changing
 - [ ] Non-contract UI polish
-- [ ] Runtime-only / no v0 impact
+- [ ] Runtime-only
 - [ ] Emergency hotfix
 
-Contract-changing work must be v0-first unless explicitly approved as an
-emergency hotfix. Non-contract UI polish means styling, layout, copy, icons,
+Contract-changing work must update `packages/contracts/` before or alongside
+runtime implementation. Non-contract UI polish means styling, layout, copy, icons,
 responsive behaviour, accessibility attributes, modal/scrollbar polish, or
 component arrangement only, with no data/API/WSS/cache/mock/settings/runtime
 semantic change.
 
-## v0 freshness
+## Contract and UI evidence
 
-Choose one:
+- [ ] Contract files changed:
+- [ ] `pnpm check:contracts`
+- [ ] Existing UI visual evidence attached:
+- [ ] Net-new v0 reference used:
 
-- [ ] Linked v0 PR/commit:
-- [ ] No v0 impact:
+If net-new v0 reference was used, cite the v0 commit and include a visual diff
+or disposition list. Existing runtime UI surfaces are repo-owned and reviewed
+directly.
 
-Reason when selecting "No v0 impact":
+## Emergency Contract Reconciliation
 
-## Emergency v0 Reconciliation
+Complete only for approved delayed-contract hotfixes:
 
-Complete only for approved runtime-first contract-changing hotfixes:
-
-- Why runtime-first was necessary:
+- Why delayed contract update was necessary:
 - Explicit owner approval reference:
 - Affected contract files/surfaces:
 - Affected UI/mock surfaces:
-- v0 reconciliation PR or issue link:
+- Contract reconciliation PR or issue link:
 - Expected reconciliation deadline:
 - Validation plan:
 
 ## Validation
 
-- [ ] `pnpm sync:v0`
-- [ ] `pnpm check:v0-contracts`
+- [ ] `pnpm check:contracts`
 - [ ] Other:

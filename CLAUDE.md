@@ -68,92 +68,57 @@ This rule emerged from M7 recons where the named attribute checked out cleanly b
 Categories to consider in the impact check:
 - IAM policies, infrastructure resources → `cdk.md`, `inventory.md`
 - Auth flows, identity providers, claims → `auth.md`
-- Lambda handlers, API endpoints → `MONOREPO.md`, `CONTRIBUTING.md` §3, v0-authored contracts synced through `v0-reference/contracts/<scope>/`, `inventory.md`
+- Lambda handlers, API endpoints → `MONOREPO.md`, `CONTRIBUTING.md` §3, repo-owned contracts in `packages/contracts/`, `inventory.md`
 - Build patterns, env vars, runtime config → `CONTRIBUTING.md` §5, `inventory.md`, deploy workflow env blocks, GH Actions variables/secrets
 - Repository structure → `CONTRIBUTING.md` §3, `MONOREPO.md`
 - Operating mode, agent behaviour → `AGENTS.md` and this compatibility mirror
 
 This rule emerged from cumulative M7 evidence. PRs #259, #261 (multiple rounds), the M6 launchpad-at-root work, the budget-tracker gateway consolidation, and the platform-functions migration all shipped code without their accompanying §2.1 obligations, requiring downstream cleanup PRs (#262, #266, #267, #269, #279, #283 among others) to make up the gap.
 
-**M15 contract authoring rule**: Contracts are authored only in the v0 repo
-(`transformotion-apps-b8/contracts/`). Do not edit
-`v0-reference/contracts/` directly; it is generated and read-only. If runtime
-implementation requires a contract change, edit the v0 repo contract first,
-commit and push that v0 repo change, run `pnpm sync:v0` in this runtime repo,
-then implement against the synced contract. Stop and ask if v0 repo access is
-unavailable.
+**Runtime contract ownership rule**: Contracts are authored in
+`packages/contracts/` in this repository. TypeScript shapes and executable
+constants live under `packages/contracts/src/`; behavioural specs live under
+`packages/contracts/spec/`. Do not add new dependencies on `v0-reference/`; it
+is an archived historical evidence trail. If implementation requires a contract
+change, edit `packages/contracts/`, update version metadata when shape or
+semantics change, and run `pnpm check:contracts`.
 
-**M15 v0 freshness rule**: #391 established the reconciled v0 UI/contract
-baseline at v0 repo `main` commit
-`9515fc521d2eaa7431612e17b57e3fff517d131d`. From #124 onward, any runtime PR
-that changes UI-affecting or contract-affecting paths must link the matching
-`transformotion-apps-b8` PR/commit in the PR body's `v0 freshness` section, or
-explicitly declare `No v0 impact` with a reason. UI-affecting paths include app
-`app/`, `components/`, UI-used `lib/`, `stores/`, `hooks/`, `services/`,
-`data/`, app frontend config, shared UI packages, frontend service/adaptor
-packages, and `packages/contracts/`. v0 sandboxes may be stale: refresh from
-`transformotion-apps-b8/main` before using them as freshness evidence.
+**Existing UI ownership rule**: Existing runtime UI surfaces are canonical in
+this repository and reviewed visually by the owner. v0 is optional per-task
+reference material for net-new visual design only. If a task uses v0 output,
+cite the v0 commit and include visual evidence showing the runtime port matches
+or explicitly disposes of differences.
 
-**M15 contract-first classification rule**: Before implementing runtime work,
+**Contract-first classification rule**: Before implementing runtime work,
 classify it as `Contract-changing`, `Non-contract UI polish`,
-`Runtime-only / no v0 impact`, or `Emergency hotfix`.
+`Runtime-only`, or `Emergency hotfix`.
 
-Contract-changing runtime work is prohibited by default unless the canonical v0
-contract update exists first. A change is contract-changing if it adds, removes,
+Contract-changing work must update `packages/contracts/` before or alongside
+the runtime implementation. A change is contract-changing if it adds, removes,
 renames, or changes frontend/backend data fields, API request/response payloads,
 WSS message shapes, cache/job/result shapes, auth/session/claim shapes, runtime
 configuration shapes, mock data assumptions, UI state that depends on a new or
-changed shape, persistence/storage shape that v0 mocks must represent, or app
-settings/configuration shape.
+changed shape, persistence/storage shape, or app settings/configuration shape.
 
-Normal contract-changing workflow: update
-`transformotion-apps-b8/contracts`, update typed mocks and v0 UI/adapters, merge
-the v0 PR, run `pnpm sync:v0` and `pnpm check:v0-contracts` here, implement
-runtime against the synced contracts, and reference the v0 PR/commit in the
-runtime PR freshness section.
+Normal contract-changing workflow: update `packages/contracts/`, update typed
+mocks/spec notes when needed, run `pnpm check:contracts`, implement runtime
+against the repo-owned contracts, and reference the contract files plus
+validation in the PR body. Preserve the single-writer rule: keep one contract
+PR chain active at a time.
 
 Non-contract UI polish is allowed when it only affects styling,
 spacing/layout, copy text, icons, responsive behaviour, accessibility
 attributes, modal/scrollbar polish, or component arrangement that does not
-change data/API/WSS/cache/mock/settings/runtime semantics. If polish affects
-both v0 and runtime, prefer v0-first or paired v0/runtime PRs. Runtime PRs still
-need either a v0 PR/commit reference or a clear no-v0-impact reason.
+change data/API/WSS/cache/mock/settings/runtime semantics. For existing
+surfaces, runtime-owned visual review replaces the retired v0 freshness gate.
+For net-new visual design that uses v0 as a reference, cite the v0 commit and
+include a visual comparison or disposition list in the runtime PR.
 
-This polish license does NOT apply to a surface that v0 has prototyped. For a
-v0-prototyped surface, runtime reproduces the prototype (CONTRIBUTING.md §8.A
-rule 4); "component arrangement" is not free polish there. Changed controls,
-flow, or layout are deviations requiring a provenance-tagged disposition list,
-and the PR carries a visual diff against the v0 surface. Runtime-side
-rearrangement of a prototyped surface without that record is drift, not polish.
-
-**v0 is the authoritative source of truth for the UI.** This is the same reason
-contracts are owned by v0: UI design and shape originate in v0, and runtime
-consumes them. Runtime's job is to **wire the backend to the v0 surface and its
-contracts — not to design, restyle, re-arrange, or re-word UI.** Per §8.A rule 4,
-runtime ports a prototyped surface's **presentation verbatim** (copy the v0
-component; change only import paths and the data/persistence source) and rebuilds
-only the data layer; re-creating, restyling, or re-wording the markup is itself a
-deviation. Every UI change originates in v0 and reaches runtime via the
-v0 → contract/sync path, **never the reverse** — unless the owner has explicitly
-declared runtime ahead for that surface.
-
-Runtime-first contract-changing work is allowed only as an emergency hotfix:
-the issue must be urgent, the owner must explicitly approve runtime-first work
-before implementation, and the PR must include an `Emergency v0 Reconciliation`
-section. Urgent means app unusable, auth broken, data loss/corruption risk,
-security issue, deployment blocked, provider/model execution broken, or severe
-user-facing regression. The runtime fix must be the smallest safe change,
-affected contract and UI/mock surfaces must be listed, and a v0 reconciliation
-PR or issue must be created immediately. v0 contracts, mocks, and UI are then
-brought back into sync as soon as possible, followed by `pnpm sync:v0` and
-`pnpm check:v0-contracts`.
-
-The `Emergency v0 Reconciliation` section must include why runtime-first was
-necessary, the explicit owner approval reference, affected contract
-files/surfaces, affected UI/mock surfaces, the v0 reconciliation PR or issue
-link, the expected reconciliation deadline, and the validation plan. The
-freshness gate is a CI backstop, not permission to start runtime-first
-contract-changing work.
+Emergency contract-changing work is still allowed only for urgent fixes, but
+the reconciliation target is now `packages/contracts/`. The fix must be the
+smallest safe change, affected contract and UI/mock surfaces must be listed, and
+the repo-owned contract/spec update must land in the same PR or in an immediate
+follow-up issue explicitly approved by the owner.
 
 ## Boundary Discipline
 
@@ -196,7 +161,7 @@ Note: some paths are migrating per `CONTRIBUTING.md` Section 3 — see `MONOREPO
 
 | What | Where (current) |
 |---|---|
-| Cross-app contracts | Authored in `transformotion-apps-b8/contracts/<scope>/`; consumed here from generated read-only `/v0-reference/contracts/<scope>/` |
+| Cross-app contracts | Canonical in `/packages/contracts/` |
 | Shared packages | `/packages/` |
 | Platform infrastructure | `/platform/infrastructure/` |
 | Per-app infrastructure | `/apps/<app>/infrastructure/` |

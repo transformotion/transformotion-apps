@@ -1,4 +1,4 @@
-# Launchpad - AI Agent operating guide
+﻿# Launchpad - AI Agent operating guide
 
 This file is the authoritative Launchpad agent guide. The sibling `CLAUDE.md`
 file is a Claude Code compatibility mirror and must remain semantically

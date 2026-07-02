@@ -231,7 +231,7 @@ notification engine (#584) so the Market tab reads hit cache instead of running
 a live model call; the warm-write runs the SAME grounded computation as a live
 Market-tab run (identical-by-construction) and is gated by the #571 kill-switch.
 The Metals engine (#627) writes the fixed `METALS` shared cache entry after a
-live engine run, with the v0-contracted 24h TTL. It also stores private
+live engine run, with the `packages/contracts` 24h TTL. It also stores private
 `SHARED` bookkeeping rows in this table for feed-derived close math:
 `METALS_CLOSES#{date}` rolling daily closes and `METALS_BASELINE#{year}` YTD
 baselines. Those rows have a rolling ~400-day TTL and let the engine compute

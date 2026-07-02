@@ -1,4 +1,4 @@
-# Contributing to Transformotion Apps
+﻿# Contributing to Transformotion Apps
 
 This document describes how the Transformotion Apps platform is built: what it
 is for, how decisions get made, how documents relate, where code lives, and
@@ -15,7 +15,7 @@ needed.
 
 ---
 
-## 1. Platform goals and the v0 constraint
+## 1. Platform goals and design/reference workflow
 
 This section is canonical. Other documents reference these goals by number;
 the full statements live here.
@@ -54,35 +54,33 @@ make the trade-off visible.
   enforcement are first-class platform capabilities, not app-specific
   features.
 
-### 1.2 The v0 development workflow constraint
+### 1.2 Contracts and UI ownership
 
-The frontend is developed using v0 (vercel.com/v0). v0 generates UI
-components against documented data shapes with mocked persistence
-(localStorage). The same components run against real
-DynamoDB-via-Lambda persistence in production. This is not a goal — it is a
-cross-cutting constraint on every architectural decision involving the
-frontend, persistence layer, contracts, or build pipeline.
+Contracts and existing runtime UI surfaces are canonical in this repository.
+`packages/contracts/` is the source of truth for contract TypeScript shapes,
+executable constants, typed mocks, and behavioural specs. Existing UI surfaces
+are implemented in runtime and reviewed visually by the owner.
 
-The constraint imposes specific requirements:
+v0 (vercel.com/v0) is retained as optional, per-task reference material for
+net-new visual design only. If v0 is used, its output is not canonical until it
+is ported into this repository with a cited v0 commit and visual evidence.
+
+This ownership model imposes specific requirements:
 
 - The persistence pattern must have a swap point at the data-access layer.
   Components call `transactionRepository.findAll()` (or equivalent) without
   knowing whether the implementation reads localStorage or hits an HTTP
   endpoint.
 
-- Contracts are the v0 interface. The contracts directory is what v0 reads
-  to know what data shapes to build against. Contracts must be importable
-  without dragging in AWS SDK or other production-only dependencies.
+- Contracts must be importable without dragging in AWS SDK or other
+  production-only dependencies.
 
 - The build pipeline must support both modes. Production builds tree-shake
   or code-split the localStorage implementations out; development builds
   retain them.
 
-- The sync flow between v0 and the main repo (v0 commits to a separate
-  repo; `scripts/sync-v0.sh` pulls into a gitignored `v0-reference/`
-  directory; Claude Code adapts components into the main repo) is part of
-  the workflow, not workflow noise. Architectural decisions that break
-  the sync flow break the development model.
+- The archived v0 sync flow (`scripts/sync-v0.sh` and `v0-reference/`) is no
+  longer a build or CI dependency. It remains only as historical evidence.
 
 For the full architectural treatment of the v0 workflow as a system, see
 the architectural inventory's Section 1.9.
@@ -90,7 +88,7 @@ the architectural inventory's Section 1.9.
 ### 1.3 How the goals and constraint apply
 
 Architectural decisions are evaluated against the four goals and the v0
-constraint. Documents that record decisions (the architecture documents at
+ownership model. Documents that record decisions (the architecture documents at
 `docs/architecture/`, the contracts policy, this document) state which
 goals each decision serves. The convention is "Goals served: 1, 3
 primarily; 2 indirectly" or similar.
@@ -149,7 +147,7 @@ ways of working change. Changes are themselves PRs.
 | URLs and deploy | `/docs/architecture/urls-and-deploy.md` | Normative | URL routing, CloudFront, S3 layout, deploy triggers, Next.js basePath per app. | Steve |
 | CDK | `/docs/architecture/cdk.md` | Normative | CDK stack topology, cross-stack references, deploy ordering. | Steve |
 | Contracts policy | `/docs/architecture/contracts.md` (TBD by Stage 0b) | Normative | The policy for how contracts are organised: where they live, what is normative vs descriptive, single-source-of-truth rules. Location may shift to an extension of an existing document per Stage 0b ratification. | Steve |
-| Per-app contracts | `transformotion-apps-b8/contracts/<scope>/` in the v0 repo, synced read-only into `/v0-reference/contracts/<scope>/` in this runtime repo | Normative | The actual contracts: TypeScript shapes, API endpoints, data models, state management, and behavioural notes. Runtime-side contract mirrors and direct edits to `/v0-reference/contracts/` are not allowed. | Per-app team |
+| Contracts package | `/packages/contracts/` | Normative | The actual contracts: TypeScript shapes, API endpoints, data models, state management, typed mocks, and behavioural notes. | Per-app team |
 | Agent guide | `/AGENTS.md` and `/apps/<app>/AGENTS.md` | Operational | Canonical AI-agent operating guidance. Required at root and for every app. Minimum per-app content: app's purpose, key entry points, app-specific conventions, app-specific gotchas, sync flow if v0-driven. | Root / per-app team |
 | Claude Code mirror | `/CLAUDE.md` and `/apps/<app>/CLAUDE.md` | Operational | Claude Code compatibility mirror for the corresponding AGENTS.md file. Must remain semantically equivalent; changes to one without the other are governance drift. | Root / per-app team |
 | Architectural inventory | `/docs/architecture/inventory.md` | Normative (living document) | The current-state inventory of the platform — what is true about code, infrastructure, and operating state right now. Updated as state changes per the discipline rule (Section 2.1). Findings carry status tags including **Resolved by M*N* / PR #*N*** and **Superseded by [reference]** for living-document use. | Steve |
@@ -171,12 +169,8 @@ document for global conventions. Sibling `CLAUDE.md` files are Claude Code
 compatibility mirrors. They cover only app-specific concerns and must remain
 semantically equivalent to the corresponding AGENTS file.
 
-The contracts policy document (location ratified in Stage 0b) governs the
-per-app contract files in the v0 repo at
-`transformotion-apps-b8/contracts/<scope>/`. This runtime repo consumes those
-contracts through the generated, gitignored `v0-reference/contracts/<scope>/`
-sync target. Drift between contracts policy and per-app contract content is a
-documentation reconciliation concern.
+The contracts policy governs `/packages/contracts/`. Drift between contracts
+policy and package content is a documentation reconciliation concern.
 
 ---
 
@@ -194,7 +188,7 @@ the architecture documents.
 ├── apps/                  # User-facing applications, including launchpad
 ├── platform/              # Platform-owned deployable artefacts (Lambdas, CDK)
 ├── packages/              # Shared code consumed by 2+ apps or platform
-├── contracts/             # Per-scope normative contracts
+├── packages/contracts/    # Canonical contracts package
 ├── docs/                  # Documentation (architecture, archive, inventory)
 ├── scripts/               # Repository-level scripts (e.g., sync-v0.sh)
 └── infrastructure/        # CDK app entrypoint only; stacks live with their owners
@@ -308,75 +302,40 @@ packages/ui/
 
 The decision rule for "should this go in a package?" is in Section 3.6.
 
-### 3.5 Contracts and `v0-reference/`
+### 3.5 Contracts
 
-Contracts are authored in the v0 repo at
-`transformotion-apps-b8/contracts/<scope>/`, where `<scope>` is `platform`,
-`launchpad`, an app slug, or a future ratified scope. This runtime repo
-consumes a generated read-only copy at `v0-reference/contracts/<scope>/`.
+Contracts are authored in this repo under `packages/contracts/`, where
+`src/<scope>/` holds executable TypeScript shapes/constants and `spec/<scope>/`
+holds behavioural/narrative specs. `<scope>` is `_shared`, `platform`,
+`launchpad`, an app slug, or a future ratified scope.
 
 ```
-transformotion-apps-b8/contracts/
-├── _shared/               # Shared contract shapes and version metadata
-├── launchpad/             # Launchpad auth/control-plane contracts
-├── platform/              # Neutral substrate contracts
-├── stock-analyser/        # Stock Analyser contracts
-├── budget-tracker/        # Budget Tracker contracts
-└── <future-scope>/
+packages/contracts/
++-- src/
+¦   +-- _shared/           # Shared contract shapes and version metadata
+¦   +-- launchpad/         # Launchpad auth/control-plane contracts
+¦   +-- stock-analyser/    # Stock Analyser contracts
+¦   +-- budget-tracker/    # Budget Tracker contracts
++-- spec/                  # Behavioural contract notes by scope
 ```
 
 Per-app mirrors of contracts at `apps/<app>/contracts/` are forbidden.
-Direct edits to `v0-reference/contracts/` are also forbidden because that tree
-is generated from v0. A contract has exactly one canonical location: the v0
-repo. If runtime implementation requires a contract change, make the contract
-change in `transformotion-apps-b8/contracts/`, commit and push it there, run
-`pnpm sync:v0` in this runtime repo, and then implement runtime changes against
-the synced copy.
+`v0-reference/` is an archived historical trail and must not be imported by
+runtime code, CI, or deploy workflows. If implementation requires a contract
+change, make the contract change in `packages/contracts/`, run
+`pnpm check:contracts`, and then implement runtime changes against the package.
 
 The contracts policy document (location ratified in Stage 0b) governs what
 goes in each contract file, the normative-vs-descriptive classification,
 and the relationship between contracts and TypeScript domain packages.
 
-### 3.5.1 v0 freshness enforcement
+### 3.5.1 Existing UI ownership
 
-M15 #391 established the reconciled v0 baseline for Launchpad, Stock Analyser,
-and Budget Tracker. The baseline starts from v0 repo `main` commit
-`9515fc521d2eaa7431612e17b57e3fff517d131d`. From #124 onward, v0 must not fall
-behind runtime UI or contract behaviour.
-
-Any runtime PR that changes UI-affecting or contract-affecting paths must do
-one of two things before CI can pass:
-
-1. Link the matching `transformotion-apps-b8` v0 PR or commit in the PR body's
-   `v0 freshness` section.
-2. Declare `No v0 impact` in that section and give a clear reason.
-
-UI-affecting or contract-affecting paths include:
-
-- `apps/*/app/**`
-- `apps/*/components/**`
-- `apps/*/lib/**` when it is used by UI, services, adapters, hooks, or state
-- `apps/*/stores/**`, `apps/*/hooks/**`, `apps/*/services/**`, and
-  `apps/*/data/**`
-- app frontend config such as `next.config.*`, app `package.json`,
-  `.env.example`, and `tsconfig.json`
-- shared UI/design-system packages such as `packages/ui/**`
-- frontend service/adaptor packages such as `packages/api-client/**`,
-  `packages/auth-client/**`, and `packages/runtime-config/**`
-- the v0 contract wrapper package, `packages/contracts/**`
-- canonical contract paths, when present in the runtime repo, and v0 mock or
-  adapter changes
-
-Usually non-UI examples include backend-only Lambda internals with no UI or
-contract shape change, infrastructure-only deploy role changes,
-documentation-only changes, and CI-only changes. If in doubt, treat the change
-as v0-impacting and link the v0 work.
-
-v0 working sandboxes and branches may be stale. Before v0 work is used to
-satisfy this gate, refresh from `transformotion-apps-b8/main`, land the v0
-change there, then run `pnpm sync:v0` and `pnpm check:v0-contracts` in this
-runtime repo. CI uses `V0_REPO_READ_TOKEN` for read-only verification only; it
-must never write to or auto-fix the v0 repo from runtime state.
+Existing runtime UI surfaces are repo-owned. UI-affecting PRs should include
+the visual evidence appropriate to the blast radius: screenshots, browser
+checks, or explicit owner validation. v0 is optional for net-new visual design
+only; if v0 output is used, cite the v0 commit and include a visual comparison
+or disposition list in the runtime PR.
 
 ### 3.5.2 Contract-first development classification
 
@@ -384,15 +343,12 @@ Before implementing runtime work, classify it as one of:
 
 1. `Contract-changing`
 2. `Non-contract UI polish`
-3. `Runtime-only / no v0 impact`
+3. `Runtime-only`
 4. `Emergency hotfix`
 
-The v0 freshness gate is a CI backstop, not permission to start
-runtime-first contract-changing work.
-
-**Contract-changing work is prohibited by default unless the canonical v0
-contract update exists first.** A change is contract-changing if it adds,
-removes, renames, or changes:
+**Contract-changing work updates `packages/contracts/` before or alongside
+runtime implementation.** A change is contract-changing if it adds, removes,
+renames, or changes:
 
 - frontend/backend data fields
 - API request/response payloads
@@ -402,49 +358,46 @@ removes, renames, or changes:
 - runtime configuration shapes
 - mock data assumptions
 - UI state that depends on a new or changed shape
-- persistence/storage shape that v0 mocks must represent
+- persistence/storage shape
 - app settings/configuration shape
 
 Normal contract-changing workflow:
 
-1. Update canonical contracts in `transformotion-apps-b8/contracts` first.
-2. Update typed mocks and v0 UI/adapters.
-3. Merge the v0 PR.
-4. In this runtime repo, run `pnpm sync:v0` and `pnpm check:v0-contracts`.
-5. Implement runtime backend/frontend against the synced contracts.
-6. Reference the v0 PR/commit in the runtime PR freshness section.
+1. Update canonical contracts in `packages/contracts/` first or in the same PR.
+2. Update typed mocks/spec notes when examples, behaviour, or UI-visible
+   assumptions change.
+3. Run `pnpm check:contracts`.
+4. Implement runtime backend/frontend against the repo-owned contracts.
+5. Reference the contract files and validation in the PR body.
 
 **Non-contract UI polish is allowed.** UI polish is non-contract-changing when
 it only affects styling, spacing/layout, copy text, icons, responsive
 behaviour, accessibility attributes, modal/scrollbar polish, or component
 arrangement that does not change data/API/WSS/cache/mock/settings/runtime
-semantics. If polish affects both v0 and runtime, prefer v0-first or paired
-v0/runtime PRs. Runtime PRs still need either a v0 PR/commit reference or a
-clear no-v0-impact reason.
+semantics. Existing surfaces are reviewed directly in runtime. Net-new visual
+designs may use v0 as optional reference material when the task calls for it.
 
-**Runtime-first contract-changing work is allowed only as an emergency
-hotfix.** The issue must be urgent, the owner must explicitly approve
-runtime-first work before implementation, and the PR must include an
-`Emergency v0 Reconciliation` section. Urgent means app unusable, auth broken,
-data loss/corruption risk, security issue, deployment blocked, provider/model
-execution broken, or severe user-facing regression.
+**Emergency contract-changing work is allowed only for urgent fixes.** The
+issue must be urgent, the owner must explicitly approve any delayed contract
+reconciliation, and the PR must include an emergency reconciliation note.
+Urgent means app unusable, auth broken, data loss/corruption risk, security
+issue, deployment blocked, provider/model execution broken, or severe
+user-facing regression.
 
-The emergency runtime fix must be the smallest safe change. The PR must list
-affected contract surfaces and affected UI/mock surfaces, and a v0
-reconciliation PR or issue must be created immediately. v0 contracts, mocks,
-and UI must be brought back into sync as soon as possible. After
-reconciliation, run `pnpm sync:v0` and `pnpm check:v0-contracts`.
+The emergency fix must be the smallest safe change. The PR must list affected
+contract surfaces and affected UI/mock surfaces, and the `packages/contracts/`
+reconciliation must land in the same PR or in an immediate tracked follow-up
+explicitly approved by the owner.
 
-The `Emergency v0 Reconciliation` section must include:
+The emergency reconciliation note must include:
 
-- why runtime-first was necessary
+- why the delayed contract update was necessary
 - explicit owner approval reference
 - affected contract files/surfaces
 - affected UI/mock surfaces
-- v0 reconciliation PR or issue link
+- contract reconciliation PR or issue link
 - expected reconciliation deadline
 - validation plan
-
 ### 3.6 The decision rule — where new code lives
 
 When a new piece of code is written, the question is: does it go in
@@ -942,7 +895,7 @@ The strict rule: **business logic never references physical implementations dire
 
 This separation serves two concrete needs:
 
-1. **The v0 constraint** (Section 1.2). v0 has no AWS access; UI components must work against localStorage in v0 and against real APIs in production. Only the layered architecture's swap point at the data-access layer makes this possible — the same UI component, the same domain interface, two different implementations.
+1. **The design/reference workflow** (Section 1.2). UI components must work against local/mock implementations in development and real APIs in production. Only the layered architecture's swap point at the data-access layer makes this possible — the same UI component, the same domain interface, two different implementations.
 
 2. **Physical-layer flexibility.** Decisions about where data physically lives are encapsulated. A cache currently in DynamoDB could move to Redis later; only the data-access layer changes. Business logic doesn't know and doesn't care.
 
@@ -950,7 +903,7 @@ The layered architecture applies broadly. All data access goes through domain in
 
 ### 5.2 Domain interfaces and implementations
 
-**Domain interfaces** declare data-access shapes in store-agnostic terms. They live canonically in `transformotion-apps-b8/contracts/<scope>/` and are consumed in this runtime repo through `v0-reference/contracts/<scope>/`. A domain interface specifies what operations exist (`findAll`, `getById`, `save`, `delete`) and what types they take and return. It does not specify how those operations are implemented.
+**Domain interfaces** declare data-access shapes in store-agnostic terms. They live canonically in `packages/contracts/`. A domain interface specifies what operations exist (`findAll`, `getById`, `save`, `delete`) and what types they take and return. It does not specify how those operations are implemented.
 
 **Implementations** of a domain interface live in the data-access layer. Each implementation is named for its physical store. Examples:
 
@@ -1070,161 +1023,113 @@ If the platform's threat model changes (third-party Lambda code, multi-tenant La
 
 ### 5.7 Contracts
 
-A **contract** documents the binding interface between a provider and one or more consumers. Contracts cover any provider/consumer boundary worth documenting: HTTP APIs, Lambda-to-Lambda calls, Lambda-to-AWS service usage, TypeScript domain interfaces, data model schemas, and internal helper APIs. Contracts are inherently normative — changes are spec changes that all parties must accommodate.
+A **contract** documents the binding interface between a provider and one or
+more consumers. Contracts cover any provider/consumer boundary worth
+documenting: HTTP APIs, Lambda-to-Lambda calls, Lambda-to-AWS service usage,
+TypeScript domain interfaces, data model schemas, runtime configuration shapes,
+structured-output schemas, and internal helper APIs. Contracts are inherently
+normative; changes are spec changes that all parties must accommodate.
 
-**Contracts are normative by definition.** Anything in the contracts directory is a binding interface specification. Observation, history, project state, and other non-binding content do not belong in contracts; they live in operations docs, architecture inventory, or git history. The directory is the marker — content in it is binding; content outside it is not.
+**Contracts are normative by definition.** Anything in `packages/contracts/` is
+a binding interface specification. Observation, history, project state, and
+other non-binding content do not belong in active contract files; they live in
+operations docs, architecture inventory, git history, or `spec/_archive/`.
 
 #### Canonical location
 
-Contracts live canonically in the **v0 repo** (`transformotion-apps-b8`), not the Claude repo. The v0 repo is the only location both AIs (v0 and Claude Code) can read natively — v0 cannot access the Claude repo; Claude Code can access the v0 repo.
+Contracts live canonically in this repository under `packages/contracts/`.
+The package is dependency-light and must not import AWS SDKs, app code,
+platform code, infrastructure code, or browser-only runtime implementations.
 
-The Claude/runtime repo accesses contracts via a one-way sync from v0 repo into
-the gitignored `v0-reference/contracts/` location. Runtime code imports
-contracts from the synced location. The sync is implemented in
-`scripts/sync-v0.sh` and exposed as `pnpm sync:v0`.
+- `packages/contracts/src/` contains executable TypeScript shapes, constants,
+  schemas, examples, and typed mocks.
+- `packages/contracts/spec/` contains behavioural and narrative contract notes.
+- `packages/contracts/spec/_archive/` preserves historical inputs only.
+
+`v0-reference/` is a frozen historical archive marker. It is not a generated
+build input, not a source of truth, and not a runtime import target.
 
 #### Single source of truth
 
-Each contract has exactly one canonical location (in v0 repo). Runtime code references contracts by import from the synced location; no copies, no embedded mirrors, no independent declarations of types that match contracts.
-
-This is a strict rule. Independent type declarations in runtime code that match contract types are non-conforming, regardless of whether the duplication is convenient. The compiler does not detect divergence between independent declarations; eliminating the possibility of divergence requires eliminating duplicate declarations.
+Each contract has exactly one canonical location in `packages/contracts/`.
+Runtime code imports contract types and constants from `@transformotion/contracts`
+or its exported subpaths. Independent type declarations in runtime code that
+mirror contract types are non-conforming, even when convenient.
 
 #### Authoring discipline
 
-Contracts are edited in the v0 repo first. Runtime-side work that needs a
-contract change goes through this workflow:
+Contract-changing work goes through this workflow:
 
-1. Edit the contract in the v0 repo (`transformotion-apps-b8/contracts/...`)
-2. Commit and push the v0 repo change
-3. Run `pnpm sync:v0` in this runtime repo
-4. Then proceed with runtime implementation work that depends on the change
+1. Edit `packages/contracts/` first or in the same PR as the runtime change.
+2. Update contract examples, typed mocks, behavioural specs, and version metadata
+   when the change affects shape, semantics, or UI-visible assumptions.
+3. Run `pnpm check:contracts`.
+4. Implement consumers against `@transformotion/contracts`.
+5. Record the contract files changed and validation in the PR body.
 
-The discipline is enforced by CI verification (Level 3): this runtime repo's CI
-uses `V0_REPO_READ_TOKEN` only for read-only verification that the gitignored
-sync target is byte-identical to v0 repo's contracts at HEAD. CI must never
-auto-write to the v0 repo, auto-fix v0 contracts, or treat runtime repo state
-as authoritative over `transformotion-apps-b8/contracts/`. Mechanical
-guardrails (gitignore, sync target README warning against direct edits, sync
-script refusing to run if it detects local modifications) reduce the chance of
-mistakes reaching CI.
+Preserve the single-writer rule: keep one active contract PR chain at a time so
+shape changes do not race each other.
 
 #### Scope-first executable structure
 
-Contracts within each scope are organised as executable TypeScript-first bundles. The structure in v0 repo:
+Contracts are organised as executable TypeScript-first bundles:
 
 ```
-transformotion-apps-b8/contracts/
-  _shared/
-    api.ts
-    auth.ts
-    runtime-config.ts
-    ai-runtime.ts
-    contract-version.ts
-  launchpad/
-    types.ts
-    api.ts
-    mocks.ts
-    navigation.md
-    behaviour.md
-    backend/
-      auth-domain.md
-      control-plane.md
-  budget-tracker/
-    types.ts
-    api.ts
-    wss.ts
-    mocks.ts
-    navigation.md
-    behaviour.md
-    backend/
-      runtime.md
-      ai-runtime.md
-      data.md
-  stock-analyser/
-    types.ts
-    api.ts
-    wss.ts
-    mocks.ts
-    navigation.md
-    behaviour.md
-    backend/
-      runtime.md
-      ai-runtime.md
-      data.md
-  platform/
-    substrate.md
+packages/contracts/
+  src/
+    _shared/
+      api.ts
+      auth.ts
+      runtime-config.ts
+      ai-runtime.ts
+      contract-version.ts
+    launchpad/
+      types.ts
+      api.ts
+      mocks.ts
+      invitations.ts
+      redemption.ts
+    stock-analyser/
+      types.ts
+      api.ts
+      market-analysis.ts
+      recommendations.ts
+      etfs.ts
+      metals.ts
+      structured-output.ts
+      cache-freshness.ts
+      notification-preferences.ts
+      notification-run-history.ts
+      mocks.ts
+    budget-tracker/
+      types.ts
+      api.ts
+      mocks.ts
+      wss.ts
+  spec/
+    <scope>/
+      behaviour.md
+      navigation.md
+      backend/*.md
 ```
 
-TypeScript files are authoritative for shape. Markdown files describe behaviour,
-validation, edge cases, navigation, examples, auth rules, IAM/external
-dependencies, and mock guidance. Shared shapes live in `_shared/` and must not
-be duplicated between frontend and backend concerns.
+Shared shapes live in `_shared/` and must not be duplicated into app scopes.
+App-specific shapes live under that app's scope. Markdown specs describe
+behaviour, validation, IAM, DynamoDB, Lambda, WSS, AI runtime, and external
+dependency expectations where TypeScript alone is insufficient.
 
-Backend folders hold backend-specific behaviour and implementation constraints:
-IAM, DynamoDB schemas, Lambda behaviour, WSS behaviour, AI runtime/provider
-behaviour, auth/authorization requirements, and external dependency/mockability
-notes.
-#### Granularity (backend contracts)
+#### Minimum contract content
 
-Backend service interface contracts are organised by **functional domain**, not per-Lambda. Each domain document covers the related operations within that domain plus their cross-Lambda interactions.
+Contract files should include enough detail for the consumer to implement or
+mock the boundary without inventing shapes:
 
-Examples of domains: budget operations, auth operations, AI services, account operations, user operations, data storage. Specific domain boundaries are decided during authoring; the principle is that tightly-related operations belong together while loosely-related operations are separated.
-
-Per-domain over per-Lambda: when reasoning about workflows that span multiple Lambdas (e.g., budget deletion cascading to rules; auth setup → claim refresh → service access), related operations belong together cognitively. Per-Lambda forces cross-referencing for any cross-Lambda flow.
-
-Per-domain over per-app: per-app groups loosely-related Lambdas. Per-domain is the right level of abstraction.
-
-#### Format (hybrid)
-
-Each domain has two paired files:
-
-- **`<domain>.ts`** — typed declarations for request/response shapes, entity types, error types. Authoritative for *shape*. Imported directly by Claude code.
-- **`<domain>.md`** — behavioural specs, edge cases, rate limits, validation rules, examples. Authoritative for *behaviour and context*.
-
-**Format authority rule:** TypeScript is authoritative for shape. Markdown describes shape *semantically* but does NOT redeclare types. Markdown content follows this discipline:
-
-- Reference types by name (e.g., "`BudgetInput` requires...") without redeclaring fields
-- Sample data is labelled "Example" and clearly distinct from type definitions
-- Behavioural notes (e.g., "returns null if X", "rate-limited to 5/min") live only in markdown
-- Cross-references to paired `.ts` files are explicit ("See `budget-operations.ts` for type definitions")
-
-Why hybrid: TypeScript-only forces behavioural specs into JSDoc comments where they're easy to miss while scanning for field names; markdown-only requires runtime code to either auto-generate types from markdown or maintain types separately (which is itself a mirror, conflicting with the single-source-of-truth rule). Hybrid eliminates both problems.
-
-#### v0-sufficient minimum content
-
-Frontend contracts must contain at least the content v0 needs to build a working mock:
-
-- **HTTP API contracts:** path, method, request shape (params + body), response shape (success + error cases), status codes, authentication requirement
-- **Domain interface contracts:** method signatures, return types, error/null cases, behavioural notes
-- **Data model contracts:** field names, types, optionality, validation rules, relationships to other shapes
-
-Examples (sample payloads, return values) are encouraged but not required.
-
-#### Backend contract template
-
-Per-domain backend contracts follow a standard structure:
-
-- **Operations** — list of Lambda functions in this domain, with high-level purpose
-- **Type definitions** — paired `.ts` file holds the actual types; `.md` file references them
-- **Behavioural specs** — what each operation does, in what conditions
-- **Cross-Lambda interactions** — how operations within the domain coordinate
-- **External dependencies** — AWS services (Cognito, SES, DynamoDB) the domain interacts with; flagged for v0 mockability awareness
-- **Authentication/authorisation model** — which middleware wrappers, which guards
-- **IAM scope** — least-privilege required
-- **Error responses** — what status codes, when
-- **Rate limiting/throttling** — if any
-- **Cross-references** - to related API, WSS, type, mock, backend behaviour, shared, and platform contracts
-
-#### Cross-references
-
-Where a shape file has related behaviour, backend, WSS, mock, or shared
-contracts, cross-reference the related file explicitly. There is no implicit
-frontend/backend pairing convention in the M15 structure; related files are
-connected by scope, type names, route names, and explicit links.
-#### Mockability flagging
-
-Backend contracts include an explicit "External dependencies" section listing AWS services the domain interacts with — Cognito, SES, DynamoDB, etc. This serves both v0 (knows what to stub when generating mocks) and Claude (understands what's the platform's vs what's AWS's).
-
+- operation or helper name
+- request and response types
+- status/error vocabulary when externally visible
+- auth or authorization expectations when relevant
+- cache/job/WSS shapes when relevant
+- example values or typed mocks for UI/dev consumers
+- behavioural notes for invariants that TypeScript cannot express
 ### 5.8 Runtime configuration: profile + override pattern
 
 The platform selects between provider implementations across multiple architectural concerns (auth, data, AI, cache, email sender, file storage) using a single foundational pattern: a profile env var sets the high-level mode, and optional per-concern override env vars allow targeted swaps.
@@ -1521,9 +1426,8 @@ When removing a field from `BudgetSettings`, the required steps are:
 
 1. Remove from `SETTING_KEYS` and `DEFAULT_SETTINGS` in the settings
    Lambda.
-2. Update the canonical contract in
-   `transformotion-apps-b8/contracts/budget-tracker/`, commit and push the v0
-   repo change, run `pnpm sync:v0`, then remove any runtime mirrors such as the
+2. Update the canonical contract in `packages/contracts/`, run
+   `pnpm check:contracts`, then remove any runtime mirrors such as the
    `BudgetSettings` type in `packages/budget-domain/src/contracts.ts`.
 3. Create a one-shot migration script in
    `scripts/migrations/budget-tracker/` to delete the orphaned rows.

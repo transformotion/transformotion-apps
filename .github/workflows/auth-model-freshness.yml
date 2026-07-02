@@ -1,35 +1,9 @@
-name: Auth Model Mirror Freshness
+﻿name: Auth Model Mirror Freshness
 
-# PART B — the GATE. Fails (red) when the v0 repo's COMMITTED
-# contracts/auth-model.md differs from a fresh extraction of THIS repo's auth.md
-# fenced span. It compares the v0 mirror against the runtime auth.md SOURCE — it
-# never regenerates-then-self-diffs (that pattern always passes).
-#
-# Home: this runs in the RUNTIME repo (clobber-proof — a v0-tool push cannot
-# remove it). It reuses v0's check-auth-model-synced.sh, which regenerates from
-# runtime auth.md via the shared generator and diffs the committed v0 file, so
-# the source side and the v0 side agree by construction.
-#
-# Status-check name: Auth Model Mirror Freshness / freshness
-# Used as a MONITOR, not a required branch-protection check (it does not run on
-# pull_request, so requiring it would block every PR). The red signal + the Part
-# A auto-PR are the enforcement loop.
-#
-# Triggers: after auth.md lands on develop (the active branch; main is a stale
-# mirror), so a stale v0 mirror shows red until the Part A sync PR is merged;
-# plus a daily drift sweep and manual dispatch. Deliberately NOT a blocking check
-# on auth.md PRs (the mirror updates only after merge, which would deadlock).
-#
-# Required Actions secrets (same App as Part A; read access is sufficient here):
-#   AUTH_MODEL_SYNC_APP_ID, AUTH_MODEL_SYNC_PRIVATE_KEY
+# Retired from automatic enforcement when v0 stopped being a canonical source.
+# Kept manual-only as an archival check for the historical b8 mirror.
 
 on:
-  push:
-    branches: [develop, main]
-    paths:
-      - docs/architecture/auth.md
-  schedule:
-    - cron: '17 6 * * *'
   workflow_dispatch:
 
 permissions:
@@ -40,13 +14,10 @@ jobs:
     name: freshness
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout runtime (auth.md source — develop is the source of truth)
+      - name: Checkout runtime auth.md source
         uses: actions/checkout@v4
         with:
           path: runtime
-          # Pin to develop (the active branch). schedule / workflow_dispatch
-          # otherwise check out the default branch (main), which is a stale
-          # mirror with no mirror:start/end fences -> the check would go red.
           ref: develop
 
       - name: Mint GitHub App token (read the v0 repo)
@@ -58,18 +29,14 @@ jobs:
           owner: transformotion
           repositories: transformotion-apps-b8
 
-      - name: Clone v0 repo (its committed mirror) with the App token
+      - name: Clone historical v0 mirror with the App token
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           git clone --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/transformotion/transformotion-apps-b8.git" v0
 
-      - name: Compare v0's committed mirror against the runtime auth.md source
+      - name: Compare historical v0 mirror against runtime auth.md source
         env:
           RUNTIME_REPO_PATH: ${{ github.workspace }}/runtime
         run: |
-          # check-auth-model-synced.sh regenerates from runtime auth.md (via the
-          # shared generator) and diffs the COMMITTED v0 contracts/auth-model.md.
-          # Red when they differ — i.e. auth.md changed but the mirror has not
-          # been regenerated/merged, or the mirror was hand-edited.
           bash v0/scripts/ci/check-auth-model-synced.sh

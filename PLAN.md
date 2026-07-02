@@ -34,15 +34,15 @@ section restates them by number for quick reference.
   as a platform).
 - **Goal 4** — Invite people in based on the permissions model.
 
-### 1.2 The v0 constraint
+### 1.2 Contracts and UI ownership
 
-The frontend is developed using v0 with mocked persistence (localStorage)
-and runs against real DynamoDB-via-Lambda persistence in production. The
-canonical persistence pattern requires a swap point at the data-access
-layer. Contracts are the v0 interface. The build pipeline supports both
-modes.
+Contracts and existing runtime UI surfaces are canonical in this repository.
+The canonical persistence pattern still requires a swap point at the
+data-access layer so local/mock and live implementations can share the same
+interfaces. v0 is retained as optional, per-task reference material for
+net-new visual design only.
 
-The full constraint statement is in `/CONTRIBUTING.md` Section 1.2.
+The full ownership statement is in `/CONTRIBUTING.md` Section 1.2.
 
 ---
 
@@ -291,6 +291,11 @@ Documented in `CONTRIBUTING.md` Section 5 (Architectural patterns) and Section 6
 **Decision M2.3 — Contracts policy.**
 
 The seven M2.3 decisions establish what counts as a contract in this platform, where contracts canonically live, how they are structured, and the discipline that keeps them coherent.
+
+**Current status note (2026-07-03):** The original v0-canonical location and
+sync discipline in this decision batch is superseded by
+`docs/adr-runtime-contract-ui-ownership.md`. Current contract authority is
+`packages/contracts/` in this repository; v0-reference is archive evidence.
 
 - **Definitional framing (M2.3 batch).** A contract documents the binding interface between a provider and one or more consumers. Contracts cover any provider/consumer boundary: HTTP APIs, Lambda-to-Lambda calls, Lambda-to-AWS service usage, TypeScript domain interfaces, data model schemas, and internal helper APIs. Definition lives in CONTRIBUTING.md Section 5.7.
 - **Normative-by-definition (#116).** Contracts are inherently normative. Anything in the contracts directory is a binding interface specification. Observation, history, project state, and other non-binding content do not belong in contracts; they live in operations docs, architecture inventory, or git history.
@@ -1289,6 +1294,12 @@ verification of the verification.
 
 ## 19. M15 - v0-canonical transition (contracts, workflow, and UI readiness)
 
+**Current status note (2026-07-03):** M15 is now historical. Its v0-canonical
+contract/UI workflow is superseded by
+`docs/adr-runtime-contract-ui-ownership.md`: contracts and existing UI surfaces
+are canonical in this runtime repo, `packages/contracts/` owns contract source,
+and `v0-reference/` is an archived evidence trail only.
+
 **Purpose**
 
 The v0 development workflow is foundational to how the platform's frontend is built (CONTRIBUTING.md Section 1.2). v0 generates UI against documented data shapes with mocked persistence; the same components run against real persistence in production.
@@ -1836,8 +1847,8 @@ preserved in the milestone's per-app issues.
   Budget Tracker (#549), Launchpad (#550). Mostly v0 catch-up; some runtime
   adoption per the Phase-0 rulings.
 - **Phase 2.** Final parity verification + reconciled-baseline record (#547):
-  re-run the per-surface comparison, `pnpm sync:v0` clean, visual diffs, and
-  capture the reconciled "v0 == live" baseline commit.
+  re-run the per-surface comparison, `pnpm check:contracts` clean, visual diffs,
+  and capture the reconciled runtime-owned baseline commit.
 
 ### Goals served
 

@@ -1,4 +1,4 @@
-# Stock Analyser - Claude Code compatibility mirror
+﻿# Stock Analyser - Claude Code compatibility mirror
 
 `apps/stock-analyser/AGENTS.md` is the authoritative Stock Analyser agent guide.
 This file is maintained for Claude Code compatibility and must remain
@@ -32,7 +32,7 @@ React + TypeScript + Tailwind CSS.
 | CDK stacks, Lambda names | [/docs/architecture/cdk.md](/docs/architecture/cdk.md) |
 | Cache, daily warm job & notifications (operating reference) | [/docs/caching-and-warming.md](/docs/caching-and-warming.md) |
 | URL routing, CloudFront, deploy triggers | [/docs/architecture/urls-and-deploy.md](/docs/architecture/urls-and-deploy.md) |
-| Stock Analyser API contracts and types | Authored in `transformotion-apps-b8/contracts/stock-analyser/`; consumed here from generated read-only [/v0-reference/contracts/stock-analyser/](/v0-reference/contracts/stock-analyser/) |
+| Stock Analyser API contracts and types | Canonical in [packages/contracts/src/stock-analyser](/packages/contracts/src/stock-analyser) and [packages/contracts/spec/stock-analyser](/packages/contracts/spec/stock-analyser) |
 | Migration invariants from HTML version | [apps/stock-analyser/MIGRATION_INVARIANTS.md](./MIGRATION_INVARIANTS.md) |
 
 ## CDK stacks owned
@@ -98,9 +98,7 @@ Construct `requireAccountData('stock-analyser')` at module scope, then call `.re
 
 The app uses a service-adaptor pattern: components call service methods → service handles mock vs real internally. Components never check provider flags directly.
 
-Contracted service/API shapes are authored in the v0 repo first and consumed
-here from `v0-reference/contracts/stock-analyser/`. Do not edit the synced
-runtime copy directly; follow the root M15 contract authoring rule.
+Contracted service/API shapes are authored in `packages/contracts/` and consumed through `@transformotion/contracts`. Update the package first or in the same PR, then run `pnpm check:contracts`.
 
 Key service methods currently covered by the Stock Analyser contract set:
 - `portfolioService.getHoldings()` / `saveHoldings()` / `enrichHoldings()`
