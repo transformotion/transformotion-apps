@@ -1,4 +1,4 @@
-# Launchpad - Claude Code compatibility mirror
+﻿# Launchpad - Claude Code compatibility mirror
 
 Root `AGENTS.md` is the canonical AI-agent operating guide for this repository.
 This file mirrors `apps/launchpad/AGENTS.md` for Claude Code compatibility and

@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
-# Sync canonical contracts from the v0 repo into v0-reference/contracts/.
+# Deprecated: sync historical v0 contracts from the v0 repo into
+# v0-reference/contracts/.
+#
+# Contract authority moved to packages/contracts in the runtime repo. This
+# script remains only as an archival/manual recovery helper; CI and normal
+# development must not depend on it.
 #
 # Usage:
 #   bash scripts/sync-v0.sh
@@ -10,6 +15,12 @@
 # or enforce the final M15 contract structure.
 
 set -euo pipefail
+
+cat >&2 <<EOF
+WARNING: pnpm sync:v0 is deprecated.
+Contracts are now canonical in packages/contracts. v0-reference is a frozen
+archive trail, not a required build input.
+EOF
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -130,22 +141,20 @@ write_readme() {
   cat > "$README" <<EOF
 # v0 Reference
 
-Generated content. Do not edit this directory directly.
+Deprecated generated content. Do not edit this directory directly.
 
-Canonical contracts live in:
+Contract authority now lives in:
 
-  transformotion-apps-b8/contracts/
+  packages/contracts/
 
-This runtime repository consumes a synced copy at:
+This directory is an archival snapshot only. The deprecated sync helper can
+populate:
 
   v0-reference/contracts/
 
-To update the synced copy, edit the canonical contracts in the v0 repo and run:
+but CI, deploy workflows, and runtime package imports must not depend on it.
 
-  bash scripts/sync-v0.sh
-
-If the generated target contains local edits, the sync script refuses to
-overwrite them unless explicitly forced.
+See v0-reference/ARCHIVED.md for the final observed sync commit.
 EOF
 }
 

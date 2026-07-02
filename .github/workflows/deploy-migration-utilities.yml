@@ -1,4 +1,4 @@
-name: Deploy — Migration Utilities
+﻿name: Deploy â€” Migration Utilities
 
 on:
   push:
@@ -45,17 +45,13 @@ env:
 
 jobs:
   deploy-dev:
-    name: Migration Utilities → Dev
+    name: Migration Utilities â†’ Dev
     runs-on: ubuntu-latest
     if: (github.event_name == 'push' && github.ref_name == 'develop') || (github.event_name == 'workflow_call' && inputs.target == 'dev') || (github.event_name == 'workflow_dispatch' && inputs.target == 'dev')
     environment: dev
     steps:
       - uses: actions/checkout@v4
 
-      - name: Clone v0 repo
-        env:
-          V0_REPO_READ_TOKEN: ${{ secrets.V0_REPO_READ_TOKEN }}
-        run: git clone --depth 1 "https://x-access-token:${V0_REPO_READ_TOKEN}@github.com/transformotion/transformotion-apps-b8.git" "$RUNNER_TEMP/transformotion-apps-b8"
 
       - uses: actions/setup-node@v4
         with:
@@ -69,41 +65,24 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       # The migration-utilities CDK app bundles Lambdas that import shared
-      # packages (@transformotion/lambda-middleware → @transformotion/contracts),
-      # which re-export the gitignored, sync-only v0-reference contracts. Without
-      # this sync, esbuild cannot resolve v0-reference and bundling fails (#460).
-      - name: Sync v0 contracts
-        env:
-          V0_REPO_PATH: ${{ runner.temp }}/transformotion-apps-b8
-        run: pnpm sync:v0
-
-      - name: Verify v0 contracts byte identity
-        env:
-          V0_REPO_PATH: ${{ runner.temp }}/transformotion-apps-b8
-        run: pnpm check:v0-contracts
-
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ env.ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: CDK Deploy — Migration Utilities stack (dev)
+      - name: CDK Deploy â€” Migration Utilities stack (dev)
         working-directory: infrastructure
         run: pnpm exec cdk deploy --app 'npx ts-node --prefer-ts-exts bin/migration-utilities.ts' 'TransformotionDev-MigrationsApi' --require-approval never
 
   deploy-prod:
-    name: Migration Utilities → Prod
+    name: Migration Utilities â†’ Prod
     runs-on: ubuntu-latest
     if: (github.event_name == 'push' && github.ref_name == 'main') || (github.event_name == 'workflow_call' && inputs.target == 'prod') || (github.event_name == 'workflow_dispatch' && inputs.target == 'prod')
     environment: prod
     steps:
       - uses: actions/checkout@v4
 
-      - name: Clone v0 repo
-        env:
-          V0_REPO_READ_TOKEN: ${{ secrets.V0_REPO_READ_TOKEN }}
-        run: git clone --depth 1 "https://x-access-token:${V0_REPO_READ_TOKEN}@github.com/transformotion/transformotion-apps-b8.git" "$RUNNER_TEMP/transformotion-apps-b8"
 
       - uses: actions/setup-node@v4
         with:
@@ -116,24 +95,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # See dev job: shared-package Lambdas re-export the sync-only v0-reference
-      # contracts, so esbuild bundling needs `pnpm sync:v0` first (#460).
-      - name: Sync v0 contracts
-        env:
-          V0_REPO_PATH: ${{ runner.temp }}/transformotion-apps-b8
-        run: pnpm sync:v0
-
-      - name: Verify v0 contracts byte identity
-        env:
-          V0_REPO_PATH: ${{ runner.temp }}/transformotion-apps-b8
-        run: pnpm check:v0-contracts
-
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ env.ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: CDK Deploy — Migration Utilities stack (prod)
+      - name: CDK Deploy â€” Migration Utilities stack (prod)
         working-directory: infrastructure
         run: pnpm exec cdk deploy --app 'npx ts-node --prefer-ts-exts bin/migration-utilities.ts' 'TransformotionProd-MigrationsApi' --require-approval never

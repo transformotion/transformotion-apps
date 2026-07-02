@@ -9,66 +9,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  v0-freshness:
-    name: v0 Freshness Gate
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout runtime repo
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Detect changed files
-        run: |
-          git fetch origin "${{ github.base_ref }}" --depth=1
-          git diff --name-only "origin/${{ github.base_ref }}"...HEAD > "$RUNNER_TEMP/changed-files.txt"
-          cat "$RUNNER_TEMP/changed-files.txt"
-
-      - name: Verify v0 freshness declaration
-        env:
-          CHANGED_FILES_FILE: ${{ runner.temp }}/changed-files.txt
-          PR_BODY: ${{ github.event.pull_request.body }}
-        run: node scripts/ci/check-v0-freshness.mjs
-
-  v0-contracts-sync:
-    name: v0 Contracts Sync
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout runtime repo
-        uses: actions/checkout@v4
-        with:
-          path: transformotion-apps
-
-      - name: Require v0 repo read token
-        env:
-          V0_REPO_READ_TOKEN: ${{ secrets.V0_REPO_READ_TOKEN }}
-        run: |
-          if [ -z "$V0_REPO_READ_TOKEN" ]; then
-            echo "::error::Missing V0_REPO_READ_TOKEN secret. Configure a read-only PAT or GitHub App token with access to transformotion/transformotion-apps-b8."
-            exit 1
-          fi
-
-      - name: Clone v0 repo
-        env:
-          V0_REPO_READ_TOKEN: ${{ secrets.V0_REPO_READ_TOKEN }}
-        run: git clone --depth 1 "https://x-access-token:${V0_REPO_READ_TOKEN}@github.com/transformotion/transformotion-apps-b8.git" "$RUNNER_TEMP/transformotion-apps-b8"
-
-      - name: Verify v0 contracts byte identity
-        working-directory: transformotion-apps
-        env:
-          V0_REPO_PATH: ${{ runner.temp }}/transformotion-apps-b8
-        run: bash scripts/ci/check-v0-contracts-synced.sh
-
   typecheck-and-lint:
     name: Typecheck & Lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Clone v0 repo
-        env:
-          V0_REPO_READ_TOKEN: ${{ secrets.V0_REPO_READ_TOKEN }}
-        run: git clone --depth 1 "https://x-access-token:${V0_REPO_READ_TOKEN}@github.com/transformotion/transformotion-apps-b8.git" "$RUNNER_TEMP/transformotion-apps-b8"
 
       - uses: actions/setup-node@v4
         with:
@@ -81,14 +26,10 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Sync v0 contracts
-        env:
-          V0_REPO_PATH: ${{ runner.temp }}/transformotion-apps-b8
-        run: pnpm sync:v0
+      - name: Validate repo-owned contracts
+        run: pnpm check:contracts
 
       - name: Typecheck (all workspaces)
-        env:
-          V0_REPO_PATH: ${{ runner.temp }}/transformotion-apps-b8
         run: pnpm typecheck
 
       - name: Lint baseline check (no new violations)
@@ -97,25 +38,25 @@ jobs:
       - name: No requireGroup in handlers (deprecated)
         run: bash scripts/ci/check-no-new-require-group.sh
 
-      - name: Handler authorization pattern (DynamoDB → authz helper required)
+      - name: Handler authorization pattern (DynamoDB -> authz helper required)
         run: bash scripts/ci/check-handler-authz-pattern.sh
 
       - name: Verify baseline didn't grow vs base branch
         run: |
           BASE="${{ github.base_ref }}"
           if ! git show "origin/$BASE:.lint-baseline.json" > /tmp/base-baseline.json 2>/dev/null; then
-            echo "No baseline on origin/$BASE — first introduction, skipping growth check."
+            echo "No baseline on origin/$BASE - first introduction, skipping growth check."
             exit 0
           fi
           if git diff "origin/$BASE" -- eslint.config.mjs | grep -q '^+' 2>/dev/null; then
-            echo "eslint.config.mjs changed in this PR — baseline growth is expected, skipping growth check."
+            echo "eslint.config.mjs changed in this PR - baseline growth is expected, skipping growth check."
             exit 0
           fi
           BASE_TOTAL=$(jq '[.. | numbers] | add // 0' /tmp/base-baseline.json)
           PR_TOTAL=$(jq '[.. | numbers] | add // 0' .lint-baseline.json)
           echo "Base violations: $BASE_TOTAL  PR violations: $PR_TOTAL"
           if [ "$PR_TOTAL" -gt "$BASE_TOTAL" ]; then
-            echo "ERROR: Baseline grew ($BASE_TOTAL → $PR_TOTAL). Fix violations or justify the growth in this PR."
+            echo "ERROR: Baseline grew ($BASE_TOTAL -> $PR_TOTAL). Fix violations or justify the growth in this PR."
             exit 1
           fi
           echo "Baseline growth check passed."
@@ -131,11 +72,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Clone v0 repo
-        env:
-          V0_REPO_READ_TOKEN: ${{ secrets.V0_REPO_READ_TOKEN }}
-        run: git clone --depth 1 "https://x-access-token:${V0_REPO_READ_TOKEN}@github.com/transformotion/transformotion-apps-b8.git" "$RUNNER_TEMP/transformotion-apps-b8"
-
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -146,11 +82,6 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
-      - name: Sync v0 contracts
-        env:
-          V0_REPO_PATH: ${{ runner.temp }}/transformotion-apps-b8
-        run: pnpm sync:v0
 
       - name: Build ${{ matrix.app.name }}
         working-directory: ${{ matrix.app.dir }}
@@ -173,11 +104,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Clone v0 repo
-        env:
-          V0_REPO_READ_TOKEN: ${{ secrets.V0_REPO_READ_TOKEN }}
-        run: git clone --depth 1 "https://x-access-token:${V0_REPO_READ_TOKEN}@github.com/transformotion/transformotion-apps-b8.git" "$RUNNER_TEMP/transformotion-apps-b8"
-
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -189,19 +115,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Sync v0 contracts
-        env:
-          V0_REPO_PATH: ${{ runner.temp }}/transformotion-apps-b8
-        run: pnpm sync:v0
-
-      - name: CDK Synth — dev
+      - name: CDK Synth - dev
         working-directory: infrastructure
         run: pnpm exec cdk synth TransformotionDev-Network
 
-      - name: CDK Synth — prod
+      - name: CDK Synth - prod
         working-directory: infrastructure
         run: pnpm exec cdk synth TransformotionProd-Network
 
-      - name: CDK Synth — MigrationsApi (dev)
+      - name: CDK Synth - MigrationsApi (dev)
         working-directory: infrastructure
         run: pnpm exec cdk synth --app 'npx ts-node --prefer-ts-exts bin/migration-utilities.ts' TransformotionDev-MigrationsApi

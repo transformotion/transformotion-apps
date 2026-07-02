@@ -1,4 +1,4 @@
-name: Deploy — Budget Tracker
+﻿name: Deploy â€” Budget Tracker
 
 on:
   push:
@@ -58,7 +58,7 @@ env:
 
 jobs:
   deploy-dev:
-    name: Budget Tracker → Dev
+    name: Budget Tracker â†’ Dev
     runs-on: ubuntu-latest
     if: (github.event_name == 'push' && github.ref_name == 'develop') || (github.event_name == 'workflow_call' && inputs.target == 'dev') || (github.event_name == 'workflow_dispatch' && inputs.target == 'dev')
     environment: dev
@@ -82,10 +82,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Clone v0 repo
-        env:
-          V0_REPO_READ_TOKEN: ${{ secrets.V0_REPO_READ_TOKEN }}
-        run: git clone --depth 1 "https://x-access-token:${V0_REPO_READ_TOKEN}@github.com/transformotion/transformotion-apps-b8.git" "$RUNNER_TEMP/transformotion-apps-b8"
 
       - name: Check required env vars are set
         run: bash scripts/ci/check-required-env-vars.sh apps/budget-tracker/.env.example dev
@@ -101,23 +97,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Sync v0 contracts
-        env:
-          V0_REPO_PATH: ${{ runner.temp }}/transformotion-apps-b8
-        run: pnpm sync:v0
-
-      - name: Verify v0 contracts byte identity
-        env:
-          V0_REPO_PATH: ${{ runner.temp }}/transformotion-apps-b8
-        run: pnpm check:v0-contracts
-
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ env.ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: CDK Deploy — Budget Tracker stacks (dev)
+      - name: CDK Deploy â€” Budget Tracker stacks (dev)
         working-directory: infrastructure
         run: pnpm exec cdk deploy --app 'npx ts-node --prefer-ts-exts bin/budget-tracker.ts' 'TransformotionDev-BudgetTrackerTables' 'TransformotionDev-BudgetTrackerWs' 'TransformotionDev-BudgetTrackerApi' --require-approval never
 
@@ -155,7 +141,7 @@ jobs:
             --output text)
           if [ -z "$CP_URL" ] || [ "$CP_URL" = "None" ]; then
             echo "ERROR: ControlPlaneApiUrl missing/empty on TransformotionDev-LaunchpadControlPlane."
-            echo "Refusing to build with an empty NEXT_PUBLIC_LAUNCHPAD_CONTROL_PLANE_API_URL —"
+            echo "Refusing to build with an empty NEXT_PUBLIC_LAUNCHPAD_CONTROL_PLANE_API_URL â€”"
             echo "active-account and no-access logic would silently fall back to claims/error."
             exit 1
           fi
@@ -196,7 +182,7 @@ jobs:
             "/api/budget/v1/settings"
 
   deploy-prod:
-    name: Budget Tracker → Prod
+    name: Budget Tracker â†’ Prod
     runs-on: ubuntu-latest
     if: (github.event_name == 'push' && github.ref_name == 'main') || (github.event_name == 'workflow_call' && inputs.target == 'prod') || (github.event_name == 'workflow_dispatch' && inputs.target == 'prod')
     environment: prod
@@ -220,10 +206,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Clone v0 repo
-        env:
-          V0_REPO_READ_TOKEN: ${{ secrets.V0_REPO_READ_TOKEN }}
-        run: git clone --depth 1 "https://x-access-token:${V0_REPO_READ_TOKEN}@github.com/transformotion/transformotion-apps-b8.git" "$RUNNER_TEMP/transformotion-apps-b8"
 
       - name: Check required env vars are set
         run: bash scripts/ci/check-required-env-vars.sh apps/budget-tracker/.env.example prod
@@ -239,23 +221,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Sync v0 contracts
-        env:
-          V0_REPO_PATH: ${{ runner.temp }}/transformotion-apps-b8
-        run: pnpm sync:v0
-
-      - name: Verify v0 contracts byte identity
-        env:
-          V0_REPO_PATH: ${{ runner.temp }}/transformotion-apps-b8
-        run: pnpm check:v0-contracts
-
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ env.ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: CDK Deploy — Budget Tracker stacks (prod)
+      - name: CDK Deploy â€” Budget Tracker stacks (prod)
         working-directory: infrastructure
         run: pnpm exec cdk deploy --app 'npx ts-node --prefer-ts-exts bin/budget-tracker.ts' 'TransformotionProd-BudgetTrackerTables' 'TransformotionProd-BudgetTrackerWs' 'TransformotionProd-BudgetTrackerApi' --require-approval never
 
@@ -293,7 +265,7 @@ jobs:
             --output text)
           if [ -z "$CP_URL" ] || [ "$CP_URL" = "None" ]; then
             echo "ERROR: ControlPlaneApiUrl missing/empty on TransformotionProd-LaunchpadControlPlane."
-            echo "Refusing to build with an empty NEXT_PUBLIC_LAUNCHPAD_CONTROL_PLANE_API_URL —"
+            echo "Refusing to build with an empty NEXT_PUBLIC_LAUNCHPAD_CONTROL_PLANE_API_URL â€”"
             echo "active-account and no-access logic would silently fall back to claims/error."
             exit 1
           fi

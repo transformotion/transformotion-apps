@@ -36,8 +36,11 @@ desktop.ini
 *.swp
 *.swo
 
-# v0 design reference — never commit (populated by scripts/sync-v0.sh)
-v0-reference/
+# v0 design/reference archive. Generated contents stay local; the archive
+# marker is tracked as the historical evidence trail.
+v0-reference/*
+!v0-reference/
+!v0-reference/ARCHIVED.md
 
 # Logs
 *.log

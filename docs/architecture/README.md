@@ -21,7 +21,7 @@ If during implementation a document is discovered to be wrong or incomplete, wor
 ## Companion documents elsewhere in the repo
 
 - **[MONOREPO.md](/MONOREPO.md)** — Workspace structure, import boundaries, build/deploy triggers.
-- **[contracts/](/contracts/)** — Per-app data and API contracts (living documentation adjacent to each app's code).
+- **[packages/contracts/](/packages/contracts/)** — Canonical contract package: TypeScript shapes, typed mocks, schemas, and behavioural specs.
 - **[AGENTS.md](/AGENTS.md)** — Canonical AI-agent operating guide.
 - **[docs/migrations/m9-363-closeout.md](/docs/migrations/m9-363-closeout.md)** — #363 deployment and runtime validation checklist; records #386 as the physical auth-domain re-home follow-up.
 - **[apps/stock-analyser/AGENTS.md](/apps/stock-analyser/AGENTS.md)** — Stock Analyser operating guide for agents.

@@ -1,4 +1,4 @@
-# Budget Tracker - Claude Code compatibility mirror
+﻿# Budget Tracker - Claude Code compatibility mirror
 
 `apps/budget-tracker/AGENTS.md` is the authoritative Budget Tracker agent guide.
 This file is maintained for Claude Code compatibility and must remain
@@ -31,7 +31,7 @@ React + TypeScript + Tailwind CSS + shadcn/ui.
 | DynamoDB table schemas | [/docs/architecture/data.md](/docs/architecture/data.md) |
 | CDK stacks, Lambda names | [/docs/architecture/cdk.md](/docs/architecture/cdk.md) |
 | URL routing, CloudFront, deploy triggers | [/docs/architecture/urls-and-deploy.md](/docs/architecture/urls-and-deploy.md) |
-| Canonical Budget Tracker contracts | [/v0-reference/contracts/budget-tracker/](/v0-reference/contracts/budget-tracker/) |
+| Canonical Budget Tracker contracts | [packages/contracts/src/budget-tracker](/packages/contracts/src/budget-tracker) and [packages/contracts/spec/budget-tracker](/packages/contracts/spec/budget-tracker) |
 
 ## CDK stacks owned
 
@@ -69,7 +69,7 @@ The connections DynamoDB table is `budget-tracker.ws-connections-{stage}`. `Budg
 
 | Table | PK | SK | Purpose |
 |---|---|---|---|
-| `budget-tracker.accounts-{stage}` | `accountId` | — | Budget Tracker account container |
+| `budget-tracker.accounts-{stage}` | `accountId` | â€” | Budget Tracker account container |
 | `budget-tracker.transactions-{stage}` | `accountId` | `transactionId` | Transactions; GSI: `accountId-dateIso-index` |
 | `budget-tracker.rules-{stage}` | `accountId` | `ruleId` | Custom categorisation rules |
 | `budget-tracker.settings-{stage}` | `accountId` | `settingKey` | Per-account settings (key-value) |
@@ -83,51 +83,51 @@ All Lambda handlers use helpers from `packages/lambda-middleware`. App-data rout
 ```typescript
 const btData = requireAccountData('budget-tracker');               // module scope
 
-btData.read(auth, accountId);                                      // read tier — claims only, viewer passes
-await btData.write(auth, accountId, membershipLoader);            // write tier — claims + live members row, viewer denied
+btData.read(auth, accountId);                                      // read tier â€” claims only, viewer passes
+await btData.write(auth, accountId, membershipLoader);            // write tier â€” claims + live members row, viewer denied
 requireAccountAdmin(/* owner / manager / supervisory guards */);  // supervisory & ownership ops
 requireSiteAdmin(auth);                                            // platform admin ops only
 ```
 
-Construct `requireAccountData('budget-tracker')` at module scope, then call `.read` on GET branches and `.write` (with a `dynamoMembershipLoader`) before each mutation. There is **no site-admin data bypass** — membership is the only grant of data authority. `requireAccountAccess` and `requireAccountOwner` were **deleted** in M16 Phase 5. Do not call `requireGroup` directly. See [auth.md](/docs/architecture/auth.md) and [route-classification-m16.md](/docs/architecture/route-classification-m16.md).
+Construct `requireAccountData('budget-tracker')` at module scope, then call `.read` on GET branches and `.write` (with a `dynamoMembershipLoader`) before each mutation. There is **no site-admin data bypass** â€” membership is the only grant of data authority. `requireAccountAccess` and `requireAccountOwner` were **deleted** in M16 Phase 5. Do not call `requireGroup` directly. See [auth.md](/docs/architecture/auth.md) and [route-classification-m16.md](/docs/architecture/route-classification-m16.md).
 
-## Adaptor pattern — mandatory constraint
+## Adaptor pattern â€” mandatory constraint
 
 Budget Tracker UI uses the adaptor pattern. **Components never call APIs, DynamoDB, or localStorage directly.** The data flow is:
 
 ```
 Component
-  → Zustand store action
-  → Repository interface method   ← defined in v0 contracts
-  → stub adaptor (dev/v0) OR aws-adaptor (production)
+  â†’ Zustand store action
+  → Repository interface method   ← defined in packages/contracts
+  â†’ stub adaptor (dev/v0) OR aws-adaptor (production)
 ```
 
 The three Zustand stores:
-- `useBudgetStore` — transactions, rules, settings, categorisation actions
-- `useAiStore` — AI review queue and CSV analysis
-- `useAuthStore` — current user and sign-in/out
+- `useBudgetStore` â€” transactions, rules, settings, categorisation actions
+- `useAiStore` â€” AI review queue and CSV analysis
+- `useAuthStore` â€” current user and sign-in/out
 
-Repository interfaces are defined in the generated read-only `v0-reference/contracts/budget-tracker/` scope. **Do not add methods to a repository without updating the canonical contract in the v0 repo first, committing and pushing that v0 change, then running `pnpm sync:v0`.**
+Repository interfaces are defined in the repo-owned `packages/contracts/src/budget-tracker/` scope. **Do not add methods to a repository without updating `packages/contracts/` and running `pnpm check:contracts`.**
 
 ### Forbidden patterns
 
 - `fetch()` in components or store actions
 - `localStorage` reads/writes outside `lib/repositories/`
-- UI/backend boundary types not sourced from `v0-reference/contracts/budget-tracker/`
-- `window.confirm` — use inline confirmation UI instead
-- IIFEs inside JSX — compute values above the return statement
-- `URL.createObjectURL` for CSV export — use data URI instead
-- AI prompt text in client-side code — prompts run server-side only
+- UI/backend boundary types not sourced from `@transformotion/contracts`
+- `window.confirm` â€” use inline confirmation UI instead
+- IIFEs inside JSX â€” compute values above the return statement
+- `URL.createObjectURL` for CSV export â€” use data URI instead
+- AI prompt text in client-side code â€” prompts run server-side only
 - Imports from `apps/stock-analyser/`
 
 ## Data types
 
-Types that cross the UI/backend boundary are defined in the generated read-only [v0-reference/contracts/budget-tracker/](/v0-reference/contracts/budget-tracker/) scope. Key types:
-- `Transaction` — atomic unit; `_manual` flag prevents rules from overwriting; `categoryId`/`subcategoryId` are UUID FKs; deprecated `category`/`subcategory` string fields remain for migration fallback display
-- `MatchingRule` — user-managed keyword/regex rule referencing `categoryId`/`subcategoryId` UUIDs; sorted by `priority` (lower = higher priority); replaces the old `CustomRule` + `BuiltinRule` split (there are no built-in rules)
-- `BudgetData` — `{ categories: Category[], budgetAmounts: Record<subcategoryId, number>, budgetFrequencies: Record<subcategoryId, BudgetFrequency> }`; stored as a single `budgetData` key in the settings table
-- `BudgetSettings` — slim; only `csvFormatMappings: Record<string, CSVMapping>` remains
-- `Category` — `{ categoryId, name, type: 'regular'|'capital', subcategories: Subcategory[], deleted? }`; `type='capital'` marks project/one-off spend excluded from cashflow
+Types that cross the UI/backend boundary are defined in the repo-owned [packages/contracts/src/budget-tracker/](/packages/contracts/src/budget-tracker/) scope. Key types:
+- `Transaction` â€” atomic unit; `_manual` flag prevents rules from overwriting; `categoryId`/`subcategoryId` are UUID FKs; deprecated `category`/`subcategory` string fields remain for migration fallback display
+- `MatchingRule` â€” user-managed keyword/regex rule referencing `categoryId`/`subcategoryId` UUIDs; sorted by `priority` (lower = higher priority); replaces the old `CustomRule` + `BuiltinRule` split (there are no built-in rules)
+- `BudgetData` â€” `{ categories: Category[], budgetAmounts: Record<subcategoryId, number>, budgetFrequencies: Record<subcategoryId, BudgetFrequency> }`; stored as a single `budgetData` key in the settings table
+- `BudgetSettings` â€” slim; only `csvFormatMappings: Record<string, CSVMapping>` remains
+- `Category` â€” `{ categoryId, name, type: 'regular'|'capital', subcategories: Subcategory[], deleted? }`; `type='capital'` marks project/one-off spend excluded from cashflow
 
 ## Exclusion rules (apply everywhere)
 
@@ -145,13 +145,13 @@ There are no built-in rules. All rules are user-managed `MatchingRule` objects w
 1. If `_manual === true`: return existing category unchanged
 2. Sort enabled rules ascending by `priority` (lower number = higher priority); apply first case-insensitive match against `description`
 3. `applyRules(description, rules)` returns `{ categoryId, subcategoryId, ruleId, isBusiness? } | null`
-4. Return `null` if no match — transaction remains uncategorized
+4. Return `null` if no match â€” transaction remains uncategorized
 
-**Critical ordering:** Never run the rules engine before rules are loaded. Load order: auth → settings → rules → transactions → run rules.
+**Critical ordering:** Never run the rules engine before rules are loaded. Load order: auth â†’ settings â†’ rules â†’ transactions â†’ run rules.
 
 ## Testing
 
-Domain logic lives in `packages/budget-domain/` — pure TypeScript, no AWS dependencies. Run tests with:
+Domain logic lives in `packages/budget-domain/` â€” pure TypeScript, no AWS dependencies. Run tests with:
 
 ```bash
 cd packages/budget-domain
@@ -164,7 +164,7 @@ Key invariants to preserve in tests:
 1. `Transaction.transactionId` is always a UUID string
 2. `buildBudgetVsActual()` numMonths matches the transaction date range
 3. `isExcludedFromCashflow()` always excludes Transfer, `_business`, and `type='capital'` categories
-4. `buildMonthlyTrend()` net = income − expenses (exact equality)
+4. `buildMonthlyTrend()` net = income âˆ’ expenses (exact equality)
 5. Migration endpoint strips legacy integer `_id` from v0 export before writing to DynamoDB; Transfer subcategory transactions are routed to the Transfer subcategory (identified by `excludeFromCashflow: true`)
 6. `getSubcategoryMonthlyBudget()` returns 0 for soft-deleted subcategories (`sub.deleted === true`)
 
@@ -175,17 +175,17 @@ Budget Tracker has its own AI service layer at `lib/services/ai/`:
 | File | Purpose |
 |---|---|
 | `index.ts` | `AIService` interface (`reviewTransactions`, `analyseCsvFormat`); `getAIService()` singleton |
-| `mock-ai.ts` | `MockAIService` — keyword-based mock for local dev |
-| `claude-ai.ts` | `ClaudeAIService` — calls `budget-ai` Lambda routes (`/api/budget/v1/ai/*`) via `getBudgetHttp()` |
+| `mock-ai.ts` | `MockAIService` â€” keyword-based mock for local dev |
+| `claude-ai.ts` | `ClaudeAIService` â€” calls `budget-ai` Lambda routes (`/api/budget/v1/ai/*`) via `getBudgetHttp()` |
 
 Provider is selected via `config.ai.provider` (`'mock'` or `'claude'`), resolved from `NEXT_PUBLIC_AI_OVERRIDE` / `NEXT_PUBLIC_RUNTIME_PROFILE`.
 
 **Adding a new AI feature:**
 1. Add the method to the `AIService` interface in `lib/services/ai/index.ts`
-2. Update the contract in the v0 repo (`transformotion-apps-b8/contracts/budget-tracker/`), commit and push that v0 change, then run `pnpm sync:v0`
+2. Update the contract in `packages/contracts/`, then run `pnpm check:contracts`
 3. Add a matching Lambda route to `apps/budget-tracker/functions/budget-ai/src/index.ts` gated by `requireAccountData('budget-tracker').write` (AI routes are member-tier, owner ruling #1)
 4. Implement the method in `MockAIService` (mock-ai.ts) and `ClaudeAIService` (claude-ai.ts)
-5. Add prompt text in the Lambda (server-side only — never in client code)
+5. Add prompt text in the Lambda (server-side only â€” never in client code)
 
 AI flows use `getAIService()` directly from components.
 
@@ -210,7 +210,7 @@ Environment: copy `apps/budget-tracker/.env.example` to `.env.local` and fill in
 | Variable | Purpose |
 |---|---|
 | `NEXT_PUBLIC_BUDGET_TRACKER_COGNITO_CLIENT_ID` | Cognito app client for this app (GitHub Actions variable) |
-| `NEXT_PUBLIC_COGNITO_CLIENT_ID` | Generic runtime name for the Cognito client ID — set in `.env.local` for local dev |
+| `NEXT_PUBLIC_COGNITO_CLIENT_ID` | Generic runtime name for the Cognito client ID â€” set in `.env.local` for local dev |
 | `NEXT_PUBLIC_COGNITO_USER_POOL_ID` | Shared Cognito user pool ID |
 | `NEXT_PUBLIC_COGNITO_DOMAIN` | Hosted UI domain |
 | `NEXT_PUBLIC_RUNTIME_PROFILE` | `mock` (default; local development) or `live` (deployed environments). Determines defaults for auth, data, AI, and future concerns. See root `AGENTS.md` for the design map. |
