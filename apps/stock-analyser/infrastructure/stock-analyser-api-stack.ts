@@ -246,6 +246,9 @@ export class StockAnalyserApiStack extends cdk.Stack {
         // #584: invoke market-data's service-principal branch for #535 sector
         // OHLCV grounding when warming MARKET#{region}.
         MARKET_DATA_FUNCTION_NAME: marketDataFn.functionName,
+        // #595: async-invoke the recommendations engine to smart-warm RECS# for enter
+        // sectors. Name string (recommendationsFn is defined later); grant added below.
+        RECOMMENDATIONS_FUNCTION_NAME: `stock-analyser-recommendations-${stage}`,
         ANTHROPIC_SECRET_NAME: anthropicSecret.secretName,
         OPENAI_SECRET_NAME: openaiSecret.secretName,
         AI_CONFIG_TABLE: aiRuntimeConfigTable.tableName,
@@ -359,6 +362,8 @@ export class StockAnalyserApiStack extends cdk.Stack {
         JOB_RESULTS_TABLE: jobResultsTable.tableName,
         MARKET_DATA_FUNCTION_NAME: marketDataFn.functionName,
         SELF_FUNCTION_NAME: `stock-analyser-recommendations-${stage}`,
+        // #595: analysis-cache Lambda for the smart-warm SHARED RECS# write.
+        ANALYSIS_CACHE_FUNCTION_NAME: cacheFn.functionName,
         WS_API_ENDPOINT: wsApiEndpoint,
       },
       bundling,
@@ -369,6 +374,9 @@ export class StockAnalyserApiStack extends cdk.Stack {
     settingsTable.grantReadData(recommendationsFn);
     jobResultsTable.grantReadWriteData(recommendationsFn);
     marketDataFn.grantInvoke(recommendationsFn); // Stage-1 real prices (service-principal)
+    cacheFn.grantInvoke(recommendationsFn); // #595: SHARED RECS# write (service-principal)
+    // #595: the notification-engine (defined earlier) async-invokes this engine to warm Recs.
+    recommendationsFn.grantInvoke(notificationEngineFn);
     recommendationsFn.addToRolePolicy(new iam.PolicyStatement({
       actions: ['lambda:InvokeFunction'], // self-invoke for the async executor
       resources: [`arn:aws:lambda:${this.region}:${this.account}:function:stock-analyser-recommendations-${stage}`],

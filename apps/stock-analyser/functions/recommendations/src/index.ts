@@ -70,6 +70,8 @@ interface RuntimeEnv {
   marketDataFunctionName: string;
   selfFunctionName: string;
   wsApiEndpoint: string;
+  // #595: analysis-cache Lambda for the smart-warm SHARED RECS# write (service-principal).
+  analysisCacheFunctionName: string;
 }
 
 function env(): RuntimeEnv {
@@ -84,8 +86,11 @@ function env(): RuntimeEnv {
     marketDataFunctionName: requireEnv('MARKET_DATA_FUNCTION_NAME'),
     selfFunctionName: requireEnv('SELF_FUNCTION_NAME'),
     wsApiEndpoint: requireEnv('WS_API_ENDPOINT'),
+    analysisCacheFunctionName: requireEnv('ANALYSIS_CACHE_FUNCTION_NAME'),
   };
 }
+
+const RECS_TTL_SECONDS = 24 * 60 * 60; // matches the RECS# cache convention (24h)
 
 // ── Self-invoked async job event ────────────────────────────────────────────────
 interface RecsJobEvent {
@@ -97,6 +102,18 @@ interface RecsJobEvent {
 }
 function isRecsJobEvent(event: unknown): event is RecsJobEvent {
   return !!event && (event as RecsJobEvent).__recsJob === true;
+}
+
+// ── #595 smart-warm event (from the notification-engine, service-principal) ───────
+// Runs the SAME engine core a live tab run does, then SHARED-writes RECS#{cacheKey}
+// instead of a per-job result + WSS push. No accountId/connectionId — it's a cache warm.
+interface WarmRecsEvent {
+  __warmRecs: true;
+  request: RunRecommendationsRequest;
+  cacheKey: string; // e.g. RECS#Dow|top-picks|Financials
+}
+function isWarmRecsEvent(event: unknown): event is WarmRecsEvent {
+  return !!event && (event as WarmRecsEvent).__warmRecs === true;
 }
 
 // ── AI provider ────────────────────────────────────────────────────────────────
@@ -203,72 +220,84 @@ function parseJsonContent<T>(content: string): T {
   return JSON.parse(stripped) as T;
 }
 
-// ── Engine ───────────────────────────────────────────────────────────────────────
+// ── Engine core (reused by the async job AND the #595 warm path) ─────────────────
+interface ComputeResult {
+  response: RunRecommendationsResponse;
+  provider: string;
+  model: string;
+  usage: { inputTokens: number; outputTokens: number };
+}
+
+// Propose → real-price → rank. Throws on a hard failure (incl. no priced candidate).
+async function computeRecommendations(request: RunRecommendationsRequest, runtime: RuntimeEnv): Promise<ComputeResult> {
+  const { provider, config } = await makeProvider(runtime);
+  const webSearch = request.searchMode === 'live';
+
+  // Pass 1 — propose candidates. FREE-TEXT so a Live proposal is a single web-search
+  // call (the reliable free-text path), not the fragile structured-Live two-pass
+  // (research→format). searchMode-driven: Live grounds fresh candidates via web search.
+  const proposal = await provider.generate({
+    prompt: proposePrompt(request),
+    system: SYSTEM_PROMPT,
+    model: config.model,
+    webSearch,
+  });
+  const candidates = (parseJsonContent<{ candidates?: CandidateProposal[] }>(proposal.content).candidates ?? [])
+    .filter((c) => c?.ticker);
+
+  // Stage 1 — real prices; drop candidates without a resolvable price (the contract's
+  // Recommendation.price is required, never model-authored).
+  const priced = (
+    await Promise.all(
+      candidates.map(async (c): Promise<PricedCandidate | null> => {
+        const q = await fetchPrice(runtime, c.ticker.trim());
+        return q ? { ...c, price: q.price, change: q.change } : null;
+      }),
+    )
+  ).filter((c): c is PricedCandidate => c !== null);
+
+  if (priced.length === 0) {
+    throw new Error('No candidate had resolvable market-data prices.');
+  }
+
+  // Pass 2 — rank WITH the supplied real prices. STRUCTURED (strict recs schema) +
+  // single-pass (Fast, no web search) for reliable output: the grounded inputs are
+  // already in hand (fresh Live candidates from pass 1 + REAL prices), so ranking
+  // needs no own search — and structured+Live would re-enter the fragile two-pass.
+  const ranked = await provider.generate({
+    prompt: rankPrompt(request, priced),
+    system: SYSTEM_PROMPT,
+    model: config.model,
+    webSearch: false,
+    responseSchema: recommendationsResultJsonSchema,
+  });
+  const modelOutputs = parseJsonContent<{ recommendations?: RecommendationModelOutput[] }>(ranked.content).recommendations ?? [];
+
+  // Overlay the real price/change onto each ranked candidate; keep only those we priced.
+  const priceByTicker = new Map(priced.map((c) => [c.ticker.toUpperCase(), c]));
+  const recommendations: Recommendation[] = modelOutputs
+    .map((m): Recommendation | null => {
+      const p = priceByTicker.get(m.ticker?.toUpperCase?.() ?? '');
+      return p ? { ...m, price: p.price, change: p.change } : null;
+    })
+    .filter((r): r is Recommendation => r !== null);
+
+  return {
+    response: { recommendations, generatedAt: new Date().toISOString() },
+    provider: config.provider,
+    model: config.model,
+    usage: { inputTokens: proposal.inputTokens + ranked.inputTokens, outputTokens: proposal.outputTokens + ranked.outputTokens },
+  };
+}
+
+// ── Async job: compute → write job result + WSS push (the live tab path) ─────────
 async function executeRecsJob(job: RecsJobEvent, runtime: RuntimeEnv): Promise<void> {
   const writeStatus = (payload: Record<string, unknown>) =>
     writeJobResult({ tableName: runtime.jobResultsTable, accountId: job.accountId, jobId: job.jobId, payload, client: ddb });
 
   try {
-    const { provider, config } = await makeProvider(runtime);
-    const webSearch = job.request.searchMode === 'live';
-
-    // Pass 1 — propose candidates. FREE-TEXT so a Live proposal is a single web-search
-    // call (the reliable free-text path), not the fragile structured-Live two-pass
-    // (research→format). searchMode-driven: Live grounds fresh candidates via web search.
-    const proposal = await provider.generate({
-      prompt: proposePrompt(job.request),
-      system: SYSTEM_PROMPT,
-      model: config.model,
-      webSearch,
-    });
-    const candidates = (parseJsonContent<{ candidates?: CandidateProposal[] }>(proposal.content).candidates ?? [])
-      .filter((c) => c?.ticker);
-
-    // Stage 1 — real prices; drop candidates without a resolvable price (the contract's
-    // Recommendation.price is required, never model-authored).
-    const priced = (
-      await Promise.all(
-        candidates.map(async (c): Promise<PricedCandidate | null> => {
-          const q = await fetchPrice(runtime, c.ticker.trim());
-          return q ? { ...c, price: q.price, change: q.change } : null;
-        }),
-      )
-    ).filter((c): c is PricedCandidate => c !== null);
-
-    if (priced.length === 0) {
-      await writeStatus({ status: 'error', message: 'No candidate had resolvable market-data prices.' });
-    } else {
-      // Pass 2 — rank WITH the supplied real prices. STRUCTURED (strict recs schema) +
-      // single-pass (Fast, no web search) for reliable output: the grounded inputs are
-      // already in hand (fresh Live candidates from pass 1 + REAL prices), so ranking
-      // needs no own search — and structured+Live would re-enter the fragile two-pass.
-      const ranked = await provider.generate({
-        prompt: rankPrompt(job.request, priced),
-        system: SYSTEM_PROMPT,
-        model: config.model,
-        webSearch: false,
-        responseSchema: recommendationsResultJsonSchema,
-      });
-      const modelOutputs = parseJsonContent<{ recommendations?: RecommendationModelOutput[] }>(ranked.content).recommendations ?? [];
-
-      // Overlay the real price/change onto each ranked candidate; keep only those we priced.
-      const priceByTicker = new Map(priced.map((c) => [c.ticker.toUpperCase(), c]));
-      const recommendations: Recommendation[] = modelOutputs
-        .map((m): Recommendation | null => {
-          const p = priceByTicker.get(m.ticker?.toUpperCase?.() ?? '');
-          return p ? { ...m, price: p.price, change: p.change } : null;
-        })
-        .filter((r): r is Recommendation => r !== null);
-
-      const response: RunRecommendationsResponse = { recommendations, generatedAt: new Date().toISOString() };
-      await writeStatus({
-        status: 'complete',
-        content: JSON.stringify(response),
-        provider: config.provider,
-        model: config.model,
-        usage: { inputTokens: proposal.inputTokens + ranked.inputTokens, outputTokens: proposal.outputTokens + ranked.outputTokens },
-      });
-    }
+    const { response, provider, model, usage } = await computeRecommendations(job.request, runtime);
+    await writeStatus({ status: 'complete', content: JSON.stringify(response), provider, model, usage });
   } catch (err) {
     await writeStatus({ status: 'error', message: err instanceof Error ? err.message : 'Recommendations engine failed' }).catch(() => undefined);
   }
@@ -280,6 +309,39 @@ async function executeRecsJob(job: RecsJobEvent, runtime: RuntimeEnv): Promise<v
     } catch (pushErr) {
       console.warn('[recommendations] WSS push failed:', (pushErr as Error).message);
     }
+  }
+}
+
+// ── #595 warm: compute (SAME engine as live) → SHARED-write RECS#{cacheKey} ───────
+async function writeSharedRecsCache(runtime: RuntimeEnv, cacheKey: string, data: unknown): Promise<void> {
+  const res = await lambda.send(new InvokeCommand({
+    FunctionName: runtime.analysisCacheFunctionName,
+    InvocationType: 'RequestResponse',
+    Payload: Buffer.from(JSON.stringify({
+      servicePrincipal: 'stock-analyser-recommendations',
+      operation: 'put-shared-cache',
+      cacheKey,
+      data,
+      ttlSeconds: RECS_TTL_SECONDS,
+      mode: 'live',
+      type: 'recs',
+    })),
+  }));
+  if (res.FunctionError) {
+    const payload = res.Payload ? Buffer.from(res.Payload).toString('utf8') : '';
+    throw new Error(`recs cache service-principal write failed: ${res.FunctionError} ${payload}`);
+  }
+}
+
+async function executeWarmRecs(event: WarmRecsEvent, runtime: RuntimeEnv): Promise<void> {
+  try {
+    const { response } = await computeRecommendations(event.request, runtime);
+    await writeSharedRecsCache(runtime, event.cacheKey, response);
+    console.log(JSON.stringify({ message: 'recs-warm-ok', cacheKey: event.cacheKey, count: response.recommendations.length }));
+  } catch (err) {
+    // Per-scope isolation: a warm failure is logged, never thrown (one scope must not
+    // affect others; the live tab still computes on demand).
+    console.log(JSON.stringify({ message: 'recs-warm-error', cacheKey: event.cacheKey, err: String(err) }));
   }
 }
 
@@ -312,6 +374,10 @@ const apiHandler = withAuth(async ({ auth, account, event }) => {
 });
 
 export const handler = async (event: unknown): Promise<unknown> => {
+  if (isWarmRecsEvent(event)) {
+    await executeWarmRecs(event, env());
+    return { statusCode: 200 };
+  }
   if (isRecsJobEvent(event)) {
     await executeRecsJob(event, env());
     return { statusCode: 200 };
