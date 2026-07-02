@@ -89,6 +89,8 @@ interface RuntimeEnv {
   recommendationsFunctionName: string;
   // #594: etfs Lambda, async-invoked to warm ETF#{market} for each market.
   etfsFunctionName: string;
+  // #627: metals Lambda, async-invoked to warm the single global METALS key.
+  metalsFunctionName: string;
   anthropicSecretName: string;
   openaiSecretName?: string;
   aiConfigTableName?: string;
@@ -121,6 +123,7 @@ function env(): RuntimeEnv {
     marketDataFunctionName: requireEnv('MARKET_DATA_FUNCTION_NAME'),
     recommendationsFunctionName: requireEnv('RECOMMENDATIONS_FUNCTION_NAME'),
     etfsFunctionName: requireEnv('ETFS_FUNCTION_NAME'),
+    metalsFunctionName: requireEnv('METALS_FUNCTION_NAME'),
     anthropicSecretName: requireEnv('ANTHROPIC_SECRET_NAME'),
     openaiSecretName: process.env.OPENAI_SECRET_NAME,
     aiConfigTableName: process.env.AI_CONFIG_TABLE,
@@ -738,6 +741,28 @@ async function warmEtfsForAllMarkets(runtime: RuntimeEnv): Promise<void> {
   }
 }
 
+// ── #627 warm the single global METALS key, ONCE per job run ──────────────────────
+// Async-invoke the runMetals engine (#627 — the SAME engine a live Metals tab run uses);
+// it SHARED-writes the METALS key. Metals is ONE global surface — no per-market fan-out,
+// a single invoke. The engine-internal METALS_CLOSES#/METALS_BASELINE# feed-history rows
+// are the engine's own concern (direct-write by design — see #637). Isolation: a dispatch
+// failure is logged, never thrown.
+async function warmMetalsForGlobal(runtime: RuntimeEnv): Promise<void> {
+  try {
+    await lambda.send(new InvokeCommand({
+      FunctionName: runtime.metalsFunctionName,
+      InvocationType: 'Event',
+      Payload: Buffer.from(JSON.stringify({
+        __warmMetals: true,
+        request: { searchMode: 'live' },
+      })),
+    }));
+    console.log(JSON.stringify({ message: 'notification-metals-warm-dispatched' }));
+  } catch (err) {
+    console.log(JSON.stringify({ message: 'notification-metals-warm-dispatch-error', err: String(err) }));
+  }
+}
+
 export function createDependencies(runtime: RuntimeEnv = env()): NotificationEngineDeps {
   return {
     today: todayUtc,
@@ -746,6 +771,7 @@ export function createDependencies(runtime: RuntimeEnv = env()): NotificationEng
     readEngineEnabled: () => readEngineEnabled(runtime),
     warmMarketCache: makeWarmMarketCache(runtime),
     warmEtfsCache: () => warmEtfsForAllMarkets(runtime),
+    warmMetalsCache: () => warmMetalsForGlobal(runtime),
     readAccountName: (accountId) => readAccountName(runtime, accountId),
     recordSendLog: (run) => recordSendLog(runtime, run),
     listStockAnalyserMembers: () => listStockAnalyserMembers(runtime),

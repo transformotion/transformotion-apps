@@ -255,6 +255,9 @@ export class StockAnalyserApiStack extends cdk.Stack {
         // #594: async-invoke the etfs engine to warm ETF#{market} for each market.
         // Name string (etfsFn is defined later); grant added below.
         ETFS_FUNCTION_NAME: `stock-analyser-etfs-${stage}`,
+        // #627: async-invoke the metals engine to warm the single global METALS key.
+        // Name string (metalsFn is defined later); grant added below.
+        METALS_FUNCTION_NAME: `stock-analyser-metals-${stage}`,
         ANTHROPIC_SECRET_NAME: anthropicSecret.secretName,
         OPENAI_SECRET_NAME: openaiSecret.secretName,
         AI_CONFIG_TABLE: aiRuntimeConfigTable.tableName,
@@ -479,6 +482,8 @@ export class StockAnalyserApiStack extends cdk.Stack {
     settingsTable.grantReadData(metalsFn);
     jobResultsTable.grantReadWriteData(metalsFn);
     cacheFn.grantInvoke(metalsFn); // SHARED METALS cache write (service-principal)
+    // #627: the notification-engine (defined earlier) async-invokes this engine to warm METALS.
+    metalsFn.grantInvoke(notificationEngineFn);
     metalsFn.addToRolePolicy(new iam.PolicyStatement({
       actions: ['dynamodb:GetItem', 'dynamodb:PutItem', 'dynamodb:Query'],
       resources: [analysisCacheTable.tableArn],
