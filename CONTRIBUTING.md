@@ -337,6 +337,23 @@ checks, or explicit owner validation. v0 is optional for net-new visual design
 only; if v0 output is used, cite the v0 commit and include a visual comparison
 or disposition list in the runtime PR.
 
+The standing tool for those screenshots is **`tools/ui-screenshots/`** (Playwright;
+boots the app in mock mode, drives named surface states, captures each). It is a
+standalone dev tool — deliberately outside the pnpm workspace, so its browser
+dependency never enters the root or app install (see its `README.md` for setup and
+for how to add a surface/state). Capture is **on-demand only; it is not wired into
+CI** (visual-regression CI is a separate, later decision).
+
+**Screenshot artefact policy — branch-only, removed at merge.** Review captures are
+committed to the **PR branch** in an isolated `docs/review/<feature>/` commit and
+embedded in the PR body via a **commit-SHA-pinned** raw URL (so they render during
+review and survive branch deletion). That commit is **`git rm`'d before the
+squash-merge**, so `develop`'s history carries no binaries. This gives
+agent-produced review captures with **no human drag-drop step** (GitHub's
+attachment-upload is web-UI-only, not scriptable) while keeping the repo lean —
+review lives on the PR, `develop` stays binary-free. Whoever runs the merge drops
+the review dir first. See `tools/ui-screenshots/README.md`.
+
 ### 3.5.2 Contract-first development classification
 
 Before implementing runtime work, classify it as one of:

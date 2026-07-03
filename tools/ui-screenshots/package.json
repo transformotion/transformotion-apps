@@ -1,0 +1,14 @@
+{
+  "name": "ui-screenshots",
+  "private": true,
+  "version": "0.1.0",
+  "description": "On-demand UI review screenshots (Playwright). Isolated dev tool — deliberately NOT a pnpm workspace member, so its browser dependency never enters the app or root install. Install/run standalone (see README).",
+  "type": "module",
+  "scripts": {
+    "capture": "node capture.mjs",
+    "setup:browser": "playwright install chromium"
+  },
+  "devDependencies": {
+    "playwright": "1.61.1"
+  }
+}

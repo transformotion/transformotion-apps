@@ -1,0 +1,7 @@
+# Isolated standalone install — never part of the pnpm workspace graph.
+node_modules/
+package-lock.json
+
+# Capture scratch dir. For PR review, copy the wanted PNGs into docs/review/<feature>/
+# and commit them in a droppable commit (removed at merge) — see README "Artefact policy".
+out/
