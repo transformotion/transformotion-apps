@@ -18,6 +18,7 @@ import {
   type NotificationEngineConfig,
   type NotificationMemberConsent,
   type NotificationType,
+  type WarmSurfaces,
 } from '@transformotion/contracts/stock-analyser/notification-preferences'
 import type { NotificationRunHistoryView } from '@transformotion/contracts/stock-analyser/notification-run-history'
 
@@ -29,9 +30,11 @@ export interface NotificationPreferencesService {
   ): Promise<NotificationAccountConfig>
   getConsent(accountId: string): Promise<NotificationMemberConsent>
   putConsent(accountId: string, receiveConsent: boolean): Promise<NotificationMemberConsent>
-  // App-wide engine kill-switch (M19 #571) — a single global record, account-independent.
+  // App-wide engine kill-switch (M19 #571) + per-surface warm gates (M19) — a single
+  // global record, account-independent. `warmSurfaces` omitted ⇒ server preserves the
+  // stored map (read-merge); present ⇒ replaces it.
   getEngineConfig(): Promise<NotificationEngineConfig>
-  setEngineConfig(notificationsEnabled: boolean): Promise<NotificationEngineConfig>
+  setEngineConfig(body: { notificationsEnabled: boolean; warmSurfaces?: WarmSurfaces }): Promise<NotificationEngineConfig>
   // Run-history (M19 #573) — the response is ALREADY projected per viewer server-side.
   getRunHistory(): Promise<NotificationRunHistoryView>
 }
@@ -76,8 +79,14 @@ const mockService: NotificationPreferencesService = {
   async getEngineConfig() {
     return mockEngine
   },
-  async setEngineConfig(notificationsEnabled) {
-    mockEngine = { notificationsEnabled, updatedAt: new Date().toISOString() }
+  async setEngineConfig(body) {
+    // Mirror the server read-merge: an omitted warmSurfaces preserves the stored map.
+    const warmSurfaces = body.warmSurfaces !== undefined ? body.warmSurfaces : mockEngine.warmSurfaces
+    mockEngine = {
+      notificationsEnabled: body.notificationsEnabled,
+      ...(warmSurfaces ? { warmSurfaces } : {}),
+      updatedAt: new Date().toISOString(),
+    }
     return mockEngine
   },
   async getRunHistory() {
@@ -102,8 +111,8 @@ const realService: NotificationPreferencesService = {
   async getEngineConfig() {
     return (await stockAnalyserClient.getNotificationEngineConfig()).config
   },
-  async setEngineConfig(notificationsEnabled) {
-    return (await stockAnalyserClient.updateNotificationEngineConfig({ notificationsEnabled })).config
+  async setEngineConfig(body) {
+    return (await stockAnalyserClient.updateNotificationEngineConfig(body)).config
   },
   // The server already projects run-history per viewer — consume the response as-is.
   async getRunHistory() {
