@@ -2,6 +2,6 @@
 node_modules/
 package-lock.json
 
-# Captured screenshots are PR-attachment-only (see README "Artefact policy").
-# They are NEVER committed — drag-drop them into the PR body instead.
+# Capture scratch dir. For PR review, copy the wanted PNGs into docs/review/<feature>/
+# and commit them in a droppable commit (removed at merge) — see README "Artefact policy".
 out/

@@ -344,10 +344,15 @@ dependency never enters the root or app install (see its `README.md` for setup a
 for how to add a surface/state). Capture is **on-demand only; it is not wired into
 CI** (visual-regression CI is a separate, later decision).
 
-**Screenshot artefact policy — PR-attachment-only.** Captured PNGs are **not**
-committed to the repo. Drag-drop them into the PR body in the GitHub UI (GitHub
-hosts them permanently); `out/` is gitignored. Visual history lives on the PR, not
-in `git` — committing binaries would grow the repo forever for no ongoing benefit.
+**Screenshot artefact policy — branch-only, removed at merge.** Review captures are
+committed to the **PR branch** in an isolated `docs/review/<feature>/` commit and
+embedded in the PR body via a **commit-SHA-pinned** raw URL (so they render during
+review and survive branch deletion). That commit is **`git rm`'d before the
+squash-merge**, so `develop`'s history carries no binaries. This gives
+agent-produced review captures with **no human drag-drop step** (GitHub's
+attachment-upload is web-UI-only, not scriptable) while keeping the repo lean —
+review lives on the PR, `develop` stays binary-free. Whoever runs the merge drops
+the review dir first. See `tools/ui-screenshots/README.md`.
 
 ### 3.5.2 Contract-first development classification
 

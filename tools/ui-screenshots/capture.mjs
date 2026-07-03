@@ -137,7 +137,10 @@ async function main() {
   }
 
   console.log(`\nDONE — ${captured.length} capture(s) under ${outDir}`)
-  console.log('Attach to the PR body (policy: PR-attachment-only, gitignored, never committed):')
+  console.log('To review on a PR (policy a′ — branch-only, removed at merge; see README):')
+  console.log('  1. copy into docs/review/<feature>/ and commit it (isolated, droppable)')
+  console.log('  2. embed via a SHA-pinned raw URL in the PR body')
+  console.log('  3. git rm docs/review/<feature>/ before the squash-merge (develop stays binary-free)')
   for (const f of captured) console.log('  ' + f)
 }
 

@@ -43,18 +43,28 @@ Output lands at `out/<surface>/<state>.png`. The run prints the file list at the
 > 3000 is already busy, either free it or start `pnpm --filter @transformotion/stock-analyser
 > dev` yourself and use `--no-boot`.
 
-## Artefact policy — PR-attachment-only (do NOT commit)
+## Artefact policy — branch-only, removed at merge (agent-friendly, repo stays clean)
 
-Captured PNGs are **never committed to the repo**. `out/` is gitignored. To put them in a PR:
+Captures are embedded in the PR **during review** but never reach `develop`'s history. The
+default `out/` is gitignored (working scratch). To put captures in a PR:
 
-1. Run the harness.
-2. **Drag-drop** the PNGs from `out/<surface>/` into the PR description (or a comment) in the
-   GitHub web UI. GitHub uploads them to its own attachment CDN and hosts them permanently.
-3. Reference them in the PR body prose.
+1. Run the harness → PNGs land in `out/<surface>/`.
+2. Copy the ones for review into `docs/review/<feature>/` and commit them **in their own
+   isolated commit on the PR branch** (e.g. `review(<area>): <surface> screenshots (droppable)`).
+3. Embed them in the PR body via a **commit-SHA-pinned** raw URL, so they render during review
+   and keep rendering after the branch is deleted:
+   `https://github.com/<org>/<repo>/raw/<commit-sha>/docs/review/<feature>/<file>.png`
+4. **Before the (squash) merge, `git rm docs/review/<feature>/`** — so `develop` carries no
+   binaries. The SHA-pinned embeds still resolve on the (now-closed) PR.
 
-Rationale: the PR is where review happens and GitHub-hosted attachments are permanent, so
-committing binaries would only make the repo grow forever for no ongoing benefit. Visual
-history lives on the PR, not in `git`.
+Why this shape (vs. committing permanently, or GitHub drag-drop attachments): an automated
+agent can embed images **only** by committing them — GitHub's attachment-upload endpoint is
+web-UI-only and not scriptable. Committing to the branch and removing at merge gives
+agent-produced review captures **with no human drag-drop step** *and* keeps the repo lean:
+review lives on the PR, `develop` stays binary-free.
+
+> Whoever runs the merge drops the review dir first (`git rm docs/review/<feature>/`) so the
+> squash lands zero binaries. For agent-run merges, that is the first step of the merge routine.
 
 ## Add a surface or a state
 
