@@ -75,7 +75,11 @@ function deps(overrides: Partial<NotificationEngineDeps> = {}): NotificationEngi
     putNotificationState: vi.fn(async () => undefined),
     readPortfolio: vi.fn(async () => [{ ticker: 'CBA.AX', shares: 1, avgCost: 100, isGifted: false, addedAt: 1 }]),
     readWatchlist: vi.fn(async () => [{ ticker: 'NVDA', name: 'NVIDIA', addedAt: 1 }]),
-    readSharedAnalysisCache: vi.fn(async () => null),
+    // Option B: notification evaluation is a PURE READER of the SHARED ANALYSIS#
+    // cache — the default returns a warm BUY entry so the notification-path tests
+    // exercise evaluation. (Compute lives in the warm step; tests that want the
+    // warm path supply readWarmSurfaces + listWarmTickers and null this out.)
+    readSharedAnalysisCache: vi.fn(async (ticker) => analysis(ticker, 'BUY')),
     generateAnalysis: vi.fn(async (ticker) => analysis(ticker, 'BUY')),
     writeSharedAnalysisCache: vi.fn(async () => undefined),
     sendEmail: vi.fn(async () => undefined),
@@ -130,22 +134,25 @@ describe('notification transition predicate', () => {
   });
 });
 
-describe('notification engine analysis error reporting', () => {
-  it('records a useful account error when ticker analysis returns non-JSON output', async () => {
+describe('P&W warm — compute failure is best-effort (Option B: notifications no longer own analysis compute)', () => {
+  it('a warm-step generate failure is logged per-ticker and never fails the account or the run', async () => {
+    // Pre-Option-B this threw inside the notification path and failed the account.
+    // Now compute lives ONLY in the warm step: a generate failure is per-ticker
+    // best-effort — the run stays success and the account still processes (as a
+    // pure reader) from whatever ANALYSIS# is present.
+    const log = vi.fn();
     const run = await runNotificationEngine(deps({
-      readPortfolio: vi.fn(async () => []),
-      readWatchlist: vi.fn(async () => [{ ticker: 'FMG.AX', name: 'Fortescue', addedAt: 1 }]),
+      readWarmSurfaces: vi.fn(async () => undefined),          // all surfaces ON
+      listWarmTickers: vi.fn(async () => ['FMG.AX']),          // one ticker to warm
+      readSharedAnalysisCache: vi.fn(async () => null),        // cold → warm must generate
       generateAnalysis: vi.fn(async () => {
         throw new Error('model output unparseable while analysing FMG.AX');
       }),
+      log,
     }));
 
-    expect(run.sendLog.status).toBe('partial');
-    expect(run.sendLog.accounts[0]).toMatchObject({
-      accountId: 'acct-a',
-      status: 'failed',
-      error: 'model output unparseable while analysing FMG.AX',
-    });
+    expect(run.sendLog.status).toBe('success');               // NOT partial/failed
+    expect(log).toHaveBeenCalledWith('notification-pw-warm-ticker-error', expect.objectContaining({ ticker: 'FMG.AX' }));
   });
 });
 
@@ -209,18 +216,13 @@ describe('notification engine account processing', () => {
     expect(putNotificationState.mock.calls.map(([record]) => record.ticker).sort()).toEqual(['CBA.AX', 'MSFT']);
   });
 
-  it('generates a shared ticker analysis only once per run across accounts', async () => {
+  it('warm step generates + SHARED-writes each distinct P&W ticker once (compute now lives in the warm step)', async () => {
     const generateAnalysis = vi.fn(async (ticker) => analysis(ticker, 'BUY'));
     const writeSharedAnalysisCache = vi.fn(async () => undefined);
     const engineDeps = deps({
-      listStockAnalyserMembers: vi.fn(async () => [
-        { ...activeMember, accountId: 'acct-a', userId: 'user-a' },
-        { ...activeMember, accountId: 'acct-b', userId: 'user-b' },
-      ]),
-      readPortfolio: vi.fn(async () => [
-        { ticker: 'CBA.AX', shares: 1, avgCost: 100, isGifted: false, addedAt: 1 },
-      ]),
-      readWatchlist: vi.fn(async () => []),
+      readWarmSurfaces: vi.fn(async () => undefined),                 // all surfaces ON
+      listWarmTickers: vi.fn(async () => ['CBA.AX']),                 // distinct union (deduped upstream)
+      readSharedAnalysisCache: vi.fn(async () => null),              // cold → warm generates
       generateAnalysis,
       writeSharedAnalysisCache,
     });
@@ -228,28 +230,25 @@ describe('notification engine account processing', () => {
     await runNotificationEngine(engineDeps);
 
     expect(generateAnalysis).toHaveBeenCalledTimes(1);
-    expect(generateAnalysis).toHaveBeenCalledWith('CBA.AX', expect.objectContaining({
-      accountId: 'acct-a',
-      runId: 'run-test',
-      sourceType: 'Portfolio',
-    }));
+    expect(generateAnalysis).toHaveBeenCalledWith('CBA.AX', undefined); // warm carries no per-account context
     expect(writeSharedAnalysisCache).toHaveBeenCalledTimes(1);
     expect(writeSharedAnalysisCache).toHaveBeenCalledWith('CBA.AX', expect.objectContaining({ ticker: 'CBA.AX' }));
   });
 
-  it('reuses fresh SHARED cache analysis without regenerating', async () => {
+  it('warm step reuses a fresh SHARED cache entry without regenerating (cache-first)', async () => {
     const generateAnalysis = vi.fn(async (ticker) => analysis(ticker, 'SELL'));
     const writeSharedAnalysisCache = vi.fn(async () => undefined);
     const engineDeps = deps({
-      readSharedAnalysisCache: vi.fn(async (ticker) => analysis(ticker, 'BUY')),
-      readWatchlist: vi.fn(async () => []),
+      readWarmSurfaces: vi.fn(async () => undefined),
+      listWarmTickers: vi.fn(async () => ['CBA.AX']),
+      readSharedAnalysisCache: vi.fn(async (ticker) => analysis(ticker, 'BUY')), // fresh entry present
       generateAnalysis,
       writeSharedAnalysisCache,
     });
 
     await runNotificationEngine(engineDeps);
 
-    expect(generateAnalysis).not.toHaveBeenCalled();
+    expect(generateAnalysis).not.toHaveBeenCalled();       // cache-first: same-day fresh entry = skip
     expect(writeSharedAnalysisCache).not.toHaveBeenCalled();
   });
 
@@ -257,7 +256,7 @@ describe('notification engine account processing', () => {
     const putNotificationState = vi.fn(async (_record: NotificationStateRecord) => undefined);
     const sendEmail = vi.fn(async () => undefined);
     const engineDeps = deps({
-      generateAnalysis: vi.fn(async (ticker) => analysis(ticker, 'HOLD')),
+      readSharedAnalysisCache: vi.fn(async (ticker) => analysis(ticker, 'HOLD')),
       readWatchlist: vi.fn(async () => []),
       readNotificationStates: vi.fn(async (): Promise<NotificationStateRecord[]> => [
         { accountId: 'acct-a', sk: stateSk('Portfolio', 'CBA.AX'), type: 'Portfolio', ticker: 'CBA.AX', lastVerdict: 'BUY', lastNotifiedAt: 123 },
@@ -383,7 +382,7 @@ describe('notification send-log (#572)', () => {
 
   it('records no-actionable-transition for eligible members when no ticker fires', async () => {
     const run = await runNotificationEngine(deps({
-      generateAnalysis: vi.fn(async (ticker) => analysis(ticker, 'HOLD')), // never actionable
+      readSharedAnalysisCache: vi.fn(async (ticker) => analysis(ticker, 'HOLD')), // never actionable
     }));
     expect(run.sendLog.accounts[0].status).toBe('processed');
     expect(outcome(run, 'user-1')).toMatchObject({ outcome: 'skipped', reason: 'no-actionable-transition' });
@@ -563,5 +562,109 @@ describe('notification send-log (#572)', () => {
     const clean: SendLogAccount = { accountId: 'acct-a', status: 'processed', transitions: [], emailsSent: 0, memberOutcomes: [{ userId: 'user-1', outcome: 'sent', reason: 'delivered' }] };
     assertNoCrossAccount({ log: vi.fn() }, 'acct-a', members({ userId: 'user-1' }), clean);
     expect(clean.error).toBeUndefined();
+  });
+});
+
+// ── M19: per-surface warm gating + recs⇒market rule + P&W warm + Option B ─────────
+describe('M19 warm-surface gating + P&W warm + Option B pure reader', () => {
+  it('absent config ⇒ every surface warms (zero-migration default = all ON)', async () => {
+    const warmMarketCache = vi.fn(async () => undefined);
+    const warmEtfsCache = vi.fn(async () => undefined);
+    const warmMetalsCache = vi.fn(async () => undefined);
+    const listWarmTickers = vi.fn(async () => []);
+    await runNotificationEngine(deps({
+      readWarmSurfaces: vi.fn(async () => undefined),
+      warmMarketCache, warmEtfsCache, warmMetalsCache, listWarmTickers,
+    }));
+    expect(warmMarketCache).toHaveBeenCalledWith({ warmRecs: true }); // recs effective by default
+    expect(warmEtfsCache).toHaveBeenCalledTimes(1);
+    expect(warmMetalsCache).toHaveBeenCalledTimes(1);
+    expect(listWarmTickers).toHaveBeenCalledWith({ portfolio: true, watchlist: true });
+  });
+
+  it('a surface flag = false skips ONLY that warm (surfaces are independent)', async () => {
+    const warmMarketCache = vi.fn(async () => undefined);
+    const warmEtfsCache = vi.fn(async () => undefined);
+    const warmMetalsCache = vi.fn(async () => undefined);
+    const log = vi.fn();
+    await runNotificationEngine(deps({
+      readWarmSurfaces: vi.fn(async () => ({ etfs: false })),
+      warmMarketCache, warmEtfsCache, warmMetalsCache, log,
+    }));
+    expect(warmMarketCache).toHaveBeenCalledTimes(1);
+    expect(warmEtfsCache).not.toHaveBeenCalled();               // only ETFs suppressed
+    expect(warmMetalsCache).toHaveBeenCalledTimes(1);
+    expect(log).toHaveBeenCalledWith('notification-etfs-warm-skipped-flag-off', expect.anything());
+  });
+
+  it('recs flag off ⇒ market still warms but with warmRecs:false (recs fan-out suppressed)', async () => {
+    const warmMarketCache = vi.fn(async () => undefined);
+    await runNotificationEngine(deps({
+      readWarmSurfaces: vi.fn(async () => ({ recs: false })),
+      warmMarketCache,
+    }));
+    expect(warmMarketCache).toHaveBeenCalledWith({ warmRecs: false });
+  });
+
+  it('recs on + market off ⇒ market warm skipped AND recs suppressed+logged (dependency enforced engine-side)', async () => {
+    const warmMarketCache = vi.fn(async () => undefined);
+    const log = vi.fn();
+    await runNotificationEngine(deps({
+      readWarmSurfaces: vi.fn(async () => ({ market: false, recs: true })),
+      warmMarketCache, log,
+    }));
+    expect(warmMarketCache).not.toHaveBeenCalled();            // market off → no market warm → no recs
+    expect(log).toHaveBeenCalledWith('notification-recs-warm-suppressed-market-off', expect.anything());
+    expect(log).toHaveBeenCalledWith('notification-market-warm-skipped-flag-off', expect.anything());
+  });
+
+  it('P&W warm-set honours the portfolio/watchlist flags (union of ON surfaces only)', async () => {
+    const listWarmTickers = vi.fn(async () => ['CBA.AX']);
+    await runNotificationEngine(deps({
+      readWarmSurfaces: vi.fn(async () => ({ watchlist: false })),  // portfolio only
+      listWarmTickers,
+      readSharedAnalysisCache: vi.fn(async () => null),
+    }));
+    expect(listWarmTickers).toHaveBeenCalledWith({ portfolio: true, watchlist: false });
+  });
+
+  it('both P&W flags off ⇒ no warm-set scan at all', async () => {
+    const listWarmTickers = vi.fn(async () => []);
+    await runNotificationEngine(deps({
+      readWarmSurfaces: vi.fn(async () => ({ portfolio: false, watchlist: false })),
+      listWarmTickers,
+    }));
+    expect(listWarmTickers).not.toHaveBeenCalled();
+  });
+
+  it('Option B: a ticker with no ANALYSIS# is skipped — logged, never generated, never a failure', async () => {
+    const generateAnalysis = vi.fn(async (ticker) => analysis(ticker, 'BUY'));
+    const sendEmail = vi.fn(async () => undefined);
+    const putNotificationState = vi.fn(async () => undefined);
+    const log = vi.fn();
+    const run = await runNotificationEngine(deps({
+      readSharedAnalysisCache: vi.fn(async () => null),  // cold; no warm step (no listWarmTickers)
+      readWatchlist: vi.fn(async () => []),
+      generateAnalysis, sendEmail, putNotificationState, log,
+    }));
+    expect(run.sendLog.status).toBe('success');
+    expect(generateAnalysis).not.toHaveBeenCalled();     // the notification path NEVER computes
+    expect(sendEmail).not.toHaveBeenCalled();
+    expect(putNotificationState).not.toHaveBeenCalled(); // skipped ticker writes no state
+    expect(log).toHaveBeenCalledWith('notification-eval-skip-no-analysis', expect.objectContaining({ ticker: 'CBA.AX' }));
+  });
+
+  it('portfolio warm off ⇒ portfolio notification not generated; a warmed watchlist ticker still fires', async () => {
+    const sendEmail = vi.fn(async () => undefined);
+    const run = await runNotificationEngine(deps({
+      readWarmSurfaces: vi.fn(async () => ({ portfolio: false })),
+      readPortfolio: vi.fn(async () => [{ ticker: 'CBA.AX', shares: 1, avgCost: 100, isGifted: false, addedAt: 1 }]),
+      readWatchlist: vi.fn(async () => [{ ticker: 'NVDA', name: 'NVIDIA', addedAt: 1 }]),
+      listWarmTickers: vi.fn(async () => ['NVDA']),           // only watchlist warmed
+      readSharedAnalysisCache: vi.fn(async (ticker) => (ticker === 'NVDA' ? analysis(ticker, 'BUY') : null)),
+      sendEmail,
+    }));
+    expect(sendEmail).toHaveBeenCalledTimes(1);               // NVDA (watchlist BUY) only
+    expect(run.sendLog.accounts[0].transitions.map((t) => t.ticker)).toEqual(['NVDA']);
   });
 });

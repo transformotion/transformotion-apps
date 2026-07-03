@@ -2,9 +2,13 @@ import type {
   NotificationAccountConfig,
   NotificationMemberConsent,
   NotificationType,
+  WarmSurface,
+  WarmSurfaces,
+  WarmSurfaceState,
 } from '@transformotion/contracts/stock-analyser/notification-preferences';
 import {
   defaultNotificationAccountConfig,
+  resolveWarmSurfaceState,
 } from '@transformotion/contracts/stock-analyser/notification-preferences';
 import type { PortfolioHolding, WatchlistItem } from '@transformotion/contracts/stock-analyser/types';
 import type { StockAnalysisResult } from '../../../lib/services/portfolio/types';
@@ -75,11 +79,30 @@ export interface NotificationEngineDeps {
   /** #571 kill-switch: app-wide `notificationsEnabled` (default ON). */
   readEngineEnabled: () => Promise<boolean>;
   /**
+   * Per-surface warm gates (M19). Read ONCE per run, AFTER the kill-switch gate.
+   * `undefined` (absent config) ⇒ every surface ON (zero-migration default).
+   * Optional so unit tests can omit it (⇒ all surfaces warm).
+   */
+  readWarmSurfaces?: () => Promise<WarmSurfaces | undefined>;
+  /**
    * #584: warm the market-wide analysis cache (`MARKET#{region}` for each
    * region). Runs ONCE per job execution, AFTER the kill-switch gate, so an
    * engine-OFF run does NO market warming. Optional so unit tests can omit it.
+   *
+   * `opts.warmRecs` carries the resolved Recs gate: the market warm fans Recs out
+   * per region (#595) ONLY when Recs is effective this run (recs flag ON AND —
+   * enforced upstream — market flag ON). With `warmRecs:false` the market cache is
+   * still warmed but NO Recs are fanned out.
    */
-  warmMarketCache?: () => Promise<void>;
+  warmMarketCache?: (opts?: { warmRecs: boolean }) => Promise<void>;
+  /**
+   * Distinct Portfolio/Watchlist ticker warm-set across ALL accounts — the union
+   * of holdings from whichever of `opts.portfolio` / `opts.watchlist` is ON. No
+   * consent/eligibility filter (the warm produces SHARED, non-account-private
+   * `ANALYSIS#`; consent gates SENDS only). Optional so unit tests can omit it
+   * (⇒ empty warm-set). Backs the unconditional P&W `ANALYSIS#` warm step.
+   */
+  listWarmTickers?: (opts: { portfolio: boolean; watchlist: boolean }) => Promise<string[]>;
   /**
    * #594: warm the ETF caches (`ETF#{market}` for each market) by async-invoking
    * the runEtfs engine. Runs ONCE per job execution, AFTER the kill-switch gate and
@@ -334,9 +357,51 @@ function createAnalysisResolver(deps: NotificationEngineDeps) {
   };
 }
 
+/**
+ * M19 P&W warm step: compute + SHARED-write `ANALYSIS#{ticker}` for the distinct
+ * union of Portfolio/Watchlist holdings across ALL accounts (whichever surfaces
+ * are effective this run), via the SAME cache-first compute path a live Analyser
+ * run uses (`createAnalysisResolver`: read SHARED cache → else generate → write).
+ * Cache-first ⇒ a same-day fresh entry is a skip (no model call). No consent /
+ * eligibility filter — the warm produces SHARED, non-account-private results, so
+ * there is nothing private to gate (consent gates SENDS, not the warm-set).
+ * Per-ticker best-effort: one ticker's failure never blocks the rest.
+ */
+async function warmPortfolioWatchlist(
+  deps: NotificationEngineDeps,
+  warm: Record<WarmSurface, WarmSurfaceState>,
+): Promise<void> {
+  const resolveAnalysis = createAnalysisResolver(deps);
+  const tickers = (await deps.listWarmTickers?.({
+    portfolio: warm.portfolio.effective,
+    watchlist: warm.watchlist.effective,
+  })) ?? [];
+  let warmed = 0;
+  let failed = 0;
+  for (const ticker of tickers) {
+    try {
+      await resolveAnalysis(ticker);
+      warmed += 1;
+    } catch (err) {
+      failed += 1;
+      deps.log?.('notification-pw-warm-ticker-error', { ticker, err: String(err) });
+    }
+  }
+  deps.log?.('notification-pw-warm-complete', {
+    tickerCount: tickers.length,
+    warmed,
+    failed,
+    portfolio: warm.portfolio.effective,
+    watchlist: warm.watchlist.effective,
+  });
+}
+
+type ProcessedTicker =
+  | { skipped: true }
+  | { skipped?: false; transition: NotificationTransition; sentUserIds: string[]; sent: number };
+
 async function processTicker(
   deps: NotificationEngineDeps,
-  resolveAnalysis: (ticker: string, context?: AnalysisGenerationContext) => Promise<StockAnalysisResult>,
   accountId: string,
   runId: string,
   type: NotificationSourceType,
@@ -344,9 +409,19 @@ async function processTicker(
   previous: NotificationStateRecord | undefined,
   eligible: MemberRow[],
   today: string,
-): Promise<{ transition: NotificationTransition; sentUserIds: string[]; sent: number }> {
+): Promise<ProcessedTicker> {
   const normalisedTicker = ticker.toUpperCase();
-  const analysis = await resolveAnalysis(normalisedTicker, { accountId, runId, sourceType: type });
+  // Option B (M19): notification evaluation is a PURE READER of the SHARED
+  // ANALYSIS# cache — it NEVER computes on miss (the resolver's compute path is
+  // invoked only by the warm step). A missing/stale entry ⇒ skip this ticker's
+  // evaluation this run (logged, not an error). Consequence-by-design: a surface
+  // whose warm flag is OFF writes no ANALYSIS#, so its notifications are simply
+  // not generated — the warm flag is the single spend lever.
+  const analysis = await deps.readSharedAnalysisCache(normalisedTicker);
+  if (!analysis) {
+    deps.log?.('notification-eval-skip-no-analysis', { accountId, runId, type, ticker: normalisedTicker });
+    return { skipped: true };
+  }
 
   const transition = evaluateTransition({ accountId, type, ticker: normalisedTicker, analysis, previous });
   const sentUserIds: string[] = [];
@@ -397,7 +472,6 @@ export function assertNoCrossAccount(
 
 async function processAccount(
   deps: NotificationEngineDeps,
-  resolveAnalysis: (ticker: string, context?: AnalysisGenerationContext) => Promise<StockAnalysisResult>,
   accountId: string,
   accountName: string | undefined,
   candidateMembers: MemberRow[],
@@ -457,7 +531,6 @@ async function processAccount(
   for (const item of work) {
     const processed = await processTicker(
       deps,
-      resolveAnalysis,
       accountId,
       sendLog.runId,
       item.type,
@@ -466,6 +539,9 @@ async function processAccount(
       eligible,
       today,
     );
+    // Option B: no ANALYSIS# for this ticker this run → evaluation skipped (no
+    // transition, no state write, no send). Neither a fire nor a failure.
+    if (processed.skipped) continue;
     if (processed.transition.shouldNotify) {
       result.transitionsFired += 1;
       transitions.push({
@@ -535,37 +611,69 @@ export async function runNotificationEngine(deps: NotificationEngineDeps): Promi
       return result;
     }
 
-    // #584: warm the market-wide analysis cache ONCE per run, AFTER the
-    // kill-switch gate (engine OFF → no warming AND no sends — the switch pauses
-    // the WHOLE batch, the bigger AI-credit consumer). Best-effort: a warming
-    // failure must never abort the notification run.
-    try {
-      await deps.warmMarketCache?.();
-    } catch (err) {
-      deps.log?.('notification-market-warm-error', { err: String(err) });
+    // Per-surface warm gates (M19). Read ONCE, AFTER the master kill-switch —
+    // absent config ⇒ every surface ON (zero-migration). `resolveWarmSurfaceState`
+    // applies the one cross-surface dependency (recs⇒market): Recs is effective
+    // only when BOTH recs and market flags are ON, and (enforced inside
+    // warmMarketCache via `warmRecs`) fans out only after a region's market warm
+    // SUCCEEDS. recs-on + market-off ⇒ recs suppressed, logged.
+    const warmSurfaces = await deps.readWarmSurfaces?.();
+    const warm = resolveWarmSurfaceState(warmSurfaces);
+    if (warm.recs.blockedBy === 'market') {
+      deps.log?.('notification-recs-warm-suppressed-market-off', {});
     }
 
-    // #594: warm the ETF#{market} caches (all 3 markets) AFTER the market warm and
-    // under the same kill-switch gate. Independent best-effort concern: an ETF
-    // warming failure must never abort the notification run (or the market warm).
-    try {
-      await deps.warmEtfsCache?.();
-    } catch (err) {
-      deps.log?.('notification-etfs-warm-error', { err: String(err) });
+    // #584: warm MARKET#{region} ONCE per run, AFTER the kill-switch gate (engine
+    // OFF → no warming AND no sends). #595 Recs fan-out is carried by `warmRecs`.
+    // Best-effort: a warming failure must never abort the notification run.
+    if (warm.market.effective) {
+      try {
+        await deps.warmMarketCache?.({ warmRecs: warm.recs.effective });
+      } catch (err) {
+        deps.log?.('notification-market-warm-error', { err: String(err) });
+      }
+    } else {
+      deps.log?.('notification-market-warm-skipped-flag-off', {});
     }
 
-    // #627: warm the METALS cache AFTER the ETF warm and under the same kill-switch
-    // gate. Independent best-effort concern: a Metals warm failure must never abort the
-    // notification run (or the market/ETF warms).
-    try {
-      await deps.warmMetalsCache?.();
-    } catch (err) {
-      deps.log?.('notification-metals-warm-error', { err: String(err) });
+    // #594: warm the ETF#{market} caches (all 3 markets). Independent best-effort
+    // concern: an ETF warming failure must never abort the run (or sibling warms).
+    if (warm.etfs.effective) {
+      try {
+        await deps.warmEtfsCache?.();
+      } catch (err) {
+        deps.log?.('notification-etfs-warm-error', { err: String(err) });
+      }
+    } else {
+      deps.log?.('notification-etfs-warm-skipped-flag-off', {});
+    }
+
+    // #627: warm the METALS cache. Independent best-effort concern.
+    if (warm.metals.effective) {
+      try {
+        await deps.warmMetalsCache?.();
+      } catch (err) {
+        deps.log?.('notification-metals-warm-error', { err: String(err) });
+      }
+    } else {
+      deps.log?.('notification-metals-warm-skipped-flag-off', {});
+    }
+
+    // M19 P&W: unconditional per-ticker ANALYSIS# warm for the distinct union of
+    // Portfolio/Watchlist holdings (whichever surfaces are effective), DECOUPLED
+    // from the notification due/eligibility/type gates. Runs AFTER the list warms,
+    // BEFORE the notification loop, so evaluation (a pure reader) finds warm
+    // entries. Best-effort: any failure is logged and never aborts the run.
+    if (warm.portfolio.effective || warm.watchlist.effective) {
+      try {
+        await warmPortfolioWatchlist(deps, warm);
+      } catch (err) {
+        deps.log?.('notification-pw-warm-error', { err: String(err) });
+      }
     }
 
     const today = deps.today();
     const grouped = groupMembersByAccount(await deps.listStockAnalyserMembers());
-    const resolveAnalysis = createAnalysisResolver(deps);
     result.accountsDiscovered = grouped.size;
     sendLog.accountsEvaluated = grouped.size;
 
@@ -579,7 +687,7 @@ export async function runNotificationEngine(deps: NotificationEngineDeps): Promi
       // Per-account guard (#572): one account's failure is RECORDED and downgrades
       // the run to `partial` — it never loses the whole run's audit record.
       try {
-        sendLog.accounts.push(await processAccount(deps, resolveAnalysis, accountId, accountName, candidateMembers, today, result, sendLog));
+        sendLog.accounts.push(await processAccount(deps, accountId, accountName, candidateMembers, today, result, sendLog));
       } catch (err) {
         deps.log?.('notification-account-error', { accountId, err: String(err) });
         sendLog.accounts.push({ accountId, ...(accountName ? { accountName } : {}), status: 'failed', transitions: [], emailsSent: 0, memberOutcomes: [], error: String((err as Error)?.message ?? err) });

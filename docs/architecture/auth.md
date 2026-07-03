@@ -650,6 +650,17 @@ The compensating controls are:
 - security tests proving SHARED-only cache-write rejection, fail-closed
   delivery gating, cross-account isolation, and delivery-time consent re-check.
 
+The M19 P&W `ANALYSIS#` warm step adds one cross-account read: a full-table `Scan`
+of `portfolio`/`watchlist` projecting the **`ticker` attribute only**, to build the
+distinct union of holdings to warm. It is deliberately **NOT consent-gated** (owner-ratified):
+the warmed output is `ANALYSIS#{ticker}` — SHARED, non-account-private data identical for
+every account — and the read reveals nothing about *who* holds what (it unions symbols to
+decide what to compute). Consent gates **delivery**, not the warm-set (the delivery-time
+consent re-check above is unchanged). This read carries no account-scoped payload and writes
+nothing account-scoped, so it does not erode D8; it is a symbol-enumeration input to a
+SHARED-only producer. See `docs/adr-service-principal-background-jobs.md` (P&W warm-set read)
+and `docs/caching-and-warming.md` §4.1.
+
 ### Rules
 
 1. **A policy guard runs before any DynamoDB access.** Data routes call `requireAccountData(app).read`/`.write`; supervisory/ownership routes call `requireAccountAdmin(...)`; platform routes call `requireSiteAdmin`. Multi-app platform handlers (claude-proxy) still call `requireAnyAppAccess` first.

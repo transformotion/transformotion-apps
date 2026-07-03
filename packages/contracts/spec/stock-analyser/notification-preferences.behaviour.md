@@ -14,6 +14,22 @@ Notification controls at three grains, plus the existing personal toggles:
     early-returns and NO sends happen for ANYONE until re-enabled. Use case:
     pause sends when AI credit is exhausted. This is NOT per-account and NOT
     per-user — one global flag.
+  - `warmSurfaces` (M19) — OPTIONAL per-surface warm gates
+    `{ market?, recs?, etfs?, metals?, portfolio?, watchlist? }`, each boolean,
+    **absent ⇒ ON** (zero-migration). Gate the daily **warming** of each cache
+    surface only — a live tab run and a manual refresh are never blocked by them.
+    `recs` requires `market` (Recs is fanned out from the sectors a fresh Market
+    warm flags `enter`; recs-on + market-off ⇒ recs suppressed). Because
+    notification evaluation is a pure READER of `ANALYSIS#` (it never computes on
+    miss), the `portfolio` / `watchlist` flags are ALSO the single spend lever for
+    that surface's notifications: portfolio warm OFF ⇒ no portfolio `ANALYSIS#`
+    written ⇒ portfolio notifications not generated (likewise watchlist). Resolve
+    effective state + the recs⇒market dependency via `resolveWarmSurfaceState`.
+    Same admin write-gate + read visibility as `notificationsEnabled`; GET exposes
+    ONLY these toggle booleans (no new data leaves the config). The per-surface
+    admin toggles and the user-facing per-type "disabled at the app level" banner
+    are computed live from this map (never stored). See
+    `docs/caching-and-warming.md` §2/§4/§6.
 - **ACCOUNT-level** (owner/manager-controlled, per-account):
   - `intervalDays` — how often the job processes this account. Floor: 1 day
     (`MIN_NOTIFICATION_INTERVAL_DAYS`).
@@ -86,9 +102,10 @@ immediately re-gates the card.
 
 ## Storage
 
-- **App-wide engine config** (`notificationsEnabled`): a SINGLE global settings
-  row (NOT per-account, NOT per-user), default ON. Canonical key shape
-  `pk: 'SETTINGS'`, `sk: 'NOTIFICATION_ENGINE'`. Admin-controlled.
+- **App-wide engine config** (`notificationsEnabled` + optional M19
+  `warmSurfaces`): a SINGLE global settings row (NOT per-account, NOT per-user),
+  default ON / all surfaces warm. Canonical key shape `pk: 'SETTINGS'`,
+  `sk: 'NOTIFICATION_ENGINE_CONFIG#stock-analyser'`. Admin-controlled.
 - **Account-level config** (`intervalDays`, `typeSelection`): per-account, in
   the SA settings store (`stock-analyser.settings`), owner/manager-controlled.
   Canonical key shape `pk: 'SETTINGS'`, `sk: 'NOTIFICATIONS#${accountId}'`.
