@@ -10,7 +10,10 @@ import { useNotificationPreferences } from "@/lib/hooks/use-notification-prefere
 import {
   MIN_NOTIFICATION_INTERVAL_DAYS,
   NOTIFICATION_TYPES,
+  resolveWarmSurfaceState,
+  WARM_SURFACES,
   type NotificationType,
+  type WarmSurface,
 } from "@transformotion/contracts/stock-analyser/notification-preferences"
 import type {
   NotificationOutcomeReason,
@@ -1001,6 +1004,16 @@ function NotificationRunHistory({ history }: { history: NotificationRunHistoryVi
   )
 }
 
+// M19 per-surface warm gates — display metadata for the admin toggles.
+const WARM_SURFACE_META: Record<WarmSurface, { label: string; desc: string }> = {
+  market: { label: "Market", desc: "Daily market-analysis warm, per region" },
+  recs: { label: "Recommendations", desc: "Smart-warm the top 'enter' sectors — requires Market" },
+  etfs: { label: "ETFs", desc: "Warm the ETF lists for all markets" },
+  metals: { label: "Metals", desc: "Warm the metals board" },
+  portfolio: { label: "Portfolio", desc: "Warm per-ticker analysis for all holdings" },
+  watchlist: { label: "Watchlist", desc: "Warm per-ticker analysis for all watchlists" },
+}
+
 /**
  * Notification preferences (M19 #534) — role-conditional.
  *
@@ -1024,6 +1037,7 @@ function NotificationsCard() {
     setActiveTypes,
     setReceiveConsent,
     setNotificationsEnabled,
+    setWarmSurface,
   } = useNotificationPreferences(user.activeAccountId ?? null)
 
   // Not ready (SSR/first paint) or the entire feature is inapplicable (viewer):
@@ -1040,6 +1054,10 @@ function NotificationsCard() {
   const showEngineToggle = visibility.engineToggle !== "hidden"
   const engineEditable = visibility.engineToggle === "editable"
   const notificationsEnabled = engine?.notificationsEnabled ?? true
+
+  // M19 per-surface warm gates. Effective state + the recs⇒market dependency come
+  // from the ONE contract resolver (shared with the engine) — never re-implemented.
+  const warmState = resolveWarmSurfaceState(engine?.warmSurfaces)
 
   const activeTypes = config?.activeTypes ?? []
   const intervalDays = config?.intervalDays ?? MIN_NOTIFICATION_INTERVAL_DAYS
@@ -1127,6 +1145,62 @@ function NotificationsCard() {
         </div>
       )}
 
+      {/* APP-WIDE per-surface daily-warm gates (M19) — same permission model as the
+          engine kill-switch: visible to owner/manager (read-only) + admins (editable),
+          hidden for member/viewer. Gates WARMING only — live tabs + manual refresh are
+          never affected. Recs requires Market (disabled + noted when Market is off). */}
+      {showEngineToggle && (
+        <div className="rounded-xl border border-border bg-surface2/60 p-4 space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium text-foreground">Daily cache warming</p>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Which surfaces the daily job pre-warms. Turning a surface off only skips its warm —
+                live tabs and manual refresh are unaffected. Portfolio/Watchlist gate whether those
+                per-ticker analyses are generated for notifications.
+              </p>
+            </div>
+            {!engineEditable && (
+              <span className="mt-0.5 inline-flex shrink-0 items-center gap-1 text-[10px] text-muted-foreground">
+                <Lock className="size-3" />
+                Administrators only
+              </span>
+            )}
+          </div>
+          <div className="space-y-2.5">
+            {WARM_SURFACES.map((surface) => {
+              const st = warmState[surface]
+              const recsBlocked = surface === "recs" && st.blockedBy === "market"
+              return (
+                <div
+                  key={surface}
+                  className="flex items-start justify-between gap-3 rounded-lg border border-border/60 bg-surface/40 px-3 py-2.5"
+                >
+                  <div>
+                    <p className="text-sm text-foreground">{WARM_SURFACE_META[surface].label}</p>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      {WARM_SURFACE_META[surface].desc}
+                    </p>
+                    {recsBlocked && (
+                      <p className="mt-1 flex items-center gap-1 text-[11px] font-medium text-signal-amber">
+                        <AlertTriangle className="size-3 shrink-0" />
+                        Recommendations warming requires Market warming
+                      </p>
+                    )}
+                  </div>
+                  <Switch
+                    label={`Warm ${WARM_SURFACE_META[surface].label}`}
+                    checked={st.configured}
+                    disabled={!engineEditable || recsBlocked}
+                    onChange={(next) => setWarmSurface(surface, next)}
+                  />
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       {/* ACCOUNT-level config (owner/manager-controlled). */}
       {showAccountConfig && (
         <div className="rounded-xl border border-border bg-surface2/60 p-4 space-y-4">
@@ -1198,6 +1272,18 @@ function NotificationsCard() {
                 />
               ))}
             </div>
+            {/* M19 per-type app-level warm banner — computed LIVE from the engine
+                config (never stored). When a type's warm is off platform-wide, its
+                notifications are not generated regardless of this account's settings. */}
+            {NOTIFICATION_TYPES.filter((type) => warmState[type].effective === false).map((type) => (
+              <p
+                key={type}
+                className="flex items-center gap-1.5 rounded-lg bg-surface2 px-3 py-2 text-[11px] font-medium text-muted-foreground"
+              >
+                <AlertTriangle className="size-3.5 shrink-0 text-signal-amber" />
+                {type === "portfolio" ? "Portfolio" : "Watchlist"} notifications are currently disabled at the app level.
+              </p>
+            ))}
           </div>
         </div>
       )}

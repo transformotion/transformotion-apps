@@ -12,6 +12,7 @@ import type {
   NotificationEngineConfig,
   NotificationMemberConsent,
   NotificationType,
+  WarmSurfaces,
 } from '@transformotion/contracts/stock-analyser/notification-preferences'
 import type { NotificationRunHistoryView } from '@transformotion/contracts/stock-analyser/notification-run-history'
 import { authService } from '../services/auth'
@@ -97,7 +98,7 @@ export const stockAnalyserClient = {
     return http().get('notification-engine-config')
   },
   updateNotificationEngineConfig(
-    body: { notificationsEnabled: boolean },
+    body: { notificationsEnabled: boolean; warmSurfaces?: WarmSurfaces },
   ): Promise<{ config: NotificationEngineConfig }> {
     return http().put('notification-engine-config', body)
   },

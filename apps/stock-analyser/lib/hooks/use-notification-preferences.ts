@@ -12,6 +12,7 @@ import {
   type NotificationMemberConsent,
   type NotificationViewerContext,
   type NotificationVisibility,
+  type WarmSurface,
 } from "@transformotion/contracts/stock-analyser/notification-preferences"
 import type { NotificationRunHistoryView } from "@transformotion/contracts/stock-analyser/notification-run-history"
 import { stockAnalyserNotificationService } from "@/lib/services/notifications/notification-preferences-service"
@@ -48,6 +49,8 @@ export interface UseNotificationPreferencesResult {
   setActiveTypes: (types: NotificationAccountConfig["activeTypes"]) => void
   setReceiveConsent: (receive: boolean) => void
   setNotificationsEnabled: (enabled: boolean) => void
+  /** Toggle a single per-surface daily-warm gate (M19). Sends the full map + current master flag. */
+  setWarmSurface: (surface: WarmSurface, enabled: boolean) => void
 }
 
 const HIDDEN_VISIBILITY: NotificationVisibility = {
@@ -177,12 +180,25 @@ export function useNotificationPreferences(
   const setNotificationsEnabled = useCallback(
     (enabled: boolean) => {
       setEngine((e) => (e ? { ...e, notificationsEnabled: enabled } : e)) // optimistic
+      // warmSurfaces omitted → server preserves the stored map (read-merge).
       stockAnalyserNotificationService
-        .setEngineConfig(enabled)
+        .setEngineConfig({ notificationsEnabled: enabled })
         .then(setEngine)
         .catch(refetchEngine)
     },
     [refetchEngine],
+  )
+
+  const setWarmSurface = useCallback(
+    (surface: WarmSurface, enabled: boolean) => {
+      const nextMap = { ...(engine?.warmSurfaces ?? {}), [surface]: enabled }
+      setEngine((e) => (e ? { ...e, warmSurfaces: nextMap } : e)) // optimistic
+      stockAnalyserNotificationService
+        .setEngineConfig({ notificationsEnabled: engine?.notificationsEnabled ?? true, warmSurfaces: nextMap })
+        .then(setEngine)
+        .catch(refetchEngine)
+    },
+    [engine, refetchEngine],
   )
 
   return {
@@ -197,5 +213,6 @@ export function useNotificationPreferences(
     setActiveTypes,
     setReceiveConsent,
     setNotificationsEnabled,
+    setWarmSurface,
   }
 }
