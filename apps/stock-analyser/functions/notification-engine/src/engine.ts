@@ -172,6 +172,12 @@ export interface SendLogAccount {
   emailsSent: number;
   memberOutcomes: MemberOutcome[];
   error?: string;
+  /**
+   * #579: tickers whose evaluation was SKIPPED this run because no fresh ANALYSIS#
+   * entry existed (Option B pure-reader). Surfaced in run-history detail as the
+   * "why didn't I get notified about X" answer. Omitted when empty.
+   */
+  skippedTickers?: string[];
 }
 
 export type SendLogStatus = 'success' | 'partial' | 'failed';
@@ -526,6 +532,7 @@ async function processAccount(
 
   const transitions: SendLogTransition[] = [];
   const sentTickersByUser = new Map<string, string[]>();
+  const skippedTickers: string[] = [];
   let emailsSent = 0;
 
   for (const item of work) {
@@ -540,8 +547,12 @@ async function processAccount(
       today,
     );
     // Option B: no ANALYSIS# for this ticker this run → evaluation skipped (no
-    // transition, no state write, no send). Neither a fire nor a failure.
-    if (processed.skipped) continue;
+    // transition, no state write, no send). Neither a fire nor a failure — but
+    // RECORDED (#579) so run-history can answer "why didn't I get notified about X".
+    if (processed.skipped) {
+      skippedTickers.push(item.ticker.toUpperCase());
+      continue;
+    }
     if (processed.transition.shouldNotify) {
       result.transitionsFired += 1;
       transitions.push({
@@ -572,7 +583,15 @@ async function processAccount(
     }),
   ];
 
-  const account: SendLogAccount = { accountId, accountName, status: 'processed', transitions, emailsSent, memberOutcomes };
+  const account: SendLogAccount = {
+    accountId,
+    accountName,
+    status: 'processed',
+    transitions,
+    emailsSent,
+    memberOutcomes,
+    ...(skippedTickers.length > 0 ? { skippedTickers } : {}),
+  };
   assertNoCrossAccount(deps, accountId, candidateMembers, account);
   return account;
 }

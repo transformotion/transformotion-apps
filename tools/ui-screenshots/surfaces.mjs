@@ -61,4 +61,37 @@ export const surfaces = [
       },
     ],
   },
+  {
+    name: 'notifications-run-history',
+    description:
+      'Settings → Notifications → Run history: M19 #579 error surfacing + Option-B skipped-ticker legibility, ' +
+      'with the server-scoped detail-vs-summary tiers (mock site-admin+owner persona).',
+    viewport: { width: 1440, height: 2400 },
+    nav: [
+      { click: { role: ['button', 'Settings'] } },
+      { waitVisible: { text: 'Run history' } },
+      { click: { text: 'Run history' } },        // expand the run-history section
+      { waitVisible: { text: '2 errored' } },     // the partial run's summary line
+    ],
+    clip: { selector: 'div.rounded-xl', hasText: 'Run history' },
+    states: [
+      {
+        name: '01-run-list',
+        // The list: a healthy (Success) run + a Partial run showing "· 2 errored".
+        actions: [],
+      },
+      {
+        name: '02-partial-expanded',
+        // Expand the Partial RUN ROW (its button name starts with the run date, vs the
+        // section header which starts with "Run history") → OWNED account detail (error
+        // reason + Option-B skipped ticker + member outcome) AND a NON-owned account as
+        // admin summary-only (error reason, no member detail).
+        actions: [
+          { click: { testId: 'run-row-run-2026-07-03' } }, // the partial run (stable runId, tz-independent)
+          { waitVisible: { text: 'analysis unavailable this run' } }, // owner-detail skipped line
+          { waitVisible: { text: 'Member detail visible to account owners' } }, // admin summary-only lock
+        ],
+      },
+    ],
+  },
 ]

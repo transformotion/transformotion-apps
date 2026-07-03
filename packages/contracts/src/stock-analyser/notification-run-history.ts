@@ -162,6 +162,16 @@ export interface NotificationRunAccount {
   /** Emails sent for this account this run (equals members with `outcome: 'sent'`). */
   emailsSent: number;
   memberOutcomes: NotificationMemberOutcome[];
+  /**
+   * Tickers whose evaluation was SKIPPED this run because no fresh `ANALYSIS#`
+   * entry existed (Option B — notification evaluation is a pure reader; it never
+   * computes on miss). This is the user-facing answer to "why didn't I get
+   * notified about X": its analysis wasn't warm this run (e.g. its warm surface is
+   * off, or the warm failed). DETAIL-tier — the ticker list is account-private, so
+   * it reaches only an owner/manager of the account and is STRIPPED for
+   * summary-only viewers (like `transitions`/`memberOutcomes`). Omitted when empty.
+   */
+  skippedTickers?: string[];
 }
 
 /** Overall run status: all-ok, some accounts errored, or the run failed. */
@@ -301,15 +311,16 @@ export function projectRunForViewer(
     if (level === 'detail') {
       accounts.push({ ...account, visibility: 'detail' });
     } else {
-      // summary-only: strip member outcomes AND transitions — they are never
-      // sent over the wire for an account the viewer does not own/manage. The
-      // account-level `error` reason is SUMMARY-tier and is PRESERVED (spread):
-      // admins see WHICH accounts errored and why, but NOT the per-member error
-      // reasons (those go with memberOutcomes).
+      // summary-only: strip member outcomes, transitions AND skippedTickers —
+      // account-private detail never sent over the wire for an account the viewer
+      // does not own/manage. The account-level `error` reason is SUMMARY-tier and
+      // is PRESERVED (spread): admins see WHICH accounts errored and why, but NOT
+      // the per-member error reasons or the skipped-ticker list (which are detail).
       accounts.push({
         ...account,
         transitions: [],
         memberOutcomes: [],
+        skippedTickers: [],
         visibility: 'summary',
       });
     }

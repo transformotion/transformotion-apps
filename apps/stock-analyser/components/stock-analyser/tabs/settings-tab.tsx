@@ -16,6 +16,7 @@ import {
   type WarmSurface,
 } from "@transformotion/contracts/stock-analyser/notification-preferences"
 import type {
+  AccountRunErrorReason,
   NotificationOutcomeReason,
   NotificationRunStatus,
   NotificationRunAccountView,
@@ -775,6 +776,13 @@ const RUN_REASON_LABEL: Record<NotificationOutcomeReason, string> = {
   "credit-balance": "AI credit too low",
 }
 
+/** Human label for each account-level error reason (#579, summary-tier). */
+const ACCOUNT_ERROR_LABEL: Record<AccountRunErrorReason, string> = {
+  "processing-failed": "Processing failed",
+  "credit-balance": "AI credit too low",
+  "write-failed": "Log write failed",
+}
+
 /** Overall-run status chip styling (#573). */
 const RUN_STATUS_STYLE: Record<NotificationRunStatus, { label: string; cls: string }> = {
   success: { label: "Success", cls: "bg-signal-green/15 text-signal-green" },
@@ -813,6 +821,15 @@ function RunAccountBlock({ account }: { account: NotificationRunAccountView }) {
         </span>
       </div>
 
+      {/* #579: account-level error reason — SUMMARY-tier, so shown to admins too
+          (they see WHICH accounts errored + why, without member detail). */}
+      {account.accountStatus === "error" && account.error && (
+        <p className="mt-1.5 flex items-center gap-1.5 rounded-lg bg-signal-red/10 px-2.5 py-1.5 text-[11px] font-medium text-signal-red">
+          <AlertTriangle className="size-3.5 shrink-0" />
+          {ACCOUNT_ERROR_LABEL[account.error]}
+        </p>
+      )}
+
       {isSummaryOnly ? (
         // Admin-without-ownership: count only, no member detail in the payload.
         <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
@@ -827,6 +844,18 @@ function RunAccountBlock({ account }: { account: NotificationRunAccountView }) {
         </div>
       ) : (
         <>
+          {/* #579: Option-B skipped tickers — DETAIL-tier. The user-facing answer to
+              "why didn't I get notified about X": its analysis wasn't warm this run. */}
+          {account.skippedTickers && account.skippedTickers.length > 0 && (
+            <p className="mt-2 flex items-start gap-1.5 rounded-lg bg-surface2 px-2.5 py-1.5 text-[11px] text-muted-foreground">
+              <MinusCircle className="mt-px size-3.5 shrink-0 text-signal-gold" />
+              <span>
+                Not evaluated — analysis unavailable this run:{" "}
+                <span className="font-medium text-foreground">{account.skippedTickers.join(", ")}</span>
+              </span>
+            </p>
+          )}
+
           {account.transitions.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1.5">
               {account.transitions.map((t) => (
@@ -877,12 +906,14 @@ function RunAccountBlock({ account }: { account: NotificationRunAccountView }) {
   )
 }
 
-/** The "N emails [across M accounts]" tail of a run's one-line summary. */
+/** The "N emails [across M accounts] [· K errored]" tail of a run's one-line summary. */
 function runEmailsLabel(run: NotificationRunView): string {
   const emails = `${run.emailsSent} ${run.emailsSent === 1 ? "email" : "emails"}`
-  return run.showCrossAccountHeader
+  const base = run.showCrossAccountHeader
     ? `${emails} across ${run.accountsEvaluated} ${run.accountsEvaluated === 1 ? "account" : "accounts"}`
     : emails
+  // #579: surface the errored-account count (summary-tier) inline on the run row.
+  return run.accountsErrored > 0 ? `${base} · ${run.accountsErrored} errored` : base
 }
 
 /**
@@ -900,6 +931,7 @@ function RunRow({ run }: { run: NotificationRunView }) {
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
+        data-testid={`run-row-${run.runId}`}
         className="flex w-full items-center gap-3 px-3 py-2.5 text-left"
       >
         <span className="shrink-0 text-xs font-medium tabular-nums text-foreground">

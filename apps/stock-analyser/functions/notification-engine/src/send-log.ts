@@ -52,6 +52,7 @@ export function accountItem(run: SendLogRun, account: SendLogAccount, expiresAt:
     emailsSent: account.emailsSent,
     memberOutcomes: account.memberOutcomes,
     ...(account.error ? { error: account.error } : {}),
+    ...(account.skippedTickers && account.skippedTickers.length > 0 ? { skippedTickers: account.skippedTickers } : {}),
     expiresAt,
   };
 }
