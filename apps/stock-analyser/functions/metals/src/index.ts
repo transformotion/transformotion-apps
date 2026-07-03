@@ -256,6 +256,11 @@ async function readCacheJson<T>(runtime: RuntimeEnv, cacheKey: string): Promise<
   return parseStoredJson<T>(result.Item);
 }
 
+// Direct-write feed-history bookkeeping (METALS_CLOSES#/METALS_BASELINE#) — engine-internal,
+// never tab-read, so it stays OUT of the analysis-cache service-principal chokepoint BY DESIGN
+// (see docs/adr-service-principal-background-jobs.md — "engine-internal feed-history direct-write",
+// #637). #637: cachedAt is epoch seconds — the canonical table timestamp shape (matches the
+// service-principal and frontend PUT writers); do NOT reintroduce an ISO string here.
 async function writeCacheJson(runtime: RuntimeEnv, cacheKey: string, dataType: string, data: unknown, now = new Date()): Promise<void> {
   await ddb.send(new PutCommand({
     TableName: runtime.analysisCacheTable,
@@ -263,7 +268,7 @@ async function writeCacheJson(runtime: RuntimeEnv, cacheKey: string, dataType: s
       accountId: SHARED_ACCOUNT_ID,
       cacheKey,
       data: JSON.stringify(data),
-      cachedAt: now.toISOString(),
+      cachedAt: toEpochSeconds(now),
       dataType,
       mode: 'live',
       expiresAt: cacheExpiry(now),
