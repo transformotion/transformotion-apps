@@ -337,6 +337,18 @@ checks, or explicit owner validation. v0 is optional for net-new visual design
 only; if v0 output is used, cite the v0 commit and include a visual comparison
 or disposition list in the runtime PR.
 
+The standing tool for those screenshots is **`tools/ui-screenshots/`** (Playwright;
+boots the app in mock mode, drives named surface states, captures each). It is a
+standalone dev tool — deliberately outside the pnpm workspace, so its browser
+dependency never enters the root or app install (see its `README.md` for setup and
+for how to add a surface/state). Capture is **on-demand only; it is not wired into
+CI** (visual-regression CI is a separate, later decision).
+
+**Screenshot artefact policy — PR-attachment-only.** Captured PNGs are **not**
+committed to the repo. Drag-drop them into the PR body in the GitHub UI (GitHub
+hosts them permanently); `out/` is gitignored. Visual history lives on the PR, not
+in `git` — committing binaries would grow the repo forever for no ongoing benefit.
+
 ### 3.5.2 Contract-first development classification
 
 Before implementing runtime work, classify it as one of:

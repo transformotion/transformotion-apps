@@ -1,0 +1,7 @@
+# Isolated standalone install — never part of the pnpm workspace graph.
+node_modules/
+package-lock.json
+
+# Captured screenshots are PR-attachment-only (see README "Artefact policy").
+# They are NEVER committed — drag-drop them into the PR body instead.
+out/
