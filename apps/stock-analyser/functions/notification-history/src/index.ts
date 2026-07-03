@@ -157,6 +157,32 @@ async function loadRecentRuns(limit: number): Promise<NotificationRunSummary[]> 
   }));
 }
 
+type MemberRow = { accountId?: string; appSlug?: string; role?: string };
+
+/**
+ * The accessible-account filter, isolated from IO so it is unit-testable. Strict
+ * `appSlug === 'stock-analyser'` filtering is CORRECT and retained — a row for a
+ * different app must not grant SA run-history detail. But a row that is MISSING
+ * `appSlug` entirely (a data defect, #582) silently excludes an owner/manager from
+ * their OWN account's detail; that exclusion is logged so it is observable, without
+ * relaxing the filter.
+ */
+export function filterAccessibleAccountIds(
+  rows: MemberRow[],
+  log?: (message: string, context?: Record<string, unknown>) => void,
+): string[] {
+  const accessible: string[] = [];
+  for (const r of rows) {
+    const isOwnerOrManager = r.role === 'owner' || r.role === 'manager';
+    if (!r.appSlug && isOwnerOrManager && r.accountId) {
+      log?.('run-history-member-row-missing-appslug', { accountId: r.accountId, role: r.role });
+      continue; // strict filter still drops it — the WARN just makes the drop visible
+    }
+    if (r.appSlug === APP_SLUG && isOwnerOrManager && r.accountId) accessible.push(r.accountId);
+  }
+  return accessible;
+}
+
 async function loadAccessibleAccountIds(userId: string): Promise<string[]> {
   const res = await ddb.send(new QueryCommand({
     TableName: ACCOUNT_MEMBERS_TABLE,
@@ -166,10 +192,10 @@ async function loadAccessibleAccountIds(userId: string): Promise<string[]> {
     ProjectionExpression: 'accountId, appSlug, #r',
     ExpressionAttributeNames: { '#r': 'role' },
   }));
-  const rows = (res.Items ?? []) as Array<{ accountId?: string; appSlug?: string; role?: string }>;
-  return rows
-    .filter((r) => r.appSlug === APP_SLUG && (r.role === 'owner' || r.role === 'manager') && !!r.accountId)
-    .map((r) => r.accountId!);
+  const rows = (res.Items ?? []) as MemberRow[];
+  return filterAccessibleAccountIds(rows, (message, context) =>
+    console.log(JSON.stringify({ message, userId, ...context })),
+  );
 }
 
 export const handler = createHandler({
