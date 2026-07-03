@@ -162,6 +162,38 @@ strongest N, not the whole list) is the natural shape.
 Portfolio/Watchlist `ANALYSIS#` warming is **conditional** on the notification path (§6) and is
 also accepted as-is.
 
+### 4a. Live Analyser cost & why a research sub-cache was rejected (#610 / #612)
+
+Measured baseline — **N=5 real Analyser Live two-pass runs, gpt-5.5, 2026-07-03** (faithful
+harness replicating the `openai.ts` two-pass): a Live call averages **42,642 tokens**, split
+**pass-1 grounded research 92.8% / pass-2 format 7.2%**, with **~5 web searches per call, all in
+pass-1**. Search volume — not output size — is the dominant cost driver; pass-2 (formatting the
+grounded evidence into the strict schema) makes **zero** web-search calls. ($ ≈ $0.14–0.24/call at
+assumed gpt-5.5 rates — $1.25/1M in, $10/1M out, web_search ~$0.01–0.03/call.)
+
+**Thin-coverage tickers never cache.** `security` grounding **hard-fails (502)** when pass-1
+returns `DATA_STATUS: UNAVAILABLE` (the #601 guard) — e.g. AZN.L in the baseline — so a live call
+on an ungroundable ticker errors rather than producing a cacheable result.
+
+**Research sub-cache (#610) — considered, rejected.** Caching pass-1's grounded evidence
+(`ANALYSIS-RESEARCH#{ticker}`) to skip the searches looks attractive given the 92.8% share (the
+evidence is a self-contained string, trivially cacheable). But it is **redundant with the 24h
+`ANALYSIS#` result cache**: a repeat view within 24h already hits the result cache at **zero**
+cost, and a research entry could only help if the result cache missed *while* the research entry
+was still valid — impossible, because grounded research goes stale in **hours**, so its TTL must be
+**shorter** than the 24h result TTL and it therefore always expires first. Force-refresh must serve
+fresh anyway, and no other surface consumes per-ticker research. Net expected saving ≈ $0 against
+real added complexity (second cache layer, staleness guard, new SHARED prefix + allowlist,
+evidence-age plumbing). Closed not-required. **Do not re-propose on rediscovering the 92.8%** — the
+number is real; the redundancy is what kills it.
+
+**#612 (trim pass-2 re-ingested evidence) — closed on the same baseline, same day.** Pass-2 input
+is ~7.2% of tokens (~1,700 tok of re-sent evidence ≈ ~4% of the call); a perfect trim saves
+~$0.002–0.004/call — immaterial, and #612's own scope condition ("apply only where pass-2 input
+cost remains material after higher-value fixes") is unmet. Revival condition: a future surface that
+re-introduces heavyweight two-pass with materially larger pass-1 → pass-2 re-ingestion — re-measure
+first (#617 already moved Recs off structured-Live, shrinking the two-pass footprint).
+
 ---
 
 ## 5. UI behaviour (cache-first reads)
@@ -231,3 +263,6 @@ Issues / PRs:
   (two-stage price-before-signal) · **#594** ETF warm (PR **#636**) · **#595** Recs smart-warm ·
   **#626** ETF engine · **#627** Metals engine + warm (PR **#638**) · **#637** Metals
   direct-write boundary + latent `SHARED_PREFIXES` guard.
+- Cost-lever decisions (§4a): **#610** research sub-cache (closed not-required — redundant with the
+  #590 result cache) · **#612** pass-2 trim (closed not-required — immaterial) · **#617** moved Recs
+  off structured-Live · **#601** grounding hard-fail guard.
