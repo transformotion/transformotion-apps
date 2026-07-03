@@ -77,6 +77,11 @@ function normaliseItem(item: Record<string, unknown>) {
 // per-account partition with data that should be global.
 // #594: the ETF cache key is `ETF#{market}` (prefix `ETF`), NOT `ETFS` — the old `ETFS`
 // entry never matched a real key, so scheduled ETF# writes were rejected as non-SHARED.
+// #637: these are the TAB-READ shared-result prefixes only. Do NOT add the metals engine's
+// feed-history prefixes `METALS_CLOSES` / `METALS_BASELINE` here — they are engine-internal,
+// direct-write BY DESIGN (see docs/adr-service-principal-background-jobs.md, "feed-history
+// direct-write"), and adding them re-opens the latent silent-rejection gap the ADR retires.
+// A guard test (index.test.ts) fails if they ever appear here.
 const SHARED_PREFIXES = ['MARKET', 'ETF', 'RECS', 'METALS', 'ANALYSIS', 'CYCLE'];
 
 // Service principals allowed to write SHARED cache entries. The notification-engine

@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type { MetalFeedData, MetalModelOutput, MetalSymbol } from '@transformotion/contracts/stock-analyser/metals';
 import { STOCK_ANALYSER_CACHE_TTL_SECONDS } from '@transformotion/contracts/stock-analyser/cache-freshness';
 import { buildFeedData, mergeMetalsResult } from './index';
@@ -113,5 +115,35 @@ describe('runMetals engine helpers', () => {
     expect(result.metals[0]).not.toHaveProperty('week52Low');
     expect(result.metals[0]).not.toHaveProperty('week52High');
     expect(STOCK_ANALYSER_CACHE_TTL_SECONDS.metals).toBe(86_400);
+  });
+});
+
+// #637 feed-history write-path guard (source-level — writeCacheJson isn't exported). The
+// METALS_CLOSES#/METALS_BASELINE# rows are direct-write BY DESIGN (see
+// docs/adr-service-principal-background-jobs.md — "feed-history direct-write"); only the
+// tab-facing METALS key uses the service-principal chokepoint. Goes RED if someone reroutes the
+// feed-history through the chokepoint or reintroduces an ISO-string cachedAt.
+describe('#637 feed-history direct-write + canonical timestamp', () => {
+  const src = readFileSync(join(process.cwd(), 'functions/metals/src/index.ts'), 'utf8');
+  const writeCacheJsonBody = src.slice(
+    src.indexOf('async function writeCacheJson'),
+    src.indexOf('async function hasStoredCloses'),
+  );
+
+  it('writeCacheJson uses a DIRECT PutCommand with epoch-seconds cachedAt (not the SP invoke, not ISO)', () => {
+    expect(writeCacheJsonBody).toContain('new PutCommand');            // direct write
+    expect(writeCacheJsonBody).toContain('cachedAt: toEpochSeconds(now)'); // #637 canonical epoch shape
+    expect(writeCacheJsonBody).not.toContain('toISOString');           // no ISO regression
+    expect(writeCacheJsonBody).not.toContain('InvokeCommand');         // not rerouted through the chokepoint
+  });
+
+  it('the service-principal chokepoint is used ONLY for the tab-facing METALS key', () => {
+    const spBody = src.slice(
+      src.indexOf('async function writeSharedMetalsCache'),
+      src.indexOf('async function executeMetalsJob'),
+    );
+    expect(spBody).toContain('cacheKey: METALS_CACHE_KEY');
+    expect(spBody).not.toContain('METALS_CLOSES_PREFIX');
+    expect(spBody).not.toContain('METALS_BASELINE_PREFIX');
   });
 });

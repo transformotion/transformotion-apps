@@ -51,8 +51,8 @@ by their owning Lambda (not through the shared-cache service-principal chokepoin
 | `ETF#{market}` | etfs engine (warm #594); live ETFs tab | service-principal / PUT | 48h | ETFs tab (`surface: etfs`) |
 | `METALS` | metals engine (warm #627 + async job); live Metals tab | service-principal / PUT | 24h | Metals tab (`surface: metals`) |
 | `ANALYSIS#{ticker}` | notification-engine (conditional warm, §6); live Analyser / Portfolio / Watchlist | service-principal / PUT | 24h | Analyser tab (`surface: analyser`) + Portfolio/Watchlist enrichment |
-| `METALS_CLOSES#{date}` | metals engine | **direct** (#637) | 400d | metals engine only (internal feed history) |
-| `METALS_BASELINE#{year}` | metals engine | **direct** (#637) | 400d | metals engine only (YTD baseline) |
+| `METALS_CLOSES#{date}` | metals engine | **direct — sanctioned ([ADR](adr-service-principal-background-jobs.md), #637)** | 400d | metals engine only (internal feed history) |
+| `METALS_BASELINE#{year}` | metals engine | **direct — sanctioned ([ADR](adr-service-principal-background-jobs.md), #637)** | 400d | metals engine only (YTD baseline) |
 | `MARKET-DATA#{ticker}#{range}#{interval}` | market-data, cycle-data | **direct** | 8h | Live-mode price/OHLCV; engines' real-price stage |
 | `OHLCV#{ticker}` | cycle-data | **direct** | 1h | `FullCycleGauge` live cycle position |
 | `CYCLE#{geography}` | **none — reserved prefix, no current writer** | — | — | — |

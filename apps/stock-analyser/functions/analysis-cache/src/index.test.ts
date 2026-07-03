@@ -93,3 +93,23 @@ describe('analysis-cache service-principal SHARED write branch', () => {
     });
   });
 });
+
+// #637 FEED-HISTORY BOUNDARY GUARD. The metals engine's METALS_CLOSES#/METALS_BASELINE# rows are
+// engine-internal, direct-write BY DESIGN (docs/adr-service-principal-background-jobs.md —
+// "feed-history direct-write"). They MUST stay OUT of SHARED_PREFIXES. This block goes RED if
+// someone adds them to the allowlist (or drops a tab-read prefix from it) — converting the latent
+// ETFS-shape silent-rejection gap from "waiting to fire" to "structurally cannot fire unsanctioned".
+describe('#637 feed-history direct-write boundary', () => {
+  it('rejects the metals feed-history prefixes from the service-principal (SHARED) path', async () => {
+    const { isSharedServiceCacheKey } = await import('./index');
+    expect(isSharedServiceCacheKey('METALS_CLOSES#2026-07-02')).toBe(false);
+    expect(isSharedServiceCacheKey('METALS_BASELINE#2026')).toBe(false);
+  });
+
+  it('keeps the tab-read shared-result prefixes ON the service-principal path', async () => {
+    const { isSharedServiceCacheKey } = await import('./index');
+    for (const key of ['METALS', 'MARKET#australia', 'ETF#ASX', 'RECS#Dow|Top Picks', 'ANALYSIS#BHP.AX']) {
+      expect(isSharedServiceCacheKey(key)).toBe(true);
+    }
+  });
+});
