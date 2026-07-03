@@ -86,13 +86,113 @@ export const DEFAULT_NOTIFICATIONS_ENABLED = true;
  * exhausted. DEFAULT ON.
  *
  * Persisted as a single global settings row (runtime owns the real store).
- * Canonical key shape: `pk: 'SETTINGS'`, `sk: 'NOTIFICATION_ENGINE'`.
+ * Canonical key shape: `pk: 'SETTINGS'`, `sk: 'NOTIFICATION_ENGINE_CONFIG#stock-analyser'`.
  * Runtime write-gates it to site/app-admin only (see behaviour.md CONSTRAINT).
  */
 export interface NotificationEngineConfig {
   /** Whether the notification job is allowed to run platform-wide. Default `true`. */
   notificationsEnabled: boolean;
+  /**
+   * Per-surface daily-warm gates (M19). OPTIONAL and ABSENT ⇒ every surface ON
+   * (zero-migration default). Independent of {@link notificationsEnabled}: the
+   * master switch gates the WHOLE run (early-return before anything); these gate
+   * individual warm steps WITHIN a run. See {@link WarmSurfaces} /
+   * {@link resolveWarmSurfaceState}.
+   */
+  warmSurfaces?: WarmSurfaces;
   updatedAt: ISODateTime;
+}
+
+// ---------------------------------------------------------------------------
+// Warm-surface flags (M19 — per-surface daily-warm gating + P&W intent fix)
+// ---------------------------------------------------------------------------
+
+/**
+ * The daily warm chain's individually-gateable surfaces. Each names a cache the
+ * notification engine warms once per run: `market`/`recs`/`etfs`/`metals` are the
+ * Layer-A list surfaces; `portfolio`/`watchlist` gate the per-ticker `ANALYSIS#`
+ * warm-set built from account holdings (the union of whichever are ON).
+ *
+ * Because notification evaluation is a pure READER of `ANALYSIS#` (it never
+ * computes on miss), a surface's warm flag is ALSO the single spend lever for
+ * that surface's notifications: portfolio warm OFF ⇒ no portfolio `ANALYSIS#`
+ * written ⇒ portfolio notifications are not generated (and likewise watchlist).
+ */
+export type WarmSurface = 'market' | 'recs' | 'etfs' | 'metals' | 'portfolio' | 'watchlist';
+
+/** All warm surfaces, in warm-chain order. */
+export const WARM_SURFACES: readonly WarmSurface[] = ['market', 'recs', 'etfs', 'metals', 'portfolio', 'watchlist'];
+
+/**
+ * Per-surface warm gates. Each key is OPTIONAL and ABSENT MEANS ON — a fresh
+ * config (no `warmSurfaces`) warms every surface. Only an explicit `false`
+ * disables a surface's warm.
+ */
+export type WarmSurfaces = Partial<Record<WarmSurface, boolean>>;
+
+/** Raw per-surface flag: absent/`true` ⇒ ON, only explicit `false` ⇒ OFF. */
+export function isWarmSurfaceConfigured(warmSurfaces: WarmSurfaces | undefined, surface: WarmSurface): boolean {
+  return warmSurfaces?.[surface] !== false;
+}
+
+/**
+ * Resolved state for one surface: its raw flag, its effective on/off after
+ * cross-surface dependency resolution, and (when suppressed) what blocked it.
+ */
+export interface WarmSurfaceState {
+  /** The raw configured flag (absent ⇒ `true`). */
+  configured: boolean;
+  /** Effective on/off after applying cross-surface dependencies (recs⇒market). */
+  effective: boolean;
+  /** Set when `configured` is on but a dependency forced `effective` off. */
+  blockedBy?: WarmSurface;
+}
+
+/**
+ * Resolve every warm surface's effective state, applying the ONE cross-surface
+ * dependency: **Recs warming requires Market warming.** Recs is fanned out from
+ * the sectors a fresh Market warm flags `enter`, so with Market OFF there is
+ * nothing to base Recs on. A config with recs ON + market OFF therefore resolves
+ * recs to `{ effective: false, blockedBy: 'market' }`. All other surfaces are
+ * independent (`effective === configured`).
+ *
+ * Single source of truth shared by the engine (which surfaces to warm) and the
+ * settings UI (which toggle to disable / annotate, and the per-type banners).
+ */
+export function resolveWarmSurfaceState(
+  warmSurfaces: WarmSurfaces | undefined,
+): Record<WarmSurface, WarmSurfaceState> {
+  const marketOn = isWarmSurfaceConfigured(warmSurfaces, 'market');
+  const recsOn = isWarmSurfaceConfigured(warmSurfaces, 'recs');
+  const independent = (surface: WarmSurface): WarmSurfaceState => {
+    const on = isWarmSurfaceConfigured(warmSurfaces, surface);
+    return { configured: on, effective: on };
+  };
+  return {
+    market: independent('market'),
+    recs: {
+      configured: recsOn,
+      effective: recsOn && marketOn,
+      ...(recsOn && !marketOn ? { blockedBy: 'market' as const } : {}),
+    },
+    etfs: independent('etfs'),
+    metals: independent('metals'),
+    portfolio: independent('portfolio'),
+    watchlist: independent('watchlist'),
+  };
+}
+
+/**
+ * Validate a `warmSurfaces` map: absent/`null` is valid (⇒ all ON); otherwise it
+ * must be a plain object whose every key is a known {@link WarmSurface} with a
+ * boolean value. Unknown keys and non-boolean values are rejected.
+ */
+export function isValidWarmSurfaces(value: unknown): value is WarmSurfaces {
+  if (value === undefined || value === null) return true;
+  if (typeof value !== 'object' || Array.isArray(value)) return false;
+  return Object.entries(value as Record<string, unknown>).every(
+    ([key, v]) => (WARM_SURFACES as readonly string[]).includes(key) && typeof v === 'boolean',
+  );
 }
 
 /** A fresh engine config: kill-switch ON. */

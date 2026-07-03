@@ -44,11 +44,13 @@ import {
   defaultNotificationEngineConfig,
   defaultNotificationMemberConsent,
   isValidNotificationAccountConfig,
+  isValidWarmSurfaces,
   normalizeIntervalDays,
   type NotificationAccountConfig,
   type NotificationEngineConfig,
   type NotificationMemberConsent,
   type NotificationType,
+  type WarmSurfaces,
 } from '@transformotion/contracts/stock-analyser/notification-preferences';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -308,7 +310,14 @@ function parseNotificationEngineConfig(
   if (typeof enabled !== 'boolean' || typeof updatedAt !== 'string') {
     return defaultNotificationEngineConfig(now.toISOString());
   }
-  return { notificationsEnabled: enabled, updatedAt };
+  // warmSurfaces is OPTIONAL (absent ⇒ all surfaces ON). Keep it only when it is
+  // a valid map; a malformed value degrades to absent (all ON), never throws on read.
+  const warmSurfaces = item['warmSurfaces'];
+  return {
+    notificationsEnabled: enabled,
+    ...(isValidWarmSurfaces(warmSurfaces) && warmSurfaces ? { warmSurfaces: warmSurfaces as WarmSurfaces } : {}),
+    updatedAt,
+  };
 }
 
 /**
@@ -335,14 +344,33 @@ async function readNotificationEngineConfig(deps: Dependencies) {
 }
 
 async function updateNotificationEngineConfig(deps: Dependencies, event: APIGatewayProxyEvent) {
-  const body = parseBody<{ notificationsEnabled?: unknown } & Record<string, unknown>>(event);
-  const unexpected = Object.keys(body).filter(key => key !== 'notificationsEnabled');
+  const body = parseBody<{ notificationsEnabled?: unknown; warmSurfaces?: unknown } & Record<string, unknown>>(event);
+  const unexpected = Object.keys(body).filter(key => key !== 'notificationsEnabled' && key !== 'warmSurfaces');
   if (unexpected.length) throw badRequest(`Unsupported engine config fields: ${unexpected.join(', ')}`);
   if (typeof body.notificationsEnabled !== 'boolean') {
     throw badRequest('notificationsEnabled (boolean) is required');
   }
+  // warmSurfaces is OPTIONAL. When present it must be a valid map (known keys,
+  // boolean values); when ABSENT we PRESERVE any existing map rather than wiping
+  // it — so a legacy `{ notificationsEnabled }`-only PUT (e.g. the pre-Stage-2 UI)
+  // never silently clears the per-surface gates. Absent stored map ⇒ all ON.
+  if (body.warmSurfaces !== undefined && !isValidWarmSurfaces(body.warmSurfaces)) {
+    throw badRequest('warmSurfaces must be a map of {market,recs,etfs,metals,portfolio,watchlist} booleans');
+  }
+  let warmSurfaces: WarmSurfaces | undefined;
+  if (body.warmSurfaces !== undefined) {
+    warmSurfaces = body.warmSurfaces as WarmSurfaces;
+  } else {
+    const existing = await deps.client.send(new GetCommand({
+      TableName: deps.settingsTable,
+      Key: notificationEngineConfigKey,
+    }));
+    const prior = parseNotificationEngineConfig(existing.Item, deps.now());
+    warmSurfaces = prior.warmSurfaces;
+  }
   const config: NotificationEngineConfig = {
     notificationsEnabled: body.notificationsEnabled,
+    ...(warmSurfaces ? { warmSurfaces } : {}),
     updatedAt: deps.now().toISOString(),
   };
   await deps.client.send(new PutCommand({

@@ -413,4 +413,52 @@ describe('Notification preferences authorization', () => {
     const res = await createHandler(deps)(makeEvent('PUT', { enabled: false }, { resource: '/notification-engine-config', groups: 'stock-app-access,site-admin' }));
     expect(res.statusCode).toBe(400);
   });
+
+  // ── M19 per-surface warm gates (warmSurfaces) ────────────────────────────────
+  it('PUT engine-config: persists a valid warmSurfaces map and echoes it', async () => {
+    const { deps, getItem } = createFakeDeps();
+    const res = await createHandler(deps)(makeEvent(
+      'PUT',
+      { notificationsEnabled: true, warmSurfaces: { recs: false, portfolio: false } },
+      { resource: '/notification-engine-config', groups: 'stock-app-access,site-admin' },
+    ));
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).config.warmSurfaces).toEqual({ recs: false, portfolio: false });
+    expect((getItem() as { warmSurfaces: unknown }).warmSurfaces).toEqual({ recs: false, portfolio: false });
+  });
+
+  it('PUT engine-config: an omitted warmSurfaces PRESERVES the stored map (read-merge, no silent wipe)', async () => {
+    const { deps, getItem } = createFakeDeps({
+      pk: 'SETTINGS', sk: 'NOTIFICATION_ENGINE_CONFIG#stock-analyser',
+      notificationsEnabled: true, warmSurfaces: { etfs: false }, updatedAt: '2026-06-01T00:00:00.000Z',
+    });
+    const res = await createHandler(deps)(makeEvent(
+      'PUT', { notificationsEnabled: false },  // legacy body: no warmSurfaces
+      { resource: '/notification-engine-config', groups: 'stock-app-access,site-admin' },
+    ));
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).config.warmSurfaces).toEqual({ etfs: false }); // preserved
+    expect((getItem() as { warmSurfaces: unknown }).warmSurfaces).toEqual({ etfs: false });
+  });
+
+  it('PUT engine-config: rejects (400) a malformed warmSurfaces (unknown key or non-boolean)', async () => {
+    const { deps } = createFakeDeps();
+    for (const warmSurfaces of [{ bogus: true }, { market: 'yes' }, { recs: 1 }]) {
+      const res = await createHandler(deps)(makeEvent(
+        'PUT', { notificationsEnabled: true, warmSurfaces },
+        { resource: '/notification-engine-config', groups: 'stock-app-access,site-admin' },
+      ));
+      expect(res.statusCode).toBe(400);
+    }
+  });
+
+  it('GET engine-config: returns the stored warmSurfaces (member-readable; only toggle booleans)', async () => {
+    const { deps } = createFakeDeps({
+      pk: 'SETTINGS', sk: 'NOTIFICATION_ENGINE_CONFIG#stock-analyser',
+      notificationsEnabled: true, warmSurfaces: { metals: false }, updatedAt: '2026-06-01T00:00:00.000Z',
+    });
+    const res = await createHandler(deps)(makeEvent('GET', undefined, { resource: '/notification-engine-config' }));
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).config.warmSurfaces).toEqual({ metals: false });
+  });
 });

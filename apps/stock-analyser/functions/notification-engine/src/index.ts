@@ -4,6 +4,7 @@ import {
   GetCommand,
   PutCommand,
   QueryCommand,
+  ScanCommand,
   type QueryCommandInput,
 } from '@aws-sdk/lib-dynamodb';
 import { InvokeCommand, LambdaClient } from '@aws-sdk/client-lambda';
@@ -20,9 +21,11 @@ import {
 import {
   defaultNotificationAccountConfig,
   isValidNotificationAccountConfig,
+  isValidWarmSurfaces,
   type NotificationAccountConfig,
   type NotificationMemberConsent,
   type NotificationType,
+  type WarmSurfaces,
 } from '@transformotion/contracts/stock-analyser/notification-preferences';
 import type { PortfolioHolding, WatchlistItem } from '@transformotion/contracts/stock-analyser/types';
 import {
@@ -547,6 +550,55 @@ async function readEngineEnabled(runtime: RuntimeEnv): Promise<boolean> {
   return typeof enabled === 'boolean' ? enabled : true;
 }
 
+// M19 per-surface warm gates: read from the SAME app-wide engine-config row as
+// the #571 kill-switch. Absent/malformed ⇒ undefined (⇒ every surface ON — the
+// zero-migration default the engine applies via resolveWarmSurfaceState).
+async function readWarmSurfaces(runtime: RuntimeEnv): Promise<WarmSurfaces | undefined> {
+  const res = await ddb.send(new GetCommand({
+    TableName: runtime.settingsTable,
+    Key: { pk: 'SETTINGS', sk: 'NOTIFICATION_ENGINE_CONFIG#stock-analyser' },
+  }));
+  const warmSurfaces = res.Item?.['warmSurfaces'];
+  return isValidWarmSurfaces(warmSurfaces) && warmSurfaces ? (warmSurfaces as WarmSurfaces) : undefined;
+}
+
+// M19 P&W warm-set: the distinct union of Portfolio/Watchlist tickers across ALL
+// accounts, for whichever surface is ON. Full-table Scan (already granted via
+// grantReadData) projecting `ticker` only; de-duped uppercased. No consent /
+// eligibility filter — the warmed ANALYSIS# is SHARED, non-account-private, so
+// the warm-set read carries no per-account privacy (consent gates SENDS only).
+async function scanAllTickers(table: string): Promise<string[]> {
+  const tickers: string[] = [];
+  let ExclusiveStartKey: Record<string, unknown> | undefined;
+  do {
+    const res = await ddb.send(new ScanCommand({
+      TableName: table,
+      ProjectionExpression: 'ticker',
+      ExclusiveStartKey,
+    }));
+    for (const item of res.Items ?? []) {
+      const ticker = (item as Record<string, unknown>)['ticker'];
+      if (typeof ticker === 'string' && ticker.length > 0) tickers.push(ticker);
+    }
+    ExclusiveStartKey = res.LastEvaluatedKey as Record<string, unknown> | undefined;
+  } while (ExclusiveStartKey);
+  return tickers;
+}
+
+async function listWarmTickers(
+  runtime: RuntimeEnv,
+  opts: { portfolio: boolean; watchlist: boolean },
+): Promise<string[]> {
+  const union = new Set<string>();
+  if (opts.portfolio) {
+    for (const ticker of await scanAllTickers(runtime.portfolioTable)) union.add(ticker.toUpperCase());
+  }
+  if (opts.watchlist) {
+    for (const ticker of await scanAllTickers(runtime.watchlistTable)) union.add(ticker.toUpperCase());
+  }
+  return [...union];
+}
+
 // ── #584 market-wide cache warming ───────────────────────────────────────────
 // Server-side OHLCV for the #535 Bucket-1 grounding: invoke the market-data
 // Lambda's service-principal branch — the SAME shared source the frontend
@@ -682,10 +734,14 @@ async function warmRecsForRegion(runtime: RuntimeEnv, region: AnalysisRegion, ma
 // SAME grounded computation the live Market tab runs (shared prompt + system +
 // grounding) → the warm-write is identical-to-live by construction. Per-region
 // isolation: one region's model/cache failure never drops the others.
-function makeWarmMarketCache(runtime: RuntimeEnv): () => Promise<void> {
+function makeWarmMarketCache(runtime: RuntimeEnv): (opts?: { warmRecs: boolean }) => Promise<void> {
   const providerFactory = makeAiProviderFactory(runtime);
   const fetchOhlcv = makeServerOhlcvFetcher(runtime);
-  return async () => {
+  return async (opts) => {
+    // #595 Recs fan-out gate (M19): default ON so an absent config still warms Recs.
+    // The engine passes the resolved recs⇒market state; market being ON is implied
+    // here (we only reach this when the market warm itself is effective).
+    const warmRecs = opts?.warmRecs ?? true;
     const { provider, config } = await providerFactory();
     for (const region of ANALYSIS_REGIONS) {
       try {
@@ -706,8 +762,11 @@ function makeWarmMarketCache(runtime: RuntimeEnv): () => Promise<void> {
         const data = parseMarketAnalysisProviderResult(result, region);
         await writeSharedMarketCache(runtime, region, data);
         console.log(JSON.stringify({ message: 'notification-market-warm-ok', region }));
-        // #595: fan out Recs warming for the sectors this region flagged 'enter'.
-        await warmRecsForRegion(runtime, region, data);
+        // #595: fan out Recs warming for the sectors this region flagged 'enter' —
+        // only when Recs warming is effective this run (per the warmSurfaces gate).
+        if (warmRecs) {
+          await warmRecsForRegion(runtime, region, data);
+        }
       } catch (err) {
         console.log(JSON.stringify({ message: 'notification-market-warm-region-error', region, err: String(err) }));
       }
@@ -769,9 +828,11 @@ export function createDependencies(runtime: RuntimeEnv = env()): NotificationEng
     nowEpochSeconds: () => Math.floor(Date.now() / 1000),
     newRunId: () => randomUUID(),
     readEngineEnabled: () => readEngineEnabled(runtime),
+    readWarmSurfaces: () => readWarmSurfaces(runtime),
     warmMarketCache: makeWarmMarketCache(runtime),
     warmEtfsCache: () => warmEtfsForAllMarkets(runtime),
     warmMetalsCache: () => warmMetalsForGlobal(runtime),
+    listWarmTickers: (opts) => listWarmTickers(runtime, opts),
     readAccountName: (accountId) => readAccountName(runtime, accountId),
     recordSendLog: (run) => recordSendLog(runtime, run),
     listStockAnalyserMembers: () => listStockAnalyserMembers(runtime),

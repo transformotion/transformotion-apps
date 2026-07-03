@@ -21,10 +21,12 @@ miss" questions.
 - **Layer A — list / summary caches** (`MARKET#`, `RECS#`, `ETF#`, `METALS`). These are the
   tab-facing AI-result surfaces, **warmed daily** by the notification engine and also written
   by a live tab run (write-on-miss). A cold tab open is a cache hit against the warmed entry.
-- **Layer B — per-ticker `ANALYSIS#{ticker}`** (the Analyser page). This is **on-demand**: it
-  is written by a live Analyser run, and **conditionally** warmed by the notification path for
-  Portfolio/Watchlist tickers (§6). It is **not** warmed for the tickers inside the Layer-A
-  lists — see the accepted depth boundary in §4.
+- **Layer B — per-ticker `ANALYSIS#{ticker}`** (the Analyser page). Written by a live Analyser
+  run, and **unconditionally warmed** by the daily **P&W warm step** (M19, §2/§4) for the distinct
+  union of Portfolio/Watchlist holdings across all accounts, under the `portfolio`/`watchlist` warm
+  flags — decoupled from the notification due/eligibility/type gates. It is **not** warmed for the
+  tickers inside the Layer-A lists (Recs/ETF/Metals click-through) — see the accepted depth
+  boundary in §4.
 
 Under both layers sit **raw-data caches** (`MARKET-DATA#`, `OHLCV#`) and the metals engine's
 **feed-history bookkeeping** (`METALS_CLOSES#`, `METALS_BASELINE#`), which are written directly
@@ -50,7 +52,7 @@ by their owning Lambda (not through the shared-cache service-principal chokepoin
 | `RECS#{universe\|mode\|sector}` | recommendations engine (warm #595); live Recs tab | service-principal / PUT | 24h | Recs tab (`surface: recs`) |
 | `ETF#{market}` | etfs engine (warm #594); live ETFs tab | service-principal / PUT | 48h | ETFs tab (`surface: etfs`) |
 | `METALS` | metals engine (warm #627 + async job); live Metals tab | service-principal / PUT | 24h | Metals tab (`surface: metals`) |
-| `ANALYSIS#{ticker}` | notification-engine (conditional warm, §6); live Analyser / Portfolio / Watchlist | service-principal / PUT | 24h | Analyser tab (`surface: analyser`) + Portfolio/Watchlist enrichment |
+| `ANALYSIS#{ticker}` | notification-engine (P&W warm step, §2/§4 — under `portfolio`/`watchlist` flags); live Analyser / Portfolio / Watchlist | service-principal / PUT | 24h | Analyser tab (`surface: analyser`) + Portfolio/Watchlist enrichment + notification evaluation (pure reader, §6) |
 | `METALS_CLOSES#{date}` | metals engine | **direct — sanctioned ([ADR](adr-service-principal-background-jobs.md), #637)** | 400d | metals engine only (internal feed history) |
 | `METALS_BASELINE#{year}` | metals engine | **direct — sanctioned ([ADR](adr-service-principal-background-jobs.md), #637)** | 400d | metals engine only (YTD baseline) |
 | `MARKET-DATA#{ticker}#{range}#{interval}` | market-data, cycle-data | **direct** | 8h | Live-mode price/OHLCV; engines' real-price stage |
@@ -76,28 +78,42 @@ The notification engine (`stock-analyser-notification-engine-{stage}`) runs **da
 EventBridge schedule (no HTTP route). After the #571 kill-switch gate (§6) it warms, in order:
 
 ```
-market (#584)  →  Recs (#595)  →  ETFs (#594)  →  Metals (#627)  →  notification transitions/sends
+market (#584)  →  Recs (#595)  →  ETFs (#594)  →  Metals (#627)  →  P&W ANALYSIS# (M19)  →  notification transitions/sends
 ```
 
-- **Order + gating.** All four warms run **after** the kill-switch gate — engine OFF ⇒ zero
-  warming and zero sends (the switch pauses the whole batch, the larger AI-credit consumer).
+- **Order + master gating.** All warms run **after** the #571 kill-switch gate — engine OFF ⇒
+  zero warming and zero sends (the switch pauses the whole batch, the larger AI-credit consumer).
+- **Per-surface gating (M19).** Each surface has its own warm flag in `warmSurfaces` on the
+  engine-config row (§6). Absent ⇒ ON (zero-migration default); only an explicit `false` disables
+  a surface's warm. The flags gate **warming only** — a live tab run and a manual refresh are never
+  blocked by them. Read once per run via `resolveWarmSurfaceState` (contracts).
+- **recs⇒market dependency (enforced engine-side).** Recs is fanned out from the sectors a fresh
+  Market warm flags `enter`, so Recs warms **only** when the market flag is ON **and** a region's
+  market warm succeeds this run. A config with recs ON + market OFF resolves recs to off
+  (`blockedBy: 'market'`, logged `notification-recs-warm-suppressed-market-off`); the market warm
+  carries the resolved decision as a `warmRecs` flag.
 - **Best-effort isolation.** Each warm step is wrapped independently; a failure is logged and
-  never aborts the run or the sibling steps (`notification-{market,etfs,metals}-warm-error`).
+  never aborts the run or the sibling steps (`notification-{market,etfs,metals,pw}-warm-error`;
+  a skipped-by-flag step logs `notification-{surface}-warm-skipped-flag-off`).
 - **Once per run.** Every warm runs once per job execution, not per account.
 
 Per-surface behaviour:
 
-| Surface | Fan-out | Filter |
-|---|---|---|
-| Market | one grounded market-analysis per region (`ANALYSIS_REGIONS`), synchronous inline | none — all regions |
-| Recs (#595) | async-invoke the recommendations engine per warmed sector | **smart-filter**: top-3 `enter`-flagged sectors **per region**, ranked by `cyclePosition` ascending (`WARM_RECS_CAP = 3`, ≤12 recs/run); mode `top-picks` only; cache key uses the `'Top Picks'` display label |
-| ETFs (#594) | async-invoke the etfs engine once **per market** (ASX/US/Global) | **none** — ETFs have no `enter`-gate equivalent, all 3 markets every run |
-| Metals (#627) | **single** async-invoke of the metals engine | n/a — Metals is one global `METALS` key |
+| Surface | Flag | Fan-out | Filter |
+|---|---|---|---|
+| Market | `market` | one grounded market-analysis per region (`ANALYSIS_REGIONS`), synchronous inline | none — all regions |
+| Recs (#595) | `recs` (requires `market`) | async-invoke the recommendations engine per warmed sector | **smart-filter**: top-3 `enter`-flagged sectors **per region**, ranked by `cyclePosition` ascending (`WARM_RECS_CAP = 3`, ≤12 recs/run); mode `top-picks` only; cache key uses the `'Top Picks'` display label |
+| ETFs (#594) | `etfs` | async-invoke the etfs engine once **per market** (ASX/US/Global) | **none** — ETFs have no `enter`-gate equivalent, all 3 markets every run |
+| Metals (#627) | `metals` | **single** async-invoke of the metals engine | n/a — Metals is one global `METALS` key |
+| P&W `ANALYSIS#` (M19) | `portfolio`, `watchlist` | inline `createAnalysisResolver` per distinct ticker | the **distinct union** of Portfolio/Watchlist holdings across **all** accounts (whichever flags are ON), cache-first (a same-day fresh `ANALYSIS#` = skip). **No** consent/eligibility filter — the warmed `ANALYSIS#` is SHARED, non-account-private (consent gates SENDS only, §6) |
 
 Market warm is synchronous (it computes the AI market analysis inline, then SHARED-writes).
 Recs/ETFs/Metals are **fire-and-forget** `Event` invokes of their engines, which each run the
 **same engine core a live tab run uses** and SHARED-write the result — so warmed data is
-identical-to-live by construction.
+identical-to-live by construction. The **P&W step** runs the same cache-first compute path a live
+Analyser run uses (read SHARED `ANALYSIS#` → else generate → SHARED-write), inline and best-effort
+per ticker. The engine's warm-set read scans the whole `portfolio`/`watchlist` tables (`Scan` is
+already granted by `grantReadData`); no new IAM.
 
 ---
 
@@ -133,14 +149,43 @@ sanctioned boundary and the guard against the latent `SHARED_PREFIXES` gap.
 
 ---
 
-## 4. Accepted depth boundary (decision record)
+## 4. Warm depth — the two boundaries (decision record, corrected M19)
 
-**Decision: the daily warm covers Layer-A list surfaces only. It does NOT warm the per-ticker
-`ANALYSIS#{ticker}` page behind a list's click-through. This is by design, owner-accepted.**
+There are **two** distinct depth questions. They resolved **differently**, and an earlier version
+of this section conflated them — this is the corrected record.
+
+### 4.1 P&W `ANALYSIS#` warming — CORRECTED to unconditional (M19)
+
+**Original intent** (M19 design): the daily job would **unconditionally** warm the per-ticker
+`ANALYSIS#{ticker}` for every account's Portfolio/Watchlist holdings, so a cold Analyser /
+Portfolio / Watchlist open is a cache hit, and notifications are a downstream reader of that warm.
+
+**The divergence** (what actually shipped first): `ANALYSIS#` warming was implemented as a **side
+effect of notification processing** — a ticker was warmed only when its account was **due**,
+**eligible**, and had the **type enabled**. So a not-due / no-consent / type-off account's holdings
+were never warmed, and the warm was coupled to gates it was never meant to depend on. An earlier
+draft of this section recorded that coupling as "accepted as-is" — that was wrong; it was a
+divergence from intent, not a decision.
+
+**The fix** (M19, this PR): the P&W `ANALYSIS#` warm is a **dedicated warm-chain step** (§2),
+**decoupled** from the notification due/eligibility/type gates and run over the **distinct union**
+of all accounts' Portfolio/Watchlist holdings, under the `portfolio`/`watchlist` warm flags (§6).
+Cost driver = the distinct union (cache-first + the SHARED `ANALYSIS#` layer dedupe cross-account),
+**not** per-account rows. And notification evaluation is now a **pure reader** of `ANALYSIS#`
+(Option B, §6): it never computes on miss, so the warm flags are the **single spend lever** for P&W
+analysis compute — portfolio warm OFF ⇒ no portfolio `ANALYSIS#` written ⇒ portfolio notifications
+not generated (likewise watchlist). Cost at dev scale (measured 2026-07-03: one seeded account,
+**14 distinct P&W tickers**) ≈ **$2–3.40/day** at the §4a per-call figures; prod has no SA holdings
+tables yet, so real-world cost is ~dev-only until prod SA accounts exist.
+
+### 4.2 List-ticker `ANALYSIS#` warming (Recs/ETF/Metals click-through) — REMAINS declined
+
+**Decision (unchanged): the daily warm does NOT warm the per-ticker `ANALYSIS#{ticker}` behind a
+Layer-A list's click-through.** By design, owner-accepted.
 
 The Recs, ETFs and Metals engines write **zero** `ANALYSIS#` entries (grep-verified). Clicking a
-card into the Analyser (`navigateToAnalyser(ticker)`) therefore reads an unwarmed
-`ANALYSIS#{ticker}` and triggers a **live model call**.
+card into the Analyser (`navigateToAnalyser(ticker)`) reads an unwarmed `ANALYSIS#{ticker}` and
+triggers a **live model call**.
 
 Point-in-time audit (dev, **2026-07-03**), warmed-list tickers with an `ANALYSIS#` entry present:
 
@@ -150,17 +195,13 @@ Point-in-time audit (dev, **2026-07-03**), warmed-list tickers with an `ANALYSIS
 | ETF tickers → Analyser | **1 / 22** (incidental) |
 | Metals Perth Mint → Analyser | **~0 / 4** (2 stragglers from manual testing) |
 
-Closing this would mean fanning out a per-ticker analysis warm after each list warm — on the
-order of **90+ two-pass web-search analyses/day** (68 recs picks + 22 ETFs + 4 metals), a
-material recurring AI-credit cost. **The owner has accepted the current boundary** (cold
-click-through in exchange for not paying that daily cost). The offered follow-up issue to (a)
-warm `ANALYSIS#` for list tickers and (b) make Portfolio/Watchlist warming unconditional is
-**declined — decided, not deferred**; this section is the record so it is not re-raised as a
-defect. If the trade-off is revisited, the smart-filter/cap approach from #595 (warm only the
-strongest N, not the whole list) is the natural shape.
-
-Portfolio/Watchlist `ANALYSIS#` warming is **conditional** on the notification path (§6) and is
-also accepted as-is.
+Closing this would mean fanning out a per-ticker analysis warm after each **list** warm — on the
+order of **90+ two-pass web-search analyses/day** (68 recs picks + 22 ETFs + 4 metals), a material
+recurring AI-credit cost. **The owner has accepted this boundary** (cold list click-through in
+exchange for not paying that daily cost) — decided, not deferred; this is the record so it is not
+re-raised as a defect. Note this is a **different** set from §4.1's P&W holdings (a Recs pick that
+someone also holds is covered by the P&W warm; a Recs pick nobody holds is not). If revisited, the
+smart-filter/cap approach from #595 (warm only the strongest N, not the whole list) is the shape.
 
 ### 4a. Live Analyser cost & why a research sub-cache was rejected (#610 / #612)
 
@@ -222,30 +263,42 @@ idle tabs render the `EmptyState`.
 
 ## 6. Notifications
 
-The same daily engine run, after warming, evaluates notification transitions. A ticker is
-processed (and its `ANALYSIS#` warmed as a side-effect) only when an account passes all gates:
+The same daily engine run, **after** warming (including the P&W `ANALYSIS#` warm, §2), evaluates
+notification transitions. **Notification evaluation is a pure READER of the SHARED `ANALYSIS#`
+cache (Option B, M19)** — it **never** computes on a miss. A missing/stale `ANALYSIS#{ticker}` ⇒
+that ticker's evaluation is **skipped** this run (`notification-eval-skip-no-analysis`, logged, not
+an error); no state write, no send. The resolver's compute path is invoked **only** by the P&W
+warm step. Consequence-by-design: a surface whose warm flag is OFF writes no `ANALYSIS#`, so its
+notifications are simply not generated — **the warm flag is the single spend lever** (§4.1).
 
-| Gate | Rule |
-|---|---|
-| **Eligibility** | ≥1 recipient who is an **active**, **consented**, **non-viewer** member (fail-closed on lookup error) |
-| **Due** | interval elapsed since the account's `lastProcessedDate` (`accountIsDue`; default `intervalDays = 1`) |
-| **Type** | the notification type (`portfolio` / `watchlist`) is enabled in the account config |
+A ticker's transition still fires (and emails) only when its account passes all **send** gates:
 
-What a run **does**: warm the shared caches (§2); for each due+eligible account, resolve each
-Portfolio/Watchlist ticker's analysis (`createAnalysisResolver` — reads the SHARED `ANALYSIS#`
-cache, else generates and SHARED-writes it), evaluate BUY/SELL transitions, and email eligible
-recipients on an actionable change. It also writes a send-log audit record.
+| Gate | Rule | Governs |
+|---|---|---|
+| **Eligibility** | ≥1 recipient who is an **active**, **consented**, **non-viewer** member (fail-closed on lookup error) | sends |
+| **Due** | interval elapsed since the account's `lastProcessedDate` (`accountIsDue`; default `intervalDays = 1`) | sends |
+| **Type** | the notification type (`portfolio` / `watchlist`) is enabled in the account config | sends |
 
-What a run **does not** touch: tickers in accounts that are not due, have no eligible recipient,
-or have the type disabled; and any `ANALYSIS#` for Recs/ETF/Metals list tickers (§4). The
-`ANALYSIS#` warming is therefore a **conditional side-effect of notification processing**, not a
-guaranteed warm of every Portfolio/Watchlist ticker.
+These gates govern **whether a send happens**, not whether the analysis exists — warming is now
+decoupled (§4.1). What a run **does**: warm the shared caches + P&W `ANALYSIS#` (§2); for each
+due+eligible account, **read** each enabled-type Portfolio/Watchlist ticker's `ANALYSIS#`, evaluate
+BUY/SELL transitions, and email eligible recipients on an actionable change; write a send-log audit
+record. What it **does not** warm: any `ANALYSIS#` for Recs/ETF/Metals **list** tickers (§4.2).
 
-**Kill-switch (#571).** App-wide flag on the settings table:
-`pk = "SETTINGS"`, `sk = "NOTIFICATION_ENGINE_CONFIG#stock-analyser"`, attribute
-`notificationsEnabled` (boolean). **Absent or malformed ⇒ ON** (`readEngineEnabled` defaults
-true). When OFF, the run early-returns before any warm or send and writes an `engine-disabled`
-audit note — so the schedule still fires but the batch no-ops. Re-enable = flip/remove the flag.
+**Kill-switch + warm gates (#571 / M19).** One app-wide row on the settings table:
+`pk = "SETTINGS"`, `sk = "NOTIFICATION_ENGINE_CONFIG#stock-analyser"`.
+
+- `notificationsEnabled` (boolean) — the **master** switch. **Absent or malformed ⇒ ON**
+  (`readEngineEnabled` defaults true). When OFF, the run early-returns before any warm or send and
+  writes an `engine-disabled` audit note — the schedule still fires but the batch no-ops.
+- `warmSurfaces` (optional map) — **per-surface** warm gates
+  `{ market?, recs?, etfs?, metals?, portfolio?, watchlist? }`, each boolean, **absent ⇒ ON**
+  (zero-migration). Gates **warming only** (live runs + manual refresh are never blocked). `recs`
+  requires `market` (§2). Read via `resolveWarmSurfaceState` (contracts), the single source of
+  truth shared by the engine and the settings/admin UI. Write-gated site/app-admin (same as the
+  master switch); GET is member-readable and exposes **only** the toggle booleans (no new data).
+
+Re-enable / retune = flip the relevant flag(s); a malformed value degrades to ON, never throws.
 
 ---
 
