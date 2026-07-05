@@ -3,6 +3,7 @@ import { normaliseProviderError } from '../provider';
 import {
   buildGroundedResearchPrompt,
   groundedResearchIsUnavailable,
+  GROUNDING_UNAVAILABLE_ERROR_CODE,
   STRUCTURED_OUTPUT_NAME,
   toAnthropicStrictInputSchema,
 } from '../structured-output';
@@ -221,7 +222,9 @@ export class ClaudeProvider implements AiProvider {
           throw err;
         }
       }
-      throw new AiProviderError('provider_bad_response', 502, false, 'Claude grounded research did not contain enough verifiable data for structured output');
+      // #603: keep the #601 hard-fail (never fabricate) but STAMP it so the app can
+      // distinguish a newly-listed/thin-data ticker and degrade honestly, not 502.
+      throw new AiProviderError('provider_bad_response', 502, false, 'Claude grounded research did not contain enough verifiable data for structured output', GROUNDING_UNAVAILABLE_ERROR_CODE);
     }
     let formatPrompt = this.buildFormatPrompt(prompt, grounded);
     let lastIssues: string[] = [];

@@ -270,8 +270,9 @@ describe('OpenAIProvider structured output', () => {
       },
     });
     // Default groundingKind is 'security' → no supplied fallback → must hard-fail, not fabricate.
+    // #603: the hard-fail is now STAMPED grounding_unavailable so the app can degrade honestly.
     await expect(provider.generate({ prompt: 'Analyse ZZZZQX', responseSchema: sampleSchema, webSearch: true }))
-      .rejects.toMatchObject({ errorClass: 'provider_bad_response', statusCode: 502 });
+      .rejects.toMatchObject({ errorClass: 'provider_bad_response', statusCode: 502, providerErrorCode: 'grounding_unavailable' });
     expect(bodies.length).toBe(1);                            // no degrade pass ran
     expect(bodies[0].tools).toEqual([{ type: 'web_search' }]);
   });
@@ -412,8 +413,9 @@ describe('ClaudeProvider structured output', () => {
       },
     });
     // Default groundingKind is 'security' → no supplied fallback → must hard-fail, not fabricate.
+    // #603: hard-fail STAMPED grounding_unavailable for honest app-level degrade.
     await expect(provider.generate({ prompt: 'Analyse ZZZZQX', responseSchema: sampleSchema, webSearch: true }))
-      .rejects.toMatchObject({ errorClass: 'provider_bad_response', statusCode: 502 });
+      .rejects.toMatchObject({ errorClass: 'provider_bad_response', statusCode: 502, providerErrorCode: 'grounding_unavailable' });
     expect(bodies.length).toBe(1);                            // no degrade pass ran
     expect(bodies[0].tools[0].type).toBe('web_search_20250305');
   });

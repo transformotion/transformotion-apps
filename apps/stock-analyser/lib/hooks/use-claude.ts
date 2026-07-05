@@ -277,12 +277,17 @@ async function subscribeViaWss<T>(
     }
   }
   if (jobStatus.status === 'error') {
-    throw Object.assign(new Error(jobStatus.message || 'Job failed'), { __jobError: true })
+    // #603: carry the provider error code so callers can distinguish a
+    // grounding-unavailable (newly-listed/thin-data) failure and degrade honestly.
+    throw Object.assign(new Error(jobStatus.message || 'Job failed'), {
+      __jobError: true,
+      providerErrorCode: jobStatus.providerErrorCode,
+    })
   }
   throw new Error('Connection closed before the analysis finished — please try again')
 }
 
-interface JobStatusRecord { status: string; content?: string; message?: string }
+interface JobStatusRecord { status: string; content?: string; message?: string; providerErrorCode?: string }
 
 /** Read the async job record (job-{jobId}). It exists from job creation ('pending'), so this does not 404 mid-run. */
 async function readJobStatus(jobId: string): Promise<JobStatusRecord> {

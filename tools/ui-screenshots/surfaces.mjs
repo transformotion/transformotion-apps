@@ -94,4 +94,26 @@ export const surfaces = [
       },
     ],
   },
+  {
+    name: 'analyser-newly-listed-degrade',
+    description:
+      'Analyser: #603 newly-listed / thin-data ticker (SPCX) → the distinguished insufficient-data ' +
+      'state (honest banner + "price data unavailable" note) instead of a 502 error.',
+    viewport: { width: 1440, height: 2200 },
+    nav: [
+      { click: { role: ['button', 'Analyser'] } },
+      { waitVisible: { placeholder: 'Search ticker or company...' } },
+    ],
+    // Full-page shot (no clip): search box → degraded header → banner.
+    states: [
+      {
+        name: '01-insufficient-data',
+        actions: [
+          { fill: { placeholder: 'Search ticker or company...' }, text: 'SPCX' },
+          { click: { role: ['button', /Analyse SPCX/] } },
+          { waitVisible: { text: 'Insufficient data for analysis' } },
+        ],
+      },
+    ],
+  },
 ]

@@ -47,6 +47,7 @@ function resolve(page, spec) {
   if (spec.role) return page.getByRole(spec.role[0], { name: spec.role[1] }).first()
   if (spec.text !== undefined) return page.getByText(spec.text, { exact: spec.exact ?? false }).first()
   if (spec.label) return page.getByLabel(spec.label).first()
+  if (spec.placeholder) return page.getByPlaceholder(spec.placeholder).first()
   if (spec.testId) return page.getByTestId(spec.testId).first()
   if (spec.selector) {
     let loc = page.locator(spec.selector)
@@ -58,6 +59,7 @@ function resolve(page, spec) {
 
 async function step(page, action) {
   if (action.click) await resolve(page, action.click).click()
+  else if (action.fill) await resolve(page, action.fill).fill(action.text ?? '') // { fill: <locator>, text }
   else if (action.waitVisible) await resolve(page, action.waitVisible).waitFor({ state: 'visible', timeout: 15000 })
   else if (action.waitHidden) await resolve(page, action.waitHidden).waitFor({ state: 'hidden', timeout: 15000 })
   else if (action.press) await page.keyboard.press(action.press)
