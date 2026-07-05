@@ -2,6 +2,7 @@
  * Mock response fixtures for development and testing.
  * Keyed on prompt keywords — matches the logic previously in mockClaudeCall.
  */
+import { insufficientDataAnalysis } from '@transformotion/contracts/stock-analyser/structured-output'
 
 export function getMockResponse<T>(prompt: string): T | null {
   if (prompt.includes('comprehensive market analysis') || prompt.includes('Analyse market sectors')) {
@@ -121,6 +122,12 @@ const STOCK_DATA: Record<string, { company: string; sector: string; price: numbe
 function stockAnalysisFixture(prompt: string) {
   const tickerMatch = prompt.match(/Analyse the stock (\S+)/)
   const ticker = tickerMatch?.[1]?.toUpperCase() || 'UNKNOWN'
+
+  // #603: a designated newly-listed ticker returns the distinguished insufficient-data
+  // result, so the degraded UI state is exercisable in local dev + review screenshots.
+  if (ticker === 'SPCX' || ticker === 'SPACEX') {
+    return insufficientDataAnalysis(ticker)
+  }
 
   const data = STOCK_DATA[ticker] || {
     company: ticker.replace('.AX', '') + ' Limited',

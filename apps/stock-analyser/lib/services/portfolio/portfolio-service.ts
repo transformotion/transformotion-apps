@@ -32,14 +32,17 @@ async function overlayLivePrice(
   ticker: string,
   analysis: StockAnalysisResult,
 ): Promise<StockAnalysisResult> {
+  // #603: flag no-price so the tab shows "price data unavailable (newly listed?)". Never
+  // downgrade a stronger insufficient-data status.
+  const noPrice = analysis.dataStatus === 'insufficient-data' ? {} : { dataStatus: 'no-price' as const }
   try {
     const ohlcv = getConfig().ai.provider === 'mock'
       ? getMockOhlcvData(ticker, '1mo', '1d')
       : await getStockAnalyserClient().getOhlcvData(ticker, '1mo', '1d')
     const { price, change } = latestPriceFromOhlcv(ohlcv)
-    return { ...analysis, price, change }
+    return { ...analysis, price, change, ...(price === null ? noPrice : {}) }
   } catch {
-    return { ...analysis, price: null, change: null }
+    return { ...analysis, price: null, change: null, ...noPrice }
   }
 }
 

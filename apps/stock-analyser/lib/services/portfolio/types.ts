@@ -1,5 +1,6 @@
 export type { PortfolioHolding } from '@transformotion/contracts/stock-analyser/types'
 import type { PortfolioHolding } from '@transformotion/contracts/stock-analyser/types'
+import type { StockAnalysisDataStatus } from '@transformotion/contracts/stock-analyser/structured-output'
 
 /**
  * Shape returned by the Claude stock analysis prompt (shared with Analyser tab).
@@ -23,6 +24,8 @@ export interface StockAnalysisResult {
   rsiDivergence?:  string
   macdMomentum?:   string
   volumeTrend?:    string
+  // #603: newly-listed / thin-data degrade (absent ⇒ complete).
+  dataStatus?:     StockAnalysisDataStatus
 }
 
 /** A raw holding merged with its (optional) Claude analysis for display. */

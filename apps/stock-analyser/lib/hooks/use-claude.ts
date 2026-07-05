@@ -15,6 +15,7 @@ import { useState, useCallback, useRef } from 'react'
 import { getConfig } from '../config'
 import { getStockAnalyserClient, stockAnalyserClient } from '../api'
 import { mockMarketAnalysisResult, mockRunMetalsResponse, mockRunRecommendationsResponse } from '@transformotion/contracts/stock-analyser/mocks'
+import { insufficientDataAnalysis } from '@transformotion/contracts/stock-analyser/structured-output'
 import {
   getCacheSnapshot,
   setCacheSnapshot,
@@ -277,12 +278,17 @@ async function subscribeViaWss<T>(
     }
   }
   if (jobStatus.status === 'error') {
-    throw Object.assign(new Error(jobStatus.message || 'Job failed'), { __jobError: true })
+    // #603: carry the provider error code so callers can distinguish a
+    // grounding-unavailable (newly-listed/thin-data) failure and degrade honestly.
+    throw Object.assign(new Error(jobStatus.message || 'Job failed'), {
+      __jobError: true,
+      providerErrorCode: jobStatus.providerErrorCode,
+    })
   }
   throw new Error('Connection closed before the analysis finished — please try again')
 }
 
-interface JobStatusRecord { status: string; content?: string; message?: string }
+interface JobStatusRecord { status: string; content?: string; message?: string; providerErrorCode?: string }
 
 /** Read the async job record (job-{jobId}). It exists from job creation ('pending'), so this does not 404 mid-run. */
 async function readJobStatus(jobId: string): Promise<JobStatusRecord> {
@@ -404,7 +410,13 @@ async function mockClaudeCall<T>(
   if (prompt.includes('Analyse the stock')) {
     const tickerMatch = prompt.match(/Analyse the stock (\S+)/)
     const ticker = tickerMatch?.[1]?.toUpperCase() || 'UNKNOWN'
-    
+
+    // #603: a designated newly-listed ticker returns the distinguished insufficient-data
+    // result so the degraded UI state is exercisable in local dev + review screenshots.
+    if (ticker === 'SPCX' || ticker === 'SPACEX') {
+      return insufficientDataAnalysis(ticker) as T
+    }
+
     // Mock data for known tickers
     const stockData: Record<string, { company: string; sector: string; price: number; change: number; verdict: string; cyclePosition: number; cycleStage: string; summary: string }> = {
       "EIQ.AX": { company: "Echo IQ Limited", sector: "Healthcare", price: 0.895, change: 11.87, verdict: "HOLD", cyclePosition: 85, cycleStage: "peak", summary: "Echo IQ is an AI-powered cardiac diagnostics company with FDA clearance for its heart disease detection technology. While the long-term potential is significant given the massive addressable market, the stock appears overextended after recent gains and faces cash runway concerns with approximately 12 months of funding remaining." },

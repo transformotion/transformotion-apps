@@ -284,6 +284,19 @@ export interface StockAnalysisSignal {
  * the canonical unions in `./types` so this stays in lockstep with
  * `CycleDataResponse`.
  */
+/**
+ * Data-completeness of an analysis (#603 — newly-listed / thin-data tickers).
+ * ABSENT ⇒ `complete` (zero-migration). App-set (not AI-generated):
+ *  - `complete` — full analysis with price + grounded technicals.
+ *  - `no-price` — analysis grounded, but no live OHLCV/price was available (e.g.
+ *    Yahoo 404/503 for a newly-listed ticker); price/change/cycle read as absent.
+ *  - `insufficient-data` — the Live grounding found no verifiable market data
+ *    (the #601 `security` guard fired). The analysis is NOT fabricated: a
+ *    distinguished honest result is returned instead of a 502. Verdict is
+ *    `NEUTRAL` (no signal); notifications treat it as no-signal.
+ */
+export type StockAnalysisDataStatus = 'complete' | 'no-price' | 'insufficient-data';
+
 export interface StockAnalysisResult {
   ticker: string;
   company: string;
@@ -301,6 +314,47 @@ export interface StockAnalysisResult {
   macdMomentum: MacdMomentum;
   volumeTrend: VolumeTrend;
   cycleSummary: string;
+  /**
+   * #603 data-completeness. OPTIONAL, absent ⇒ `complete`. Set by the app (never
+   * by the AI) for newly-listed / thin-data tickers so the tab renders an honest
+   * degraded state instead of erroring, and warm/notifications treat it correctly.
+   */
+  dataStatus?: StockAnalysisDataStatus;
+}
+
+/** True when an analysis is degraded (#603) — no price, or insufficient data. */
+export function isDegradedAnalysis(result: Pick<StockAnalysisResult, 'dataStatus'>): boolean {
+  return result.dataStatus === 'no-price' || result.dataStatus === 'insufficient-data';
+}
+
+/**
+ * The distinguished honest result for a ticker whose Live grounding found no
+ * verifiable market data (#603 / #601 `security` guard) — returned INSTEAD of a
+ * 502 so the analysis "distinguishes cleanly". Not fabricated: neutral verdict,
+ * empty signals, an explicit `insufficient-data` status and summary. The tab
+ * renders "insufficient data — newly listed?"; notifications see NEUTRAL ⇒ no send.
+ */
+export function insufficientDataAnalysis(ticker: string, company?: string): StockAnalysisResult {
+  return {
+    ticker,
+    company: company ?? ticker,
+    sector: 'Unknown',
+    price: 0,
+    change: 0,
+    verdict: 'NEUTRAL',
+    cyclePosition: 50,
+    cycleStage: 'mid',
+    signals: [],
+    summary:
+      'Insufficient data for analysis — this ticker appears newly listed or has no verifiable ' +
+      'market data yet. Grounded research could not confirm price/technical context.',
+    risks: [],
+    rsiDivergence: 'none',
+    macdMomentum: 'flat',
+    volumeTrend: 'neutral',
+    cycleSummary: 'Insufficient data — newly listed or unverifiable.',
+    dataStatus: 'insufficient-data',
+  };
 }
 
 const stockAnalysisSignalSchema: JsonSchema = {
@@ -338,6 +392,9 @@ export const stockAnalysisResultJsonSchema = {
     macdMomentum: { type: 'string', enum: MACD_MOMENTUMS },
     volumeTrend: { type: 'string', enum: VOLUME_TRENDS },
     cycleSummary: { type: 'string', minLength: 1 },
+    // #603 OPTIONAL app-set data-completeness (absent ⇒ complete). Not required —
+    // the AI never sets it; the app annotates degraded/newly-listed results.
+    dataStatus: { type: 'string', enum: ['complete', 'no-price', 'insufficient-data'] },
   },
   required: [
     'ticker',

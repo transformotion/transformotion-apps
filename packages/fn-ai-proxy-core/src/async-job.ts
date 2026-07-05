@@ -105,6 +105,9 @@ export async function executeAsyncJob(job: AsyncJobEvent, options: AiProxyOption
         model: job.model,
         configurationSource: job.configurationSource,
         errorClass: classifyAiError(err),
+        // #603: surface the provider error code (e.g. 'grounding_unavailable') so the
+        // client can degrade a newly-listed/thin-data ticker honestly, not error.
+        ...(providerErrorCode(err) ? { providerErrorCode: providerErrorCode(err) } : {}),
       }).catch(writeErr => {
         console.error('[fn-ai-proxy-core] Failed to write async error status:', writeErr);
       });

@@ -3,6 +3,7 @@ import { normaliseProviderError } from '../provider';
 import {
   buildGroundedResearchPrompt,
   groundedResearchIsUnavailable,
+  GROUNDING_UNAVAILABLE_ERROR_CODE,
   STRUCTURED_OUTPUT_NAME,
   toOpenAiStrictSchema,
 } from '../structured-output';
@@ -210,7 +211,9 @@ export class OpenAIProvider implements AiProvider {
         }
         return this.toResult(fast, fastContent, model, research.usage?.input_tokens ?? 0, research.usage?.output_tokens ?? 0);
       }
-      throw new AiProviderError('provider_bad_response', 502, false, 'OpenAI grounded research did not contain enough verifiable data for structured output');
+      // #603: keep the #601 hard-fail (never fabricate) but STAMP it so the app can
+      // distinguish a newly-listed/thin-data ticker and degrade honestly, not 502.
+      throw new AiProviderError('provider_bad_response', 502, false, 'OpenAI grounded research did not contain enough verifiable data for structured output', GROUNDING_UNAVAILABLE_ERROR_CODE);
     }
 
     const formatPrompt =

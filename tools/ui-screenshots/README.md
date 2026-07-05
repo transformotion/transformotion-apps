@@ -81,13 +81,14 @@ Locator DSL (used by `nav`, `actions`, and `clip`):
 
 | Spec | Resolves to |
 |---|---|
-| `{ role: ['switch', 'Warm Market'] }` | `getByRole(role, { name })` |
+| `{ role: ['switch', 'Warm Market'] }` | `getByRole(role, { name })` (name may be a string or `/regex/`) |
 | `{ text: 'some text' }` | `getByText` (substring; add `exact: true` for exact) |
 | `{ label: 'aria-label' }` | `getByLabel` |
+| `{ placeholder: 'Search…' }` | `getByPlaceholder` |
 | `{ testId: 'x' }` | `getByTestId` |
 | `{ selector: 'div.foo', hasText: 'y' }` | `page.locator(selector).filter({ hasText })` |
 
-Action verbs: `{ click }`, `{ waitVisible }`, `{ waitHidden }`, `{ press: 'Enter' }`, `{ wait: ms }`.
+Action verbs: `{ click }`, `{ fill: <locator>, text: '…' }`, `{ waitVisible }`, `{ waitHidden }`, `{ press: 'Enter' }`, `{ wait: ms }`.
 
 Prefer stable, user-facing locators (role + accessible name, visible text) over CSS classes —
 they survive restyles. The Stock Analyser `Switch` exposes `role="switch"` with an

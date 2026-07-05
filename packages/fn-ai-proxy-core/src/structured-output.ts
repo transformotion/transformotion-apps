@@ -8,6 +8,24 @@ export const STRUCTURED_OUTPUT_NAME = 'analysis_result';
 export const GROUNDED_RESEARCH_AVAILABLE = 'DATA_STATUS: AVAILABLE';
 export const GROUNDED_RESEARCH_UNAVAILABLE = 'DATA_STATUS: UNAVAILABLE';
 
+/**
+ * #603: providerErrorCode stamped on the `security`-grounding hard-fail (the #601
+ * guard, DATA_STATUS: UNAVAILABLE). The guard is UNCHANGED — it still 502s rather
+ * than fabricate — but the code lets an application layer DISTINGUISH "grounding
+ * had no verifiable data" (a newly-listed/thin-data ticker) from other provider
+ * failures, and degrade honestly (an insufficient-data result) instead of erroring.
+ */
+export const GROUNDING_UNAVAILABLE_ERROR_CODE = 'grounding_unavailable';
+
+/** True when an error is the #601 security-grounding hard-fail (see {@link GROUNDING_UNAVAILABLE_ERROR_CODE}). */
+export function isGroundingUnavailableError(err: unknown): boolean {
+  return (
+    typeof err === 'object' &&
+    err !== null &&
+    (err as { providerErrorCode?: unknown }).providerErrorCode === GROUNDING_UNAVAILABLE_ERROR_CODE
+  );
+}
+
 type SchemaObject = Record<string, unknown>;
 
 function isObject(value: unknown): value is SchemaObject {

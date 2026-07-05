@@ -103,12 +103,27 @@ function withAudCurrency(result: YahooChartResult): YahooChartResult {
   };
 }
 
+// #603: fail FAST on a hanging / newly-listed ticker (SPCX-class) rather than letting
+// the Yahoo client retry-and-block for the whole Lambda timeout. A timeout propagates
+// as a normal fetch error → the caller degrades to no-price-data.
+const YAHOO_FETCH_TIMEOUT_MS = 12_000;
+
+function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    p,
+    new Promise<T>((_, reject) => {
+      const t = setTimeout(() => reject(new Error(`Yahoo fetch timed out after ${ms}ms for ${label}`)), ms);
+      t.unref?.();
+    }),
+  ]);
+}
+
 async function readYahooChart(
   ticker: string,
   options: { period1: Date; interval: ChartInterval },
 ): Promise<YahooChartResult> {
   try {
-    return await yf.chart(ticker, options) as YahooChartResult;
+    return await withTimeout(yf.chart(ticker, options) as Promise<YahooChartResult>, YAHOO_FETCH_TIMEOUT_MS, ticker);
   } catch (err) {
     if (!isAxTicker(ticker) || !isNullCurrencyValidationError(err)) {
       throw err;
@@ -116,7 +131,11 @@ async function readYahooChart(
 
     // PMGOLD.AX currently returns valid OHLCV but `meta.currency: null`, which
     // yahoo-finance2 rejects. Accept only that narrow .AX/null-currency case.
-    const unvalidated = await yf.chart(ticker, options, { validateResult: false }) as YahooChartResult;
+    const unvalidated = await withTimeout(
+      yf.chart(ticker, options, { validateResult: false }) as Promise<YahooChartResult>,
+      YAHOO_FETCH_TIMEOUT_MS,
+      ticker,
+    );
     if (unvalidated.meta?.currency !== null || validQuotes(unvalidated).length === 0) {
       throw err;
     }

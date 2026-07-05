@@ -13,6 +13,7 @@ import type { ScheduledEvent } from 'aws-lambda';
 import {
   AiProviderNonJsonError,
   createAiProvider,
+  isGroundingUnavailableError,
   resolveAiRuntimeConfig,
   type AiProvider,
   type AiProviderResult,
@@ -55,6 +56,7 @@ import { ANALYSIS_REGIONS, type AnalysisRegion } from '@transformotion/contracts
 // #structured-output: canonical v0 schemas — CONSTRAIN provider output to valid
 // JSON instead of prompt-and-parse (the gpt-5.5 parse-error fix).
 import {
+  insufficientDataAnalysis,
   marketAnalysisResultJsonSchema,
   stockAnalysisResultJsonSchema,
 } from '@transformotion/contracts/stock-analyser/structured-output';
@@ -458,6 +460,19 @@ function makeGenerateAnalysis(runtime: RuntimeEnv) {
           },
         });
         throw new Error(`provider returned non-JSON HTTP response while analysing ${ticker}`);
+      }
+      // #603: the #601 security-grounding guard fired — no verifiable market data
+      // (a newly-listed / thin-data ticker). Degrade HONESTLY instead of aborting:
+      // return the distinguished insufficient-data result, which the warm step then
+      // WRITES to ANALYSIS# (so the tab shows the honest state and notifications read
+      // NEUTRAL = no signal, rather than a silent skip). The guard still never
+      // fabricates — the result is explicitly flagged insufficient-data.
+      if (isGroundingUnavailableError(err)) {
+        logAnalysisGenerationError('notification-analysis-insufficient-data', {
+          ticker, provider: config.provider, model: config.model, generationContext,
+          details: { dataStatus: 'insufficient-data' },
+        });
+        return insufficientDataAnalysis(ticker);
       }
       throw err;
     }

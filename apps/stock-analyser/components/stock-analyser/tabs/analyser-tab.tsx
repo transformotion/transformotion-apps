@@ -37,6 +37,12 @@ import {
   type StockSignalMetric,
 } from "@/lib/analysis/stock-analysis-signals"
 import { buildTickerSuppliedData } from "@/lib/analysis/stock-analysis-grounding"
+import { insufficientDataAnalysis, type StockAnalysisDataStatus } from "@transformotion/contracts/stock-analyser/structured-output"
+
+// #603: the thrown job error carries this providerErrorCode when the Live grounding
+// found no verifiable market data (a newly-listed / thin-data ticker). Kept in sync
+// with fn-ai-proxy-core's GROUNDING_UNAVAILABLE_ERROR_CODE (a stable protocol string).
+const GROUNDING_UNAVAILABLE_CODE = "grounding_unavailable"
 
 interface AnalysisResult {
   ticker: string
@@ -56,6 +62,8 @@ interface AnalysisResult {
   macdMomentum: "strengthening" | "weakening" | "flat"
   volumeTrend: "confirming" | "diverging" | "neutral"
   cycleSummary: string
+  // #603: newly-listed / thin-data degrade (absent ⇒ complete).
+  dataStatus?: StockAnalysisDataStatus
 }
 
 const QUICK_PICKS = ["CBA.AX", "BHP.AX", "CSL.AX", "AAPL", "NVDA", "MSFT"]
@@ -113,6 +121,12 @@ export function AnalyserTab({
       }
     },
     parse: (raw) => (raw ? normaliseStockAnalysisSignals(raw as AnalysisResult) : null),
+    // #603: a grounding-unavailable (newly-listed / thin-data) failure degrades to the
+    // distinguished insufficient-data result instead of a 502 error banner.
+    recoverFromError: (err) =>
+      (err as { providerErrorCode?: string })?.providerErrorCode === GROUNDING_UNAVAILABLE_CODE
+        ? (insufficientDataAnalysis(analysedTicker) as unknown as AnalysisResult)
+        : null,
   })
   const result = analysis.result
   const isAnalyzing = analysis.isRunning
@@ -280,6 +294,21 @@ export function AnalyserTab({
       {/* Results */}
       {result && !isAnalyzing && (
         <div className="space-y-6">
+          {/* #603: distinguished degraded state — newly-listed / thin-data ticker.
+              Honest, not an error; technicals populate once price history exists. */}
+          {result.dataStatus === "insufficient-data" && (
+            <div className="p-3 rounded-lg bg-signal-gold/10 border border-signal-gold/25 flex items-start gap-2">
+              <AlertCircle className="size-4 text-signal-gold mt-0.5 shrink-0" />
+              <div className="text-sm text-foreground">
+                <p className="font-medium">Insufficient data for analysis</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {result.ticker} appears newly listed or has no verifiable market data yet — grounded research
+                  could not confirm price or technical context. Analysis will populate once price history is available.
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Stock Header */}
           <div className="space-y-3">
             <div className="text-xs text-muted-foreground">
@@ -290,9 +319,11 @@ export function AnalyserTab({
                 <h2 className="font-display text-2xl font-bold tracking-wide text-foreground">{result.company}</h2>
                 <div className="flex items-baseline gap-3 mt-2">
                   <span className="text-3xl font-bold text-foreground">
-                    {livePrice.price !== null ? `A$${livePrice.price.toFixed(3)}` : "—"}
+                    {result.dataStatus === "insufficient-data" || livePrice.price === null
+                      ? "—"
+                      : `A$${livePrice.price.toFixed(3)}`}
                   </span>
-                  {livePrice.change !== null && (
+                  {result.dataStatus !== "insufficient-data" && livePrice.change !== null && (
                     <span
                       className={cn(
                         "text-sm font-semibold",
@@ -303,11 +334,18 @@ export function AnalyserTab({
                     </span>
                   )}
                 </div>
+                {/* #603: explicit no-price note (newly-listed / no live quote) rather than a bare dash. */}
+                {livePrice.price === null && (
+                  <p className="mt-1 text-[11px] text-muted-foreground">Price data unavailable (newly listed?)</p>
+                )}
               </div>
               <VerdictBadge verdict={result.verdict} size="md" />
             </div>
           </div>
 
+          {/* #603: for insufficient-data, hide the price/cycle/signals technicals
+              (they'd be placeholder) — only the honest banner + summary are shown. */}
+          {result.dataStatus !== "insufficient-data" && (<>
           {/* Price Chart */}
           <Card>
             <div className="flex items-center justify-between mb-3">
@@ -391,6 +429,7 @@ export function AnalyserTab({
               ))}
             </div>
           </div>
+          </>)}
 
           {/* Summary */}
           <Card>

@@ -52,6 +52,13 @@ export interface UseScopedAnalysisOptions<T> {
    * the Recs real-price overlay) runs here, for BOTH fetched and cache-served data.
    */
   parse: (raw: unknown) => T | null | Promise<T | null>
+  /**
+   * #603: convert a fetch error into a DISTINGUISHED result instead of surfacing it
+   * as an error — e.g. a grounding-unavailable (newly-listed/thin-data) failure maps
+   * to an honest insufficient-data result. Return `null` to let the error surface
+   * normally.
+   */
+  recoverFromError?: (err: unknown) => T | null
 }
 
 export interface UseScopedAnalysisResult<T> {
@@ -72,7 +79,7 @@ export interface UseScopedAnalysisResult<T> {
 export function useScopedAnalysis<T>(
   opts: UseScopedAnalysisOptions<T>,
 ): UseScopedAnalysisResult<T> {
-  const { surface, scopeKey, buildRequest, parse } = opts
+  const { surface, scopeKey, buildRequest, parse, recoverFromError } = opts
   const { defaultSearchMode } = useNavigation()
   const realKey = analysisRealCacheKey(surface, scopeKey)
   const { callClaude, isLoading } = useClaude<unknown>()
@@ -119,9 +126,17 @@ export function useScopedAnalysis<T>(
       const now = Math.floor(Date.now() / 1000)
       markWritten({ cachedAt: now, expiresAt: now + ttlSeconds })
     } catch (err) {
+      // #603: a recoverable failure (grounding-unavailable / newly-listed) becomes a
+      // distinguished honest result rendered in place of an error banner.
+      const recovered = recoverFromError?.(err) ?? null
+      if (recovered != null) {
+        setResult(recovered)
+        setResultScope(scopeKey)
+        return
+      }
       setLocalError(normaliseAnalysisErrorForDisplay(err))
     }
-  }, [buildRequest, isLive, callClaude, realKey, parse, scopeKey, markWritten, ttlSeconds])
+  }, [buildRequest, isLive, callClaude, realKey, parse, recoverFromError, scopeKey, markWritten, ttlSeconds])
 
   // Cache-first Run / Re-run: serve a present, non-expired REAL entry without a
   // model call; otherwise fetch.
