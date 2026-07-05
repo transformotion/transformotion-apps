@@ -319,9 +319,11 @@ export function AnalyserTab({
                 <h2 className="font-display text-2xl font-bold tracking-wide text-foreground">{result.company}</h2>
                 <div className="flex items-baseline gap-3 mt-2">
                   <span className="text-3xl font-bold text-foreground">
-                    {livePrice.price !== null ? `A$${livePrice.price.toFixed(3)}` : "—"}
+                    {result.dataStatus === "insufficient-data" || livePrice.price === null
+                      ? "—"
+                      : `A$${livePrice.price.toFixed(3)}`}
                   </span>
-                  {livePrice.change !== null && (
+                  {result.dataStatus !== "insufficient-data" && livePrice.change !== null && (
                     <span
                       className={cn(
                         "text-sm font-semibold",
@@ -341,6 +343,9 @@ export function AnalyserTab({
             </div>
           </div>
 
+          {/* #603: for insufficient-data, hide the price/cycle/signals technicals
+              (they'd be placeholder) — only the honest banner + summary are shown. */}
+          {result.dataStatus !== "insufficient-data" && (<>
           {/* Price Chart */}
           <Card>
             <div className="flex items-center justify-between mb-3">
@@ -424,6 +429,7 @@ export function AnalyserTab({
               ))}
             </div>
           </div>
+          </>)}
 
           {/* Summary */}
           <Card>
