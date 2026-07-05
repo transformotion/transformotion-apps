@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { APIGatewayProxyEvent } from 'aws-lambda';
-import { createHandler, mapAccount, type RunHistoryDeps } from './index';
+import { createHandler, filterAccessibleAccountIds, mapAccount, type RunHistoryDeps } from './index';
 import type { NotificationRunSummary } from '@transformotion/contracts/stock-analyser/notification-run-history';
 
 // PIECE 1d — the REAL proof: per-viewer PAYLOAD SCOPING (not render). Per-member
@@ -62,6 +62,27 @@ async function run(groups: string, d: RunHistoryDeps, sub = 'viewer-1') {
 
 const acctOf = (view: { runs: Array<{ accounts: Array<{ accountId: string }> }> }, id: string) =>
   view.runs[0]?.accounts.find((a) => a.accountId === id);
+
+describe('notification run-history — accessible-account filter (#582)', () => {
+  it('includes SA owner/manager, excludes other-app + non-owner/manager, and WARNs on a MISSING-appSlug owner/manager', () => {
+    const log = vi.fn();
+    const ids = filterAccessibleAccountIds([
+      { accountId: 'sa-owner', appSlug: 'stock-analyser', role: 'owner' },     // ✓ included
+      { accountId: 'sa-mgr', appSlug: 'stock-analyser', role: 'manager' },     // ✓ included
+      { accountId: 'bt-owner', appSlug: 'budget-tracker', role: 'owner' },     // ✗ other app (no warn)
+      { accountId: 'sa-member', appSlug: 'stock-analyser', role: 'member' },   // ✗ not owner/manager (no warn)
+      { accountId: 'noslug-owner', role: 'owner' },                            // ✗ MISSING appSlug (WARN — the #582 defect)
+      { accountId: 'noslug-member', role: 'member' },                          // ✗ missing appSlug but not owner/mgr (no warn)
+    ], log);
+
+    expect(ids.sort()).toEqual(['sa-mgr', 'sa-owner']);
+    // strict filter retained — the missing-appSlug row is NOT granted access…
+    expect(ids).not.toContain('noslug-owner');
+    // …but the silent exclusion is now observable, only for a would-be-accessible row.
+    expect(log).toHaveBeenCalledTimes(1);
+    expect(log).toHaveBeenCalledWith('run-history-member-row-missing-appslug', { accountId: 'noslug-owner', role: 'owner' });
+  });
+});
 
 describe('notification run-history — account name fallback (#581)', () => {
   const GUID = 'a03f9cd4-951f-463a-8b34-73c0f046e672';
