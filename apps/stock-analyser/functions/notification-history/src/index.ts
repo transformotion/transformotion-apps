@@ -5,6 +5,7 @@ import { appAdminGroup } from '@transformotion/contracts/_shared/auth';
 import {
   DEFAULT_RUN_HISTORY_LIMIT,
   projectRunHistoryForViewer,
+  type AccountRunErrorReason,
   type NotificationMemberOutcome,
   type NotificationOutcome,
   type NotificationOutcomeReason,
@@ -41,6 +42,17 @@ function mapReason(reason: unknown): NotificationOutcomeReason {
   return reason as NotificationOutcomeReason;
 }
 
+// #579: map the stored free-text account error message → the contract's summary-tier
+// AccountRunErrorReason. The engine stores a raw message (a Claude credit failure, a
+// send-log write-failure marker, or a generic processing error). Set only when the
+// account status maps to `error`.
+function mapAccountError(raw: unknown): AccountRunErrorReason {
+  const msg = String(raw ?? '').toLowerCase();
+  if (msg.includes('credit')) return 'credit-balance';
+  if (msg.includes('write') || msg.includes('send-log')) return 'write-failed';
+  return 'processing-failed';
+}
+
 function mapTransition(t: Record<string, unknown>): NotificationTransition {
   return {
     ticker: String(t['ticker'] ?? ''),
@@ -69,27 +81,39 @@ export function mapAccount(item: Record<string, unknown>): NotificationRunAccoun
   const accountId = String(item['accountId'] ?? '');
   const transitions = Array.isArray(item['transitions']) ? item['transitions'] : [];
   const memberOutcomes = Array.isArray(item['memberOutcomes']) ? item['memberOutcomes'] : [];
+  const skippedTickers = Array.isArray(item['skippedTickers']) ? item['skippedTickers'].map(String) : [];
   const rawName = typeof item['accountName'] === 'string' ? item['accountName'].trim() : '';
+  const accountStatus = mapAccountStatus(item['status']);
   return {
     accountId,
     accountName: rawName || UNKNOWN_ACCOUNT_NAME,
-    accountStatus: mapAccountStatus(item['status']),
+    accountStatus,
+    // #579: surface the account-level error (summary-tier — admins see WHICH accounts
+    // errored + why) only when the account actually errored.
+    ...(accountStatus === 'error' ? { error: mapAccountError(item['error']) } : {}),
     transitions: transitions.map((t) => mapTransition(t as Record<string, unknown>)),
     emailsSent: Number(item['emailsSent'] ?? 0),
     memberOutcomes: memberOutcomes.map((o) => mapMemberOutcome(o as Record<string, unknown>)),
+    // #579: Option-B skipped tickers (detail-tier — the projection strips these for
+    // summary-only viewers). Omitted when empty.
+    ...(skippedTickers.length > 0 ? { skippedTickers } : {}),
   };
 }
 
 /** Assemble a contract run from its stored SUMMARY item + ACCT# items. */
-function assembleRun(summary: Record<string, unknown>, accountItems: Record<string, unknown>[]): NotificationRunSummary {
+export function assembleRun(summary: Record<string, unknown>, accountItems: Record<string, unknown>[]): NotificationRunSummary {
   const ranAtEpoch = Number(summary['ranAt'] ?? 0);
+  const accounts = accountItems.map(mapAccount);
   return {
     runId: String(summary['runId'] ?? ''),
     ranAt: new Date(ranAtEpoch * 1000).toISOString(),
     status: (summary['status'] as NotificationRunStatus) ?? 'success',
     accountsEvaluated: Number(summary['accountsEvaluated'] ?? 0),
+    // #579: summary-tier rollup — count of accounts that errored (the stored summary
+    // does not carry it; derive from the account records).
+    accountsErrored: accounts.filter((a) => a.accountStatus === 'error').length,
     emailsSent: Number(summary['emailsSent'] ?? 0),
-    accounts: accountItems.map(mapAccount),
+    accounts,
   };
 }
 

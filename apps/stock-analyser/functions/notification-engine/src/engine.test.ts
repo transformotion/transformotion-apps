@@ -637,6 +637,21 @@ describe('M19 warm-surface gating + P&W warm + Option B pure reader', () => {
     expect(listWarmTickers).not.toHaveBeenCalled();
   });
 
+  it('Option B (#579): skipped-for-no-analysis tickers are RECORDED in the account send-log record', async () => {
+    // Due+eligible account; CBA.AX warm, BHP.AX cold → BHP.AX skipped and captured.
+    const run = await runNotificationEngine(deps({
+      readPortfolio: vi.fn(async () => [
+        { ticker: 'CBA.AX', shares: 1, avgCost: 100, isGifted: false, addedAt: 1 },
+        { ticker: 'BHP.AX', shares: 1, avgCost: 100, isGifted: false, addedAt: 1 },
+      ]),
+      readWatchlist: vi.fn(async () => []),
+      readSharedAnalysisCache: vi.fn(async (t) => (t === 'CBA.AX' ? analysis(t, 'BUY') : null)),
+    }));
+    const acct = run.sendLog.accounts[0];
+    expect(acct.status).toBe('processed');
+    expect(acct.skippedTickers).toEqual(['BHP.AX']); // the cold ticker, recorded
+  });
+
   it('Option B: a ticker with no ANALYSIS# is skipped — logged, never generated, never a failure', async () => {
     const generateAnalysis = vi.fn(async (ticker) => analysis(ticker, 'BUY'));
     const sendEmail = vi.fn(async () => undefined);

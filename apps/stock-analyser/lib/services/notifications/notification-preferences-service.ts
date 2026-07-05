@@ -20,7 +20,10 @@ import {
   type NotificationType,
   type WarmSurfaces,
 } from '@transformotion/contracts/stock-analyser/notification-preferences'
-import type { NotificationRunHistoryView } from '@transformotion/contracts/stock-analyser/notification-run-history'
+import type {
+  NotificationRunHistoryView,
+  NotificationRunView,
+} from '@transformotion/contracts/stock-analyser/notification-run-history'
 
 export interface NotificationPreferencesService {
   getConfig(accountId: string): Promise<NotificationAccountConfig>
@@ -90,8 +93,84 @@ const mockService: NotificationPreferencesService = {
     return mockEngine
   },
   async getRunHistory() {
-    return { runs: [] }
+    return MOCK_RUN_HISTORY
   },
+}
+
+// Representative run-history for local dev + UI review (M19 #573/#579). Modelled as
+// already-projected views for the mock site-admin+owner persona: a healthy run, and a
+// partial run showing an OWNED account with an Option-B skipped ticker, an OWNED errored
+// account (detail error reason), and a NON-owned errored account (admin summary-only).
+const MOCK_RUN_HISTORY: NotificationRunHistoryView = {
+  runs: [
+    {
+      showCrossAccountHeader: true,
+      runId: 'run-2026-07-03',
+      ranAt: '2026-07-03T20:00:00.000Z',
+      status: 'partial',
+      accountsEvaluated: 3,
+      accountsErrored: 2,
+      emailsSent: 1,
+      accounts: [
+        {
+          accountId: 'acc-personal',
+          accountName: "Steve's Portfolio",
+          accountStatus: 'processed',
+          visibility: 'detail',
+          transitions: [{ ticker: 'CBA.AX', from: 'HOLD', to: 'BUY' }],
+          emailsSent: 1,
+          skippedTickers: ['WDS.AX'],
+          memberOutcomes: [
+            { userId: 'u1', email: 'stevemoodie70@gmail.com', outcome: 'sent', reason: 'delivered', tickers: ['CBA.AX'] },
+          ],
+        },
+        {
+          accountId: 'acc-family',
+          accountName: 'Family Trust',
+          accountStatus: 'error',
+          visibility: 'detail',
+          error: 'credit-balance',
+          transitions: [],
+          emailsSent: 0,
+          memberOutcomes: [
+            { userId: 'u2', email: 'partner@example.com', outcome: 'skipped', reason: 'credit-balance' },
+          ],
+        },
+        {
+          accountId: 'acc-syndicate',
+          accountName: 'Shared Syndicate',
+          accountStatus: 'error',
+          visibility: 'summary',
+          error: 'processing-failed',
+          transitions: [],
+          emailsSent: 0,
+          memberOutcomes: [],
+        },
+      ],
+    },
+    {
+      showCrossAccountHeader: true,
+      runId: 'run-2026-07-02',
+      ranAt: '2026-07-02T20:00:00.000Z',
+      status: 'success',
+      accountsEvaluated: 1,
+      accountsErrored: 0,
+      emailsSent: 2,
+      accounts: [
+        {
+          accountId: 'acc-personal',
+          accountName: "Steve's Portfolio",
+          accountStatus: 'processed',
+          visibility: 'detail',
+          transitions: [{ ticker: 'BHP.AX', from: 'NEUTRAL', to: 'BUY' }],
+          emailsSent: 2,
+          memberOutcomes: [
+            { userId: 'u1', email: 'stevemoodie70@gmail.com', outcome: 'sent', reason: 'delivered', tickers: ['BHP.AX'] },
+          ],
+        },
+      ],
+    },
+  ] satisfies NotificationRunView[],
 }
 
 // ── Live — settings Lambda (account derived from the X-Account-Id header) ───────

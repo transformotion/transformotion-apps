@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { APIGatewayProxyEvent } from 'aws-lambda';
-import { createHandler, filterAccessibleAccountIds, mapAccount, type RunHistoryDeps } from './index';
+import { assembleRun, createHandler, filterAccessibleAccountIds, mapAccount, type RunHistoryDeps } from './index';
 import type { NotificationRunSummary } from '@transformotion/contracts/stock-analyser/notification-run-history';
 
 // PIECE 1d — the REAL proof: per-viewer PAYLOAD SCOPING (not render). Per-member
@@ -62,6 +62,59 @@ async function run(groups: string, d: RunHistoryDeps, sub = 'viewer-1') {
 
 const acctOf = (view: { runs: Array<{ accounts: Array<{ accountId: string }> }> }, id: string) =>
   view.runs[0]?.accounts.find((a) => a.accountId === id);
+
+describe('notification run-history — error + Option-B skip surfacing (#579)', () => {
+  it('mapAccount surfaces the account error reason (credit/write/processing) only when errored', () => {
+    expect(mapAccount({ accountId: 'a', status: 'failed', error: 'claude API error: credit balance too low' }))
+      .toMatchObject({ accountStatus: 'error', error: 'credit-balance' });
+    expect(mapAccount({ accountId: 'a', status: 'failed', error: 'send-log write failed: ddb' }))
+      .toMatchObject({ accountStatus: 'error', error: 'write-failed' });
+    expect(mapAccount({ accountId: 'a', status: 'failed', error: 'model output unparseable' }))
+      .toMatchObject({ accountStatus: 'error', error: 'processing-failed' });
+    // processed account → no error field
+    expect(mapAccount({ accountId: 'a', status: 'processed' }).error).toBeUndefined();
+  });
+
+  it('mapAccount surfaces skippedTickers (Option B) and omits when empty', () => {
+    expect(mapAccount({ accountId: 'a', status: 'processed', skippedTickers: ['CBA.AX', 'BHP.AX'] }).skippedTickers)
+      .toEqual(['CBA.AX', 'BHP.AX']);
+    expect(mapAccount({ accountId: 'a', status: 'processed' }).skippedTickers).toBeUndefined();
+  });
+
+  it('assembleRun derives accountsErrored from the account records', () => {
+    const run = assembleRun(
+      { runId: 'r', ranAt: 0, status: 'partial', accountsEvaluated: 3, emailsSent: 0 },
+      [
+        { accountId: 'a', status: 'failed', error: 'credit balance too low' },
+        { accountId: 'b', status: 'failed', error: 'boom' },
+        { accountId: 'c', status: 'processed' },
+      ],
+    );
+    expect(run.accountsErrored).toBe(2);
+  });
+
+  it('SCOPING: owner sees error + skippedTickers (detail); admin-not-owner sees error (summary) but NOT skippedTickers', async () => {
+    const erroredRun: NotificationRunSummary[] = [{
+      runId: 'run-err', ranAt: '2026-06-27T00:00:00.000Z', status: 'partial',
+      accountsEvaluated: 1, accountsErrored: 1, emailsSent: 0,
+      accounts: [{
+        accountId: 'acct-A', accountName: 'A', accountStatus: 'error', error: 'processing-failed',
+        transitions: [], emailsSent: 0,
+        memberOutcomes: [{ userId: 'u', email: 'u@x.com', outcome: 'skipped', reason: 'lookup-error' }],
+        skippedTickers: ['CBA.AX'],
+      }],
+    }];
+    // owner of acct-A → detail: error reason + skippedTickers + member detail present
+    const owner = await run('stock-app-access', deps({ loadRecentRuns: vi.fn(async () => erroredRun), loadAccessibleAccountIds: vi.fn(async () => ['acct-A']) }));
+    const oAcc = acctOf(owner.view, 'acct-A') as unknown as { visibility: string; error?: string; skippedTickers?: string[]; memberOutcomes: unknown[] };
+    expect(oAcc).toMatchObject({ visibility: 'detail', error: 'processing-failed', skippedTickers: ['CBA.AX'] });
+    expect(oAcc.memberOutcomes.length).toBe(1);
+    // admin-not-owner → summary: error PRESERVED (summary-tier), skippedTickers + member detail STRIPPED
+    const admin = await run('site-admin', deps({ loadRecentRuns: vi.fn(async () => erroredRun), loadAccessibleAccountIds: vi.fn(async () => []) }));
+    const aAcc = acctOf(admin.view, 'acct-A') as unknown as { visibility: string; error?: string; skippedTickers: string[]; memberOutcomes: unknown[] };
+    expect(aAcc).toMatchObject({ visibility: 'summary', error: 'processing-failed', skippedTickers: [], memberOutcomes: [] });
+  });
+});
 
 describe('notification run-history — accessible-account filter (#582)', () => {
   it('includes SA owner/manager, excludes other-app + non-owner/manager, and WARNs on a MISSING-appSlug owner/manager', () => {
