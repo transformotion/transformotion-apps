@@ -89,8 +89,11 @@ export const portfolioService = {
 
   /**
    * Enrich each ticker with Claude analysis.
-   * Cache hits are returned immediately; misses are processed sequentially.
-   * `onResult` fires for each ticker as its result arrives.
+   * Cache hits and misses are processed IN PARALLEL, per ticker (migration
+   * invariant #4: watchlist/portfolio refresh uses Promise.all, not serial
+   * awaits). `onResult` fires for each ticker as its result arrives, so the UI
+   * fills in progressively regardless of completion order. Each ticker is
+   * error-isolated and abort-aware — one failure never blocks the others.
    */
   async enrichHoldings(
     tickers: string[],
@@ -98,7 +101,7 @@ export const portfolioService = {
     signal?: AbortSignal,
     onCacheMetadata?: (ticker: string, metadata: CacheMetadata) => void,
   ): Promise<void> {
-    // 1. Check cache for all tickers simultaneously
+    // 1. Check cache for all tickers simultaneously.
     const cacheChecks = await Promise.all(
       tickers.map(async (ticker) => ({
         ticker,
@@ -106,41 +109,40 @@ export const portfolioService = {
       }))
     )
 
-    // 2. Deliver cache hits — overlaying the real (market-data) price/change.
-    for (const { ticker, cached } of cacheChecks) {
-      if (cached) {
-        onCacheMetadata?.(ticker, { cachedAt: cached.cachedAt, expiresAt: cached.expiresAt })
-        onResult(ticker, await overlayLivePrice(ticker, normaliseStockAnalysisSignals(cached.value)))
-      }
-    }
-
-    // 3. Call Claude sequentially for cache misses
-    const misses = cacheChecks.filter(r => !r.cached).map(r => r.ticker)
-
-    for (const ticker of misses) {
-      if (signal?.aborted) break
-      try {
-        const result = await callClaudeAPI<StockAnalysisResult>(
-          // webSearch: always-on grounding — parity with the Analyser tab, which sends
-          // the same prompt with webSearch:isLive. Portfolio + Watchlist (both route
-          // through this enrichHoldings) have no Live/Fast toggle in v0 and are
-          // always-live by design, so this is hardcoded true — no ModeToggle, zero
-          // surface change. Only cache MISSES reach here, so cost stays bounded.
-          { prompt: createStockAnalysisPrompt(ticker), systemPrompt: STOCK_ANALYSIS_SYSTEM_PROMPT, webSearch: true },
-          { signal }
-        )
-        const normalisedResult = normaliseStockAnalysisSignals(result)
+    // 2. Resolve every ticker concurrently: cache hits overlay the real
+    //    (market-data) price; misses call Claude, cache, then overlay.
+    await Promise.all(
+      cacheChecks.map(async ({ ticker, cached }) => {
+        if (signal?.aborted) return
         try {
-          const entry = await setCacheSnapshot(`ANALYSIS#${ticker}`, normalisedResult)
-          onCacheMetadata?.(ticker, { cachedAt: entry.cachedAt, expiresAt: entry.expiresAt })
+          if (cached) {
+            onCacheMetadata?.(ticker, { cachedAt: cached.cachedAt, expiresAt: cached.expiresAt })
+            onResult(ticker, await overlayLivePrice(ticker, normaliseStockAnalysisSignals(cached.value)))
+            return
+          }
+
+          const result = await callClaudeAPI<StockAnalysisResult>(
+            // webSearch: always-on grounding — parity with the Analyser tab, which sends
+            // the same prompt with webSearch:isLive. Portfolio + Watchlist (both route
+            // through this enrichHoldings) have no Live/Fast toggle in v0 and are
+            // always-live by design, so this is hardcoded true — no ModeToggle, zero
+            // surface change. Only cache MISSES reach here, so cost stays bounded.
+            { prompt: createStockAnalysisPrompt(ticker), systemPrompt: STOCK_ANALYSIS_SYSTEM_PROMPT, webSearch: true },
+            { signal }
+          )
+          if (signal?.aborted) return
+          const normalisedResult = normaliseStockAnalysisSignals(result)
+          try {
+            const entry = await setCacheSnapshot(`ANALYSIS#${ticker}`, normalisedResult)
+            onCacheMetadata?.(ticker, { cachedAt: entry.cachedAt, expiresAt: entry.expiresAt })
+          } catch (err) {
+            console.warn('[portfolio] cache write failed for', ticker, err)
+          }
+          onResult(ticker, await overlayLivePrice(ticker, normalisedResult))
         } catch (err) {
-          console.warn('[portfolio] cache write failed for', ticker, err)
+          if (!signal?.aborted) console.warn('[portfolio] enrichment failed for', ticker, err)
         }
-        onResult(ticker, await overlayLivePrice(ticker, normalisedResult))
-      } catch (err) {
-        if (signal?.aborted) break
-        console.warn('[portfolio] enrichment failed for', ticker, err)
-      }
-    }
+      })
+    )
   },
 }
