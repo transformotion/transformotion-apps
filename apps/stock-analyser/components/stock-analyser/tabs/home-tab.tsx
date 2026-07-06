@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { PageHeader, Card, EmptyState } from "@transformotion/ui-primitives"
 import { LayoutDashboard, TrendingUp, TrendingDown } from "lucide-react"
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts"
+import { PriceChart } from "@/components/price-chart/price-chart"
 import { useNavigation } from "@/components/stock-analyser/app-shell"
 import { portfolioService } from "@/lib/services/portfolio/portfolio-service"
 import { watchlistService } from "@/lib/services/watchlist/watchlist-service"
@@ -163,24 +163,6 @@ export function HomeTab() {
   const wlPnl = useMemo(() => watchlistPnl(wlRows.map((r) => ({ dayChangePct: r.change }))), [wlRows])
   const wlCacheMeta = useMemo(() => oldest(Object.values(wlMeta)), [wlMeta])
 
-  const chartData = useMemo(() => {
-    if (!ohlcv?.dates) return [] as { date: string; close: number }[]
-    return ohlcv.dates
-      .map((d, i) => ({ date: d, close: ohlcv.closes[i] ?? null }))
-      .filter((p): p is { date: string; close: number } => p.close != null)
-  }, [ohlcv])
-
-  // Pad the Y domain below the data so the area fill reads as a filled region
-  // (rather than a sliver hugging the axis floor).
-  const yDomain = useMemo<[number, number]>(() => {
-    if (chartData.length === 0) return [0, 1]
-    const closes = chartData.map((p) => p.close)
-    const min = Math.min(...closes)
-    const max = Math.max(...closes)
-    const span = Math.max(max - min, 1)
-    return [Math.floor(min - span * 0.35), Math.ceil(max + span * 0.1)]
-  }, [chartData])
-
   return (
     <div className="p-4 space-y-4">
       <PageHeader
@@ -245,25 +227,11 @@ export function HomeTab() {
               ))}
             </div>
           </div>
-          <div className="h-64 mt-3">
-            {chartData.length === 0 ? (
-              <div className="h-full grid place-items-center text-xs text-muted-foreground">No price data</div>
+          <div className="mt-3">
+            {ohlcv ? (
+              <PriceChart data={ohlcv} height={256} />
             ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="featuredFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#2F9E8F" stopOpacity={0.35} />
-                      <stop offset="100%" stopColor="#2F9E8F" stopOpacity={0.02} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} minTickGap={40} />
-                  <YAxis domain={yDomain} tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} width={44} tickFormatter={(v: number) => `$${Math.round(v)}`} />
-                  <Tooltip formatter={(v: number) => [fmtUsd(v), "Close"]} contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }} />
-                  <Area type="monotone" dataKey="close" stroke="#2F9E8F" strokeWidth={2} fill="url(#featuredFill)" dot={false} isAnimationActive={false} />
-                </AreaChart>
-              </ResponsiveContainer>
+              <div className="h-64 grid place-items-center text-xs text-muted-foreground">No price data</div>
             )}
           </div>
         </Card>
