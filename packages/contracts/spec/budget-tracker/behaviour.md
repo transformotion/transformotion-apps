@@ -15,6 +15,48 @@ Settings include AI review controls represented by `BudgetSettings`. Runtime
 code batches review work and emits `BudgetTrackerWsBatchResultMessage` with
 pass progress and result counts.
 
+## Category roles (M21)
+
+`Category` and `Subcategory` each carry an optional `role?: CategoryRole`
+(`'income' | 'savings'`). A role is **user-assigned**; absent means no role;
+multiple categories or subcategories may hold the same role.
+
+- **Income (dashboard/cashflow purposes)** = Σ transactions classified into
+  **any** category *or* subcategory whose `role === 'income'`. A category-level
+  income role includes every subcategory under it; a subcategory-level role
+  includes only that subcategory.
+- A role **never** affects budget limits — `budgetAmounts`/`budgetFrequencies`
+  and the budget-vs-actual computation are unchanged. The role is purely a
+  classification signal for reads.
+- The legacy `category.name === "Income"` (and the `t.category === "Income"`
+  fallback) detection is **deprecated**; it is removed from domain code in PR-2
+  after a one-off backfill sets `role: 'income'` on existing categories named
+  "Income".
+
+## Savings goal (M21)
+
+`BudgetData.savingsGoal?` is an optional per-account goal
+(`{ targetAmount; linkedSubcategoryId? }`) that travels through the existing
+budget-data read/write routes — there is no new route. Progress **this month**:
+
+- `linkedSubcategoryId` set → progress = Σ|transactions| classified into that
+  subcategory this month.
+- otherwise (implicit goal) → progress = (role-based income − spending) this
+  month, using the income definition above.
+
+## Dashboard insight (M21)
+
+`GET /api/budget/v1/dashboard-insight` returns
+`{ text, generatedAt, stale }`. The server reads the per-account derived row
+(`PK = accountId`, `SK = 'AI_INSIGHT#DASHBOARD'`; a D12 account-shared,
+service-principal-written, viewer-readable row — see
+`docs/architecture/data.md` § D12). If the row is absent, older than 24h, or
+invalidated, the server regenerates the text from the app-level AI config (D9)
+**within the same request**, writes it back, and returns it. Invalidation is
+**event-driven, not scheduled**: transaction mutation handlers set an
+`invalidatedAt` marker (or delete the row). Auth: `requireAccountData` for the
+read (a `viewer` may read); regeneration runs server-side under that request.
+
 ## Mock Behaviour
 
 `MockAIService.reviewTransactions()` must produce `ReviewBatchResult`

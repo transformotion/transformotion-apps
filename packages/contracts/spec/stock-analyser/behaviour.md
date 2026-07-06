@@ -18,6 +18,23 @@ Analysis cache entries use `AnalysisCacheEntry` and
 `WriteAnalysisCacheRequest`. Shared market/cache keys may use shared partitions
 only where the backend data contract allows it.
 
+### Cached quotes (M21)
+
+`GET /market/cached-quotes` returns `{ quotes: CachedQuote[] }`, one latest
+quote per ticker (`{ ticker, price, dayChangePct, asOf }`) for the SA Home
+dashboard. Implementation constraint:
+
+- The handler queries the **SHARED** partition with `SK begins_with
+  MARKET-DATA#` and emits the latest point per ticker. It is **read-only**: it
+  MUST NOT trigger a provider fetch or a warm — it only enumerates what the
+  background warm jobs have already cached.
+- An empty cache yields an **empty array** — a valid, supported state (a
+  never-warmed dashboard), never an error.
+- Auth: `requireAccountData` (marked `auth: 'account'` in `api.ts`).
+- The owner spec named the path `/api/stock/v1/market/cached-quotes`; it is
+  normalised in the contract to the bare `/market/cached-quotes` to match the
+  SA route convention (siblings `/portfolio`, `/watchlist`, `/price/ohlcv`).
+
 ### Cache Freshness Badges
 
 Cache status badges are derived, never decorative. `cache-freshness.ts` is the

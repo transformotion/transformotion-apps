@@ -6,6 +6,7 @@ import {
   exampleBudgetData,
   exampleBudgetSettings,
   exampleCsvAnalysisResponse,
+  exampleDashboardInsight,
   exampleMatchingRule,
   exampleTransaction,
   type AiReviewRequest,
@@ -13,6 +14,7 @@ import {
   type BudgetSettings,
   type BudgetTrackerAiResponse,
   type CsvAnalysisRequest,
+  type DashboardInsightResponse,
   type ExportFormat,
   type MatchingRule,
   type Transaction,
@@ -104,6 +106,7 @@ export type BudgetTrackerRoute =
   | ApiRoute<Partial<BudgetSettings>, SettingsResponse>
   | ApiRoute<EmptyRequest, BudgetDataResponse>
   | ApiRoute<Partial<BudgetData>, BudgetDataResponse>
+  | ApiRoute<EmptyRequest, DashboardInsightResponse>
   | ApiRoute<ExportRequest, ExportResponse>
   | ApiRoute<CsvAnalysisRequest, typeof exampleCsvAnalysisResponse>
   | ApiRoute<AiReviewRequest, BudgetTrackerAiResponse>
@@ -164,6 +167,16 @@ export const budgetTrackerRoutes = [
     auth: 'account',
     request: { budgetAmounts: { 'subcat-groceries': 800 } },
     response: { budgetData: exampleBudgetData },
+  },
+  // M21 — BT Home dashboard AI insight. Reader route; the server regenerates
+  // the AI_INSIGHT#DASHBOARD derived row on a miss/stale/invalidated read. Auth
+  // marker 'account' maps to requireAccountData (read; a viewer may read).
+  {
+    method: 'GET',
+    path: '/api/budget/v1/dashboard-insight',
+    auth: 'account',
+    request: emptyRequest,
+    response: exampleDashboardInsight,
   },
   { method: 'POST', path: '/api/budget/v1/export', auth: 'account', request: { format: 'csv', month: '2026-06' }, response: { contentType: 'text/csv', body: 'date,description,amount' } },
   {

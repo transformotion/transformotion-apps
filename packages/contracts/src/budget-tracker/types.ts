@@ -1,12 +1,24 @@
-import type { AccountId } from '../_shared/api';
+import type { AccountId, ISODateTime } from '../_shared/api';
 import type { AiAsyncStartResponse, AiProxyRequest } from '../_shared/ai-runtime';
 
-export type BudgetTrackerContractVersion = 'm15.1.0';
+export type BudgetTrackerContractVersion = 'm15.2.0';
 export type BudgetFrequency = 'weekly' | 'fortnightly' | 'monthly' | 'quarterly' | 'annually' | 'one-off';
 export type BudgetConfidence = 'high' | 'medium' | 'low';
 export type MatchType = 'contains' | 'startsWith' | 'regex';
 export type CategoryType = 'regular' | 'capital';
 export type ExportFormat = 'csv' | 'json';
+
+/**
+ * M21 — optional user-assigned semantic role on a category OR subcategory.
+ * Absent ⇒ no role. `income` marks holders whose classified transactions count
+ * as income for dashboard/cashflow purposes; `savings` marks holders that
+ * represent money deliberately set aside. A role is USER-ASSIGNED, multiple
+ * holders are allowed, and a role NEVER affects budget limits — it is purely a
+ * classification signal. This supersedes the deprecated `name === "Income"`
+ * detection (removed from domain code in PR-2 after backfill).
+ * See spec/budget-tracker/behaviour.md § "Category roles".
+ */
+export type CategoryRole = 'income' | 'savings';
 
 export interface Subcategory {
   subcategoryId: string;
@@ -14,6 +26,8 @@ export interface Subcategory {
   displayOrder: number;
   deleted?: boolean;
   excludeFromCashflow?: boolean;
+  /** M21: optional user-assigned semantic role; absent ⇒ no role. */
+  role?: CategoryRole;
 }
 
 export interface Category {
@@ -23,12 +37,29 @@ export interface Category {
   displayOrder: number;
   deleted?: boolean;
   subcategories: Subcategory[];
+  /** M21: optional user-assigned semantic role; absent ⇒ no role. */
+  role?: CategoryRole;
+}
+
+/**
+ * M21 — an account's savings goal, carried on `BudgetData` (travels through the
+ * existing budget-data read/write routes; no new route). Progress semantics
+ * (spec/budget-tracker/behaviour.md § "Savings goal"): if `linkedSubcategoryId`
+ * is set → Σ|transactions| classified into that subcategory THIS MONTH;
+ * otherwise the goal is IMPLICIT and progress = (role-based income − spending)
+ * THIS MONTH.
+ */
+export interface SavingsGoal {
+  targetAmount: number;
+  linkedSubcategoryId?: string | null;
 }
 
 export interface BudgetData {
   categories: Category[];
   budgetAmounts: Record<string, number>;
   budgetFrequencies: Record<string, BudgetFrequency>;
+  /** M21: optional per-account savings goal; absent ⇒ none configured. */
+  savingsGoal?: SavingsGoal;
 }
 
 export interface Transaction {
@@ -152,7 +183,36 @@ export interface BudgetTrackerFrontendState {
   pendingReviewBatchIds: string[];
 }
 
-export const budgetTrackerContractVersion = 'm15.1.0' as const satisfies BudgetTrackerContractVersion;
+/**
+ * M21 — BT Home dashboard AI insight.
+ *
+ * `DashboardInsightRecord` is the persisted DERIVED row under the D12 row-class
+ * model (docs/architecture/data.md § D12): an account-shared
+ * (`PK = accountId`), service-principal-written, viewer-READABLE row keyed
+ * `SK = 'AI_INSIGHT#DASHBOARD'`. The server regenerates it from the app-level
+ * AI config (D9) when it is absent, older than 24h, or invalidated, then writes
+ * it back and returns it. Invalidation is event-driven, not scheduled: a
+ * transaction mutation sets `invalidatedAt` (or deletes the row).
+ * See spec/budget-tracker/behaviour.md § "Dashboard insight".
+ */
+export interface DashboardInsightRecord {
+  pk: AccountId;
+  sk: 'AI_INSIGHT#DASHBOARD';
+  text: string;
+  generatedAt: ISODateTime;
+  /** Set by transaction mutation handlers to force regeneration on next read. */
+  invalidatedAt?: ISODateTime | null;
+}
+
+/** Response for `GET /api/budget/v1/dashboard-insight`. */
+export interface DashboardInsightResponse {
+  text: string;
+  generatedAt: ISODateTime;
+  /** True when the served text predates the current data (regenerated on read). */
+  stale: boolean;
+}
+
+export const budgetTrackerContractVersion = 'm15.2.0' as const satisfies BudgetTrackerContractVersion;
 
 export const exampleSubcategory = {
   subcategoryId: 'subcat-groceries',
@@ -178,6 +238,17 @@ export const exampleBudgetData = {
     'subcat-groceries': 'monthly',
   },
 } as const satisfies BudgetData;
+
+export const exampleSavingsGoal = {
+  targetAmount: 2000,
+  linkedSubcategoryId: 'subcat-emergency-fund',
+} as const satisfies SavingsGoal;
+
+export const exampleDashboardInsight = {
+  text: 'You are 68% through your monthly budget with 9 days left; groceries are trending 12% above your usual.',
+  generatedAt: '2026-07-06T00:00:00.000Z',
+  stale: false,
+} as const satisfies DashboardInsightResponse;
 
 export const exampleTransaction = {
   transactionId: 'txn-123',

@@ -1563,8 +1563,12 @@ gate into further build-phase work.)
   UI parity, with v0 re-established as the authoritative source of truth.
   External users must not see a runtime UI that has drifted from the
   canonical v0 design. Cannot cut over with the apps mid-reconciliation.
+- **M21 — App Dashboards (SA + BT), complete (hard gate).** Owner decision:
+  production go-live is blocked on the Home dashboards shipping for both
+  Stock Analyser and Budget Tracker. This is an ordering gate the owner set,
+  not a technical dependency on M11 phases 7–11.
 
-Cutover does not begin until M16, M18, M19, and M20 are all done.
+Cutover does not begin until M16, M18, M19, M20, and M21 are all done.
 
 ---
 
@@ -1692,9 +1696,10 @@ For quick visual reference. The full text above is the canonical source.
 | M15 | v0-canonical transition | 2, 4 | M6 |
 | M16 | Account lifecycle and invitation | 3, 4 | M11, M15 |
 | M18 | Corporate rebrand and light/dark theming | 3, 1, 2 | M15, M16 |
-| M17 | Production cutover (go-live) | 2 | M16, M18, M19, M20 |
+| M17 | Production cutover (go-live) | 2 | M16, M18, M19, M20, M21 |
 | M19 | Stock Analyser background intelligence and notifications (PLANNING) | 1, 2, 3 | M18 (closed); ADR D8 |
 | M20 | UI reconciliation — v0 ↔ live parity (PLANNING) | 3, 1 | (audit done); §8.A discipline |
+| M21 | App Dashboards (SA + BT) — pre-req to go-live | 1, 2 | contracts m16.10.0 (PR-1) |
 
 M8, M9, M10 can run in parallel. M11 follows M10. M7 can run in parallel
 with M6 once M2 and M3 complete. M13 and M14 are sequenced strictly
@@ -1873,3 +1878,31 @@ implementation work.
 - **M17 (go-live) depends on M20.** Prod cannot cut over with the apps
   mid-reconciliation — external users must see the canonical v0 design. (Recorded
   on both sides: see M17's Dependencies in Section 22.)
+
+---
+
+## 28. M21 — App Dashboards (SA + BT) — pre-requisite to production go-live
+
+GitHub milestone #28. Owner priority: go-live is blocked on this milestone's
+completion (an ordering decision, not a technical dependency on M11 phases
+7–11). Recorded on both sides — see M17's Dependencies in Section 22 and the
+reference table in Section 25.
+
+- **PR-1 — contracts (`CONTRACT_VERSION` m16.10.0, additive):** category roles
+  (`income`/`savings`) on `Category`+`Subcategory`, `SavingsGoal` on
+  `BudgetData`, BT `dashboard-insight` route + `AI_INSIGHT#DASHBOARD` derived
+  cache row-class (D12), SA `cached-quotes` enumeration route.
+  (The task brief said "m16.2.0"; that version is already taken — the contracts
+  package was at m16.9.0 — so PR-1 uses the next additive minor, m16.10.0.
+  Per-app version lines bump budget-tracker/stock-analyser m15.1.0 → m15.2.0.)
+- **PR-2 — BT Home dashboard** + savings-goal/role UI on the Budgets tab +
+  income-role migration of the three shipped read paths (backfill included).
+- **PR-3 — SA Home dashboard** + portfolio valuation domain module.
+
+Design of record: owner Claude Design mocks (`Budget_Tracker_Dashboard.html`,
+`Stock_Analyser_Dashboard.html`). Review gate: (a′) screenshots + mock
+comparison. Sequence: PR-1 → (PR-2 ∥ PR-3) after PR-1 merges.
+
+M21 is appended after the reference table deliberately — section order does not
+encode implementation sequence, and this section was added without renumbering
+the existing sections.
