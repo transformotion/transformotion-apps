@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react"
 import { useBudgetStore } from "@/stores/budget-tracker/use-budget-store"
 import { PageHeader, Card, PrimaryButton, SecondaryButton } from "@transformotion/ui-primitives"
-import { ChevronDown, Plus, Pencil, Trash2, RotateCcw, X, Check, Undo2, Eye, EyeOff } from "lucide-react"
+import { ChevronDown, Plus, Pencil, Trash2, RotateCcw, X, Check, Undo2, Eye, EyeOff, Target } from "lucide-react"
 import {
   getActiveCategories,
   getActiveSubcategories,
@@ -15,8 +15,15 @@ import {
 } from "@/lib/categories"
 import { CATEGORY_COLORS } from "../data/category-colors"
 import { ExcludedBadge } from "../badges/excluded-badge"
-import type { Category, Subcategory } from "@transformotion/budget-domain"
+import type { Category, Subcategory, CategoryRole } from "@transformotion/budget-domain"
+import { collectIncomeHolderIds } from "@transformotion/budget-domain"
 import { cn } from "@/lib/utils"
+
+const ROLE_OPTIONS: { value: CategoryRole | ""; label: string }[] = [
+  { value: "", label: "No role" },
+  { value: "income", label: "Income" },
+  { value: "savings", label: "Savings" },
+]
 
 function getMonthKey(dateStr: string): string {
   const [, month, year] = dateStr.split("/").map(Number)
@@ -53,6 +60,13 @@ export function BudgetTab() {
   const [newCategoryName, setNewCategoryName] = useState("")
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null)
   const [editCategoryName, setEditCategoryName] = useState("")
+  const [editRole, setEditRole] = useState<CategoryRole | "">("")
+
+  // Savings-goal setter state (M21). Populated from the current goal when the
+  // user opens the editor; display mode reads budgetData.savingsGoal directly.
+  const [goalEditing, setGoalEditing] = useState(false)
+  const [goalTarget, setGoalTarget] = useState("")
+  const [goalLinkedSub, setGoalLinkedSub] = useState("")
 
   type DeleteTarget =
     | { kind: "subcategory"; subcategoryId: string; categoryId: string; count: number }
@@ -102,13 +116,15 @@ export function BudgetTab() {
     let totalIncome = 0
     let totalExpenses = 0
 
+    const incomeHolders = collectIncomeHolderIds(budgetData.categories)
+
     for (const cat of getActiveCategories(budgetData.categories)) {
       if (cat.type === "capital") continue
       for (const sub of getActiveSubcategories(cat)) {
         const amount = budgetData.budgetAmounts[sub.subcategoryId] ?? 0
         const freq = (budgetData.budgetFrequencies[sub.subcategoryId] ?? "monthly") as BudgetFrequency
         const monthly = toMonthlyAmount(amount, freq)
-        if (cat.name === "Income") {
+        if (incomeHolders.subcategoryIds.has(sub.subcategoryId)) {
           totalIncome += monthly
         } else {
           totalExpenses += monthly
@@ -150,6 +166,7 @@ export function BudgetTab() {
     setEditBudget(getBudgetAmount(sub.subcategoryId).toString())
     setEditFrequency(getBudgetFrequency(sub.subcategoryId))
     setEditExclude(sub.excludeFromCashflow ?? false)
+    setEditRole(sub.role ?? "")
   }
 
   function saveEdit(categoryId: string) {
@@ -161,7 +178,7 @@ export function BudgetTab() {
         ...cat,
         subcategories: cat.subcategories.map(sub =>
           sub.subcategoryId === editingSubcategoryId
-            ? { ...sub, name: editName.trim() || sub.name, excludeFromCashflow: editExclude || undefined }
+            ? { ...sub, name: editName.trim() || sub.name, excludeFromCashflow: editExclude || undefined, role: editRole || undefined }
             : sub
         ),
       }
@@ -173,6 +190,42 @@ export function BudgetTab() {
     })
     setEditingSubcategoryId(null)
   }
+
+  // M21 — assign/clear a category's semantic role (income/savings). Roles never
+  // affect budget limits; they drive dashboard/cashflow income classification.
+  function setCategoryRole(categoryId: string, role: CategoryRole | "") {
+    const updatedCategories = categories.map(cat =>
+      cat.categoryId === categoryId ? { ...cat, role: role || undefined } : cat
+    )
+    updateBudgetData({ categories: updatedCategories })
+  }
+
+  function openGoalEditor() {
+    setGoalTarget(budgetData.savingsGoal ? String(budgetData.savingsGoal.targetAmount) : "")
+    setGoalLinkedSub(budgetData.savingsGoal?.linkedSubcategoryId ?? "")
+    setGoalEditing(true)
+  }
+
+  function saveGoal() {
+    const targetAmount = parseFloat(goalTarget) || 0
+    if (targetAmount <= 0) {
+      updateBudgetData({ savingsGoal: undefined })
+    } else {
+      updateBudgetData({
+        savingsGoal: { targetAmount, linkedSubcategoryId: goalLinkedSub || null },
+      })
+    }
+    setGoalEditing(false)
+  }
+
+  function removeGoal() {
+    updateBudgetData({ savingsGoal: undefined })
+    setGoalEditing(false)
+  }
+
+  const allSubcategoryOptions = categories
+    .filter(c => !c.deleted)
+    .flatMap(c => getActiveSubcategories(c).map(s => ({ id: s.subcategoryId, label: `${c.name} › ${s.name}` })))
 
   function toggleSubcategoryExclude(sub: Subcategory, categoryId: string) {
     const updatedCategories = categories.map(cat => {
@@ -401,6 +454,19 @@ export function BudgetTab() {
                   </div>
                 </div>
               </div>
+              {!isCapitalSection && (
+                <select
+                  value={category.role ?? ""}
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={(e) => setCategoryRole(category.categoryId, e.target.value as CategoryRole | "")}
+                  className="shrink-0 h-7 px-1.5 bg-card border border-border rounded text-xs text-muted-foreground"
+                  title="Semantic role (income / savings)"
+                >
+                  {ROLE_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+              )}
               <button
                 onClick={() => openDeleteCategoryModal(category.categoryId)}
                 className="shrink-0 p-1.5 rounded text-muted-foreground hover:text-signal-red opacity-0 group-hover:opacity-100 transition-opacity"
@@ -463,6 +529,18 @@ export function BudgetTab() {
                           >
                             {Object.entries(FREQUENCY_LABELS).map(([key, label]) => (
                               <option key={key} value={key}>{label}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="w-28">
+                          <label className="text-[10px] text-muted-foreground">Role</label>
+                          <select
+                            value={editRole}
+                            onChange={(e) => setEditRole(e.target.value as CategoryRole | "")}
+                            className="w-full h-8 px-2 bg-card border border-border rounded text-sm"
+                          >
+                            {ROLE_OPTIONS.map((o) => (
+                              <option key={o.value} value={o.value}>{o.label}</option>
                             ))}
                           </select>
                         </div>
@@ -625,6 +703,76 @@ export function BudgetTab() {
           </div>
         </div>
       </div>
+
+      {/* Savings Goal (M21) */}
+      <Card>
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="grid place-items-center size-8 rounded-lg bg-signal-amber/10 text-signal-amber shrink-0">
+              <Target className="size-4" />
+            </span>
+            <div className="min-w-0">
+              <p className="font-display text-sm font-semibold tracking-wide text-foreground">Savings Goal</p>
+              {budgetData.savingsGoal ? (
+                <p className="text-xs text-muted-foreground truncate">
+                  {formatCurrency(budgetData.savingsGoal.targetAmount)} target
+                  {budgetData.savingsGoal.linkedSubcategoryId
+                    ? ` · tracked via ${allSubcategoryOptions.find(o => o.id === budgetData.savingsGoal!.linkedSubcategoryId)?.label ?? "linked subcategory"}`
+                    : " · tracked as income − spending"}
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">No goal set</p>
+              )}
+            </div>
+          </div>
+          {!goalEditing && (
+            <SecondaryButton onClick={openGoalEditor} className="shrink-0">
+              {budgetData.savingsGoal ? "Edit" : "Set goal"}
+            </SecondaryButton>
+          )}
+        </div>
+
+        {goalEditing && (
+          <div className="mt-3 pt-3 border-t border-border space-y-3">
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="flex-1">
+                <label className="text-[10px] text-muted-foreground">Target amount</label>
+                <input
+                  type="number"
+                  value={goalTarget}
+                  onChange={(e) => setGoalTarget(e.target.value)}
+                  placeholder="1000"
+                  className="w-full h-9 px-2 bg-card border border-border rounded text-sm"
+                  autoFocus
+                />
+              </div>
+              <div className="flex-1">
+                <label className="text-[10px] text-muted-foreground">Track via subcategory (optional)</label>
+                <select
+                  value={goalLinkedSub}
+                  onChange={(e) => setGoalLinkedSub(e.target.value)}
+                  className="w-full h-9 px-2 bg-card border border-border rounded text-sm"
+                >
+                  <option value="">Implicit (income − spending)</option>
+                  {allSubcategoryOptions.map((o) => (
+                    <option key={o.id} value={o.id}>{o.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <PrimaryButton onClick={saveGoal} className="flex-1">
+                <Check className="size-4 mr-2" />
+                Save goal
+              </PrimaryButton>
+              {budgetData.savingsGoal && (
+                <SecondaryButton onClick={removeGoal}>Remove</SecondaryButton>
+              )}
+              <SecondaryButton onClick={() => setGoalEditing(false)}>Cancel</SecondaryButton>
+            </div>
+          </div>
+        )}
+      </Card>
 
       {showUpdateFeedback && (
         <div className="p-3 bg-primary/10 border border-primary/20 rounded-lg text-sm text-primary">

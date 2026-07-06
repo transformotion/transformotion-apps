@@ -4,6 +4,7 @@ import {
   getMatchingRulesRepositoryInstance,
   getBudgetDataRepository,
   getSettingsRepository,
+  getDashboardInsightRepository,
   getFilters,
   saveFilters,
   clearFilters,
@@ -13,9 +14,10 @@ import {
   type BudgetSettings,
   type TransactionFilters,
 } from '@/lib/repositories/budget-tracker'
-import { ruleComparator } from '@transformotion/budget-domain'
+import { ruleComparator, type DashboardInsightResponse } from '@transformotion/budget-domain'
 
-export type BudgetTabId = 'transactions' | 'summary' | 'budget' | 'cashflow' | 'rules' | 'review' | 'settings'
+// 'home' (M21) is the dashboard landing tab.
+export type BudgetTabId = 'home' | 'transactions' | 'summary' | 'budget' | 'cashflow' | 'rules' | 'review' | 'settings'
 
 interface BudgetState {
   activeTab: BudgetTabId
@@ -25,6 +27,7 @@ interface BudgetState {
   budgetData: BudgetData
   settings: BudgetSettings
   filters: TransactionFilters
+  dashboardInsight: DashboardInsightResponse | null
 
   uncategorizedCount: number
   isLoading: boolean
@@ -51,6 +54,8 @@ interface BudgetState {
   loadSettings: () => Promise<void>
   updateSettings: (updates: Partial<BudgetSettings>) => Promise<void>
 
+  loadDashboardInsight: () => Promise<void>
+
   setFilters: (filtersOrUpdater: TransactionFilters | ((prev: TransactionFilters) => TransactionFilters)) => void
   resetFilters: () => void
 
@@ -68,12 +73,13 @@ const DEFAULT_SETTINGS: BudgetSettings = {
 }
 
 export const useBudgetStore = create<BudgetState>()((set, get) => ({
-  activeTab: 'transactions',
+  activeTab: 'home',
   transactions: [],
   matchingRules: [],
   budgetData: DEFAULT_BUDGET_DATA,
   settings: DEFAULT_SETTINGS,
   filters: getFilters(),
+  dashboardInsight: null,
   uncategorizedCount: 0,
   isLoading: false,
   isInitialized: false,
@@ -160,6 +166,16 @@ export const useBudgetStore = create<BudgetState>()((set, get) => ({
     set({ settings })
   },
 
+  loadDashboardInsight: async () => {
+    // Non-critical: the dashboard renders without an insight line if this fails.
+    try {
+      const dashboardInsight = await getDashboardInsightRepository().get('')
+      set({ dashboardInsight })
+    } catch {
+      set({ dashboardInsight: null })
+    }
+  },
+
   setFilters: (filtersOrUpdater) => {
     const filters = typeof filtersOrUpdater === 'function' ? filtersOrUpdater(get().filters) : filtersOrUpdater
     set({ filters })
@@ -177,6 +193,7 @@ export const useBudgetStore = create<BudgetState>()((set, get) => ({
         get().loadMatchingRules(),
         get().loadBudgetData(),
         get().loadSettings(),
+        get().loadDashboardInsight(),
       ])
       set({ isInitialized: true, isLoading: false })
     } catch (error) {

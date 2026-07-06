@@ -15,6 +15,7 @@ const CATEGORIES: Category[] = [
     name: "Income",
     type: "regular",
     displayOrder: 0,
+    role: "income",
     subcategories: [{ subcategoryId: SUB_PAY_ID, name: "Pay", displayOrder: 0 }],
   },
   {
