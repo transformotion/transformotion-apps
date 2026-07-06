@@ -204,6 +204,26 @@ export class StockAnalyserApiStack extends cdk.Stack {
     const priceOhlcv = price.addResource('ohlcv');
     priceOhlcv.addMethod('GET', marketDataIntegration, auth);
 
+    // M21 (#656) — GET /market/cached-quotes: read-only enumeration of the SHARED
+    // MARKET-DATA# cache (latest quote per ticker) for the Home dashboard's featured
+    // symbol. Read-only grant; never triggers a fetch/warm.
+    const cachedQuotesFn = new lambdaNodejs.NodejsFunction(this, 'CachedQuotesFn', {
+      functionName: `transformotion-cached-quotes-${stage}`,
+      entry: path.join(__dirname, '../functions/cached-quotes/src/index.ts'),
+      handler: 'handler',
+      runtime: lambda.Runtime.NODEJS_20_X,
+      timeout: cdk.Duration.seconds(15),
+      memorySize: 256,
+      environment: { ANALYSIS_CACHE_TABLE: analysisCacheTable.tableName },
+      bundling,
+    });
+    analysisCacheTable.grantReadData(cachedQuotesFn);
+
+    const cachedQuotesIntegration = new apigateway.LambdaIntegration(cachedQuotesFn, { proxy: true });
+    const market = this.api.root.addResource('market');
+    const cachedQuotes = market.addResource('cached-quotes');
+    cachedQuotes.addMethod('GET', cachedQuotesIntegration, auth);
+
     const anthropicSecret = secretsmanager.Secret.fromSecretNameV2(
       this, 'AnthropicApiKey', `${stage}/anthropic/api-key`,
     );
