@@ -1,7 +1,7 @@
 import type { AccountId, ISODateTime, JsonValue } from '../_shared/api';
 import type { AiAsyncStartResponse, AiProxyRequest, AiTextResponse } from '../_shared/ai-runtime';
 
-export type StockAnalyserContractVersion = 'm15.1.0';
+export type StockAnalyserContractVersion = 'm15.2.0';
 export type StockAnalyserTab = 'market' | 'recs' | 'etfs' | 'metals' | 'analyser' | 'portfolio' | 'watchlist' | 'settings';
 export type MarketDataSource = 'cache' | 'live';
 /**
@@ -97,6 +97,25 @@ export interface AnalysisCacheEntry<T = JsonValue> {
   mode?: string;
 }
 
+/**
+ * M21 — a single ticker's latest cached quote, derived from the SHARED
+ * MARKET-DATA cache (the most recent point per ticker). Enumerated read-only:
+ * the producing route queries the SHARED partition (`SK begins_with
+ * MARKET-DATA#`) and NEVER triggers a fetch or warm. An empty cache yields an
+ * empty list (a valid, supported state — not an error).
+ * See spec/stock-analyser/behaviour.md § "Cached quotes".
+ */
+export interface CachedQuote {
+  ticker: string;
+  price: number;
+  dayChangePct: number;
+  asOf: ISODateTime;
+}
+
+export interface CachedQuotesResponse {
+  quotes: CachedQuote[];
+}
+
 export interface WriteAnalysisCacheRequest<T = JsonValue> {
   data: T;
   ttlSeconds: number;
@@ -180,7 +199,7 @@ export interface StockAnalyserFrontendState {
   watchlistTickers: string[];
 }
 
-export const stockAnalyserContractVersion = 'm15.1.0' as const satisfies StockAnalyserContractVersion;
+export const stockAnalyserContractVersion = 'm15.2.0' as const satisfies StockAnalyserContractVersion;
 
 export const examplePortfolioHolding = {
   ticker: 'BHP.AX',
@@ -196,6 +215,13 @@ export const exampleWatchlistItem = {
   addedAt: 1798761600,
   addedPrice: 120.25,
 } as const satisfies WatchlistItem;
+
+export const exampleCachedQuote = {
+  ticker: 'BHP.AX',
+  price: 43.18,
+  dayChangePct: 0.0142,
+  asOf: '2026-07-06T00:00:00.000Z',
+} as const satisfies CachedQuote;
 
 export const exampleOhlcvPoint = {
   timestamp: 1798761600,

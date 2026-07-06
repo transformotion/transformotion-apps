@@ -3,6 +3,7 @@ import {
   exampleBudgetSettings,
   exampleCategory,
   exampleCsvAnalysisResponse,
+  exampleDashboardInsight,
   exampleMatchingRule,
   exampleReviewBatchResult,
   exampleTransaction,
@@ -10,6 +11,7 @@ import {
   type BudgetData,
   type BudgetSettings,
   type Category,
+  type DashboardInsightResponse,
   type MatchingRule,
   type ReviewBatchResult,
   type Transaction,
@@ -37,6 +39,7 @@ export const mockCategories = [exampleCategory] satisfies Category[];
 export const mockRules = [exampleMatchingRule] satisfies MatchingRule[];
 export const mockSettings = exampleBudgetSettings satisfies BudgetSettings;
 export const mockBudgetData = exampleBudgetData satisfies BudgetData;
+export const mockDashboardInsight = exampleDashboardInsight satisfies DashboardInsightResponse;
 export const mockReviewBatchResults = [exampleReviewBatchResult] satisfies ReviewBatchResult[];
 export const mockCsvAnalysisResponse = exampleCsvAnalysisResponse satisfies AiCsvAnalysisResponse;
 

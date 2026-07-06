@@ -9,11 +9,13 @@ import type {
 } from './cache-freshness';
 import { exampleCacheFreshnessConfigRecord } from './cache-freshness';
 import {
+  exampleCachedQuote,
   exampleOhlcvPoint,
   exampleCycleSignal,
   examplePortfolioHolding,
   exampleStockAnalyserSettings,
   exampleWatchlistItem,
+  type CachedQuotesResponse,
   type CycleDataResponse,
   type PortfolioHolding,
   type PriceInterval,
@@ -92,6 +94,7 @@ export type StockAnalyserRoute =
   | ApiRoute<EmptyRequest, { ok: true }>
   | ApiRoute<CycleQuery, CycleDataResponse>
   | ApiRoute<PriceQuery, PriceOhlcvResponse>
+  | ApiRoute<EmptyRequest, CachedQuotesResponse>
   | ApiRoute<StockAnalyserAiRequest, StockAnalyserAiResponse>
   | ApiRoute<EmptyRequest, SettingsResponse>
   | ApiRoute<PatchSettingsRequest, SettingsResponse>
@@ -157,6 +160,13 @@ export const stockAnalyserRoutes = [
       source: 'live',
     },
   },
+  // M21 — enumerate the latest SHARED-cached quote per ticker for the SA Home
+  // dashboard. Read-only: queries the SHARED partition (SK begins_with
+  // MARKET-DATA#) and NEVER triggers a fetch/warm; an empty cache yields an
+  // empty array (a valid state). Owner spec wrote
+  // /api/stock/v1/market/cached-quotes; normalised here to the SA contract's
+  // bare-path convention (siblings: /portfolio, /watchlist, /price/ohlcv).
+  { method: 'GET', path: '/market/cached-quotes', auth: 'account', request: emptyRequest, response: { quotes: [exampleCachedQuote] } },
   {
     method: 'POST',
     path: '/api/claude',

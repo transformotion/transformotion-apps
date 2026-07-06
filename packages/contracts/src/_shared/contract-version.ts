@@ -103,8 +103,25 @@
  * existing shape changed, no new policy vocabulary, no domain-object change;
  * accept reuses the existing redeem route. Minor bump: additive route +
  * response type.
+ *
+ * m16.10.0 — Non-breaking (additive, M21 App Dashboards PR-1). Four additive
+ * changes, no existing shape altered: (1) budget-tracker/types.ts gains
+ * `CategoryRole = 'income' | 'savings'` and an optional `role?` on `Category`
+ * and `Subcategory` (user-assigned classification signal; never affects budget
+ * limits; supersedes the deprecated `name === "Income"` detection removed from
+ * domain code in PR-2 after backfill); (2) `SavingsGoal` plus an optional
+ * `BudgetData.savingsGoal?` (travels the existing budget-data routes — no new
+ * route); (3) `DashboardInsightResponse`/`DashboardInsightRecord` and route
+ * `GET /api/budget/v1/dashboard-insight` — a reader over the D12 account-shared,
+ * service-principal-written, viewer-readable `AI_INSIGHT#DASHBOARD` derived row,
+ * regenerated from the app-level AI config on miss/stale/invalidated;
+ * (4) stock-analyser `CachedQuote`/`CachedQuotesResponse` and route
+ * `GET /market/cached-quotes` — a read-only enumeration of the latest
+ * SHARED-cached quote per ticker (never triggers a fetch/warm). Per-app version
+ * lines bump additively (budget-tracker m15.1.0 -> m15.2.0, stock-analyser
+ * m15.1.0 -> m15.2.0). Minor bump: purely additive types + routes.
  */
-export const CONTRACT_VERSION = 'm16.9.0' as const;
+export const CONTRACT_VERSION = 'm16.10.0' as const;
 
 export type ContractScope =
   | '_shared'

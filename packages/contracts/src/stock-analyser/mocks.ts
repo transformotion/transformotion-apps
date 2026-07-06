@@ -1,4 +1,5 @@
 import {
+  exampleCachedQuote,
   exampleOhlcvPoint,
   exampleCycleSignal,
   examplePortfolioHolding,
@@ -6,6 +7,7 @@ import {
   exampleStockAnalyserState,
   exampleWatchlistItem,
   type AnalysisCacheEntry,
+  type CachedQuote,
   type CycleDataResponse,
   type PortfolioHolding,
   type PriceOhlcvResponse,
@@ -109,6 +111,10 @@ export const mockCacheSnapshots = {
 
 export const mockPortfolio = [examplePortfolioHolding] satisfies PortfolioHolding[];
 export const mockWatchlist = [exampleWatchlistItem] satisfies WatchlistItem[];
+export const mockCachedQuotes = [
+  exampleCachedQuote,
+  { ticker: 'CBA.AX', price: 121.04, dayChangePct: -0.0061, asOf: '2026-07-06T00:00:00.000Z' },
+] satisfies CachedQuote[];
 export const mockStockAnalyserState = exampleStockAnalyserState satisfies StockAnalyserFrontendState;
 export const mockStockAnalyserSettings = exampleStockAnalyserSettings satisfies StockAnalyserSettings;
 

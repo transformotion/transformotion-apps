@@ -449,6 +449,14 @@ table, item key shape determines the authorization tier, not the route:
   only their own data; cross-user writes within the account are denied. These
   routes therefore use `.read` (membership floor), with the per-user SK scoping
   the mutation to the caller.
+- **Account-shared derived rows** (`PK=accountId`, no user dimension, produced
+  by the server — e.g. Budget Tracker `SK=AI_INSIGHT#DASHBOARD`, M21) are
+  **service-principal-written and viewer-readable**: any member (including a
+  `viewer`) may read via `requireAccountData`, but no client write route exists.
+  The row is (re)generated server-side from the app-level AI config on a
+  miss/stale/invalidated read and invalidated event-driven by the account's own
+  mutation handlers (no scheduler). This is the read tier of D8 applied to a
+  derived cache: read is a membership floor, writes are the server's alone.
 
 ## Account relationships example
 
