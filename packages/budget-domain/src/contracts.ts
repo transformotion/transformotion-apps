@@ -7,12 +7,16 @@ export type {
   BudgetFrequency,
   BudgetSettings,
   Category,
+  CategoryRole,
   CategoryType,
   CSVMapping,
+  DashboardInsightRecord,
+  DashboardInsightResponse,
   MatchingRule,
   MatchType,
   RawTransaction,
   ReviewBatchResult,
+  SavingsGoal,
   Subcategory,
   Transaction,
 } from '@transformotion/contracts/budget-tracker/types';
@@ -51,6 +55,17 @@ export interface BudgetDataRepository {
     accountId: string,
     partial: Partial<import('@transformotion/contracts/budget-tracker/types').BudgetData>,
   ): Promise<import('@transformotion/contracts/budget-tracker/types').BudgetData>;
+}
+
+/**
+ * M21 — read-only access to the account's dashboard AI insight
+ * (`GET /api/budget/v1/dashboard-insight`). Regeneration is entirely
+ * server-side (D9 app-level AI config); the client never generates or warms.
+ */
+export interface DashboardInsightRepository {
+  get(
+    accountId: string,
+  ): Promise<import('@transformotion/contracts/budget-tracker/types').DashboardInsightResponse>;
 }
 
 export interface SettingsRepository {

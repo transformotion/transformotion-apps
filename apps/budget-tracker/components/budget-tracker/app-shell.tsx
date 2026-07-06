@@ -55,6 +55,7 @@ function useAccountSwitcher() {
 // ============================================================================
 
 export const BUDGET_NAV_ITEMS: { id: BudgetTabId; icon: typeof Receipt; label: string }[] = [
+  { id: "home", icon: Home, label: "Home" },
   { id: "transactions", icon: Receipt, label: "Transactions" },
   { id: "summary", icon: PieChart, label: "Summary" },
   { id: "budget", icon: Target, label: "Budget" },

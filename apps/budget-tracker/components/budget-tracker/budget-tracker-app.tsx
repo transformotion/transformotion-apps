@@ -2,6 +2,7 @@
 
 import { useEffect } from "react"
 import { BudgetAppShell } from "./app-shell"
+import { HomeTab } from "./tabs/home-tab"
 import { TransactionsTab } from "./tabs/transactions-tab"
 import { SummaryTab } from "./tabs/summary-tab"
 import { BudgetTab } from "./tabs/budget-tab"
@@ -24,6 +25,8 @@ function BudgetTabContent() {
   const activeTab = useBudgetStore((s) => s.activeTab)
 
   switch (activeTab) {
+    case "home":
+      return <HomeTab />
     case "transactions":
       return <TransactionsTab />
     case "summary":

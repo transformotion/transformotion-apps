@@ -1,4 +1,5 @@
 import type { Transaction, BudgetData, BudgetFrequency, Category } from "./contracts";
+import { collectIncomeHolderIds, isIncomeCategory, isRoleTransaction } from "./roles";
 
 export const FREQ_FACTORS: Record<BudgetFrequency, number> = {
   weekly: 52 / 12,
@@ -78,15 +79,16 @@ export function buildBudgetVsActual(
   const numMonths = filterMonth ? 1 : Math.max(allMonths.size, 1);
 
   const regularCats = budgetData.categories.filter(c => !c.deleted && c.type === "regular");
-  const incomeCat = regularCats.find(c => c.name === "Income");
+  const incomeHolders = collectIncomeHolderIds(budgetData.categories);
 
   const totalIncome = activeTx
-    .filter(t => t.categoryId === incomeCat?.categoryId || (!t.categoryId && t.category === "Income"))
+    .filter(t => isRoleTransaction(t, incomeHolders))
     .reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0);
 
   const totalExpenses = activeTx
     .filter(t => {
       if (t._business) return false;
+      if (isRoleTransaction(t, incomeHolders)) return false;
       if (t.subcategoryId) {
         const sub = budgetData.categories
           .flatMap(c => c.subcategories)
@@ -96,24 +98,23 @@ export function buildBudgetVsActual(
       const cat = budgetData.categories.find(c => c.categoryId === t.categoryId);
       if (cat?.type === "capital") return false;
       const catName = cat?.name || t.category;
-      return catName && catName !== "Income";
+      return !!catName;
     })
     .reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0);
 
-  const budgetIncome = incomeCat
-    ? getActiveSubs(incomeCat).reduce(
-        (s, sub) => s + getSubcategoryMonthlyBudget(sub.subcategoryId, budgetData) * numMonths,
-        0
-      )
-    : 0;
+  const budgetIncome = regularCats
+    .flatMap(c => getActiveSubs(c))
+    .filter(sub => incomeHolders.subcategoryIds.has(sub.subcategoryId))
+    .reduce((s, sub) => s + getSubcategoryMonthlyBudget(sub.subcategoryId, budgetData) * numMonths, 0);
 
   const budgetExpenses = regularCats
-    .filter(c => c.name !== "Income")
+    .filter(c => !isIncomeCategory(c))
     .flatMap(c => getActiveSubs(c))
+    .filter(sub => !incomeHolders.subcategoryIds.has(sub.subcategoryId))
     .reduce((s, sub) => s + getSubcategoryMonthlyBudget(sub.subcategoryId, budgetData) * numMonths, 0);
 
   const categories: CategoryActual[] = regularCats
-    .filter(c => c.name !== "Income")
+    .filter(c => !isIncomeCategory(c))
     .map(cat => {
       const activeSubs = getActiveSubs(cat);
       const catTx = activeTx.filter(t => {

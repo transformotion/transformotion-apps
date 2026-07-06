@@ -1,5 +1,6 @@
 import type { Transaction, BudgetData, Category } from "./contracts";
 import { getSubcategoryMonthlyBudget } from "./budget-tracking";
+import { collectIncomeHolderIds, isIncomeCategory, isRoleTransaction } from "./roles";
 
 export interface MonthlyTrendPoint {
   month: string;
@@ -73,7 +74,7 @@ export function buildMonthlyTrend(
   transactions: Transaction[],
   categories: Category[]
 ): MonthlyTrendPoint[] {
-  const incomeCat = categories.find(c => c.name === "Income");
+  const incomeHolders = collectIncomeHolderIds(categories);
   const months = [
     ...new Set(transactions.map(txMonth).filter((m): m is string => m !== null)),
   ].sort();
@@ -82,14 +83,14 @@ export function buildMonthlyTrend(
     const mtx = transactions.filter(t => txMonth(t) === mo);
 
     const income = mtx
-      .filter(t => t.categoryId === incomeCat?.categoryId || (!t.categoryId && t.category === "Income"))
+      .filter(t => isRoleTransaction(t, incomeHolders))
       .reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0);
 
     const expenses = mtx
       .filter(t => {
         const cat = categories.find(c => c.categoryId === t.categoryId);
         const catName = cat?.name || t.category;
-        return catName && catName !== "Income" && !isExcludedTx(t, categories);
+        return !!catName && !isRoleTransaction(t, incomeHolders) && !isExcludedTx(t, categories);
       })
       .reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0);
 
@@ -115,7 +116,7 @@ export function buildCategoryBarData(
   const numMonths = Math.max(months.size, 1);
 
   const regularExpenseCats = budgetData.categories.filter(
-    c => !c.deleted && c.type === "regular" && c.name !== "Income"
+    c => !c.deleted && c.type === "regular" && !isIncomeCategory(c)
   );
 
   return regularExpenseCats.map(cat => {
@@ -149,17 +150,19 @@ export function buildSankeyData(budgetData: BudgetData): SankeyData {
     getSubcategoryMonthlyBudget(subcategoryId, budgetData);
 
   const regularCats = budgetData.categories.filter(c => !c.deleted && c.type === "regular");
-  const incomeCat = regularCats.find(c => c.name === "Income");
+  const incomeHolders = collectIncomeHolderIds(budgetData.categories);
 
-  const incomeSubs = incomeCat
-    ? getActiveSubs(incomeCat).filter(s => getSubBudget(s.subcategoryId) > 0)
-    : [];
+  // Income sources = any active subcategory that holds the income role (directly
+  // or inherited from an income-role category) and has a budgeted amount.
+  const incomeSubs = regularCats
+    .flatMap(c => getActiveSubs(c))
+    .filter(s => incomeHolders.subcategoryIds.has(s.subcategoryId) && getSubBudget(s.subcategoryId) > 0);
 
   const getCatBudget = (cat: Category) =>
     getActiveSubs(cat).reduce((s, sub) => s + getSubBudget(sub.subcategoryId), 0);
 
   const expCats = regularCats.filter(
-    c => c.name !== "Income" && getCatBudget(c) > 0
+    c => !isIncomeCategory(c) && getCatBudget(c) > 0
   );
 
   const totalIncomeVal = incomeSubs.reduce((s, sub) => s + getSubBudget(sub.subcategoryId), 0);

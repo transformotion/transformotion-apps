@@ -8,7 +8,9 @@ import { DynamoBudgetDataRepository } from './dynamo-budget-data-repository'
 import { LocalBudgetDataRepository } from './budget-data-repository'
 import { DynamoSettingsRepository } from './dynamo-settings-repository'
 import { LocalSettingsRepository } from './settings-repository'
-import type { TransactionRepository, MatchingRulesRepository, BudgetDataRepository, SettingsRepository } from '@transformotion/budget-domain'
+import { DynamoDashboardInsightRepository } from './dynamo-dashboard-insight-repository'
+import { LocalDashboardInsightRepository } from './dashboard-insight-repository'
+import type { TransactionRepository, MatchingRulesRepository, BudgetDataRepository, SettingsRepository, DashboardInsightRepository } from '@transformotion/budget-domain'
 
 export type { Transaction, TransactionRepository } from '@transformotion/budget-domain'
 export type { MatchingRule, MatchingRulesRepository } from '@transformotion/budget-domain'
@@ -24,6 +26,7 @@ let _txRepo: TransactionRepository | null = null
 let _matchingRulesRepo: MatchingRulesRepository | null = null
 let _budgetDataRepo: BudgetDataRepository | null = null
 let _settingsRepo: SettingsRepository | null = null
+let _dashboardInsightRepo: DashboardInsightRepository | null = null
 
 export function getTransactionRepository(): TransactionRepository {
   if (!_txRepo) {
@@ -59,4 +62,13 @@ export function getSettingsRepository(): SettingsRepository {
       : new LocalSettingsRepository()
   }
   return _settingsRepo
+}
+
+export function getDashboardInsightRepository(): DashboardInsightRepository {
+  if (!_dashboardInsightRepo) {
+    _dashboardInsightRepo = getConfig().storage.provider === 'dynamo'
+      ? new DynamoDashboardInsightRepository(getBudgetHttp())
+      : new LocalDashboardInsightRepository()
+  }
+  return _dashboardInsightRepo
 }

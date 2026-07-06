@@ -11,6 +11,7 @@ import {
   isCapital, excludeFromCashflow, toMonthlyAmount
 } from "@/lib/categories"
 import type { Transaction, BudgetFrequency } from '@transformotion/budget-domain'
+import { collectIncomeHolderIds, isIncomeCategory, isRoleTransaction } from '@transformotion/budget-domain'
 import { cn } from "@/lib/utils"
 
 function parseDate(dateStr: string): Date {
@@ -74,6 +75,8 @@ export function SummaryTab() {
     return transactions.filter(t => getMonthKey(t.date) === currentMonth)
   }, [transactions, currentMonth])
 
+  const incomeHolders = useMemo(() => collectIncomeHolderIds(categories), [categories])
+
   const summary = useMemo(() => {
     const activeNonCapitalCats = getActiveCategories(categories).filter(c => c.type !== 'capital')
 
@@ -116,7 +119,7 @@ export function SummaryTab() {
       const catName = getCategoryName(categories, tx.categoryId ?? null) || tx.category || ''
       const subName = getSubcategoryName(categories, tx.subcategoryId ?? null) || tx.subcategory || ''
 
-      if (catName === 'Income') {
+      if (isRoleTransaction(tx, incomeHolders)) {
         totalIncome += Math.abs(amount)
       } else if (catName && byCategory[catName]) {
         totalExpenses += Math.abs(amount)
@@ -142,7 +145,7 @@ export function SummaryTab() {
     const netSavings = totalIncome - totalExpenses
     const savingsRate = totalIncome > 0 ? (netSavings / totalIncome) * 100 : 0
     return { totalIncome, totalExpenses, netSavings, savingsRate, byCategory }
-  }, [monthTransactions, budgetData, categories])
+  }, [monthTransactions, budgetData, categories, incomeHolders])
 
   const capitalSummary = useMemo(() => {
     const capitalTransactions = monthTransactions.filter(t =>
@@ -290,7 +293,7 @@ export function SummaryTab() {
               if (!data) return null
 
               const isExpanded = expandedCategories.has(cat.categoryId)
-              const isIncome = cat.name === 'Income'
+              const isIncome = isIncomeCategory(cat)
               const categoryColor = CATEGORY_COLORS[cat.name] || CATEGORY_COLORS["default"]
               const isOverBudget = !isIncome && data.total > data.budget && data.budget > 0
               const percentUsed = data.budget > 0 ? (data.total / data.budget) * 100 : 0

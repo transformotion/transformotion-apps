@@ -14,6 +14,7 @@ const BUDGET_DATA: BudgetData = {
       name: "Income",
       type: "regular",
       displayOrder: 0,
+      role: "income",
       subcategories: [{ subcategoryId: SUB_A, name: "Pay", displayOrder: 0 }],
     },
     {

@@ -6,6 +6,7 @@ import { PageHeader, Card, EmptyState, PillSelector } from "@transformotion/ui-p
 import { BarChart3 } from "lucide-react"
 import { CATEGORY_COLORS } from "../data/category-colors"
 import { getActiveCategories, getCategoryName, getSubcategoryName, isCapital, excludeFromCashflow } from "@/lib/categories"
+import { collectIncomeHolderIds, isIncomeCategory, isRoleTransaction } from "@transformotion/budget-domain"
 import { cn } from "@/lib/utils"
 import {
   LineChart,
@@ -72,9 +73,11 @@ export function CashflowTab() {
   const categories = budgetData.categories
   const [timeRange, setTimeRange] = useState<TimeRange>("6M")
 
+  const incomeHolders = useMemo(() => collectIncomeHolderIds(categories), [categories])
+
   // Expense category names (non-income, non-capital) for stacked bar chart
   const expenseCategoryNames = useMemo(
-    () => getActiveCategories(categories).filter(c => c.name !== 'Income' && c.type !== 'capital').map(c => c.name),
+    () => getActiveCategories(categories).filter(c => !isIncomeCategory(c) && c.type !== 'capital').map(c => c.name),
     [categories]
   )
 
@@ -107,7 +110,7 @@ export function CashflowTab() {
 
       if (isCapital(categories, tx.categoryId ?? null)) {
         byMonth[monthKey].capitalSpend += Math.abs(amount)
-      } else if (catName === 'Income') {
+      } else if (isRoleTransaction(tx, incomeHolders)) {
         byMonth[monthKey].income += Math.abs(amount)
       } else if (catName) {
         byMonth[monthKey].expenses += Math.abs(amount)
@@ -120,7 +123,7 @@ export function CashflowTab() {
     }
 
     return byMonth
-  }, [transactions, categories])
+  }, [transactions, categories, incomeHolders])
 
   const allMonths = useMemo(() => Object.keys(monthlyData).sort(), [monthlyData])
 
@@ -225,7 +228,7 @@ export function CashflowTab() {
       const catName = getCategoryName(categories, tx.categoryId ?? null) || tx.category || ''
       const subName = getSubcategoryName(categories, tx.subcategoryId ?? null) || tx.subcategory || ''
 
-      if (catName === 'Income' && subName) {
+      if (isRoleTransaction(tx, incomeHolders) && subName) {
         incomeBySource[subName] = (incomeBySource[subName] || 0) + amount
       } else if (catName && !isCapital(categories, tx.categoryId ?? null)) {
         expensesByCategory[catName] = (expensesByCategory[catName] || 0) + amount
@@ -291,7 +294,7 @@ export function CashflowTab() {
     })
 
     return { nodes, links, hasData: nodes.length > 2 && links.length > 0 }
-  }, [transactions, filteredMonths, categories])
+  }, [transactions, filteredMonths, categories, incomeHolders])
 
   const TrendTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{name: string; value: number; color: string}>; label?: string }) => {
     if (!active || !payload) return null
