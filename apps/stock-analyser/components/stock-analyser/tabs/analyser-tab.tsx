@@ -69,6 +69,7 @@ interface AnalysisResult {
 const QUICK_PICKS = ["CBA.AX", "BHP.AX", "CSL.AX", "AAPL", "NVDA", "MSFT"]
 
 const SOURCE_LABELS: Record<TabId, string> = {
+  home: "Home",
   market: "Market Analysis",
   recs: "Recommendations",
   etfs: "ETFs",

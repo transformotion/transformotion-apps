@@ -42,7 +42,7 @@ import {
 // TYPES
 // ============================================================================
 
-export type TabId = "market" | "recs" | "etfs" | "metals" | "analyser" | "portfolio" | "watchlist" | "settings"
+export type TabId = "home" | "market" | "recs" | "etfs" | "metals" | "analyser" | "portfolio" | "watchlist" | "settings"
 
 export interface Account {
   id: string
@@ -130,6 +130,7 @@ export function useNavigation() {
 // ============================================================================
 
 export const NAV_ITEMS: { id: TabId; icon: typeof BarChart3; label: string }[] = [
+  { id: "home", icon: Home, label: "Home" },
   { id: "market", icon: BarChart3, label: "Market" },
   { id: "recs", icon: Star, label: "Recs" },
   { id: "etfs", icon: Layers, label: "ETFs" },

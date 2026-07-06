@@ -10,6 +10,8 @@ export type {
   PriceRange as OhlcvRange,
   PriceInterval as OhlcvInterval,
   WriteAnalysisCacheRequest as PutCacheRequest,
+  CachedQuote,
+  CachedQuotesResponse,
 } from '@transformotion/contracts/stock-analyser/types';
 
 export type { PriceOhlcvResponse as OhlcvDataResponse } from '@transformotion/contracts/stock-analyser/types';

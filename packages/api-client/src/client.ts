@@ -26,6 +26,7 @@ import type {
   OhlcvDataResponse,
   OhlcvRange,
   OhlcvInterval,
+  CachedQuotesResponse,
 } from './types';
 
 /**
@@ -93,6 +94,13 @@ export class ApiClient {
   /** PUT /watchlist — replace the account's watchlist. */
   async putWatchlist(req: PutWatchlistRequest): Promise<PutWatchlistResponse> {
     return this.http.put<PutWatchlistResponse>('watchlist', req);
+  }
+
+  /** GET /market/cached-quotes — read-only enumeration of the latest cached
+   * quote per ticker (SHARED partition). Never triggers a fetch; empty cache
+   * yields an empty array. (M21) */
+  async getCachedQuotes(): Promise<CachedQuotesResponse> {
+    return this.http.get<CachedQuotesResponse>('market/cached-quotes');
   }
 
   // ── Analysis cache (S2.6) ─────────────────────────────────────────────────

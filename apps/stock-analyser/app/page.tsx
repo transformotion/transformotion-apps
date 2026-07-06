@@ -3,6 +3,7 @@
 import type React from "react"
 import { getConfig } from "@/lib/config"
 import { NavigationProvider, AppShell, useNavigation } from "@/components/stock-analyser/app-shell"
+import { HomeTab } from "@/components/stock-analyser/tabs/home-tab"
 import { MarketAnalysisTab } from "@/components/stock-analyser/tabs/market-analysis-tab"
 import { RecommendationsTab } from "@/components/stock-analyser/tabs/recommendations-tab"
 import { ETFsTab } from "@/components/stock-analyser/tabs/etfs-tab"
@@ -21,6 +22,9 @@ function TabRouter() {
 
   let tab: React.ReactNode
   switch (activeTab) {
+    case "home":
+      tab = <HomeTab />
+      break
     case "market":
       tab = <MarketAnalysisTab />
       break
@@ -70,7 +74,7 @@ function StockAnalyserContent() {
 
   return (
     <NavigationProvider
-      initialTab="market"
+      initialTab="home"
       onSignOut={handleSignOut}
       onGoToLaunchpad={handleGoToLaunchpad}
     >
