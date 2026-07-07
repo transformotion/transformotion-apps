@@ -4,6 +4,7 @@ import { createContext, useContext, useState, useCallback, useEffect, type React
 import { useTheme } from "next-themes"
 import { watchlistService, type WatchlistItem } from "@/lib/services/watchlist/watchlist-service"
 import { stockAnalyserSettingsService } from "@/lib/services/settings/settings-service"
+import { notifyError } from "@/lib/util/notify-error"
 import { cn } from "@/lib/utils"
 import { BrandLogo } from "@/components/brand/brand-logo"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -230,9 +231,10 @@ export function NavigationProvider({
       if (prev.watchlist.some(e => e.ticker === ticker)) return prev
       const newItem: WatchlistItem = { ticker, name: name ?? ticker, addedAt: Date.now() }
       const updated = [...prev.watchlist, newItem]
-      watchlistService.saveItems(updated).catch(err =>
+      watchlistService.saveItems(updated).catch(err => {
         console.warn('[watchlist] save failed', err)
-      )
+        notifyError(err, { title: 'Watchlist', description: "Couldn't save your watchlist change — it may not persist." })
+      })
       return { ...prev, watchlist: updated }
     })
   }, [])
@@ -240,9 +242,10 @@ export function NavigationProvider({
   const removeFromWatchlist = useCallback((ticker: string) => {
     setState(prev => {
       const updated = prev.watchlist.filter(e => e.ticker !== ticker)
-      watchlistService.saveItems(updated).catch(err =>
+      watchlistService.saveItems(updated).catch(err => {
         console.warn('[watchlist] save failed', err)
-      )
+        notifyError(err, { title: 'Watchlist', description: "Couldn't save your watchlist change — it may not persist." })
+      })
       return { ...prev, watchlist: updated }
     })
   }, [])
@@ -281,8 +284,9 @@ export function NavigationProvider({
     try {
       await storeSwitchTo(accountId)
       if (typeof window !== 'undefined') window.location.reload()
-    } catch {
+    } catch (err) {
       /* store reverted + logged; remain on the current account */
+      notifyError(err, { title: 'Account', description: "Couldn't switch account. Staying on the current one." })
     }
   }, [storeSwitchTo, storeActiveId])
 
@@ -301,13 +305,19 @@ export function NavigationProvider({
       tabTextOverrides: {}, // Clear all overrides when global setting changes
     }))
     stockAnalyserSettingsService.patchSettings({ explanatoryTextEnabled: show })
-      .catch(err => console.warn('[stock-analyser-settings] save failed', err))
+      .catch(err => {
+        console.warn('[stock-analyser-settings] save failed', err)
+        notifyError(err, { title: 'Settings', description: "Couldn't save your setting change." })
+      })
   }, [])
 
   const setDefaultSearchMode = useCallback((mode: SearchMode) => {
     setState(prev => ({ ...prev, defaultSearchMode: mode }))
     stockAnalyserSettingsService.patchSettings({ defaultSearchMode: mode })
-      .catch(err => console.warn('[stock-analyser-settings] save failed', err))
+      .catch(err => {
+        console.warn('[stock-analyser-settings] save failed', err)
+        notifyError(err, { title: 'Settings', description: "Couldn't save your setting change." })
+      })
   }, [])
 
   const setTabTextOverride = useCallback((tab: TabId, show: boolean) => {

@@ -15,6 +15,7 @@ import {
 import { callClaudeAPI } from '@/lib/hooks/use-claude'
 import { getMockOhlcvData } from '@/lib/services/ai/fixtures/ohlcv-data'
 import { latestPriceFromOhlcv } from '@/lib/market-data'
+import { mapWithConcurrency } from '@/lib/util/map-with-concurrency'
 import {
   createStockAnalysisPrompt,
   normaliseStockAnalysisSignals,
@@ -89,11 +90,20 @@ export const portfolioService = {
 
   /**
    * Enrich each ticker with Claude analysis.
-   * Cache hits and misses are processed IN PARALLEL, per ticker (migration
-   * invariant #4: watchlist/portfolio refresh uses Promise.all, not serial
-   * awaits). `onResult` fires for each ticker as its result arrives, so the UI
-   * fills in progressively regardless of completion order. Each ticker is
-   * error-isolated and abort-aware — one failure never blocks the others.
+   *
+   * Tickers are processed through a BOUNDED worker pool (`mapWithConcurrency`)
+   * capped at `getConfig().concurrency.enrich` in-flight at a time — still
+   * parallel (migration invariant #4: not serial), but the burst of per-ticker
+   * Lambda invocations is bounded so a single user's refresh can't saturate the
+   * account Lambda concurrency quota (which surfaces to the user as 500s). Each
+   * ticker's whole chain (cache read → model-on-miss → price overlay) runs inside
+   * one worker, so at most `limit` invocations are ever in flight. `onResult`
+   * fires per ticker as its result arrives, so the UI fills in progressively.
+   *
+   * Each ticker is error-isolated and abort-aware — one failure never blocks the
+   * others. `onError` fires per failed ticker so the caller can surface the
+   * failure (toast / "unavailable · retry" state) instead of a card stuck on
+   * "Analysing…".
    *
    * `options.forceRefresh` bypasses the ANALYSIS# cache read so every ticker is
    * treated as a miss and RE-analysed (fresh model call → fresh cache entry →
@@ -106,52 +116,50 @@ export const portfolioService = {
     signal?: AbortSignal,
     onCacheMetadata?: (ticker: string, metadata: CacheMetadata) => void,
     options?: { forceRefresh?: boolean },
+    onError?: (ticker: string, error: unknown) => void,
   ): Promise<void> {
     const forceRefresh = options?.forceRefresh ?? false
+    const limit = getConfig().concurrency.enrich
 
-    // 1. Check cache for all tickers simultaneously — skipped when forcing a
-    //    refresh, so every ticker falls through to a fresh re-analysis below.
-    const cacheChecks = await Promise.all(
-      tickers.map(async (ticker) => ({
-        ticker,
-        cached: forceRefresh ? null : await getCacheSnapshot<StockAnalysisResult>(`ANALYSIS#${ticker}`),
-      }))
-    )
-
-    // 2. Resolve every ticker concurrently: cache hits overlay the real
-    //    (market-data) price; misses call Claude, cache, then overlay.
-    await Promise.all(
-      cacheChecks.map(async ({ ticker, cached }) => {
-        if (signal?.aborted) return
-        try {
-          if (cached) {
-            onCacheMetadata?.(ticker, { cachedAt: cached.cachedAt, expiresAt: cached.expiresAt })
-            onResult(ticker, await overlayLivePrice(ticker, normaliseStockAnalysisSignals(cached.value)))
-            return
-          }
-
-          const result = await callClaudeAPI<StockAnalysisResult>(
-            // webSearch: always-on grounding — parity with the Analyser tab, which sends
-            // the same prompt with webSearch:isLive. Portfolio + Watchlist (both route
-            // through this enrichHoldings) have no Live/Fast toggle in v0 and are
-            // always-live by design, so this is hardcoded true — no ModeToggle, zero
-            // surface change. Only cache MISSES reach here, so cost stays bounded.
-            { prompt: createStockAnalysisPrompt(ticker), systemPrompt: STOCK_ANALYSIS_SYSTEM_PROMPT, webSearch: true },
-            { signal }
-          )
-          if (signal?.aborted) return
-          const normalisedResult = normaliseStockAnalysisSignals(result)
-          try {
-            const entry = await setCacheSnapshot(`ANALYSIS#${ticker}`, normalisedResult)
-            onCacheMetadata?.(ticker, { cachedAt: entry.cachedAt, expiresAt: entry.expiresAt })
-          } catch (err) {
-            console.warn('[portfolio] cache write failed for', ticker, err)
-          }
-          onResult(ticker, await overlayLivePrice(ticker, normalisedResult))
-        } catch (err) {
-          if (!signal?.aborted) console.warn('[portfolio] enrichment failed for', ticker, err)
+    // Bounded per-ticker pass: cache-first (skipped on force refresh), else a
+    // fresh model call → cache write → price overlay. At most `limit` chains run
+    // concurrently; each pulls the next ticker as it finishes.
+    await mapWithConcurrency(tickers, limit, async (ticker) => {
+      if (signal?.aborted) return
+      try {
+        const cached = forceRefresh
+          ? null
+          : await getCacheSnapshot<StockAnalysisResult>(`ANALYSIS#${ticker}`)
+        if (cached) {
+          onCacheMetadata?.(ticker, { cachedAt: cached.cachedAt, expiresAt: cached.expiresAt })
+          onResult(ticker, await overlayLivePrice(ticker, normaliseStockAnalysisSignals(cached.value)))
+          return
         }
-      })
-    )
+
+        const result = await callClaudeAPI<StockAnalysisResult>(
+          // webSearch: always-on grounding — parity with the Analyser tab, which sends
+          // the same prompt with webSearch:isLive. Portfolio + Watchlist (both route
+          // through this enrichHoldings) have no Live/Fast toggle in v0 and are
+          // always-live by design, so this is hardcoded true — no ModeToggle, zero
+          // surface change. Only cache MISSES reach here, so cost stays bounded.
+          { prompt: createStockAnalysisPrompt(ticker), systemPrompt: STOCK_ANALYSIS_SYSTEM_PROMPT, webSearch: true },
+          { signal }
+        )
+        if (signal?.aborted) return
+        const normalisedResult = normaliseStockAnalysisSignals(result)
+        try {
+          const entry = await setCacheSnapshot(`ANALYSIS#${ticker}`, normalisedResult)
+          onCacheMetadata?.(ticker, { cachedAt: entry.cachedAt, expiresAt: entry.expiresAt })
+        } catch (err) {
+          console.warn('[portfolio] cache write failed for', ticker, err)
+        }
+        onResult(ticker, await overlayLivePrice(ticker, normalisedResult))
+      } catch (err) {
+        // Abort is a deliberate cancellation, not a failure — don't surface it.
+        if (signal?.aborted) return
+        console.warn('[portfolio] enrichment failed for', ticker, err)
+        onError?.(ticker, err)
+      }
+    })
   },
 }

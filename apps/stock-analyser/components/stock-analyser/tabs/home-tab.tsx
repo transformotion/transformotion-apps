@@ -10,6 +10,7 @@ import { watchlistService } from "@/lib/services/watchlist/watchlist-service"
 import { cachedQuotesService } from "@/lib/services/cached-quotes"
 import { homeDashboardService, type MarketRoundup, type MarketSignals } from "@/lib/services/dashboard"
 import { useOhlcvData } from "@/lib/hooks/use-ohlcv-data"
+import { notifyError } from "@/lib/util/notify-error"
 import { valuePortfolio, watchlistPnl, pickFeatured } from "@/lib/domain/portfolio-valuation"
 import { stockSignalBadgeClassName } from "../status-badge"
 import {
@@ -104,6 +105,16 @@ export function HomeTab() {
     const ctrl = new AbortController()
     abortRef.current = ctrl
 
+    // The dashboard is a collage of best-effort widgets; a failed load used to be
+    // indistinguishable from genuinely-empty data. Surface any real failure as ONE
+    // calm, deduped toast (notifyError collapses the burst by message) so the user
+    // knows the data is stale, not empty — without a per-widget alarm.
+    const notifyDashboard = (err: unknown) =>
+      notifyError(err, {
+        title: "Dashboard",
+        description: "Some data couldn't load just now. Refresh or try again shortly.",
+      })
+
     portfolioService.getHoldings().then((holdings) => {
       if (cancelled) return
       setPortfolio(holdings.map((h) => ({ ticker: h.ticker, shares: h.shares, avgCost: h.avgCost, isGifted: h.isGifted })))
@@ -112,8 +123,11 @@ export function HomeTab() {
         holdings.map((h) => h.ticker),
         (ticker, result) => { if (!cancelled) setPfAnalysis((p) => ({ ...p, [ticker]: result })) },
         ctrl.signal,
+        undefined,
+        undefined,
+        (_ticker, err) => { if (!cancelled) notifyDashboard(err) },
       )
-    }).catch(() => { if (!cancelled) setPfLoaded(true) })
+    }).catch((err) => { if (!cancelled) { setPfLoaded(true); notifyDashboard(err) } })
 
     watchlistService.getItems().then((items) => {
       if (cancelled) return
@@ -123,17 +137,19 @@ export function HomeTab() {
         (ticker, result) => { if (!cancelled) setWlAnalysis((w) => ({ ...w, [ticker]: result })) },
         ctrl.signal,
         (ticker, metadata) => { if (!cancelled) setWlMeta((w) => ({ ...w, [ticker]: metadata })) },
+        undefined,
+        (_ticker, err) => { if (!cancelled) notifyDashboard(err) },
       )
-    }).catch(() => {})
+    }).catch((err) => { if (!cancelled) notifyDashboard(err) })
 
     cachedQuotesService.getQuotes().then((quotes) => {
       if (cancelled) return
       const top = pickFeatured(quotes)
       if (top) setFeatured({ ticker: top.ticker, price: top.price, dayChangePct: top.dayChangePct })
-    }).catch(() => {})
+    }).catch((err) => { if (!cancelled) notifyDashboard(err) })
 
-    homeDashboardService.getMarketSignals().then((s) => { if (!cancelled) setSignals(s) }).catch(() => {})
-    homeDashboardService.getMarketRoundup().then((r) => { if (!cancelled) setRoundup(r) }).catch(() => {})
+    homeDashboardService.getMarketSignals().then((s) => { if (!cancelled) setSignals(s) }).catch((err) => { if (!cancelled) notifyDashboard(err) })
+    homeDashboardService.getMarketRoundup().then((r) => { if (!cancelled) setRoundup(r) }).catch((err) => { if (!cancelled) notifyDashboard(err) })
 
     return () => { cancelled = true; ctrl.abort() }
   }, [])

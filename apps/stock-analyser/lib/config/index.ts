@@ -18,6 +18,7 @@ import {
   type FeaturesConfig,
   type AppsConfig,
 } from '@transformotion/runtime-config'
+import { resolveConcurrencyLimit } from '@/lib/util/map-with-concurrency'
 
 export interface AIConfig {
   provider: 'mock' | 'claude'
@@ -25,6 +26,20 @@ export interface AIConfig {
   wssUrl: string
   saWssUrl: string
 }
+
+export interface ConcurrencyConfig {
+  /**
+   * Max tickers enriched concurrently by `portfolioService.enrichHoldings`
+   * (Portfolio / Watchlist / Home). Bounds the burst of per-ticker Lambda
+   * invocations so a single user's refresh can't saturate the account-level
+   * Lambda concurrency quota. Env: `NEXT_PUBLIC_ENRICH_CONCURRENCY` (default 4;
+   * raised per stage, e.g. 10 for prod).
+   */
+  enrich: number
+}
+
+/** Default in-flight ticker limit when the env var is unset (dev). */
+const DEFAULT_ENRICH_CONCURRENCY = 4
 
 export interface ControlPlaneConfig {
   /** Launchpad control-plane API base URL (includes the API Gateway stage). */
@@ -41,6 +56,7 @@ export interface AppConfig {
   features: FeaturesConfig
   apps: AppsConfig
   controlPlane: ControlPlaneConfig
+  concurrency: ConcurrencyConfig
 }
 
 export type {
@@ -108,6 +124,12 @@ function loadConfig(): AppConfig {
     },
     controlPlane: {
       apiUrl: process.env.NEXT_PUBLIC_LAUNCHPAD_CONTROL_PLANE_API_URL ?? '',
+    },
+    concurrency: {
+      enrich: resolveConcurrencyLimit(
+        process.env.NEXT_PUBLIC_ENRICH_CONCURRENCY,
+        DEFAULT_ENRICH_CONCURRENCY,
+      ),
     },
   }
 }

@@ -16,9 +16,10 @@ import {
   getAlert,
   type CycleStage,
 } from "@transformotion/ui-primitives"
-import { Eye, RefreshCw, X, TrendingUp, ChevronDown } from "lucide-react"
+import { Eye, RefreshCw, X, TrendingUp, ChevronDown, AlertCircle } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useDerivedCacheStatus } from "@/lib/hooks"
+import { notifyError } from "@/lib/util/notify-error"
 import type { CacheMetadata } from "@/lib/services/cache/dynamo-ttl-cache"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -51,6 +52,7 @@ export function WatchlistTab() {
 
   const [analysisMap, setAnalysisMap] = useState<Record<string, StockAnalysisResult>>({})
   const [cacheMetadata, setCacheMetadata] = useState<Record<string, CacheMetadata>>({})
+  const [erroredTickers, setErroredTickers] = useState<Set<string>>(new Set())
   const [isAnalysing, setIsAnalysing]   = useState(false)
   const [analysingLeft, setAnalysingLeft] = useState(0)
   const [tickerInput, setTickerInput]   = useState("")
@@ -82,6 +84,13 @@ export function WatchlistTab() {
       setAnalysisMap({})
       setCacheMetadata({})
     }
+    // Clear stale failures for this run — a retry starts fresh.
+    setErroredTickers(prev => {
+      if (prev.size === 0) return prev
+      const next = new Set(prev)
+      tickers.forEach(t => next.delete(t))
+      return next
+    })
 
     setIsAnalysing(true)
     setAnalysingLeft(tickers.length)
@@ -96,6 +105,13 @@ export function WatchlistTab() {
         ctrl.signal,
         (ticker, metadata) => setCacheMetadata(prev => ({ ...prev, [ticker]: metadata })),
         { forceRefresh: force },
+        (ticker, err) => {
+          // Mark the ticker so its card shows "couldn't load · retry" instead of
+          // a card stuck on "Analysing…" or silently showing default NEUTRAL data.
+          setErroredTickers(prev => new Set(prev).add(ticker))
+          setAnalysingLeft(prev => Math.max(0, prev - 1))
+          notifyError(err)
+        },
       )
     } finally {
       setIsAnalysing(false)
@@ -248,7 +264,8 @@ export function WatchlistTab() {
           const stageLabel = cycleStageLabel(cycleStage)
           const alert      = getAlert(cyclePos, verdict)
           const isAsx      = entry.ticker.endsWith(".AX")
-          const loading    = !analysis && isAnalysing
+          const errored    = !analysis && erroredTickers.has(entry.ticker)
+          const loading    = !analysis && isAnalysing && !errored
 
           return (
             <Card
@@ -271,6 +288,15 @@ export function WatchlistTab() {
                     {analysis && <VerdictBadge verdict={verdict} size="sm" />}
                     {loading && (
                       <span className="text-[11px] px-1.5 py-0.5 rounded bg-muted/20 text-muted-foreground animate-pulse">Analysing…</span>
+                    )}
+                    {errored && (
+                      <button
+                        onClick={e => { e.stopPropagation(); handleEnrich([entry.ticker], true) }}
+                        className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-signal-red/10 text-signal-red hover:bg-signal-red/20 transition-colors"
+                      >
+                        <AlertCircle className="size-3" />
+                        Couldn&apos;t load · Retry
+                      </button>
                     )}
                   </div>
                   {price != null && (
