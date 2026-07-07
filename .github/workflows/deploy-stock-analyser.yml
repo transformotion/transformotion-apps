@@ -77,6 +77,12 @@ jobs:
       NEXT_PUBLIC_SIGNOUT_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}/signed-out/
       NEXT_PUBLIC_COMMIT_HASH: ${{ github.sha }}
       NEXT_PUBLIC_SA_WSS_URL: ${{ vars.NEXT_PUBLIC_SA_WSS_URL }}
+      # Max tickers enriched concurrently in enrichHoldings (Portfolio/Watchlist/
+      # Home). Bounds the per-user burst of Lambda invocations against the account
+      # concurrency quota. Baked at build (NEXT_PUBLIC_*). Default 4; set the
+      # NEXT_PUBLIC_ENRICH_CONCURRENCY environment var to 10 for prod. Parsed +
+      # clamped [1,32] at runtime by resolveConcurrencyLimit.
+      NEXT_PUBLIC_ENRICH_CONCURRENCY: ${{ vars.NEXT_PUBLIC_ENRICH_CONCURRENCY || '4' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -212,6 +218,12 @@ jobs:
       NEXT_PUBLIC_SIGNOUT_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}/signed-out/
       NEXT_PUBLIC_COMMIT_HASH: ${{ github.sha }}
       NEXT_PUBLIC_SA_WSS_URL: ${{ vars.NEXT_PUBLIC_SA_WSS_URL }}
+      # Max tickers enriched concurrently in enrichHoldings (Portfolio/Watchlist/
+      # Home). Bounds the per-user burst of Lambda invocations against the account
+      # concurrency quota. Baked at build (NEXT_PUBLIC_*). Default 4; set the
+      # NEXT_PUBLIC_ENRICH_CONCURRENCY environment var to 10 for prod. Parsed +
+      # clamped [1,32] at runtime by resolveConcurrencyLimit.
+      NEXT_PUBLIC_ENRICH_CONCURRENCY: ${{ vars.NEXT_PUBLIC_ENRICH_CONCURRENCY || '4' }}
     steps:
       - uses: actions/checkout@v4
 

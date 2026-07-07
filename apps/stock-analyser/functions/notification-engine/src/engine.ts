@@ -12,6 +12,10 @@ import {
 } from '@transformotion/contracts/stock-analyser/notification-preferences';
 import type { PortfolioHolding, WatchlistItem } from '@transformotion/contracts/stock-analyser/types';
 import type { StockAnalysisResult } from '../../../lib/services/portfolio/types';
+import { mapWithConcurrency } from '../../../lib/util/map-with-concurrency';
+
+/** In-flight ticker limit for the P&W warm when `deps.warmConcurrency` is absent. */
+const DEFAULT_WARM_CONCURRENCY = 4;
 
 export type ActionableVerdict = 'BUY' | 'SELL';
 export type Verdict = ActionableVerdict | 'HOLD' | 'NEUTRAL';
@@ -103,6 +107,14 @@ export interface NotificationEngineDeps {
    * (⇒ empty warm-set). Backs the unconditional P&W `ANALYSIS#` warm step.
    */
   listWarmTickers?: (opts: { portfolio: boolean; watchlist: boolean }) => Promise<string[]>;
+  /**
+   * Max tickers warmed concurrently in the P&W `ANALYSIS#` warm step. Uses the
+   * SAME bounded worker pool (`mapWithConcurrency`) as the frontend
+   * `enrichHoldings`, so the warm fan-out can't burst the account Lambda
+   * concurrency quota. Env: `WARM_CONCURRENCY` (default 4; raised per stage).
+   * Absent ⇒ `DEFAULT_WARM_CONCURRENCY`.
+   */
+  warmConcurrency?: number;
   /**
    * #594: warm the ETF caches (`ETF#{market}` for each market) by async-invoking
    * the runEtfs engine. Runs ONCE per job execution, AFTER the kill-switch gate and
@@ -382,9 +394,13 @@ async function warmPortfolioWatchlist(
     portfolio: warm.portfolio.effective,
     watchlist: warm.watchlist.effective,
   })) ?? [];
+  const limit = deps.warmConcurrency ?? DEFAULT_WARM_CONCURRENCY;
   let warmed = 0;
   let failed = 0;
-  for (const ticker of tickers) {
+  // Same bounded worker pool as the frontend enrichHoldings: at most `limit`
+  // tickers warmed concurrently. Per-ticker best-effort — one failure never
+  // aborts the batch (the mapper swallows into the counters).
+  await mapWithConcurrency(tickers, limit, async (ticker) => {
     try {
       await resolveAnalysis(ticker);
       warmed += 1;
@@ -392,11 +408,12 @@ async function warmPortfolioWatchlist(
       failed += 1;
       deps.log?.('notification-pw-warm-ticker-error', { ticker, err: String(err) });
     }
-  }
+  });
   deps.log?.('notification-pw-warm-complete', {
     tickerCount: tickers.length,
     warmed,
     failed,
+    concurrency: limit,
     portfolio: warm.portfolio.effective,
     watchlist: warm.watchlist.effective,
   });

@@ -35,6 +35,7 @@ import {
   STOCK_ANALYSIS_SYSTEM_PROMPT,
 } from '../../../lib/analysis/stock-analysis-signals';
 import type { StockAnalysisResult } from '../../../lib/services/portfolio/types';
+import { resolveConcurrencyLimit } from '../../../lib/util/map-with-concurrency';
 import { buildNotificationEmail } from './email';
 import { randomUUID } from 'crypto';
 import {
@@ -104,6 +105,9 @@ interface RuntimeEnv {
   fallbackModel?: string;
   fromEmail: string;
   appUrl: string;
+  // Max tickers warmed concurrently in the P&W ANALYSIS# warm (same bounded pool
+  // as the frontend enrichHoldings). Env WARM_CONCURRENCY (default 4).
+  warmConcurrency: number;
 }
 
 function requireEnv(name: string): string {
@@ -137,6 +141,7 @@ function env(): RuntimeEnv {
     fallbackModel: process.env.AI_FALLBACK_MODEL,
     fromEmail: requireEnv('FROM_EMAIL'),
     appUrl: process.env.APP_URL ?? `https://${stage === 'prod' ? 'apps' : 'dev.apps'}.transformotion.com.au`,
+    warmConcurrency: resolveConcurrencyLimit(process.env.WARM_CONCURRENCY, 4),
   };
 }
 
@@ -848,6 +853,7 @@ export function createDependencies(runtime: RuntimeEnv = env()): NotificationEng
     warmEtfsCache: () => warmEtfsForAllMarkets(runtime),
     warmMetalsCache: () => warmMetalsForGlobal(runtime),
     listWarmTickers: (opts) => listWarmTickers(runtime, opts),
+    warmConcurrency: runtime.warmConcurrency,
     readAccountName: (accountId) => readAccountName(runtime, accountId),
     recordSendLog: (run) => recordSendLog(runtime, run),
     listStockAnalyserMembers: () => listStockAnalyserMembers(runtime),

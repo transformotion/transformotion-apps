@@ -286,6 +286,11 @@ export class StockAnalyserApiStack extends cdk.Stack {
         AI_FALLBACK_MODEL: 'claude-sonnet-4-6',
         FROM_EMAIL: `noreply${stage === 'prod' ? '' : `-${stage}`}@transformotion.com.au`,
         APP_URL: `https://${stage === 'prod' ? 'apps' : 'dev.apps'}.transformotion.com.au`,
+        // Max tickers warmed concurrently in the P&W ANALYSIS# warm — the same
+        // bounded worker pool the frontend enrichHoldings uses. 4 in dev, 10 in
+        // prod (parsed + clamped [1,32] by resolveConcurrencyLimit). Bounds the
+        // warm fan-out against the account Lambda concurrency quota.
+        WARM_CONCURRENCY: stage === 'prod' ? '10' : '4',
       },
       bundling,
     });

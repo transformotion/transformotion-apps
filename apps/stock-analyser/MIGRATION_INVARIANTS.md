@@ -33,10 +33,16 @@ in the monorepo's test suite.
    `isLive()` in a context without a toggle and assert `false`, not
    `undefined`.
 
-4. Watchlist refresh must use `Promise.all`, not serial awaits. Root
+4. Watchlist/portfolio refresh must be **concurrent, not serial**. Root
    cause: serial `for` loop with `await` caused 30+ second refreshes.
-   Test: performance test asserting concurrent fetches, or a
-   code-level assertion that the relevant function calls `Promise.all`.
+   The invariant is *parallelism*, not the literal `Promise.all` call:
+   `enrichHoldings` now runs a **bounded worker pool**
+   (`mapWithConcurrency`, capped at `getConfig().concurrency.enrich`,
+   default 4) instead of unbounded `Promise.all`, so a large watchlist
+   can't burst one Lambda invocation per ticker and saturate the account
+   Lambda-concurrency quota (which surfaced to users as 500s). Still fully
+   parallel — just capped. Test: assert the refresh is not serial (>1
+   in flight) AND never exceeds the configured limit.
 
 5. Claude tickers may not string-match portfolio tickers exactly
    (e.g. `BRN` vs `BRN.AX`). Root cause: exact string equality. Fix:

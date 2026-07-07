@@ -160,6 +160,19 @@ Stock Analyser owns:
   invoked daily by EventBridge
 - AI runtime selection: app override -> platform default -> env fallback, using
   app-owned Anthropic/OpenAI secrets
+- Bounded per-ticker enrichment concurrency: the frontend `enrichHoldings`
+  (Portfolio/Watchlist/Home) and the notification-engine P&W `ANALYSIS#` warm both
+  run a shared bounded worker pool (`lib/util/map-with-concurrency`), capped by
+  `NEXT_PUBLIC_ENRICH_CONCURRENCY` (frontend, default 4 dev / 10 prod) and
+  `WARM_CONCURRENCY` (Lambda, `'4'` dev / `'10'` prod). Bounds the burst of Lambda
+  invocations so neither a user refresh nor the daily warm can saturate the
+  account-level Lambda concurrency quota (an unbounded burst surfaced to users as
+  intermittent 500s).
+- App-wide failure handling: a mounted `Toaster` + a global unhandled-rejection/
+  error listener (`GlobalErrorListener`) + route error boundaries (`app/error.tsx`,
+  `app/global-error.tsx`) surface async failures as friendly toasts regardless of
+  tab/screen (raw errors mapped by `lib/util/describe-error`), replacing the prior
+  swallow-to-`console.warn` / stuck-"Analysing…" behaviour.
 
 The runtime flow is:
 

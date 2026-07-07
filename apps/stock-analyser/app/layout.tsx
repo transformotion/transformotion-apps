@@ -1,7 +1,9 @@
 import type { Metadata, Viewport } from 'next'
 import { Inter, Geist_Mono, Bebas_Neue, Oswald } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
+import { Toaster } from '@transformotion/ui-primitives'
 import { AmplifyProvider } from '@/components/providers/amplify-provider'
+import { GlobalErrorListener } from '@/components/providers/global-error-listener'
 import { BUILD_COMMIT_HASH, APP_IDENTITY } from '@/lib/build-info'
 import { ThemeProvider } from '@/components/theme-provider'
 import './globals.css'
@@ -74,6 +76,11 @@ export default function RootLayout({
           <AmplifyProvider>
             {children}
           </AmplifyProvider>
+          {/* App-wide failure surfacing: toast host + async-error safety net,
+              mounted above the app so they cover every tab, auth screen, and
+              provider boundary. */}
+          <GlobalErrorListener />
+          <Toaster />
         </ThemeProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>

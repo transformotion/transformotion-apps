@@ -28,6 +28,8 @@ import {
 import { cn } from "@/lib/utils"
 import { Spinner } from "@transformotion/ui-primitives"
 import { useDerivedCacheStatus } from "@/lib/hooks"
+import { notifyError } from "@/lib/util/notify-error"
+import { describeErrorText } from "@/lib/util/describe-error"
 import type { CacheMetadata } from "@/lib/services/cache/dynamo-ttl-cache"
 import {
   portfolioService,
@@ -71,7 +73,7 @@ export function PortfolioTab() {
     let cancelled = false
     portfolioService.getHoldings()
       .then(holdings => { if (!cancelled) setRawHoldings(holdings) })
-      .catch(err     => { if (!cancelled) setLoadError(err instanceof Error ? err.message : 'Failed to load portfolio') })
+      .catch(err     => { if (!cancelled) setLoadError(describeErrorText(err)) })
       .finally(()    => { if (!cancelled) setIsLoading(false) })
     return () => { cancelled = true }
   }, [])
@@ -98,19 +100,27 @@ export function PortfolioTab() {
     setIsAnalysing(true)
     setAnalysingLeft(toAnalyse.length)
 
-    await portfolioService.enrichHoldings(
-      toAnalyse,
-      (ticker, result) => {
-        setAnalysisMap(prev => ({ ...prev, [ticker]: result }))
-        setAnalysingLeft(prev => Math.max(0, prev - 1))
-      },
-      abortRef.current.signal,
-      (ticker, metadata) => setCacheMetadata(prev => ({ ...prev, [ticker]: metadata })),
-      { forceRefresh: force }
-    )
-
-    setIsAnalysing(false)
-    setAnalysingLeft(0)
+    try {
+      await portfolioService.enrichHoldings(
+        toAnalyse,
+        (ticker, result) => {
+          setAnalysisMap(prev => ({ ...prev, [ticker]: result }))
+          setAnalysingLeft(prev => Math.max(0, prev - 1))
+        },
+        abortRef.current.signal,
+        (ticker, metadata) => setCacheMetadata(prev => ({ ...prev, [ticker]: metadata })),
+        { forceRefresh: force },
+        (_ticker, err) => {
+          // Per-ticker enrichment failure — surface it (deduped) instead of the
+          // holding silently keeping stale/default data.
+          setAnalysingLeft(prev => Math.max(0, prev - 1))
+          notifyError(err)
+        },
+      )
+    } finally {
+      setIsAnalysing(false)
+      setAnalysingLeft(0)
+    }
   }, [rawHoldings, analysisMap, isAnalysing])
 
   // Auto-enrich on load when holdings come in

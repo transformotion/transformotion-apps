@@ -250,6 +250,8 @@ Required env vars marked `[REQUIRED]` in `.env.example` must be set before the d
 | `NEXT_PUBLIC_RUNTIME_PROFILE` | `mock` (default; local development) or `live` (deployed environments). Determines defaults for auth, data, AI, and future concerns. See root `AGENTS.md` for the design map. |
 | `NEXT_PUBLIC_API_URL` | Stock Analyser-owned API Gateway URL from `Transformotion{Stage}-StockAnalyserApi` |
 | `NEXT_PUBLIC_SA_WSS_URL` | Stock Analyser-owned WebSocket URL from `Transformotion{Stage}-StockAnalyserWs`; live AI WSS endpoint after #366 |
+| `NEXT_PUBLIC_ENRICH_CONCURRENCY` | Max tickers enriched concurrently by `enrichHoldings` (Portfolio/Watchlist/Home). Bounds the per-user Lambda-invocation burst against the account concurrency quota. `[OPTIONAL]`, default 4 (dev), set 10 for prod; parsed + clamped [1,32]. Same bounded pool (`mapWithConcurrency`) the warm job uses via `WARM_CONCURRENCY`. |
+| `WARM_CONCURRENCY` | **Lambda-only** (CDK-set on `stock-analyser-notification-engine-{stage}`): max tickers warmed concurrently in the P&W `ANALYSIS#` warm. `'4'` dev / `'10'` prod; parsed + clamped [1,32]. Not a `NEXT_PUBLIC_*` var — must never appear in the deploy workflow env block. |
 
 **Cognito client variable rebind:** The GitHub Actions variable `NEXT_PUBLIC_STOCK_ANALYSER_COGNITO_CLIENT_ID` is mapped to the generic runtime env var `NEXT_PUBLIC_COGNITO_CLIENT_ID` in the deploy workflow's env block. This allows each app to have its own Cognito App Client (established in sub-phase 7b.5-alpha) while the runtime code (`@transformotion/auth-client`) reads a single generic name. Local development reads `NEXT_PUBLIC_COGNITO_CLIENT_ID` directly from `.env.local`.
 

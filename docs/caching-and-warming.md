@@ -105,15 +105,19 @@ Per-surface behaviour:
 | Recs (#595) | `recs` (requires `market`) | async-invoke the recommendations engine per warmed sector | **smart-filter**: top-3 `enter`-flagged sectors **per region**, ranked by `cyclePosition` ascending (`WARM_RECS_CAP = 3`, ≤12 recs/run); mode `top-picks` only; cache key uses the `'Top Picks'` display label |
 | ETFs (#594) | `etfs` | async-invoke the etfs engine once **per market** (ASX/US/Global) | **none** — ETFs have no `enter`-gate equivalent, all 3 markets every run |
 | Metals (#627) | `metals` | **single** async-invoke of the metals engine | n/a — Metals is one global `METALS` key |
-| P&W `ANALYSIS#` (M19) | `portfolio`, `watchlist` | inline `createAnalysisResolver` per distinct ticker | the **distinct union** of Portfolio/Watchlist holdings across **all** accounts (whichever flags are ON), cache-first (a same-day fresh `ANALYSIS#` = skip). **No** consent/eligibility filter — the warmed `ANALYSIS#` is SHARED, non-account-private (consent gates SENDS only, §6) |
+| P&W `ANALYSIS#` (M19) | `portfolio`, `watchlist` | `createAnalysisResolver` per distinct ticker, through a **bounded worker pool** (`mapWithConcurrency`, `WARM_CONCURRENCY`, default 4 dev / 10 prod) | the **distinct union** of Portfolio/Watchlist holdings across **all** accounts (whichever flags are ON), cache-first (a same-day fresh `ANALYSIS#` = skip). **No** consent/eligibility filter — the warmed `ANALYSIS#` is SHARED, non-account-private (consent gates SENDS only, §6) |
 
 Market warm is synchronous (it computes the AI market analysis inline, then SHARED-writes).
 Recs/ETFs/Metals are **fire-and-forget** `Event` invokes of their engines, which each run the
 **same engine core a live tab run uses** and SHARED-write the result — so warmed data is
 identical-to-live by construction. The **P&W step** runs the same cache-first compute path a live
-Analyser run uses (read SHARED `ANALYSIS#` → else generate → SHARED-write), inline and best-effort
-per ticker. The engine's warm-set read scans the whole `portfolio`/`watchlist` tables (`Scan` is
-already granted by `grantReadData`); no new IAM.
+Analyser run uses (read SHARED `ANALYSIS#` → else generate → SHARED-write), best-effort per ticker,
+through a **bounded worker pool** (`mapWithConcurrency`, at most `WARM_CONCURRENCY` tickers in flight
+— default 4 dev / 10 prod, parsed + clamped [1,32]). This is the **same bounded-concurrency mechanism
+the frontend `enrichHoldings` uses** (`getConfig().concurrency.enrich`), so neither the daily warm nor
+a user's refresh can burst one Lambda invocation per ticker and saturate the account Lambda-concurrency
+quota. The engine's warm-set read scans the whole `portfolio`/`watchlist` tables (`Scan` is already
+granted by `grantReadData`); no new IAM.
 
 ---
 
