@@ -105,7 +105,8 @@ export function PortfolioTab() {
         setAnalysingLeft(prev => Math.max(0, prev - 1))
       },
       abortRef.current.signal,
-      (ticker, metadata) => setCacheMetadata(prev => ({ ...prev, [ticker]: metadata }))
+      (ticker, metadata) => setCacheMetadata(prev => ({ ...prev, [ticker]: metadata })),
+      { forceRefresh: force }
     )
 
     setIsAnalysing(false)

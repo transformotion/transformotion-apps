@@ -94,18 +94,27 @@ export const portfolioService = {
    * awaits). `onResult` fires for each ticker as its result arrives, so the UI
    * fills in progressively regardless of completion order. Each ticker is
    * error-isolated and abort-aware — one failure never blocks the others.
+   *
+   * `options.forceRefresh` bypasses the ANALYSIS# cache read so every ticker is
+   * treated as a miss and RE-analysed (fresh model call → fresh cache entry →
+   * advanced freshness timestamp). Used by the explicit Refresh buttons; the
+   * default (cache-first) is used for auto-load on mount.
    */
   async enrichHoldings(
     tickers: string[],
     onResult: (ticker: string, result: StockAnalysisResult) => void,
     signal?: AbortSignal,
     onCacheMetadata?: (ticker: string, metadata: CacheMetadata) => void,
+    options?: { forceRefresh?: boolean },
   ): Promise<void> {
-    // 1. Check cache for all tickers simultaneously.
+    const forceRefresh = options?.forceRefresh ?? false
+
+    // 1. Check cache for all tickers simultaneously — skipped when forcing a
+    //    refresh, so every ticker falls through to a fresh re-analysis below.
     const cacheChecks = await Promise.all(
       tickers.map(async (ticker) => ({
         ticker,
-        cached: await getCacheSnapshot<StockAnalysisResult>(`ANALYSIS#${ticker}`),
+        cached: forceRefresh ? null : await getCacheSnapshot<StockAnalysisResult>(`ANALYSIS#${ticker}`),
       }))
     )
 
