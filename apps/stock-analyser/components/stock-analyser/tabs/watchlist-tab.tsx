@@ -95,6 +95,7 @@ export function WatchlistTab() {
         },
         ctrl.signal,
         (ticker, metadata) => setCacheMetadata(prev => ({ ...prev, [ticker]: metadata })),
+        { forceRefresh: force },
       )
     } finally {
       setIsAnalysing(false)
