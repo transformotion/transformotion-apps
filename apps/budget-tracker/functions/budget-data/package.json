@@ -6,7 +6,8 @@
   "scripts": {
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
-    "lint": "echo \"lint: budget-data\""
+    "lint": "echo \"lint: budget-data\"",
+    "test": "vitest run"
   },
   "dependencies": {
     "@transformotion/budget-domain": "workspace:*",
@@ -18,6 +19,7 @@
     "@aws-sdk/lib-dynamodb": "^3",
     "@types/aws-lambda": "^8",
     "@types/node": "^22",
-    "typescript": "*"
+    "typescript": "*",
+    "vitest": "^1"
   }
 }

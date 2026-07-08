@@ -9,7 +9,7 @@ const TABLE = process.env.BUDGET_DATA_TABLE!;
 // D8 write-path membership loader (scoped GetItem on launchpad-account-members).
 const membershipLoader = dynamoMembershipLoader(ddb, process.env.ACCOUNT_MEMBERS_TABLE!);
 
-const CONCEPTS = ['categories', 'budgetAmounts', 'budgetFrequencies'] as const;
+const CONCEPTS = ['categories', 'budgetAmounts', 'budgetFrequencies', 'savingsGoal'] as const;
 type Concept = typeof CONCEPTS[number];
 
 const DEFAULT_BUDGET_DATA: BudgetData = {
