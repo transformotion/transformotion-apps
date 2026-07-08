@@ -120,8 +120,19 @@
  * SHARED-cached quote per ticker (never triggers a fetch/warm). Per-app version
  * lines bump additively (budget-tracker m15.1.0 -> m15.2.0, stock-analyser
  * m15.1.0 -> m15.2.0). Minor bump: purely additive types + routes.
+ *
+ * m16.11.0 — Non-breaking (additive, BT Review "accept-writes-rule" PR 1).
+ * budget-tracker `ReviewBatchResult` gains two OPTIONAL fields — `suggestedPattern`
+ * (minimal stable merchant token) and `suggestedRuleName` — so an accepted AI
+ * Review suggestion can also create a custom `MatchingRule`. Optional at the type
+ * level for an additive rollout ahead of the runtime prompt/UI; the AI output is
+ * REQUIRED to carry both, and consumers treat a non-conforming/absent
+ * `suggestedPattern` as absent (self-match invariant — see
+ * spec/budget-tracker/behaviour.md § "AI Review rule suggestion"). No existing
+ * shape altered; no runtime code in this PR. Per-app: budget-tracker
+ * m15.2.0 -> m15.3.0. Minor bump: purely additive optional fields.
  */
-export const CONTRACT_VERSION = 'm16.10.0' as const;
+export const CONTRACT_VERSION = 'm16.11.0' as const;
 
 export type ContractScope =
   | '_shared'
