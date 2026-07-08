@@ -1,4 +1,5 @@
 import { Transaction, TransactionRepository } from '@transformotion/budget-domain'
+import { MOCK_SEED_TRANSACTIONS } from './mock-seed'
 
 export type { Transaction }
 
@@ -9,7 +10,13 @@ class LocalTransactionRepository implements TransactionRepository {
     if (typeof window === 'undefined') return []
     try {
       const stored = localStorage.getItem(STORAGE_KEY)
-      return stored ? JSON.parse(stored) : []
+      // First run only (key absent) → seed the mock demo data. A user-emptied
+      // list is stored as '[]' (not null), so clearing data is never re-seeded.
+      if (stored === null) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(MOCK_SEED_TRANSACTIONS))
+        return [...MOCK_SEED_TRANSACTIONS]
+      }
+      return JSON.parse(stored)
     } catch {
       return []
     }

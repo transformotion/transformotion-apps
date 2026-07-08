@@ -1,4 +1,5 @@
 import type { BudgetData, BudgetDataRepository } from '@transformotion/budget-domain'
+import { MOCK_SEED_BUDGET_DATA } from './mock-seed'
 
 const BUDGET_DATA_KEY = 'budget-tracker-budget-data'
 
@@ -13,7 +14,13 @@ export class LocalBudgetDataRepository implements BudgetDataRepository {
     if (typeof window === 'undefined') return DEFAULT_BUDGET_DATA
     try {
       const stored = localStorage.getItem(BUDGET_DATA_KEY)
-      return stored ? { ...DEFAULT_BUDGET_DATA, ...JSON.parse(stored) } : DEFAULT_BUDGET_DATA
+      // First run only (key absent) → seed the mock category tree so the AI
+      // Review has somewhere to categorise. User edits persist thereafter.
+      if (stored === null) {
+        localStorage.setItem(BUDGET_DATA_KEY, JSON.stringify(MOCK_SEED_BUDGET_DATA))
+        return MOCK_SEED_BUDGET_DATA
+      }
+      return { ...DEFAULT_BUDGET_DATA, ...JSON.parse(stored) }
     } catch {
       return DEFAULT_BUDGET_DATA
     }
