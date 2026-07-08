@@ -57,8 +57,47 @@ invalidated, the server regenerates the text from the app-level AI config (D9)
 `invalidatedAt` marker (or delete the row). Auth: `requireAccountData` for the
 read (a `viewer` may read); regeneration runs server-side under that request.
 
+## AI Review rule suggestion (accept-writes-rule)
+
+Each `ReviewBatchResult` may carry two additional fields so that accepting an AI
+Review suggestion can also create a custom `MatchingRule` (via the existing
+`POST /api/budget/v1/rules`), not just recategorise the one transaction:
+
+- `suggestedPattern` — the **minimal stable merchant token** distilled from the
+  transaction description (e.g. `VERCEL`, `BP TANAWHA`, `COLES`). It is **NOT**
+  the full description, an amount, a date, or a reference number.
+- `suggestedRuleName` — a short, human-readable rule name (e.g. `Vercel hosting`).
+
+**The AI output is REQUIRED to populate both fields** for every reviewed
+transaction. They are optional at the TypeScript level only so the contract can
+roll out additively ahead of the runtime prompt and the Review-tab UI; a
+consumer must not assume presence (see the client-validation rule below).
+
+**Verbatim system prompt requirement.** The AI Review system prompt MUST
+instruct the model to return `suggestedPattern` and `suggestedRuleName` on every
+object, with the minimal-token guidance above and worked examples, e.g.:
+
+| Description (source transaction) | `suggestedPattern` | `suggestedRuleName` |
+|---|---|---|
+| `VERCEL              INC. HTTPSVERCEL. CA` | `VERCEL` | `Vercel hosting` |
+| `BP TANAWHA 4556 TANAWHA QLD` | `BP TANAWHA` | `BP fuel` |
+| `COLES 0342 MOOLOOLABA` | `COLES` | `Coles groceries` |
+
+**Self-match invariant.** A `suggestedPattern` MUST match its own source
+transaction's description under the app's normal matching semantics — a
+case-insensitive, whitespace-flexible `contains` match (the `applyRules` /
+`normalisePattern` convention in `@transformotion/budget-domain`, where the
+pattern is regex-escaped and whitespace runs are collapsed to `\s+`, matched
+with the `i` flag).
+
+**Client-validation rule.** Consumers MUST validate the invariant client-side
+and treat a non-conforming (or absent) `suggestedPattern` as **absent**: it is
+not offered as a prefill, and the user must supply a pattern before a rule can be
+saved.
+
 ## Mock Behaviour
 
 `MockAIService.reviewTransactions()` must produce `ReviewBatchResult`
 compatible findings and must not bypass the public service contract used by
-live review flows.
+live review flows. When it supplies `suggestedPattern` / `suggestedRuleName`,
+those must satisfy the self-match invariant above.

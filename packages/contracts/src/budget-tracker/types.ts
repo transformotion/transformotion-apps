@@ -1,7 +1,7 @@
 import type { AccountId, ISODateTime } from '../_shared/api';
 import type { AiAsyncStartResponse, AiProxyRequest } from '../_shared/ai-runtime';
 
-export type BudgetTrackerContractVersion = 'm15.2.0';
+export type BudgetTrackerContractVersion = 'm15.3.0';
 export type BudgetFrequency = 'weekly' | 'fortnightly' | 'monthly' | 'quarterly' | 'annually' | 'one-off';
 export type BudgetConfidence = 'high' | 'medium' | 'low';
 export type MatchType = 'contains' | 'startsWith' | 'regex';
@@ -156,6 +156,31 @@ export interface ReviewBatchResult {
   subcategoryId: string;
   reason: string;
   confidence: BudgetConfidence;
+  /**
+   * Review "accept-writes-rule" — minimal stable merchant token distilled from
+   * the source transaction's description (e.g. `VERCEL`, `BP TANAWHA`, `COLES`)
+   * — NOT the full description, amounts, dates, or reference numbers. Prefills
+   * the pattern of the custom rule created when a suggestion is accepted.
+   *
+   * INVARIANT: a `suggestedPattern` MUST match its own source transaction's
+   * description under the app's normal matching semantics — a case-insensitive,
+   * whitespace-flexible `contains` match (the `applyRules` / `normalisePattern`
+   * convention in `@transformotion/budget-domain`). Consumers MUST validate this
+   * client-side and treat a non-conforming pattern as ABSENT (offer no prefill;
+   * the user must supply one).
+   *
+   * Optional at the TYPE level so the field rolls out additively ahead of the
+   * runtime prompt/UI; the AI output is REQUIRED to carry it. See
+   * spec/budget-tracker/behaviour.md § "AI Review rule suggestion".
+   */
+  suggestedPattern?: string;
+  /**
+   * Review "accept-writes-rule" — short human-readable name for the custom rule
+   * an accept creates (e.g. `Vercel hosting`). Prefills the rule-name field.
+   * Optional at the type level (additive rollout); REQUIRED of the AI output per
+   * spec/budget-tracker/behaviour.md § "AI Review rule suggestion".
+   */
+  suggestedRuleName?: string;
 }
 
 export interface CsvAnalysisRequest extends AiProxyRequest {
@@ -212,7 +237,7 @@ export interface DashboardInsightResponse {
   stale: boolean;
 }
 
-export const budgetTrackerContractVersion = 'm15.2.0' as const satisfies BudgetTrackerContractVersion;
+export const budgetTrackerContractVersion = 'm15.3.0' as const satisfies BudgetTrackerContractVersion;
 
 export const exampleSubcategory = {
   subcategoryId: 'subcat-groceries',
@@ -303,6 +328,8 @@ export const exampleReviewBatchResult = {
   subcategoryId: 'subcat-groceries',
   reason: 'Merchant and amount match the grocery category.',
   confidence: 'high',
+  suggestedPattern: 'COLES',
+  suggestedRuleName: 'Coles groceries',
 } as const satisfies ReviewBatchResult;
 
 export const exampleCsvAnalysisResponse = {
