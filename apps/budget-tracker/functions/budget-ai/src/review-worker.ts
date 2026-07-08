@@ -24,6 +24,12 @@ type BatchResult = {
   subcategoryId: string;
   reason: string;
   confidence: 'high' | 'medium' | 'low';
+  // Review "accept-writes-rule": minimal merchant token + rule name the model
+  // proposes so an accepted suggestion can also create a custom MatchingRule.
+  // Pass-through to the WSS batch_result; the client validates the self-match
+  // invariant and treats a non-conforming/absent pattern as absent.
+  suggestedPattern?: string;
+  suggestedRuleName?: string;
 };
 
 const CONFIDENCE_ORDER: Record<string, number> = { high: 2, medium: 1, low: 0 };
@@ -43,7 +49,7 @@ async function runBatch(
   const proxyResponse = await invokeProxy(auth, accountId, {
     maxTokens: 4096,
     webSearch,
-    system:    `You are a personal finance assistant helping to categorise Australian bank transactions.\n\nYou will be given:\n- A list of budget categories, each with allowed subcategories\n- A list of transactions (index, description, amount)\n\n${webSearch ? 'You have access to a web_search tool. If a merchant or description is unfamiliar, you MAY search to identify the business type. Use web_search sparingly.' : ''}\n\nWhen a merchant could plausibly belong to multiple categories, use the transaction amount as a disambiguating signal. Smaller amounts at hospitality venues (pubs, bars, cafes) typically indicate drinks or snacks; larger amounts typically indicate meals. Smaller amounts at petrol stations may indicate convenience-store items; larger amounts indicate fuel. Smaller amounts at supermarkets may indicate a quick convenience purchase; larger amounts indicate a full grocery shop. Use your judgement based on typical Australian prices.\n\nYou must:\n- Return ONLY a JSON array, one object per transaction\n- Each object has exactly: {"index": <int>, "category": <string>, "subcategory": <string>, "reason": <string>, "confidence": "high"|"medium"|"low"}\n- The category must be one of the provided categories exactly\n- The subcategory must be one of the subcategories listed under that category exactly\n- "confidence" reflects how certain you are: "high" = clear match, "medium" = reasonable inference, "low" = best guess\n- The reason must be a single sentence explaining your choice in plain English, and should mention the amount where it influenced the decision\n- If a transaction is genuinely uncategorisable, return it with category: "", subcategory: "", confidence: "low", and reason explaining why\n- Do not include any text outside the JSON array\n- Do not wrap the JSON in markdown code fences`,
+    system:    `You are a personal finance assistant helping to categorise Australian bank transactions.\n\nYou will be given:\n- A list of budget categories, each with allowed subcategories\n- A list of transactions (index, description, amount)\n\n${webSearch ? 'You have access to a web_search tool. If a merchant or description is unfamiliar, you MAY search to identify the business type. Use web_search sparingly.' : ''}\n\nWhen a merchant could plausibly belong to multiple categories, use the transaction amount as a disambiguating signal. Smaller amounts at hospitality venues (pubs, bars, cafes) typically indicate drinks or snacks; larger amounts typically indicate meals. Smaller amounts at petrol stations may indicate convenience-store items; larger amounts indicate fuel. Smaller amounts at supermarkets may indicate a quick convenience purchase; larger amounts indicate a full grocery shop. Use your judgement based on typical Australian prices.\n\nYou must:\n- Return ONLY a JSON array, one object per transaction\n- Each object has exactly: {"index": <int>, "category": <string>, "subcategory": <string>, "reason": <string>, "confidence": "high"|"medium"|"low", "suggestedPattern": <string>, "suggestedRuleName": <string>}\n- The category must be one of the provided categories exactly\n- The subcategory must be one of the subcategories listed under that category exactly\n- "confidence" reflects how certain you are: "high" = clear match, "medium" = reasonable inference, "low" = best guess\n- The reason must be a single sentence explaining your choice in plain English, and should mention the amount where it influenced the decision\n- "suggestedPattern" is the MINIMAL stable merchant token from the description — the shortest text that identifies the merchant (e.g. "VERCEL", "BP TANAWHA", "COLES"). It MUST be a case-insensitive substring of THIS transaction's description, so a rule matching on it re-matches this transaction. Do NOT use the full description, an amount, a date, a card/reference number, or store/branch numbers.\n- "suggestedRuleName" is a short, human-readable name for a categorisation rule built from that merchant (e.g. "Vercel hosting", "BP fuel", "Coles groceries").\n- Examples: "VERCEL              INC. HTTPSVERCEL. CA" -> suggestedPattern "VERCEL", suggestedRuleName "Vercel hosting"; "BP TANAWHA 4556 TANAWHA QLD" -> suggestedPattern "BP TANAWHA", suggestedRuleName "BP fuel"; "COLES 0342 MOOLOOLABA" -> suggestedPattern "COLES", suggestedRuleName "Coles groceries".\n- If a transaction is genuinely uncategorisable, return it with category: "", subcategory: "", confidence: "low", suggestedPattern: "", suggestedRuleName: "", and reason explaining why\n- Do not include any text outside the JSON array\n- Do not wrap the JSON in markdown code fences`,
     prompt:    `BUDGET CATEGORIES AND SUBCATEGORIES:\n${categoryList}\n\nTRANSACTIONS TO CATEGORISE (index: description — amount):\n${formatTxList(batch)}`,
   });
 
@@ -54,7 +60,7 @@ async function runBatch(
     const clean = text.replace(/```json|```/g, '').trim();
     const rawSuggestions = JSON.parse(
       clean.slice(clean.indexOf('['), clean.lastIndexOf(']') + 1)
-    ) as Array<{ index: number; category: string; subcategory: string; reason: string; confidence: string }>;
+    ) as Array<{ index: number; category: string; subcategory: string; reason: string; confidence: string; suggestedPattern?: string; suggestedRuleName?: string }>;
 
     for (const s of rawSuggestions) {
       const key = `${s.category.toLowerCase()}::${s.subcategory.toLowerCase()}`;
@@ -64,11 +70,15 @@ async function runBatch(
         continue;
       }
       results.push({
-        index:         s.index,
-        categoryId:    ids.categoryId,
-        subcategoryId: ids.subcategoryId,
-        reason:        s.reason,
-        confidence:    (s.confidence as 'high' | 'medium' | 'low') ?? 'low',
+        index:            s.index,
+        categoryId:       ids.categoryId,
+        subcategoryId:    ids.subcategoryId,
+        reason:           s.reason,
+        confidence:       (s.confidence as 'high' | 'medium' | 'low') ?? 'low',
+        // Pass-through; empty/whitespace tokens are normalised to undefined so a
+        // downstream consumer sees "absent" rather than an unusable pattern.
+        suggestedPattern:  s.suggestedPattern?.trim() || undefined,
+        suggestedRuleName: s.suggestedRuleName?.trim() || undefined,
       });
     }
   } catch {

@@ -54,6 +54,11 @@ export class MockAIService implements AIService {
             subcategoryId: matchedSubcategoryId,
             reason: `Mock categorisation based on description keywords for "${tx.description}".`,
             confidence: 'high' as const,
+            // Minimal merchant token from the description — the first token is
+            // always a (case-insensitive) substring, so it satisfies the
+            // self-match invariant. Case doesn't matter: the matcher is `i`-flagged.
+            suggestedPattern: mockMerchantToken(tx.description),
+            suggestedRuleName: mockRuleName(tx.description),
           }
         })
 
@@ -87,4 +92,19 @@ export function createMockAIService(): MockAIService {
 
 async function simulateDelay(): Promise<void> {
   await new Promise(resolve => setTimeout(resolve, 400 + Math.random() * 400))
+}
+
+function firstToken(description: string): string {
+  return description.trim().split(/\s+/)[0] ?? ''
+}
+
+function mockMerchantToken(description: string): string {
+  return firstToken(description).toUpperCase()
+}
+
+function mockRuleName(description: string): string {
+  const token = firstToken(description)
+  if (!token) return 'Custom rule'
+  const titled = token.charAt(0).toUpperCase() + token.slice(1).toLowerCase()
+  return `${titled} rule`
 }
