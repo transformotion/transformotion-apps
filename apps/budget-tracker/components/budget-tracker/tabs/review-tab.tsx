@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { useBudgetStore } from "@/stores/budget-tracker/use-budget-store"
 import { useReviewStore } from "@/stores/budget-tracker/use-review-store"
-import type { ReviewResult } from "@/stores/budget-tracker/use-review-store"
+import type { ReviewResult, RuleGroup } from "@/stores/budget-tracker/use-review-store"
 import { useAuthStore, selectCurrentAccount } from "@/stores/auth/use-auth-store"
 import { PageHeader, Card, PrimaryButton, EmptyState } from "@transformotion/ui-primitives"
 import { Sparkles, Check, X, ChevronRight, Pencil, AlertCircle, RefreshCw } from "lucide-react"
@@ -12,7 +12,7 @@ import { getActiveCategories, getActiveSubcategories, getCategoryName, getSubcat
 import { cn } from "@/lib/utils"
 import { getAIService } from "@/lib/services/ai"
 import type { ReviewResult as AIReviewResult } from "@/lib/services/ai"
-import type { MatchingRule } from "@transformotion/budget-domain"
+import { applyRules, type MatchingRule } from "@transformotion/budget-domain"
 
 function ConfidenceBadge({ confidence }: { confidence: 'high' | 'medium' | 'low' }) {
   const cls = {
@@ -29,7 +29,6 @@ function ConfidenceBadge({ confidence }: { confidence: 'high' | 'medium' | 'low'
 
 export function ReviewTab() {
   const transactions = useBudgetStore((s) => s.transactions)
-  const matchingRules = useBudgetStore((s) => s.matchingRules)
   const uncategorizedCount = useBudgetStore((s) => s.uncategorizedCount)
   const updateTransaction = useBudgetStore((s) => s.updateTransaction)
   const addMatchingRule = useBudgetStore((s) => s.addMatchingRule)
@@ -42,16 +41,21 @@ export function ReviewTab() {
   const error          = useReviewStore((s) => s.error)
   const reviewResults  = useReviewStore((s) => s.reviewResults)
   const progress       = useReviewStore((s) => s.progress)
-  const { setReviewState, setError, setReviewResults, setProgress, updateProgress, updateResultStatus } = useReviewStore.getState()
+  const ruleGroups     = useReviewStore((s) => s.ruleGroups)
+  const { setReviewState, setError, setReviewResults, setProgress, updateProgress, updateResultStatus, addRuleGroup, dismissRuleGroup } = useReviewStore.getState()
 
   // Ephemeral interaction state (local — intentionally lost on navigation)
   // forceFullSearch is local (resets per page session) — a per-run override, not a setting
   const [forceFullSearch, setForceFullSearch] = useState(false)
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [editCategoryId, setEditCategoryId] = useState("")
-  const [editSubcategoryId, setEditSubcategoryId] = useState("")
   const [acceptError, setAcceptError] = useState<string | null>(null)
   const [acceptAllProgress, setAcceptAllProgress] = useState<{ current: number; total: number } | null>(null)
+  // Inline rule-preview (accept-writes-rule): one open at a time, keyed by txn id.
+  const [previewId, setPreviewId] = useState<string | null>(null)
+  const [pvCategoryId, setPvCategoryId] = useState("")
+  const [pvSubcategoryId, setPvSubcategoryId] = useState("")
+  const [pvPattern, setPvPattern] = useState("")
+  const [pvName, setPvName] = useState("")
+  const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null)
 
   const categories = budgetData.categories
   const uncategorizedTransactions = transactions.filter(t => !t.categoryId && !t.category)
@@ -72,6 +76,8 @@ export function ReviewTab() {
         confidence: r.confidence,
         pass,
         status: 'pending',
+        suggestedPattern: r.suggestedPattern,
+        suggestedRuleName: r.suggestedRuleName,
       }
       const idx = next.findIndex(x => x.transactionId === tx.transactionId)
       if (idx >= 0) {
@@ -122,90 +128,182 @@ export function ReviewTab() {
     }
   }
 
-  const acceptResult = async (result: ReviewResult, categoryId: string, subcategoryId: string) => {
-    await updateTransaction(result.transactionId, { categoryId, subcategoryId, _manual: true })
-    if (currentAccount && result.description && categoryId && subcategoryId) {
+  // ── Rule preview + self-match validation ───────────────────────────────────
+  const accountId = currentAccount?.id ?? ""
+
+  // A suggestedPattern is valid only if it matches its own source description
+  // under the app's real matching semantics (applyRules: case-insensitive,
+  // whitespace-flexible `contains`). A one-element array reuses that matcher.
+  const patternMatchesSource = (pattern: string, description: string): boolean => {
+    const p = pattern.trim()
+    if (!p || !accountId) return false
+    const candidate: MatchingRule = {
+      ruleId: "preview", accountId, name: "preview", match: p, matchType: "contains",
+      categoryId: "", subcategoryId: "", enabled: true, priority: 0,
+      isBusiness: false, learned: true, createdAt: new Date().toISOString(),
+    }
+    return applyRules(description, [candidate]) !== null
+  }
+
+  // Same priority convention the Rules tab uses: lowest number wins, so a new
+  // custom rule sits at the front ("custom rules always win").
+  const nextRulePriority = (rules: MatchingRule[]): number =>
+    rules.length > 0 ? Math.min(...rules.map(r => r.priority)) - 1000 : 1000
+
+  const openPreview = (result: ReviewResult) => {
+    setAcceptError(null)
+    setPreviewId(result.transactionId)
+    setPvCategoryId(result.suggestedCategoryId)
+    setPvSubcategoryId(result.suggestedSubcategoryId)
+    setPvName(result.suggestedRuleName ?? "")
+    // Discard a non-conforming pattern → empty field; the user must supply one.
+    const seed = result.suggestedPattern ?? ""
+    setPvPattern(seed && patternMatchesSource(seed, result.description) ? seed : "")
+  }
+
+  const cancelPreview = () => {
+    setPreviewId(null)
+    setAcceptError(null)
+  }
+
+  const previewValid = (description: string): boolean =>
+    !!pvPattern.trim() && patternMatchesSource(pvPattern, description) &&
+    !!pvCategoryId && !!pvSubcategoryId && !!pvName.trim()
+
+  // Match the just-saved rule (ONLY that rule) against the remaining pending
+  // queue. Latest results/groups read via getState() to avoid a stale closure.
+  const runCascade = (rule: MatchingRule, justAcceptedId: string) => {
+    const results = useReviewStore.getState().reviewResults
+    const grouped = new Set(useReviewStore.getState().ruleGroups.flatMap(g => g.transactionIds))
+    const matched = results.filter(r =>
+      r.status === "pending" &&
+      r.transactionId !== justAcceptedId &&
+      !grouped.has(r.transactionId) &&
+      applyRules(r.description, [rule]) !== null
+    )
+    if (matched.length === 0) return
+    addRuleGroup({
+      id: rule.ruleId,
+      ruleName: rule.name,
+      categoryId: rule.categoryId,
+      subcategoryId: rule.subcategoryId,
+      categoryName: getCategoryName(categories, rule.categoryId),
+      subcategoryName: getSubcategoryName(categories, rule.subcategoryId),
+      transactionIds: matched.map(m => m.transactionId),
+    })
+  }
+
+  const savePreview = async (result: ReviewResult) => {
+    if (!accountId || !previewValid(result.description)) return
+    setAcceptError(null)
+    try {
+      // 1. Create the custom rule via the shared store path (reuse, don't fork).
+      //    Priority read from the LATEST rules (getState) — no stale closure.
       const rule: MatchingRule = {
         ruleId:       crypto.randomUUID(),
-        accountId:    currentAccount.id,
-        name:         result.description,
-        match:        result.description,
-        matchType:    'contains',
-        categoryId,
-        subcategoryId,
+        accountId,
+        name:         pvName.trim(),
+        match:        pvPattern.trim(),
+        matchType:    "contains",
+        categoryId:   pvCategoryId,
+        subcategoryId: pvSubcategoryId,
         isBusiness:   false,
         learned:      true,
         enabled:      true,
-        priority:     matchingRules.length > 0 ? Math.min(...matchingRules.map(r => r.priority)) - 1000 : 1000,
+        priority:     nextRulePriority(useBudgetStore.getState().matchingRules),
         createdAt:    new Date().toISOString(),
       }
       await addMatchingRule(rule)
-    }
-    updateResultStatus(result.transactionId, 'accepted')
-  }
-
-  const handleAccept = async (transactionId: string) => {
-    const result = reviewResults.find(r => r.transactionId === transactionId)
-    if (!result) return
-    setAcceptError(null)
-    try {
-      await acceptResult(result, result.suggestedCategoryId, result.suggestedSubcategoryId)
+      // 2. Categorisation is now rule-derived → _manual: false (deliberate).
+      await updateTransaction(result.transactionId, { categoryId: pvCategoryId, subcategoryId: pvSubcategoryId, _manual: false })
+      // 3. Mark accepted, close the preview, then cascade the new rule.
+      updateResultStatus(result.transactionId, "accepted")
+      setPreviewId(null)
+      runCascade(rule, result.transactionId)
     } catch (err) {
-      setAcceptError(err instanceof Error ? err.message : 'Failed to save — check your connection and try again')
+      setAcceptError(err instanceof Error ? err.message : "Failed to save — check your connection and try again")
     }
   }
 
+  // ── Cascade group actions ──────────────────────────────────────────────────
+  const confirmGroup = async (group: RuleGroup) => {
+    setAcceptError(null)
+    let failCount = 0
+    for (const txId of group.transactionIds) {
+      try {
+        await updateTransaction(txId, { categoryId: group.categoryId, subcategoryId: group.subcategoryId, _manual: false })
+        updateResultStatus(txId, "accepted")
+      } catch { failCount++ }
+    }
+    dismissRuleGroup(group.id)
+    if (failCount > 0) {
+      setAcceptError(`${failCount} transaction${failCount !== 1 ? "s" : ""} could not be saved — check your connection and try again`)
+    }
+  }
+
+  // Decline: items return to the individual pending list; the rule stays saved.
+  const declineGroup = (group: RuleGroup) => dismissRuleGroup(group.id)
+
+  const handleReject = (transactionId: string) => {
+    updateResultStatus(transactionId, "rejected")
+  }
+
+  // ── Accept-all: bulk, NON-interactive (no preview, no cascade) ──────────────
+  // Applies the same rule-writes + _manual:false semantics to every pending item
+  // at once; uses the suggested pattern where it self-matches, else the full
+  // description. See PR disposition note.
   const handleAcceptAll = async () => {
-    const pending = reviewResults.filter(r => r.status === 'pending')
+    const groupedNow = new Set(useReviewStore.getState().ruleGroups.flatMap(g => g.transactionIds))
+    const pending = useReviewStore.getState().reviewResults.filter(r => r.status === "pending" && !groupedNow.has(r.transactionId))
     if (pending.length === 0) return
     setAcceptError(null)
     setAcceptAllProgress({ current: 0, total: pending.length })
     let failCount = 0
     for (let i = 0; i < pending.length; i++) {
       setAcceptAllProgress({ current: i + 1, total: pending.length })
+      const result = pending[i]
       try {
-        await acceptResult(pending[i], pending[i].suggestedCategoryId, pending[i].suggestedSubcategoryId)
-      } catch {
-        failCount++
-      }
+        await updateTransaction(result.transactionId, { categoryId: result.suggestedCategoryId, subcategoryId: result.suggestedSubcategoryId, _manual: false })
+        if (accountId && result.suggestedCategoryId && result.suggestedSubcategoryId) {
+          const validPattern = !!result.suggestedPattern && patternMatchesSource(result.suggestedPattern, result.description)
+          const rule: MatchingRule = {
+            ruleId:       crypto.randomUUID(),
+            accountId,
+            name:         result.suggestedRuleName?.trim() || result.description,
+            match:        validPattern ? result.suggestedPattern!.trim() : result.description,
+            matchType:    "contains",
+            categoryId:   result.suggestedCategoryId,
+            subcategoryId: result.suggestedSubcategoryId,
+            isBusiness:   false,
+            learned:      true,
+            enabled:      true,
+            priority:     nextRulePriority(useBudgetStore.getState().matchingRules),
+            createdAt:    new Date().toISOString(),
+          }
+          await addMatchingRule(rule)
+        }
+        updateResultStatus(result.transactionId, "accepted")
+      } catch { failCount++ }
     }
     setAcceptAllProgress(null)
     if (failCount > 0) {
-      setAcceptError(`${failCount} suggestion${failCount !== 1 ? 's' : ''} could not be saved — check your connection and try again`)
+      setAcceptError(`${failCount} suggestion${failCount !== 1 ? "s" : ""} could not be saved — check your connection and try again`)
     }
   }
 
-  const handleReject = (transactionId: string) => {
-    updateResultStatus(transactionId, 'rejected')
-  }
-
-  const startEdit = (result: ReviewResult) => {
-    setEditingId(result.transactionId)
-    setEditCategoryId(result.suggestedCategoryId)
-    setEditSubcategoryId(result.suggestedSubcategoryId)
-  }
-
-  const acceptEdited = async (result: ReviewResult) => {
-    setAcceptError(null)
-    try {
-      await acceptResult(result, editCategoryId, editSubcategoryId)
-      setEditingId(null)
-    } catch (err) {
-      setAcceptError(err instanceof Error ? err.message : 'Failed to save — check your connection and try again')
-    }
-  }
-
-  const editingCategory = getActiveCategories(categories).find(c => c.categoryId === editCategoryId)
-
-  const pendingResults   = reviewResults.filter(r => r.status === 'pending')
-  const completedResults = reviewResults.filter(r => r.status !== 'pending')
+  // ── Derived ────────────────────────────────────────────────────────────────
+  const groupedIds = new Set(ruleGroups.flatMap(g => g.transactionIds))
+  const pendingResults   = reviewResults.filter(r => r.status === "pending" && !groupedIds.has(r.transactionId))
+  const completedResults = reviewResults.filter(r => r.status !== "pending")
+  const pvCategory       = getActiveCategories(categories).find(c => c.categoryId === pvCategoryId)
   const progressPct      = progress.total > 0 ? Math.round((progress.completed / progress.total) * 100) : 0
-  const isReviewing      = reviewState === 'reviewing'
+  const isReviewing      = reviewState === "reviewing"
   const isAcceptingAll   = acceptAllProgress !== null
+  const remainingCount   = pendingResults.length + ruleGroups.reduce((n, g) => n + g.transactionIds.length, 0)
 
-  const bannerText = pendingResults.length > 0
-    ? `Review complete — ${pendingResults.length} suggestion${pendingResults.length !== 1 ? 's' : ''} remaining`
-    : 'Review complete — all suggestions processed'
+  const bannerText = remainingCount > 0
+    ? `Review complete — ${remainingCount} suggestion${remainingCount !== 1 ? "s" : ""} remaining`
+    : "Review complete — all suggestions processed"
 
   return (
     <div className="p-4 space-y-4 overflow-hidden">
@@ -323,6 +421,66 @@ export function ReviewTab() {
         />
       )}
 
+      {/* Cascade group cards — the new rule's other matches, collapsed out of the
+          individual list into one Confirm-all / Decline card each. */}
+      {ruleGroups.length > 0 && (
+        <div className="space-y-2">
+          {ruleGroups.map((group) => {
+            const expanded = expandedGroupId === group.id
+            const count = group.transactionIds.length
+            return (
+              <Card key={group.id} className="border-primary/30">
+                <button
+                  onClick={() => setExpandedGroupId(expanded ? null : group.id)}
+                  className="w-full flex items-center justify-between gap-2 text-left"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Sparkles className="size-4 text-primary shrink-0" />
+                    <span className="text-sm font-medium text-foreground truncate">
+                      {count} more transaction{count !== 1 ? 's' : ''} match “{group.ruleName}”
+                    </span>
+                  </div>
+                  <ChevronRight className={cn("size-4 text-muted-foreground shrink-0 transition-transform", expanded && "rotate-90")} />
+                </button>
+
+                {expanded && (
+                  <div className="mt-3 space-y-1.5 border-t border-border/40 pt-3">
+                    {group.transactionIds.map((txId) => {
+                      const tx = transactions.find(t => t.transactionId === txId)
+                      if (!tx) return null
+                      return (
+                        <div key={txId} className="flex items-center justify-between gap-3 text-xs">
+                          <span className="text-foreground truncate">{tx.description}</span>
+                          <span className="text-muted-foreground shrink-0">
+                            {tx.date} • ${Math.abs(parseFloat(String(tx.amount))).toFixed(2)}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+
+                <div className="mt-3 flex items-center gap-2">
+                  <button
+                    onClick={() => confirmGroup(group)}
+                    className="flex-1 h-8 rounded-lg bg-signal-green text-white text-xs font-medium flex items-center justify-center gap-1"
+                  >
+                    <Check className="size-3" />
+                    Confirm all
+                  </button>
+                  <button
+                    onClick={() => declineGroup(group)}
+                    className="h-8 px-3 rounded-lg bg-surface2 text-muted-foreground text-xs"
+                  >
+                    Decline
+                  </button>
+                </div>
+              </Card>
+            )
+          })}
+        </div>
+      )}
+
       {pendingResults.length > 0 && (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
@@ -342,7 +500,8 @@ export function ReviewTab() {
           {pendingResults.map((result) => {
             const transaction = transactions.find(t => t.transactionId === result.transactionId)
             if (!transaction) return null
-            const isEditing = editingId === result.transactionId
+            const isPreview = previewId === result.transactionId
+            const patternInvalid = !!pvPattern.trim() && !patternMatchesSource(pvPattern, transaction.description)
 
             return (
               <Card key={result.transactionId}>
@@ -362,17 +521,15 @@ export function ReviewTab() {
                       {transaction.date} • ${Math.abs(parseFloat(String(transaction.amount))).toFixed(2)}
                     </p>
 
-                    {isEditing ? (
+                    {isPreview ? (
+                      /* Inline rule preview: editable category/subcategory/pattern/name. */
                       <div className="space-y-2">
                         <div className="grid grid-cols-2 gap-2">
                           <div>
                             <label className="text-[10px] uppercase tracking-wider text-muted-foreground block mb-1">Category</label>
                             <select
-                              value={editCategoryId}
-                              onChange={(e) => {
-                                setEditCategoryId(e.target.value)
-                                setEditSubcategoryId("")
-                              }}
+                              value={pvCategoryId}
+                              onChange={(e) => { setPvCategoryId(e.target.value); setPvSubcategoryId("") }}
                               className="w-full h-8 px-2 bg-surface2 border border-border rounded text-sm"
                             >
                               <option value="">Select...</option>
@@ -384,29 +541,53 @@ export function ReviewTab() {
                           <div>
                             <label className="text-[10px] uppercase tracking-wider text-muted-foreground block mb-1">Subcategory</label>
                             <select
-                              value={editSubcategoryId}
-                              onChange={(e) => setEditSubcategoryId(e.target.value)}
+                              value={pvSubcategoryId}
+                              onChange={(e) => setPvSubcategoryId(e.target.value)}
                               className="w-full h-8 px-2 bg-surface2 border border-border rounded text-sm"
-                              disabled={!editCategoryId}
+                              disabled={!pvCategoryId}
                             >
                               <option value="">Select...</option>
-                              {editingCategory && getActiveSubcategories(editingCategory).map(sub => (
+                              {pvCategory && getActiveSubcategories(pvCategory).map(sub => (
                                 <option key={sub.subcategoryId} value={sub.subcategoryId}>{sub.name}</option>
                               ))}
                             </select>
                           </div>
                         </div>
+                        <div>
+                          <label className="text-[10px] uppercase tracking-wider text-muted-foreground block mb-1">Rule pattern</label>
+                          <input
+                            value={pvPattern}
+                            onChange={(e) => setPvPattern(e.target.value)}
+                            placeholder="e.g. COLES"
+                            className={cn(
+                              "w-full h-8 px-2 bg-surface2 border rounded text-sm",
+                              patternInvalid ? "border-signal-red" : "border-border"
+                            )}
+                          />
+                          {patternInvalid && (
+                            <p className="text-[10px] text-signal-red mt-0.5">Pattern must appear in this transaction’s description.</p>
+                          )}
+                        </div>
+                        <div>
+                          <label className="text-[10px] uppercase tracking-wider text-muted-foreground block mb-1">Rule name</label>
+                          <input
+                            value={pvName}
+                            onChange={(e) => setPvName(e.target.value)}
+                            placeholder="e.g. Coles groceries"
+                            className="w-full h-8 px-2 bg-surface2 border border-border rounded text-sm"
+                          />
+                        </div>
                         <div className="flex items-center gap-2">
                           <button
-                            onClick={() => acceptEdited(result)}
-                            disabled={!editCategoryId || !editSubcategoryId}
+                            onClick={() => savePreview(result)}
+                            disabled={!previewValid(transaction.description)}
                             className="flex-1 h-8 rounded-lg bg-signal-green text-white text-xs font-medium disabled:opacity-50 flex items-center justify-center gap-1"
                           >
                             <Check className="size-3" />
-                            Accept
+                            Save
                           </button>
                           <button
-                            onClick={() => setEditingId(null)}
+                            onClick={cancelPreview}
                             className="h-8 px-3 rounded-lg bg-surface2 text-muted-foreground text-xs"
                           >
                             Cancel
@@ -430,20 +611,21 @@ export function ReviewTab() {
                     )}
                   </div>
 
-                  {!isEditing && (
+                  {!isPreview && (
                     <div className="flex items-center gap-1">
                       <button
-                        onClick={() => startEdit(result)}
-                        className="size-8 rounded-lg bg-surface2 text-muted-foreground hover:text-foreground hover:bg-surface flex items-center justify-center transition-colors"
-                        title="Edit suggestion"
+                        onClick={() => openPreview(result)}
+                        disabled={isAcceptingAll}
+                        className="size-8 rounded-lg bg-surface2 text-muted-foreground hover:text-foreground hover:bg-surface flex items-center justify-center transition-colors disabled:opacity-50"
+                        title="Edit and create rule"
                       >
                         <Pencil className="size-4" />
                       </button>
                       <button
-                        onClick={() => handleAccept(result.transactionId)}
+                        onClick={() => openPreview(result)}
                         disabled={isAcceptingAll}
                         className="size-8 rounded-lg bg-signal-green/15 text-signal-green hover:bg-signal-green/25 flex items-center justify-center transition-colors disabled:opacity-50"
-                        title="Accept"
+                        title="Accept — create rule"
                       >
                         <Check className="size-4" />
                       </button>

@@ -22,6 +22,15 @@ export const app = {
   port: 3000,
 }
 
+// A surface may set `app: budgetTrackerApp` to boot Budget Tracker (:3002) instead
+// of the default Stock Analyser app. capture.mjs boots each distinct app once.
+export const budgetTrackerApp = {
+  bootCommand: 'pnpm --filter @transformotion/budget dev',
+  envFile: 'mock.env',
+  baseURL: 'http://localhost:3002/budget-tracker/',
+  port: 3002,
+}
+
 export const surfaces = [
   {
     name: 'notifications-warm-toggles',
@@ -112,6 +121,86 @@ export const surfaces = [
           { fill: { placeholder: 'Search ticker or company...' }, text: 'SPCX' },
           { click: { role: ['button', /Analyse SPCX/] } },
           { waitVisible: { text: 'Insufficient data for analysis' } },
+        ],
+      },
+    ],
+  },
+  {
+    name: 'bt-review-accept-writes-rule',
+    app: budgetTrackerApp,
+    description:
+      'Budget Tracker → Review: accept-writes-rule. Tick opens an inline rule preview; ' +
+      'Save creates a custom rule (_manual:false) and cascades onto other pending items ' +
+      'matching the new rule. Mock mode seeds uncategorised transactions (incl. three COLES ' +
+      'rows) so the cascade is demonstrable.',
+    viewport: { width: 1440, height: 2000 },
+    // Reach the Review tab (replayed before each state's actions).
+    nav: [
+      { click: { role: ['button', 'Review'] } },
+      { waitVisible: { role: ['button', 'Review with AI'] } },
+    ],
+    // Full-page shots (no clip).
+    states: [
+      {
+        // 1. Pending card with the rule preview open, prefilled.
+        name: '01-preview-open',
+        actions: [
+          { click: { role: ['button', 'Review with AI'] } },
+          { waitVisible: { text: 'AI Suggestions' } },
+          { click: { role: ['button', 'Accept — create rule'] } },
+          { waitVisible: { text: 'Rule pattern' } },
+        ],
+      },
+      {
+        // 2. Preview with an invalid pattern → red note, Save disabled.
+        name: '02-invalid-pattern',
+        actions: [
+          { click: { role: ['button', 'Review with AI'] } },
+          { waitVisible: { text: 'AI Suggestions' } },
+          { click: { role: ['button', 'Accept — create rule'] } },
+          { waitVisible: { text: 'Rule pattern' } },
+          { fill: { placeholder: 'e.g. COLES' }, text: 'ZZZUNMATCHED' },
+          { waitVisible: { text: 'Pattern must appear' } },
+        ],
+      },
+      {
+        // 3. Cascade group card, collapsed.
+        name: '03-group-collapsed',
+        actions: [
+          { click: { role: ['button', 'Review with AI'] } },
+          { waitVisible: { text: 'AI Suggestions' } },
+          { click: { role: ['button', 'Accept — create rule'] } },
+          { waitVisible: { text: 'Rule pattern' } },
+          { click: { role: ['button', 'Save'] } },
+          { waitVisible: { text: 'more transactions match' } },
+        ],
+      },
+      {
+        // 4. Group card expanded — matched transactions listed.
+        name: '04-group-expanded',
+        actions: [
+          { click: { role: ['button', 'Review with AI'] } },
+          { waitVisible: { text: 'AI Suggestions' } },
+          { click: { role: ['button', 'Accept — create rule'] } },
+          { waitVisible: { text: 'Rule pattern' } },
+          { click: { role: ['button', 'Save'] } },
+          { waitVisible: { text: 'more transactions match' } },
+          { click: { text: 'more transactions match' } },
+          { waitVisible: { text: 'BUDERIM' } },
+        ],
+      },
+      {
+        // 5. Queue state after Confirm all.
+        name: '05-after-confirm-all',
+        actions: [
+          { click: { role: ['button', 'Review with AI'] } },
+          { waitVisible: { text: 'AI Suggestions' } },
+          { click: { role: ['button', 'Accept — create rule'] } },
+          { waitVisible: { text: 'Rule pattern' } },
+          { click: { role: ['button', 'Save'] } },
+          { waitVisible: { text: 'more transactions match' } },
+          { click: { role: ['button', 'Confirm all'] } },
+          { waitHidden: { text: 'more transactions match' } },
         ],
       },
     ],

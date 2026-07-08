@@ -89,53 +89,71 @@ function killTree(child) {
 }
 
 async function main() {
-  let server = null
-  if (!noBoot) {
-    const env = { ...process.env, ...loadEnvFile(app.envFile) }
-    console.log('[boot]', app.bootCommand)
-    server = spawn(app.bootCommand, {
-      cwd: REPO_ROOT,
-      env,
-      shell: true,
-      detached: process.platform !== 'win32',
-      stdio: 'ignore',
-    })
-    await waitForServer(app.baseURL)
-    console.log('[boot] up at', app.baseURL)
-  } else {
-    console.log('[boot] --no-boot: expecting a dev server at', app.baseURL)
+  const runnable = surfaces.filter((s) => !surfaceFilter || s.name === surfaceFilter)
+  if (runnable.length === 0) {
+    console.log('no surfaces match', surfaceFilter ? `--surface ${surfaceFilter}` : '')
+    return
+  }
+
+  // Group surfaces by their (resolved) app so each distinct app boots once.
+  const groups = new Map() // baseURL -> { app, surfaces: [] }
+  for (const s of runnable) {
+    const a = s.app ?? app
+    if (!groups.has(a.baseURL)) groups.set(a.baseURL, { app: a, surfaces: [] })
+    groups.get(a.baseURL).surfaces.push(s)
   }
 
   const browser = await chromium.launch()
   const captured = []
   try {
-    for (const surface of surfaces) {
-      if (surfaceFilter && surface.name !== surfaceFilter) continue
-      console.log('[surface]', surface.name)
-      for (const state of surface.states) {
-        const page = await browser.newPage({
-          viewport: surface.viewport ?? { width: 1440, height: 1800 },
-          deviceScaleFactor: 2,
+    for (const { app: a, surfaces: group } of groups.values()) {
+      let server = null
+      if (!noBoot) {
+        const env = { ...process.env, ...loadEnvFile(a.envFile) }
+        console.log('[boot]', a.bootCommand)
+        server = spawn(a.bootCommand, {
+          cwd: REPO_ROOT,
+          env,
+          shell: true,
+          detached: process.platform !== 'win32',
+          stdio: 'ignore',
         })
-        page.on('console', (m) => { if (m.type() === 'error') console.log('  page-err:', m.text().slice(0, 200)) })
-        // Reset-per-state: fresh load → replay nav → state actions → capture.
-        await page.goto(app.baseURL, { waitUntil: 'networkidle', timeout: 60000 })
-        for (const nav of surface.nav ?? []) await step(page, nav)
-        for (const action of state.actions ?? []) await step(page, action)
-        await page.waitForTimeout(400) // settle optimistic re-render
-        const dir = join(outDir, surface.name)
-        mkdirSync(dir, { recursive: true })
-        const file = join(dir, `${state.name}.png`)
-        if (surface.clip) await resolve(page, surface.clip).screenshot({ path: file })
-        else await page.screenshot({ path: file, fullPage: true })
-        captured.push(file)
-        console.log('  captured', `${surface.name}/${state.name}`)
-        await page.close()
+        await waitForServer(a.baseURL)
+        console.log('[boot] up at', a.baseURL)
+      } else {
+        console.log('[boot] --no-boot: expecting a dev server at', a.baseURL)
+      }
+
+      try {
+        for (const surface of group) {
+          console.log('[surface]', surface.name)
+          for (const state of surface.states) {
+            const page = await browser.newPage({
+              viewport: surface.viewport ?? { width: 1440, height: 1800 },
+              deviceScaleFactor: 2,
+            })
+            page.on('console', (m) => { if (m.type() === 'error') console.log('  page-err:', m.text().slice(0, 200)) })
+            // Reset-per-state: fresh load → replay nav → state actions → capture.
+            await page.goto(a.baseURL, { waitUntil: 'networkidle', timeout: 60000 })
+            for (const nav of surface.nav ?? []) await step(page, nav)
+            for (const action of state.actions ?? []) await step(page, action)
+            await page.waitForTimeout(400) // settle optimistic re-render
+            const dir = join(outDir, surface.name)
+            mkdirSync(dir, { recursive: true })
+            const file = join(dir, `${state.name}.png`)
+            if (surface.clip) await resolve(page, surface.clip).screenshot({ path: file })
+            else await page.screenshot({ path: file, fullPage: true })
+            captured.push(file)
+            console.log('  captured', `${surface.name}/${state.name}`)
+            await page.close()
+          }
+        }
+      } finally {
+        killTree(server)
       }
     }
   } finally {
     await browser.close()
-    killTree(server)
   }
 
   console.log(`\nDONE — ${captured.length} capture(s) under ${outDir}`)
