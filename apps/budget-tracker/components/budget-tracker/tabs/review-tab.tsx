@@ -185,6 +185,7 @@ export function ReviewTab() {
     addRuleGroup({
       id: rule.ruleId,
       ruleName: rule.name,
+      pattern: rule.match,
       categoryId: rule.categoryId,
       subcategoryId: rule.subcategoryId,
       categoryName: getCategoryName(categories, rule.categoryId),
@@ -193,33 +194,67 @@ export function ReviewTab() {
     })
   }
 
+  // Shared "accept-writes-rule" save: create the rule via the shared store path
+  // (reuse, don't fork), apply it to the source txn (_manual:false), mark
+  // accepted, then cascade. Priority read from the LATEST rules (getState) — no
+  // stale closure.
+  const saveRule = async (
+    result: ReviewResult,
+    fields: { pattern: string; name: string; categoryId: string; subcategoryId: string },
+  ) => {
+    const rule: MatchingRule = {
+      ruleId:       crypto.randomUUID(),
+      accountId,
+      name:         fields.name,
+      match:        fields.pattern,
+      matchType:    "contains",
+      categoryId:   fields.categoryId,
+      subcategoryId: fields.subcategoryId,
+      isBusiness:   false,
+      learned:      true,
+      enabled:      true,
+      priority:     nextRulePriority(useBudgetStore.getState().matchingRules),
+      createdAt:    new Date().toISOString(),
+    }
+    await addMatchingRule(rule)
+    await updateTransaction(result.transactionId, { categoryId: fields.categoryId, subcategoryId: fields.subcategoryId, _manual: false })
+    updateResultStatus(result.transactionId, "accepted")
+    runCascade(rule, result.transactionId)
+  }
+
   const savePreview = async (result: ReviewResult) => {
     if (!accountId || !previewValid(result.description)) return
     setAcceptError(null)
     try {
-      // 1. Create the custom rule via the shared store path (reuse, don't fork).
-      //    Priority read from the LATEST rules (getState) — no stale closure.
-      const rule: MatchingRule = {
-        ruleId:       crypto.randomUUID(),
-        accountId,
-        name:         pvName.trim(),
-        match:        pvPattern.trim(),
-        matchType:    "contains",
-        categoryId:   pvCategoryId,
-        subcategoryId: pvSubcategoryId,
-        isBusiness:   false,
-        learned:      true,
-        enabled:      true,
-        priority:     nextRulePriority(useBudgetStore.getState().matchingRules),
-        createdAt:    new Date().toISOString(),
-      }
-      await addMatchingRule(rule)
-      // 2. Categorisation is now rule-derived → _manual: false (deliberate).
-      await updateTransaction(result.transactionId, { categoryId: pvCategoryId, subcategoryId: pvSubcategoryId, _manual: false })
-      // 3. Mark accepted, close the preview, then cascade the new rule.
-      updateResultStatus(result.transactionId, "accepted")
+      await saveRule(result, { pattern: pvPattern.trim(), name: pvName.trim(), categoryId: pvCategoryId, subcategoryId: pvSubcategoryId })
       setPreviewId(null)
-      runCascade(rule, result.transactionId)
+    } catch (err) {
+      setAcceptError(err instanceof Error ? err.message : "Failed to save — check your connection and try again")
+    }
+  }
+
+  // Green tick: ONE-CLICK accept using the AI's suggested values — save the rule,
+  // apply it, and cascade, without opening the preview. Falls back to the preview
+  // when the suggestion can't form a valid rule (pattern doesn't self-match, or a
+  // category/subcategory is missing) so the user can complete it there.
+  const acceptDirect = async (result: ReviewResult) => {
+    if (!accountId) return
+    const suggested = (result.suggestedPattern ?? "").trim()
+    const canAutoSave =
+      !!suggested && patternMatchesSource(suggested, result.description) &&
+      !!result.suggestedCategoryId && !!result.suggestedSubcategoryId
+    if (!canAutoSave) {
+      openPreview(result)
+      return
+    }
+    setAcceptError(null)
+    try {
+      await saveRule(result, {
+        pattern: suggested,
+        name: result.suggestedRuleName?.trim() || suggested,
+        categoryId: result.suggestedCategoryId,
+        subcategoryId: result.suggestedSubcategoryId,
+      })
     } catch (err) {
       setAcceptError(err instanceof Error ? err.message : "Failed to save — check your connection and try again")
     }
@@ -436,8 +471,13 @@ export function ReviewTab() {
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <Sparkles className="size-4 text-primary shrink-0" />
-                    <span className="text-sm font-medium text-foreground truncate">
-                      {count} more transaction{count !== 1 ? 's' : ''} match “{group.ruleName}”
+                    <span className="min-w-0">
+                      <span className="block text-sm font-medium text-foreground truncate">
+                        {count} more transaction{count !== 1 ? 's' : ''} match “{group.ruleName}”
+                      </span>
+                      <span className="block text-[11px] text-muted-foreground truncate">
+                        matches <span className="font-mono text-foreground/70">{group.pattern}</span>
+                      </span>
                     </span>
                   </div>
                   <ChevronRight className={cn("size-4 text-muted-foreground shrink-0 transition-transform", expanded && "rotate-90")} />
@@ -622,10 +662,10 @@ export function ReviewTab() {
                         <Pencil className="size-4" />
                       </button>
                       <button
-                        onClick={() => openPreview(result)}
+                        onClick={() => acceptDirect(result)}
                         disabled={isAcceptingAll}
                         className="size-8 rounded-lg bg-signal-green/15 text-signal-green hover:bg-signal-green/25 flex items-center justify-center transition-colors disabled:opacity-50"
-                        title="Accept — create rule"
+                        title="Accept — save rule & apply"
                       >
                         <Check className="size-4" />
                       </button>

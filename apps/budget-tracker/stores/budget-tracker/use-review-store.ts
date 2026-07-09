@@ -26,6 +26,8 @@ export interface ReviewResult {
 export interface RuleGroup {
   id: string
   ruleName: string
+  /** The rule's match expression (pattern), shown alongside the name. */
+  pattern: string
   categoryId: string
   subcategoryId: string
   categoryName: string

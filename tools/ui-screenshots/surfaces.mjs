@@ -129,10 +129,11 @@ export const surfaces = [
     name: 'bt-review-accept-writes-rule',
     app: budgetTrackerApp,
     description:
-      'Budget Tracker → Review: accept-writes-rule. Tick opens an inline rule preview; ' +
-      'Save creates a custom rule (_manual:false) and cascades onto other pending items ' +
-      'matching the new rule. Mock mode seeds uncategorised transactions (incl. three COLES ' +
-      'rows) so the cascade is demonstrable.',
+      'Budget Tracker → Review: accept-writes-rule. The PENCIL opens an inline rule ' +
+      'preview (edit then Save); the green TICK is one-click — it saves the suggested ' +
+      'rule (_manual:false) and cascades onto other pending items in one step. The ' +
+      'cascade group card shows the rule name AND its pattern. Mock mode seeds ' +
+      'uncategorised transactions (incl. three COLES rows) so the cascade is demonstrable.',
     viewport: { width: 1440, height: 2000 },
     // Reach the Review tab (replayed before each state's actions).
     nav: [
@@ -142,12 +143,12 @@ export const surfaces = [
     // Full-page shots (no clip).
     states: [
       {
-        // 1. Pending card with the rule preview open, prefilled.
+        // 1. Pencil → inline rule preview open, prefilled.
         name: '01-preview-open',
         actions: [
           { click: { role: ['button', 'Review with AI'] } },
           { waitVisible: { text: 'AI Suggestions' } },
-          { click: { role: ['button', 'Accept — create rule'] } },
+          { click: { role: ['button', 'Edit and create rule'] } },
           { waitVisible: { text: 'Rule pattern' } },
         ],
       },
@@ -157,21 +158,20 @@ export const surfaces = [
         actions: [
           { click: { role: ['button', 'Review with AI'] } },
           { waitVisible: { text: 'AI Suggestions' } },
-          { click: { role: ['button', 'Accept — create rule'] } },
+          { click: { role: ['button', 'Edit and create rule'] } },
           { waitVisible: { text: 'Rule pattern' } },
           { fill: { placeholder: 'e.g. COLES' }, text: 'ZZZUNMATCHED' },
           { waitVisible: { text: 'Pattern must appear' } },
         ],
       },
       {
-        // 3. Cascade group card, collapsed.
+        // 3. Green tick → one-click save + cascade group card, collapsed
+        //    (shows the rule name AND pattern).
         name: '03-group-collapsed',
         actions: [
           { click: { role: ['button', 'Review with AI'] } },
           { waitVisible: { text: 'AI Suggestions' } },
-          { click: { role: ['button', 'Accept — create rule'] } },
-          { waitVisible: { text: 'Rule pattern' } },
-          { click: { role: ['button', 'Save'] } },
+          { click: { role: ['button', 'Accept — save rule & apply'] } },
           { waitVisible: { text: 'more transactions match' } },
         ],
       },
@@ -181,9 +181,7 @@ export const surfaces = [
         actions: [
           { click: { role: ['button', 'Review with AI'] } },
           { waitVisible: { text: 'AI Suggestions' } },
-          { click: { role: ['button', 'Accept — create rule'] } },
-          { waitVisible: { text: 'Rule pattern' } },
-          { click: { role: ['button', 'Save'] } },
+          { click: { role: ['button', 'Accept — save rule & apply'] } },
           { waitVisible: { text: 'more transactions match' } },
           { click: { text: 'more transactions match' } },
           { waitVisible: { text: 'BUDERIM' } },
@@ -195,9 +193,7 @@ export const surfaces = [
         actions: [
           { click: { role: ['button', 'Review with AI'] } },
           { waitVisible: { text: 'AI Suggestions' } },
-          { click: { role: ['button', 'Accept — create rule'] } },
-          { waitVisible: { text: 'Rule pattern' } },
-          { click: { role: ['button', 'Save'] } },
+          { click: { role: ['button', 'Accept — save rule & apply'] } },
           { waitVisible: { text: 'more transactions match' } },
           { click: { role: ['button', 'Confirm all'] } },
           { waitHidden: { text: 'more transactions match' } },
