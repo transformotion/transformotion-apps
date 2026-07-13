@@ -1,7 +1,7 @@
 import type { AccountId, ISODateTime } from '../_shared/api';
 import type { AiAsyncStartResponse, AiProxyRequest } from '../_shared/ai-runtime';
 
-export type BudgetTrackerContractVersion = 'm15.3.0';
+export type BudgetTrackerContractVersion = 'm15.4.0';
 export type BudgetFrequency = 'weekly' | 'fortnightly' | 'monthly' | 'quarterly' | 'annually' | 'one-off';
 export type BudgetConfidence = 'high' | 'medium' | 'low';
 export type MatchType = 'contains' | 'startsWith' | 'regex';
@@ -28,6 +28,19 @@ export interface Subcategory {
   excludeFromCashflow?: boolean;
   /** M21: optional user-assigned semantic role; absent ⇒ no role. */
   role?: CategoryRole;
+  /**
+   * Savings "pots" — optional per-subcategory pot metadata. These ride the
+   * EXISTING `categories` concept in budget-data persistence (a Subcategory
+   * nests in `BudgetData.categories[].subcategories[]`), so they need no new
+   * route and no Lambda CONCEPTS extension. Pot balance semantics (SIGNED —
+   * supersedes the prior `Math.abs`) are in behaviour.md § "Savings pots".
+   */
+  /** Target amount for the pot. */
+  potTarget?: number;
+  /** Target month for the pot, ISO year-month, e.g. "2027-12". */
+  potDeadline?: string;
+  /** Opening balance carried into the pot before tracked transactions. */
+  potOpeningBalance?: number;
 }
 
 export interface Category {
@@ -42,17 +55,27 @@ export interface Category {
 }
 
 /**
- * M21 — an account's savings goal, carried on `BudgetData` (travels through the
- * existing budget-data read/write routes; no new route). Progress semantics
- * (spec/budget-tracker/behaviour.md § "Savings goal"): if `linkedSubcategoryId`
- * is set → Σ|transactions| classified into that subcategory THIS MONTH;
- * otherwise the goal is IMPLICIT and progress = (role-based income − spending)
- * THIS MONTH.
+ * An account's savings goal, carried on `BudgetData` (travels the existing
+ * budget-data read/write routes; no new route). Discriminated on `mode`:
+ *
+ * - `{ mode: 'explicit'; targetAmount }` — a user-set target.
+ * - `{ mode: 'derived' }` — the target is COMPUTED from the monthly-normalized
+ *   budgeted amounts of `role:'savings'` holders. Derived mode with no savings
+ *   holders is INVALID (the setter must not offer it); the contract documents
+ *   `goal = 0` as the degenerate value.
+ *
+ * Progress semantics: spec/budget-tracker/behaviour.md § "Savings goal".
+ *
+ * BREAKING vs the prior `{ targetAmount; linkedSubcategoryId? }`:
+ * `linkedSubcategoryId` is REMOVED — savings tracking is now via the
+ * `role:'savings'` classification (§ "Category roles" / § "Exclusion semantics").
+ * Migration (see contract-version.ts m16.12.0): an existing goal maps to
+ * `{ mode: 'explicit', targetAmount }`; if it carried a `linkedSubcategoryId`,
+ * that subcategory additionally receives `role: 'savings'`.
  */
-export interface SavingsGoal {
-  targetAmount: number;
-  linkedSubcategoryId?: string | null;
-}
+export type SavingsGoal =
+  | { mode: 'explicit'; targetAmount: number }
+  | { mode: 'derived' };
 
 export interface BudgetData {
   categories: Category[];
@@ -237,7 +260,7 @@ export interface DashboardInsightResponse {
   stale: boolean;
 }
 
-export const budgetTrackerContractVersion = 'm15.3.0' as const satisfies BudgetTrackerContractVersion;
+export const budgetTrackerContractVersion = 'm15.4.0' as const satisfies BudgetTrackerContractVersion;
 
 export const exampleSubcategory = {
   subcategoryId: 'subcat-groceries',
@@ -265,8 +288,8 @@ export const exampleBudgetData = {
 } as const satisfies BudgetData;
 
 export const exampleSavingsGoal = {
+  mode: 'explicit',
   targetAmount: 2000,
-  linkedSubcategoryId: 'subcat-emergency-fund',
 } as const satisfies SavingsGoal;
 
 export const exampleDashboardInsight = {
