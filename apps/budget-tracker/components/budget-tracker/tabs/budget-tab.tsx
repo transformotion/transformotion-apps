@@ -49,10 +49,11 @@ function formatPotDeadline(ym: string): string {
   return new Date(y, m - 1, 1).toLocaleString("en-AU", { month: "short", year: "numeric" })
 }
 
-// One-line summary of a pot's set fields, matching the mock: "Target $X",
-// "Target $X · Dec 2027", or "No target" when neither is set.
-function potSummary(sub: Subcategory): string {
+// One-line summary of a pot: monthly contribution then set fields, e.g.
+// "$500/mo · Target $15,000 · Dec 2027", or "No target" when nothing is set.
+function potSummary(sub: Subcategory, monthlyContribution: number): string {
   const parts: string[] = []
+  if (monthlyContribution > 0) parts.push(`${formatCurrency(monthlyContribution)}/mo`)
   if (sub.potTarget != null) parts.push(`Target ${formatCurrency(sub.potTarget)}`)
   if (sub.potDeadline) parts.push(formatPotDeadline(sub.potDeadline))
   return parts.length ? parts.join(" · ") : "No target"
@@ -98,6 +99,7 @@ export function BudgetTab() {
     | { kind: "edit"; categoryId: string; subcategoryId: string }
   const [potModal, setPotModal] = useState<PotModal | null>(null)
   const [potName, setPotName] = useState("")
+  const [potContributionInput, setPotContributionInput] = useState("")
   const [potTargetInput, setPotTargetInput] = useState("")
   const [potDeadlineInput, setPotDeadlineInput] = useState("")
   const [potOpeningInput, setPotOpeningInput] = useState("")
@@ -286,6 +288,7 @@ export function BudgetTab() {
   function openAddPot(categoryId: string) {
     setPotModal({ kind: "add", categoryId })
     setPotName("")
+    setPotContributionInput("")
     setPotTargetInput("")
     setPotDeadlineInput("")
     setPotOpeningInput("")
@@ -294,13 +297,18 @@ export function BudgetTab() {
   function openEditPot(categoryId: string, sub: Subcategory) {
     setPotModal({ kind: "edit", categoryId, subcategoryId: sub.subcategoryId })
     setPotName(sub.name)
+    // Monthly contribution is the pot's ordinary per-subcategory budget amount.
+    const contribution = getBudgetAmount(sub.subcategoryId)
+    setPotContributionInput(contribution > 0 ? String(contribution) : "")
     setPotTargetInput(sub.potTarget != null ? String(sub.potTarget) : "")
     setPotDeadlineInput(sub.potDeadline ?? "")
     setPotOpeningInput(sub.potOpeningBalance != null ? String(sub.potOpeningBalance) : "")
   }
 
   // Create a pot: same custom-subcategory mechanism as addSubcategory, plus the
-  // optional pot fields. Role is inherited from the parent savings category.
+  // optional pot fields. Role is inherited from the parent savings category. The
+  // monthly contribution rides the ordinary budgetAmounts path (frequency defaults
+  // to monthly — no separate storage, no contract change).
   function createPot() {
     if (potModal?.kind !== "add") return
     const name = potName.trim()
@@ -311,20 +319,29 @@ export function BudgetTab() {
       displayOrder: Date.now(),
       ...parsePotFields(),
     }
+    const contribution = parseFloat(potContributionInput) || 0
     const updatedCategories = categories.map(cat =>
       cat.categoryId === potModal.categoryId
         ? { ...cat, subcategories: [...cat.subcategories, newSub] }
         : cat
     )
-    updateBudgetData({ categories: updatedCategories })
+    updateBudgetData({
+      categories: updatedCategories,
+      budgetAmounts:
+        contribution > 0
+          ? { ...budgetData.budgetAmounts, [newSub.subcategoryId]: contribution }
+          : budgetData.budgetAmounts,
+    })
     setPotModal(null)
   }
 
-  // Save pot: update only the three pot fields on the subcategory (no name edit,
-  // no delete — those are owned by the existing subcategory mechanisms).
+  // Save pot: update the three pot fields plus the monthly contribution (the
+  // ordinary budgetAmounts value; frequency left as-is). No name edit, no delete
+  // — those are owned by the existing subcategory mechanisms.
   function savePot() {
     if (potModal?.kind !== "edit") return
     const fields = parsePotFields()
+    const contribution = parseFloat(potContributionInput) || 0
     const updatedCategories = categories.map(cat =>
       cat.categoryId !== potModal.categoryId
         ? cat
@@ -335,7 +352,10 @@ export function BudgetTab() {
             ),
           }
     )
-    updateBudgetData({ categories: updatedCategories })
+    updateBudgetData({
+      categories: updatedCategories,
+      budgetAmounts: { ...budgetData.budgetAmounts, [potModal.subcategoryId]: contribution },
+    })
     setPotModal(null)
   }
 
@@ -601,7 +621,9 @@ export function BudgetTab() {
                     style={{ backgroundColor: POT_DOT_COLORS[idx % POT_DOT_COLORS.length] }}
                   />
                   <span className="flex-1 min-w-0 text-sm font-medium text-foreground truncate">{sub.name}</span>
-                  <span className="text-xs text-muted-foreground mr-4 shrink-0">{potSummary(sub)}</span>
+                  <span className="text-xs text-muted-foreground mr-4 shrink-0">
+                    {potSummary(sub, toMonthlyAmount(getBudgetAmount(sub.subcategoryId), getBudgetFrequency(sub.subcategoryId)))}
+                  </span>
                   <button
                     onClick={() => openEditPot(category.categoryId, sub)}
                     className="shrink-0 inline-flex items-center gap-1 rounded-md border border-primary/30 px-2.5 py-1 text-xs font-semibold text-primary hover:bg-primary/5 transition-colors"
@@ -1064,7 +1086,7 @@ export function BudgetTab() {
               {potModal.kind === "add" ? (
                 <>
                   A new subcategory under <span className="font-medium text-foreground">{potModalCatName}</span>.
-                  Target, deadline and opening balance are all optional — a pot with none is a simple sinking fund.
+                  Contribution, target, deadline and opening balance are all optional — a pot with none is a simple sinking fund.
                 </>
               ) : (
                 <>
@@ -1085,6 +1107,29 @@ export function BudgetTab() {
                 />
               </div>
             )}
+
+            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
+              Monthly contribution{potModal.kind === "add" && <span className="font-normal text-muted-foreground/60"> (optional)</span>}
+            </label>
+            <div className="flex gap-2 mb-3.5">
+              <div className="flex-1 flex items-center h-10 px-3 bg-card border border-border rounded-lg">
+                <span className="text-muted-foreground font-bold">$</span>
+                <input
+                  type="number"
+                  value={potContributionInput}
+                  onChange={(e) => setPotContributionInput(e.target.value)}
+                  placeholder="None"
+                  className="w-full px-1 bg-transparent text-sm text-foreground outline-none"
+                />
+                <span className="text-muted-foreground text-xs ml-1">/mo</span>
+              </div>
+              <button
+                onClick={() => setPotContributionInput("")}
+                className="px-3.5 rounded-lg border border-border bg-surface2 text-xs font-semibold text-muted-foreground hover:text-foreground"
+              >
+                Clear
+              </button>
+            </div>
 
             <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
               Target amount{potModal.kind === "add" && <span className="font-normal text-muted-foreground/60"> (optional)</span>}
