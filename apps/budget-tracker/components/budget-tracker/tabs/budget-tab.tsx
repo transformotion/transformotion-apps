@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react"
 import { useBudgetStore } from "@/stores/budget-tracker/use-budget-store"
 import { PageHeader, Card, PrimaryButton, SecondaryButton } from "@transformotion/ui-primitives"
-import { ChevronDown, Plus, Pencil, Trash2, RotateCcw, X, Check, Undo2, Eye, EyeOff, Target } from "lucide-react"
+import { ChevronDown, Plus, Pencil, Trash2, RotateCcw, X, Check, Undo2, Eye, EyeOff, Target, Lock } from "lucide-react"
 import {
   getActiveCategories,
   getActiveSubcategories,
@@ -16,7 +16,7 @@ import {
 import { CATEGORY_COLORS } from "../data/category-colors"
 import { ExcludedBadge } from "../badges/excluded-badge"
 import type { Category, Subcategory, CategoryRole } from "@transformotion/budget-domain"
-import { collectIncomeHolderIds } from "@transformotion/budget-domain"
+import { collectIncomeHolderIds, collectSavingsHolderIds, buildSavingsGoalProgress, latestMonth } from "@transformotion/budget-domain"
 import { cn } from "@/lib/utils"
 
 const ROLE_OPTIONS: { value: CategoryRole | ""; label: string }[] = [
@@ -37,6 +37,25 @@ function formatCurrency(amount: number): string {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(amount)
+}
+
+// Pot marker colours, cycled by position within a savings category.
+const POT_DOT_COLORS = ["#14b8a6", "#3b82f6", "#f59e0b", "#8b5cf6", "#ec4899"]
+
+// A pot deadline is a contract YYYY-MM string; render it as e.g. "Dec 2027".
+function formatPotDeadline(ym: string): string {
+  const [y, m] = ym.split("-").map(Number)
+  if (!y || !m) return ym
+  return new Date(y, m - 1, 1).toLocaleString("en-AU", { month: "short", year: "numeric" })
+}
+
+// One-line summary of a pot's set fields, matching the mock: "Target $X",
+// "Target $X · Dec 2027", or "No target" when neither is set.
+function potSummary(sub: Subcategory): string {
+  const parts: string[] = []
+  if (sub.potTarget != null) parts.push(`Target ${formatCurrency(sub.potTarget)}`)
+  if (sub.potDeadline) parts.push(formatPotDeadline(sub.potDeadline))
+  return parts.length ? parts.join(" · ") : "No target"
 }
 
 export function BudgetTab() {
@@ -62,10 +81,26 @@ export function BudgetTab() {
   const [editCategoryName, setEditCategoryName] = useState("")
   const [editRole, setEditRole] = useState<CategoryRole | "">("")
 
-  // Savings-goal setter state (M21). Populated from the current goal when the
-  // user opens the editor; display mode reads budgetData.savingsGoal directly.
-  const [goalEditing, setGoalEditing] = useState(false)
-  const [goalTarget, setGoalTarget] = useState("")
+  // Savings-goal setter state (M21). The setter is always visible in the card:
+  // a segmented Set amount / Use my savings budget toggle. `goalMode` seeds from
+  // the stored goal; writes commit immediately (mode) or on blur/Enter (amount).
+  const [goalMode, setGoalMode] = useState<"amount" | "derived">(
+    budgetData.savingsGoal?.mode === "derived" ? "derived" : "amount"
+  )
+  const [goalTarget, setGoalTarget] = useState(
+    budgetData.savingsGoal?.mode === "explicit" ? String(budgetData.savingsGoal.targetAmount) : ""
+  )
+
+  // Add / Edit pot modal state (M21). A pot is a subcategory under a savings
+  // category, carrying optional potTarget / potDeadline / potOpeningBalance.
+  type PotModal =
+    | { kind: "add"; categoryId: string }
+    | { kind: "edit"; categoryId: string; subcategoryId: string }
+  const [potModal, setPotModal] = useState<PotModal | null>(null)
+  const [potName, setPotName] = useState("")
+  const [potTargetInput, setPotTargetInput] = useState("")
+  const [potDeadlineInput, setPotDeadlineInput] = useState("")
+  const [potOpeningInput, setPotOpeningInput] = useState("")
 
   type DeleteTarget =
     | { kind: "subcategory"; subcategoryId: string; categoryId: string; count: number }
@@ -135,6 +170,23 @@ export function BudgetTab() {
     return { totalIncome, totalExpenses, net, isSurplus: net >= 0 }
   }, [budgetData])
 
+  // Whether any savings-role holders exist (gates the derived-goal toggle) and the
+  // computed derived target (Σ monthly savings budgets) shown read-only in derived
+  // mode. Both reuse the domain — no target maths is re-implemented in the UI.
+  const savingsHolders = useMemo(() => collectSavingsHolderIds(budgetData.categories), [budgetData])
+  const hasSavingsHolders = savingsHolders.categoryIds.size > 0 || savingsHolders.subcategoryIds.size > 0
+  const derivedTarget = useMemo(
+    () =>
+      hasSavingsHolders
+        ? buildSavingsGoalProgress(
+            transactions,
+            { ...budgetData, savingsGoal: { mode: "derived" } },
+            latestMonth(transactions) ?? ""
+          ).targetAmount
+        : 0,
+    [transactions, budgetData, hasSavingsHolders]
+  )
+
   const deletedItems = useMemo(() => {
     const deletedCats: Category[] = []
     const deletedSubs: Array<{ sub: Subcategory; categoryName: string; categoryId: string }> = []
@@ -199,27 +251,92 @@ export function BudgetTab() {
     updateBudgetData({ categories: updatedCategories })
   }
 
-  function openGoalEditor() {
-    // m16.12.0 stub: `SavingsGoal` is now a discriminated union; this contracts-only
-    // PR keeps the editor on the `explicit` mode. The explicit/derived + pot-field
-    // editor rebuild is a follow-up UI PR.
-    setGoalTarget(budgetData.savingsGoal?.mode === "explicit" ? String(budgetData.savingsGoal.targetAmount) : "")
-    setGoalEditing(true)
-  }
-
-  function saveGoal() {
+  // Commit the explicit target: a positive amount sets an explicit goal; an empty
+  // or non-positive amount clears the goal entirely (no separate Remove control).
+  function commitGoalTarget() {
     const targetAmount = parseFloat(goalTarget) || 0
-    if (targetAmount <= 0) {
-      updateBudgetData({ savingsGoal: undefined })
-    } else {
-      updateBudgetData({ savingsGoal: { mode: "explicit", targetAmount } })
-    }
-    setGoalEditing(false)
+    updateBudgetData({ savingsGoal: targetAmount > 0 ? { mode: "explicit", targetAmount } : undefined })
   }
 
-  function removeGoal() {
-    updateBudgetData({ savingsGoal: undefined })
-    setGoalEditing(false)
+  function selectAmountMode() {
+    setGoalMode("amount")
+    commitGoalTarget()
+  }
+
+  // Derived mode is only offered when savings-role holders exist (contract: the
+  // setter must not offer a derived target with nothing to derive it from).
+  function selectDerivedMode() {
+    if (!hasSavingsHolders) return
+    setGoalMode("derived")
+    updateBudgetData({ savingsGoal: { mode: "derived" } })
+  }
+
+  // ---- Pots (savings-category subcategories) ----
+
+  // Parse the three optional pot inputs into contract fields; a blank field ⇒
+  // undefined (cleared), so Clear + save removes the field from the subcategory.
+  function parsePotFields(): Pick<Subcategory, "potTarget" | "potDeadline" | "potOpeningBalance"> {
+    return {
+      potTarget: potTargetInput.trim() === "" ? undefined : parseFloat(potTargetInput) || 0,
+      potDeadline: potDeadlineInput.trim() === "" ? undefined : potDeadlineInput,
+      potOpeningBalance: potOpeningInput.trim() === "" ? undefined : parseFloat(potOpeningInput) || 0,
+    }
+  }
+
+  function openAddPot(categoryId: string) {
+    setPotModal({ kind: "add", categoryId })
+    setPotName("")
+    setPotTargetInput("")
+    setPotDeadlineInput("")
+    setPotOpeningInput("")
+  }
+
+  function openEditPot(categoryId: string, sub: Subcategory) {
+    setPotModal({ kind: "edit", categoryId, subcategoryId: sub.subcategoryId })
+    setPotName(sub.name)
+    setPotTargetInput(sub.potTarget != null ? String(sub.potTarget) : "")
+    setPotDeadlineInput(sub.potDeadline ?? "")
+    setPotOpeningInput(sub.potOpeningBalance != null ? String(sub.potOpeningBalance) : "")
+  }
+
+  // Create a pot: same custom-subcategory mechanism as addSubcategory, plus the
+  // optional pot fields. Role is inherited from the parent savings category.
+  function createPot() {
+    if (potModal?.kind !== "add") return
+    const name = potName.trim()
+    if (!name) return
+    const newSub: Subcategory = {
+      subcategoryId: crypto.randomUUID(),
+      name,
+      displayOrder: Date.now(),
+      ...parsePotFields(),
+    }
+    const updatedCategories = categories.map(cat =>
+      cat.categoryId === potModal.categoryId
+        ? { ...cat, subcategories: [...cat.subcategories, newSub] }
+        : cat
+    )
+    updateBudgetData({ categories: updatedCategories })
+    setPotModal(null)
+  }
+
+  // Save pot: update only the three pot fields on the subcategory (no name edit,
+  // no delete — those are owned by the existing subcategory mechanisms).
+  function savePot() {
+    if (potModal?.kind !== "edit") return
+    const fields = parsePotFields()
+    const updatedCategories = categories.map(cat =>
+      cat.categoryId !== potModal.categoryId
+        ? cat
+        : {
+            ...cat,
+            subcategories: cat.subcategories.map(sub =>
+              sub.subcategoryId === potModal.subcategoryId ? { ...sub, ...fields } : sub
+            ),
+          }
+    )
+    updateBudgetData({ categories: updatedCategories })
+    setPotModal(null)
   }
 
   function toggleSubcategoryExclude(sub: Subcategory, categoryId: string) {
@@ -472,7 +589,37 @@ export function BudgetTab() {
             </div>
           )}
 
-          {isExpanded && (
+          {/* Savings-role category: its subcategories are pots — show pot rows
+              (name + set-field summary + Edit pot) and an Add pot affordance. */}
+          {isExpanded && category.role === "savings" && (
+            <div className="mt-3 pt-3 border-t border-border">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground pb-1">Pots</p>
+              {activeSubs.map((sub, idx) => (
+                <div key={sub.subcategoryId} className="flex items-center py-2.5 border-t border-border/60 first:border-t-0">
+                  <span
+                    className="size-2.5 rounded-[3px] mr-3 shrink-0"
+                    style={{ backgroundColor: POT_DOT_COLORS[idx % POT_DOT_COLORS.length] }}
+                  />
+                  <span className="flex-1 min-w-0 text-sm font-medium text-foreground truncate">{sub.name}</span>
+                  <span className="text-xs text-muted-foreground mr-4 shrink-0">{potSummary(sub)}</span>
+                  <button
+                    onClick={() => openEditPot(category.categoryId, sub)}
+                    className="shrink-0 inline-flex items-center gap-1 rounded-md border border-primary/30 px-2.5 py-1 text-xs font-semibold text-primary hover:bg-primary/5 transition-colors"
+                  >
+                    <Pencil className="size-3" /> Edit pot
+                  </button>
+                </div>
+              ))}
+              <button
+                onClick={() => openAddPot(category.categoryId)}
+                className="mt-2 w-full flex items-center justify-center gap-2 rounded-lg border border-dashed border-primary/40 py-2.5 text-sm font-semibold text-primary hover:bg-primary/5 transition-colors"
+              >
+                <Plus className="size-4" /> Add pot
+              </button>
+            </div>
+          )}
+
+          {isExpanded && category.role !== "savings" && (
             <div className="mt-3 pt-3 border-t border-border space-y-1">
               {activeSubs.map((sub) => {
                 const budget = getBudgetAmount(sub.subcategoryId)
@@ -646,6 +793,7 @@ export function BudgetTab() {
   const deleteModalCatName = deleteModal?.kind === "category"
     ? categories.find(c => c.categoryId === deleteModal.categoryId)?.name
     : null
+  const potModalCatName = potModal ? categories.find(c => c.categoryId === potModal.categoryId)?.name ?? "Savings" : null
 
   return (
     <div className="p-4 space-y-4">
@@ -699,60 +847,79 @@ export function BudgetTab() {
         </div>
       </div>
 
-      {/* Savings Goal (M21) */}
+      {/* Savings Goal setter (M21) — Set amount / Use my savings budget */}
       <Card>
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="grid place-items-center size-8 rounded-lg bg-signal-amber/10 text-signal-amber shrink-0">
-              <Target className="size-4" />
-            </span>
-            <div className="min-w-0">
-              <p className="font-display text-sm font-semibold tracking-wide text-foreground">Savings Goal</p>
-              {budgetData.savingsGoal ? (
-                <p className="text-xs text-muted-foreground truncate">
-                  {budgetData.savingsGoal.mode === "explicit"
-                    ? `${formatCurrency(budgetData.savingsGoal.targetAmount)} target`
-                    : "Derived target"}
-                </p>
-              ) : (
-                <p className="text-xs text-muted-foreground">No goal set</p>
-              )}
-            </div>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+          <span className="grid place-items-center size-10 rounded-xl bg-signal-amber/10 text-signal-amber shrink-0">
+            <Target className="size-5" />
+          </span>
+          <div className="flex-1 min-w-0">
+            <p className="font-display text-sm font-semibold tracking-wide text-foreground">Savings Goal</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {goalMode === "derived"
+                ? "Following your Savings category — updates automatically"
+                : "A fixed monthly target you set by hand"}
+            </p>
           </div>
-          {!goalEditing && (
-            <SecondaryButton onClick={openGoalEditor} className="shrink-0">
-              {budgetData.savingsGoal ? "Edit" : "Set goal"}
-            </SecondaryButton>
+
+          {/* Segmented toggle */}
+          <div className="flex bg-surface2 rounded-lg p-0.5 shrink-0">
+            <button
+              onClick={selectAmountMode}
+              className={cn(
+                "px-3 py-1.5 rounded-md text-xs font-semibold transition-colors",
+                goalMode === "amount" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"
+              )}
+            >
+              Set amount
+            </button>
+            <button
+              onClick={selectDerivedMode}
+              disabled={!hasSavingsHolders}
+              title={
+                hasSavingsHolders
+                  ? undefined
+                  : "Assign the Savings role to a category or subcategory to use this"
+              }
+              className={cn(
+                "px-3 py-1.5 rounded-md text-xs font-semibold transition-colors",
+                goalMode === "derived" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground",
+                !hasSavingsHolders && "opacity-40 cursor-not-allowed"
+              )}
+            >
+              Use my savings budget
+            </button>
+          </div>
+
+          {/* Value: editable target (amount) or read-only derived figure */}
+          {goalMode === "amount" ? (
+            <div className="flex items-center h-10 w-40 px-3 bg-card border-2 border-primary rounded-lg shrink-0">
+              <span className="text-muted-foreground font-bold">$</span>
+              <input
+                type="number"
+                value={goalTarget}
+                onChange={(e) => setGoalTarget(e.target.value)}
+                onBlur={commitGoalTarget}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") commitGoalTarget()
+                }}
+                placeholder="1000"
+                className="w-full bg-transparent text-right text-base font-bold text-foreground outline-none"
+              />
+              <span className="text-muted-foreground text-xs ml-1">/mo</span>
+            </div>
+          ) : (
+            <div className="flex flex-col items-end min-w-[180px] px-3.5 py-2 bg-surface2 border border-border rounded-lg shrink-0">
+              <span className="text-base font-extrabold text-foreground">
+                {formatCurrency(derivedTarget)}
+                <span className="text-xs font-semibold text-muted-foreground">/mo</span>
+              </span>
+              <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+                <Lock className="size-3" /> from your Savings category
+              </span>
+            </div>
           )}
         </div>
-
-        {goalEditing && (
-          <div className="mt-3 pt-3 border-t border-border space-y-3">
-            <div className="flex flex-col sm:flex-row gap-3">
-              <div className="flex-1">
-                <label className="text-[10px] text-muted-foreground">Target amount</label>
-                <input
-                  type="number"
-                  value={goalTarget}
-                  onChange={(e) => setGoalTarget(e.target.value)}
-                  placeholder="1000"
-                  className="w-full h-9 px-2 bg-card border border-border rounded text-sm"
-                  autoFocus
-                />
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <PrimaryButton onClick={saveGoal} className="flex-1">
-                <Check className="size-4 mr-2" />
-                Save goal
-              </PrimaryButton>
-              {budgetData.savingsGoal && (
-                <SecondaryButton onClick={removeGoal}>Remove</SecondaryButton>
-              )}
-              <SecondaryButton onClick={() => setGoalEditing(false)}>Cancel</SecondaryButton>
-            </div>
-          </div>
-        )}
       </Card>
 
       {showUpdateFeedback && (
@@ -876,6 +1043,119 @@ export function BudgetTab() {
                   </button>
                 </div>
               ))}
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Add / Edit Pot Modal */}
+      {potModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
+          <Card className="w-full max-w-md">
+            <div className="flex items-center justify-between mb-1">
+              <h3 className="font-display text-lg font-semibold tracking-wide text-foreground">
+                {potModal.kind === "add" ? "Add pot" : "Edit pot"}
+              </h3>
+              <button onClick={() => setPotModal(null)} className="p-1 text-muted-foreground hover:text-foreground">
+                <X className="size-5" />
+              </button>
+            </div>
+            <p className="text-xs text-muted-foreground mb-4 leading-relaxed">
+              {potModal.kind === "add" ? (
+                <>
+                  A new subcategory under <span className="font-medium text-foreground">{potModalCatName}</span>.
+                  Target, deadline and opening balance are all optional — a pot with none is a simple sinking fund.
+                </>
+              ) : (
+                <>
+                  <span className="font-medium text-foreground">{potName}</span> · each field is optional
+                </>
+              )}
+            </p>
+
+            {potModal.kind === "add" && (
+              <div className="mb-4">
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Pot name</label>
+                <input
+                  value={potName}
+                  onChange={(e) => setPotName(e.target.value)}
+                  placeholder="e.g. Emergency fund"
+                  autoFocus
+                  className="w-full h-10 px-3 bg-card border border-border rounded-lg text-sm"
+                />
+              </div>
+            )}
+
+            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
+              Target amount{potModal.kind === "add" && <span className="font-normal text-muted-foreground/60"> (optional)</span>}
+            </label>
+            <div className="flex gap-2 mb-3.5">
+              <div className="flex-1 flex items-center h-10 px-3 bg-card border border-border rounded-lg">
+                <span className="text-muted-foreground font-bold">$</span>
+                <input
+                  type="number"
+                  value={potTargetInput}
+                  onChange={(e) => setPotTargetInput(e.target.value)}
+                  placeholder="No target"
+                  className="w-full px-1 bg-transparent text-sm text-foreground outline-none"
+                />
+              </div>
+              <button
+                onClick={() => setPotTargetInput("")}
+                className="px-3.5 rounded-lg border border-border bg-surface2 text-xs font-semibold text-muted-foreground hover:text-foreground"
+              >
+                Clear
+              </button>
+            </div>
+
+            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
+              Deadline{potModal.kind === "add" && <span className="font-normal text-muted-foreground/60"> (optional)</span>}
+            </label>
+            <div className="flex gap-2 mb-3.5">
+              <input
+                type="month"
+                value={potDeadlineInput}
+                onChange={(e) => setPotDeadlineInput(e.target.value)}
+                className="flex-1 h-10 px-3 bg-card border border-border rounded-lg text-sm text-foreground"
+              />
+              <button
+                onClick={() => setPotDeadlineInput("")}
+                className="px-3.5 rounded-lg border border-border bg-surface2 text-xs font-semibold text-muted-foreground hover:text-foreground"
+              >
+                Clear
+              </button>
+            </div>
+
+            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
+              Opening balance{potModal.kind === "add" && <span className="font-normal text-muted-foreground/60"> (optional)</span>}
+            </label>
+            <div className="flex gap-2 mb-1.5">
+              <div className="flex-1 flex items-center h-10 px-3 bg-card border border-border rounded-lg">
+                <span className="text-muted-foreground font-bold">$</span>
+                <input
+                  type="number"
+                  value={potOpeningInput}
+                  onChange={(e) => setPotOpeningInput(e.target.value)}
+                  placeholder="None"
+                  className="w-full px-1 bg-transparent text-sm text-foreground outline-none"
+                />
+              </div>
+              <button
+                onClick={() => setPotOpeningInput("")}
+                className="px-3.5 rounded-lg border border-border bg-surface2 text-xs font-semibold text-muted-foreground hover:text-foreground"
+              >
+                Clear
+              </button>
+            </div>
+            <p className="text-[11px] text-muted-foreground mb-5 leading-relaxed">
+              Money already saved toward this before tracking started.
+            </p>
+
+            <div className="flex items-center gap-2.5 justify-end">
+              <SecondaryButton onClick={() => setPotModal(null)}>Cancel</SecondaryButton>
+              <PrimaryButton onClick={potModal.kind === "add" ? createPot : savePot}>
+                {potModal.kind === "add" ? "Create pot" : "Save pot"}
+              </PrimaryButton>
             </div>
           </Card>
         </div>
