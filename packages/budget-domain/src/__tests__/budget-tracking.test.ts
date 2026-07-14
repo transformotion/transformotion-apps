@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { toMonthlyAmount, getSubcategoryMonthlyBudget, buildBudgetVsActual, FREQ_FACTORS } from "../budget-tracking.js";
+import { toMonthlyAmount, getSubcategoryMonthlyBudget, buildBudgetVsActual, buildBudgetSummary, FREQ_FACTORS } from "../budget-tracking.js";
 import type { BudgetData, Transaction } from "../contracts.js";
 
 const SUB_A = "sub-a-uuid";
@@ -134,5 +134,55 @@ describe("buildBudgetVsActual", () => {
     const result = buildBudgetVsActual(transactions, data);
     expect(result.totalIncome).toBe(1000); // savings is NOT income
     expect(result.totalExpenses).toBe(200); // groceries only — savings is NOT an expense
+  });
+});
+
+describe("buildBudgetSummary", () => {
+  it("planned income vs expenses vs net from budgeted amounts", () => {
+    const s = buildBudgetSummary(BUDGET_DATA);
+    expect(s.totalIncome).toBe(8000); // SUB_A income budget
+    expect(s.totalExpenses).toBe(800); // SUB_B groceries budget
+    expect(s.net).toBe(7200);
+    expect(s.isSurplus).toBe(true);
+  });
+
+  it("excludes role:'savings' budgets from expenses (set aside, not spent)", () => {
+    const SUB_SAVINGS = "sub-savings-uuid";
+    const data: BudgetData = {
+      ...BUDGET_DATA,
+      categories: [
+        ...BUDGET_DATA.categories,
+        {
+          categoryId: "cat-savings-uuid",
+          name: "Savings",
+          type: "regular",
+          displayOrder: 2,
+          role: "savings",
+          subcategories: [{ subcategoryId: SUB_SAVINGS, name: "Emergency", displayOrder: 0 }],
+        },
+      ],
+      budgetAmounts: { ...BUDGET_DATA.budgetAmounts, [SUB_SAVINGS]: 500 },
+    };
+    const s = buildBudgetSummary(data);
+    expect(s.totalExpenses).toBe(800); // the 500 savings budget is NOT an expense
+    expect(s.net).toBe(7200); // net is unchanged by the savings allocation
+  });
+
+  it("excludes capital categories from expenses", () => {
+    const data: BudgetData = {
+      ...BUDGET_DATA,
+      categories: [
+        ...BUDGET_DATA.categories,
+        {
+          categoryId: "cat-capital-uuid",
+          name: "Renovation",
+          type: "capital",
+          displayOrder: 3,
+          subcategories: [{ subcategoryId: "sub-reno", name: "Kitchen", displayOrder: 0 }],
+        },
+      ],
+      budgetAmounts: { ...BUDGET_DATA.budgetAmounts, "sub-reno": 999 },
+    };
+    expect(buildBudgetSummary(data).totalExpenses).toBe(800); // capital excluded
   });
 });

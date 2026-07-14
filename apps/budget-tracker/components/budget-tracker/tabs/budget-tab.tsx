@@ -16,7 +16,7 @@ import {
 import { CATEGORY_COLORS } from "../data/category-colors"
 import { ExcludedBadge } from "../badges/excluded-badge"
 import type { Category, Subcategory, CategoryRole } from "@transformotion/budget-domain"
-import { collectIncomeHolderIds, collectSavingsHolderIds, buildSavingsGoalProgress, latestMonth } from "@transformotion/budget-domain"
+import { collectSavingsHolderIds, buildSavingsGoalProgress, buildBudgetSummary, latestMonth } from "@transformotion/budget-domain"
 import { cn } from "@/lib/utils"
 
 const ROLE_OPTIONS: { value: CategoryRole | ""; label: string }[] = [
@@ -148,29 +148,9 @@ export function BudgetTab() {
     return { actuals: avgActuals, monthCount }
   }, [transactions, categories])
 
-  const budgetSummary = useMemo(() => {
-    let totalIncome = 0
-    let totalExpenses = 0
-
-    const incomeHolders = collectIncomeHolderIds(budgetData.categories)
-
-    for (const cat of getActiveCategories(budgetData.categories)) {
-      if (cat.type === "capital") continue
-      for (const sub of getActiveSubcategories(cat)) {
-        const amount = budgetData.budgetAmounts[sub.subcategoryId] ?? 0
-        const freq = (budgetData.budgetFrequencies[sub.subcategoryId] ?? "monthly") as BudgetFrequency
-        const monthly = toMonthlyAmount(amount, freq)
-        if (incomeHolders.subcategoryIds.has(sub.subcategoryId)) {
-          totalIncome += monthly
-        } else {
-          totalExpenses += monthly
-        }
-      }
-    }
-
-    const net = totalIncome - totalExpenses
-    return { totalIncome, totalExpenses, net, isSurplus: net >= 0 }
-  }, [budgetData])
+  // Planned income/expenses/net — the budget-domain aggregate (honours the savings
+  // exclusion; single source, no local fork). behaviour.md § "Exclusion".
+  const budgetSummary = useMemo(() => buildBudgetSummary(budgetData), [budgetData])
 
   // Whether any savings-role holders exist (gates the derived-goal toggle) and the
   // computed derived target (Σ monthly savings budgets) shown read-only in derived

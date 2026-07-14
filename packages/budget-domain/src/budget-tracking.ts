@@ -25,6 +25,44 @@ export function getSubcategoryMonthlyBudget(
   return toMonthlyAmount(amount, freq);
 }
 
+export interface BudgetSummary {
+  totalIncome: number;
+  totalExpenses: number;
+  net: number;
+  isSurplus: boolean;
+}
+
+/**
+ * Planned monthly budget summary — income vs expenses vs net from the BUDGETED
+ * amounts (not actuals). Savings-role holders are set aside, not spent, so they
+ * are EXCLUDED from expenses — same class as capital/Transfer/_business
+ * (behaviour.md § "Exclusion"). Capital categories are excluded too. This is the
+ * single source for the Budget-tab surplus/deficit banner.
+ */
+export function buildBudgetSummary(budgetData: BudgetData): BudgetSummary {
+  const incomeHolders = collectIncomeHolderIds(budgetData.categories);
+  const savingsHolders = collectSavingsHolderIds(budgetData.categories);
+
+  let totalIncome = 0;
+  let totalExpenses = 0;
+  for (const cat of budgetData.categories) {
+    if (cat.deleted || cat.type === "capital") continue;
+    for (const sub of getActiveSubs(cat)) {
+      const monthly = getSubcategoryMonthlyBudget(sub.subcategoryId, budgetData);
+      if (incomeHolders.subcategoryIds.has(sub.subcategoryId)) {
+        totalIncome += monthly;
+      } else if (savingsHolders.subcategoryIds.has(sub.subcategoryId)) {
+        continue; // set aside, not spending
+      } else {
+        totalExpenses += monthly;
+      }
+    }
+  }
+
+  const net = totalIncome - totalExpenses;
+  return { totalIncome, totalExpenses, net, isSurplus: net >= 0 };
+}
+
 export interface SubcategoryActual {
   subcategoryId: string;
   name: string;

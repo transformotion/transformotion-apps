@@ -398,6 +398,16 @@ export const surfaces = [
           { waitVisible: { text: 'Savings Goal' } },
         ],
       },
+      {
+        // 6. Item 6 — Budget-tab surplus/deficit banner now consumes the domain
+        //    aggregate: the $2,150/mo of savings pot budgets are EXCLUDED from
+        //    expenses (was a local fork that counted them → false deficit).
+        name: '06-budget-banner-savings-excluded',
+        actions: [
+          { click: { role: ['button', 'Budget'] } },
+          { waitVisible: { text: 'Set your monthly spending targets' } },
+        ],
+      },
     ],
   },
 ]
