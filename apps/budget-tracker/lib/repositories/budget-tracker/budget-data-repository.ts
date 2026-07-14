@@ -1,4 +1,5 @@
 import type { BudgetData, BudgetDataRepository } from '@transformotion/budget-domain'
+import { normaliseBudgetData } from '@transformotion/budget-domain'
 import { MOCK_SEED_BUDGET_DATA } from './mock-seed'
 
 const BUDGET_DATA_KEY = 'budget-tracker-budget-data'
@@ -36,7 +37,8 @@ export class LocalBudgetDataRepository implements BudgetDataRepository {
   }
 
   async get(_accountId: string): Promise<BudgetData> {
-    return this.getData()
+    // Read-time migration shim (m16.12.0): normalise any legacy savingsGoal shape.
+    return normaliseBudgetData(this.getData())
   }
 
   async patch(_accountId: string, partial: Partial<BudgetData>): Promise<BudgetData> {
