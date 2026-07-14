@@ -52,7 +52,7 @@ function resolve(page, spec) {
   if (spec.selector) {
     let loc = page.locator(spec.selector)
     if (spec.hasText) loc = loc.filter({ hasText: spec.hasText })
-    return loc.first()
+    return spec.nth !== undefined ? loc.nth(spec.nth) : loc.first()
   }
   throw new Error('unknown locator spec: ' + JSON.stringify(spec))
 }
@@ -60,6 +60,7 @@ function resolve(page, spec) {
 async function step(page, action) {
   if (action.click) await resolve(page, action.click).click()
   else if (action.fill) await resolve(page, action.fill).fill(action.text ?? '') // { fill: <locator>, text }
+  else if (action.select) await resolve(page, action.select).selectOption(action.value ?? '') // { select: <locator>, value }
   else if (action.waitVisible) await resolve(page, action.waitVisible).waitFor({ state: 'visible', timeout: 15000 })
   else if (action.waitHidden) await resolve(page, action.waitHidden).waitFor({ state: 'hidden', timeout: 15000 })
   else if (action.press) await page.keyboard.press(action.press)

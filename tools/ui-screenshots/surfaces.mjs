@@ -9,9 +9,10 @@
 //   { text: 'some text' }                  getByText (substring; add exact:true for exact)
 //   { label: 'aria-label' }                getByLabel
 //   { testId: 'x' }                        getByTestId
-//   { selector: 'div.foo', hasText: 'y' }  page.locator(selector).filter({ hasText })
+//   { selector: 'div.foo', hasText: 'y', nth: 2 }  page.locator(selector).filter({ hasText }).nth(2)
 //
-// Action verbs: { click }, { waitVisible }, { waitHidden }, { press: 'Enter' }, { wait: ms }.
+// Action verbs: { click }, { fill, text }, { select, value }, { waitVisible },
+//   { waitHidden }, { press: 'Enter' }, { wait: ms }.
 
 export const app = {
   // Booted by capture.mjs unless --no-boot is passed. Run from the repo root.
@@ -197,6 +198,133 @@ export const surfaces = [
           { waitVisible: { text: 'more transactions match' } },
           { click: { role: ['button', 'Confirm all'] } },
           { waitHidden: { text: 'more transactions match' } },
+        ],
+      },
+    ],
+  },
+  {
+    name: 'bt-budget-savings-pots',
+    app: budgetTrackerApp,
+    description:
+      'Budget Tracker → Budget: M21 savings-goal setter (Set amount / Use my savings ' +
+      'budget) + savings-role category pot treatment. The whole flow is driven through ' +
+      'the UI (assign Savings role → expand → Add/Edit pot), so no seed data is needed. ' +
+      'Pot modals carry a Monthly contribution field (the ordinary per-subcategory budget) ' +
+      'above target/deadline/opening, so the derived goal is reachable to non-zero in-UI.',
+    viewport: { width: 1280, height: 1400 },
+    nav: [
+      { click: { role: ['button', 'Budget'] } },
+      { waitVisible: { text: 'Savings Goal' } },
+    ],
+    // Reusable action fragment: assign Savings role to the first category, expand
+    // it, open Add pot, and create "House deposit" with a $750/mo contribution +
+    // $50,000 target + $12,000 opening. ("None" placeholder is shared by the
+    // contribution [first] and opening [second] inputs → opening uses nth:1.)
+    states: [
+      {
+        // 1. Setter, amount mode (default) with a value typed — and, since no
+        //    Savings-role holder exists yet, the derived toggle is DISABLED.
+        name: '01-setter-amount-disabled-derived',
+        actions: [
+          { fill: { placeholder: '1000' }, text: '2150' },
+          { waitVisible: { text: 'A fixed monthly target you set by hand' } },
+        ],
+      },
+      {
+        // 2. Assign Savings role → add a pot with a $750/mo contribution → switch
+        //    to derived → the read-only figure is now a REAL non-zero amount.
+        name: '02-setter-derived',
+        actions: [
+          { select: { selector: 'select[title="Semantic role (income / savings)"]' }, value: 'savings' },
+          { click: { text: '$0/mo' } },
+          { click: { role: ['button', 'Add pot'] } },
+          { waitVisible: { text: 'A new subcategory under' } },
+          { fill: { placeholder: 'e.g. Emergency fund' }, text: 'House deposit' },
+          { fill: { placeholder: 'None' }, text: '750' },
+          { fill: { placeholder: 'No target' }, text: '50000' },
+          { click: { role: ['button', 'Create pot'] } },
+          { waitHidden: { text: 'A new subcategory under' } },
+          { click: { role: ['button', 'Use my savings budget'] } },
+          { waitVisible: { text: 'from your Savings category' } },
+        ],
+      },
+      {
+        // 3. Pot rows — a pot with a contribution shows "$750/mo · Target $50,000".
+        name: '03-pot-rows',
+        actions: [
+          { select: { selector: 'select[title="Semantic role (income / savings)"]' }, value: 'savings' },
+          { click: { text: '$0/mo' } },
+          { click: { role: ['button', 'Add pot'] } },
+          { waitVisible: { text: 'A new subcategory under' } },
+          { fill: { placeholder: 'e.g. Emergency fund' }, text: 'House deposit' },
+          { fill: { placeholder: 'None' }, text: '750' },
+          { fill: { placeholder: 'No target' }, text: '50000' },
+          { click: { role: ['button', 'Create pot'] } },
+          { waitHidden: { text: 'A new subcategory under' } },
+          { waitVisible: { text: 'Target $50,000' } },
+        ],
+      },
+      {
+        // 4. Add pot modal — empty (now four fields: contribution + the three).
+        name: '04-add-pot-empty',
+        actions: [
+          { select: { selector: 'select[title="Semantic role (income / savings)"]' }, value: 'savings' },
+          { click: { text: '$0/mo' } },
+          { click: { role: ['button', 'Add pot'] } },
+          { waitVisible: { text: 'A new subcategory under' } },
+        ],
+      },
+      {
+        // 5. Add pot modal — filled (name + contribution + target + opening).
+        name: '05-add-pot-filled',
+        actions: [
+          { select: { selector: 'select[title="Semantic role (income / savings)"]' }, value: 'savings' },
+          { click: { text: '$0/mo' } },
+          { click: { role: ['button', 'Add pot'] } },
+          { waitVisible: { text: 'A new subcategory under' } },
+          { fill: { placeholder: 'e.g. Emergency fund' }, text: 'House deposit' },
+          { fill: { placeholder: 'None' }, text: '750' },
+          { fill: { placeholder: 'No target' }, text: '50000' },
+          { fill: { selector: 'input[placeholder="None"]', nth: 1 }, text: '12000' },
+        ],
+      },
+      {
+        // 6. Edit pot modal — populated. Create a pot with all fields, then reopen it.
+        name: '06-edit-pot-populated',
+        actions: [
+          { select: { selector: 'select[title="Semantic role (income / savings)"]' }, value: 'savings' },
+          { click: { text: '$0/mo' } },
+          { click: { role: ['button', 'Add pot'] } },
+          { waitVisible: { text: 'A new subcategory under' } },
+          { fill: { placeholder: 'e.g. Emergency fund' }, text: 'House deposit' },
+          { fill: { placeholder: 'None' }, text: '750' },
+          { fill: { placeholder: 'No target' }, text: '50000' },
+          { fill: { selector: 'input[placeholder="None"]', nth: 1 }, text: '12000' },
+          { click: { role: ['button', 'Create pot'] } },
+          { waitHidden: { text: 'A new subcategory under' } },
+          // The created pot is the 3rd pot row → its Edit pot button (nth 2).
+          { click: { selector: 'button', hasText: 'Edit pot', nth: 2 } },
+          { waitVisible: { text: 'each field is optional' } },
+        ],
+      },
+      {
+        // 7. Edit pot modal — a field cleared (Monthly contribution Clear pressed).
+        name: '07-edit-pot-cleared',
+        actions: [
+          { select: { selector: 'select[title="Semantic role (income / savings)"]' }, value: 'savings' },
+          { click: { text: '$0/mo' } },
+          { click: { role: ['button', 'Add pot'] } },
+          { waitVisible: { text: 'A new subcategory under' } },
+          { fill: { placeholder: 'e.g. Emergency fund' }, text: 'House deposit' },
+          { fill: { placeholder: 'None' }, text: '750' },
+          { fill: { placeholder: 'No target' }, text: '50000' },
+          { fill: { selector: 'input[placeholder="None"]', nth: 1 }, text: '12000' },
+          { click: { role: ['button', 'Create pot'] } },
+          { waitHidden: { text: 'A new subcategory under' } },
+          { click: { selector: 'button', hasText: 'Edit pot', nth: 2 } },
+          { waitVisible: { text: 'each field is optional' } },
+          // Clear the Monthly contribution (first Clear) → returns to "None".
+          { click: { role: ['button', 'Clear'] } },
         ],
       },
     ],
