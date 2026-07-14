@@ -329,4 +329,85 @@ export const surfaces = [
       },
     ],
   },
+  {
+    name: 'bt-savings-tab',
+    app: budgetTrackerApp,
+    description:
+      'Budget Tracker → Savings tab (PR 2): nav item, header strip (derived goal / ' +
+      'saved this month / total across pots), pot-balances trajectory chart, and pot ' +
+      'cards for three archetypes (sinking fund / target-only / target+deadline behind ' +
+      'pace). Add movement modal writes a manual signed transaction. Empty state when no ' +
+      'savings role exists. Home tile shows the derived ring and retargets here. Mock ' +
+      'seed provides a Savings category + 3 pots + movements.',
+    viewport: { width: 1280, height: 1500 },
+    nav: [
+      { waitVisible: { role: ['button', 'Savings'] } },
+    ],
+    states: [
+      {
+        // 1. Populated tab — header strip + trajectory chart + 3 pot cards
+        //    (Holidays sinking fund, New car on-track, House deposit behind pace).
+        //    The sidebar shows the new Savings nav item (Budget ▸ Savings ▸ Cashflow).
+        name: '01-tab-populated',
+        actions: [
+          { click: { role: ['button', 'Savings'] } },
+          { waitVisible: { text: 'Pot balances over time' } },
+          { waitVisible: { text: 'Behind pace' } },
+        ],
+      },
+      {
+        // 2. Empty state — remove the Savings role on the Budget tab, then view Savings.
+        name: '02-empty',
+        actions: [
+          { click: { role: ['button', 'Budget'] } },
+          { waitVisible: { text: 'Savings Goal' } },
+          // 5 regular categories → the Savings category's role select is nth 4.
+          { select: { selector: 'select[title="Semantic role (income / savings)"]', nth: 4 }, value: '' },
+          { click: { role: ['button', 'Savings'] } },
+          { waitVisible: { text: 'No savings category configured yet' } },
+        ],
+      },
+      {
+        // 3. Add movement modal — default (Contribution / in).
+        name: '03-movement-in',
+        actions: [
+          { click: { role: ['button', 'Savings'] } },
+          { waitVisible: { text: 'Pot balances over time' } },
+          { click: { role: ['button', 'Add movement'] } },
+          { waitVisible: { text: 'Saved as a manual transaction' } },
+          { fill: { placeholder: '0.00' }, text: '500' },
+        ],
+      },
+      {
+        // 4. Add movement modal — Withdrawal (out): red live-balance preview.
+        name: '04-movement-out',
+        actions: [
+          { click: { role: ['button', 'Savings'] } },
+          { waitVisible: { text: 'Pot balances over time' } },
+          { click: { role: ['button', 'Add movement'] } },
+          { waitVisible: { text: 'Saved as a manual transaction' } },
+          { fill: { placeholder: '0.00' }, text: '500' },
+          { click: { role: ['button', 'Withdrawal (out)'] } },
+        ],
+      },
+      {
+        // 5. Home tile — derived-mode ring gauge (retargets to Savings on click).
+        name: '05-home-tile',
+        actions: [
+          { click: { role: ['button', 'Home'] } },
+          { waitVisible: { text: 'Savings Goal' } },
+        ],
+      },
+      {
+        // 6. Item 6 — Budget-tab surplus/deficit banner now consumes the domain
+        //    aggregate: the $2,150/mo of savings pot budgets are EXCLUDED from
+        //    expenses (was a local fork that counted them → false deficit).
+        name: '06-budget-banner-savings-excluded',
+        actions: [
+          { click: { role: ['button', 'Budget'] } },
+          { waitVisible: { text: 'Set your monthly spending targets' } },
+        ],
+      },
+    ],
+  },
 ]

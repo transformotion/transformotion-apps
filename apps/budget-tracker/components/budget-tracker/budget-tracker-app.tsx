@@ -6,6 +6,7 @@ import { HomeTab } from "./tabs/home-tab"
 import { TransactionsTab } from "./tabs/transactions-tab"
 import { SummaryTab } from "./tabs/summary-tab"
 import { BudgetTab } from "./tabs/budget-tab"
+import { SavingsTab } from "./tabs/savings-tab"
 import { CashflowTab } from "./tabs/cashflow-tab"
 import { RulesTab } from "./tabs/rules-tab"
 import { ReviewTab } from "./tabs/review-tab"
@@ -33,6 +34,8 @@ function BudgetTabContent() {
       return <SummaryTab />
     case "budget":
       return <BudgetTab />
+    case "savings":
+      return <SavingsTab />
     case "cashflow":
       return <CashflowTab />
     case "rules":

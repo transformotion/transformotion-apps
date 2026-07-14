@@ -94,6 +94,57 @@ function StatTile({
   )
 }
 
+/**
+ * Home savings-goal tile — the derived-mode treatment (ring gauge + saved/target).
+ * The savings pots are now owned by the Savings tab, so the click-through
+ * retargets there (was Budget).
+ */
+function SavingsGoalTile({
+  savings,
+  derived,
+  onClick,
+}: {
+  savings: { configured: boolean; savedAmount: number; targetAmount: number; fraction: number }
+  derived: boolean
+  onClick: () => void
+}) {
+  const R = 24
+  const C = 2 * Math.PI * R
+  const pct = Math.round(savings.fraction * 100)
+  const caption = !savings.configured
+    ? "Set a goal in Budget"
+    : derived
+      ? "Derived from your Savings budget"
+      : "Monthly target"
+
+  return (
+    <Card interactive onClick={onClick} className="border-signal-green/25">
+      <p className="font-display text-[10px] uppercase tracking-wider text-signal-green mb-1">Savings Goal</p>
+      {savings.configured ? (
+        <div className="flex items-center gap-3.5">
+          <svg width="58" height="58" viewBox="0 0 58 58" className="shrink-0">
+            <circle cx="29" cy="29" r={R} fill="none" stroke="var(--surface2)" strokeWidth="7" />
+            <circle
+              cx="29" cy="29" r={R} fill="none" stroke="var(--signal-green)" strokeWidth="7" strokeLinecap="round"
+              strokeDasharray={C} strokeDashoffset={C * (1 - savings.fraction)} transform="rotate(-90 29 29)"
+            />
+            <text x="29" y="33" textAnchor="middle" fontSize="14" fontWeight="800" fill="var(--foreground)">{pct}%</text>
+          </svg>
+          <div className="min-w-0">
+            <p className="text-2xl font-bold text-foreground leading-tight">{formatCurrency(savings.savedAmount)}</p>
+            <p className="text-sm text-muted-foreground">
+              of {formatCurrency(savings.targetAmount)}<span className="text-xs">/mo</span>
+            </p>
+          </div>
+        </div>
+      ) : (
+        <p className="text-2xl font-bold text-muted-foreground">Not set</p>
+      )}
+      <p className="text-xs text-signal-green mt-2">{caption}</p>
+    </Card>
+  )
+}
+
 export function HomeTab() {
   const transactions = useBudgetStore((s) => s.transactions)
   const budgetData = useBudgetStore((s) => s.budgetData)
@@ -167,21 +218,10 @@ export function HomeTab() {
               subClassName={stats.underBudget ? "text-xs text-brand-teal mt-1" : "text-xs text-signal-red mt-1"}
               onClick={() => setActiveTab("budget")}
             />
-            <StatTile
-              label="Savings Goal"
-              value={
-                savings.configured ? (
-                  <>
-                    {formatCurrency(savings.savedAmount)}{" "}
-                    <span className="text-lg text-muted-foreground">/ {formatCurrency(savings.targetAmount)}</span>
-                  </>
-                ) : (
-                  <span className="text-lg text-muted-foreground">Not set</span>
-                )
-              }
-              sub={savings.configured ? `${Math.round(savings.fraction * 100)}% complete` : "Set a goal in Budget"}
-              subClassName="text-xs text-signal-amber mt-1"
-              onClick={() => setActiveTab("budget")}
+            <SavingsGoalTile
+              savings={savings}
+              derived={budgetData.savingsGoal?.mode === "derived"}
+              onClick={() => setActiveTab("savings")}
             />
           </div>
 

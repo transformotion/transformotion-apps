@@ -17,7 +17,7 @@ import {
 import { ruleComparator, type DashboardInsightResponse } from '@transformotion/budget-domain'
 
 // 'home' (M21) is the dashboard landing tab.
-export type BudgetTabId = 'home' | 'transactions' | 'summary' | 'budget' | 'cashflow' | 'rules' | 'review' | 'settings'
+export type BudgetTabId = 'home' | 'transactions' | 'summary' | 'budget' | 'savings' | 'cashflow' | 'rules' | 'review' | 'settings'
 
 interface BudgetState {
   activeTab: BudgetTabId
