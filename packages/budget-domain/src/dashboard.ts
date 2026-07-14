@@ -89,29 +89,24 @@ export function buildSavingsGoalProgress(
     };
   }
 
-  const linkedSubcategoryId = goal.linkedSubcategoryId ?? null;
-  let savedAmount: number;
-  if (linkedSubcategoryId) {
-    // Explicit: Σ|transactions| classified into the linked subcategory this month.
-    savedAmount = transactions
-      .filter((t) => txMonthKey(t) === month && t.subcategoryId === linkedSubcategoryId)
-      .reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0);
-  } else {
-    // Implicit: role-based income − spending this month (never negative).
-    const income = monthlyIncome(transactions, budgetData, month);
-    const spending = buildBudgetVsActual(transactions, budgetData, month).totalExpenses;
-    savedAmount = Math.max(income - spending, 0);
-  }
+  // COMPILE STUB (contracts-only PR m16.12.0): the `SavingsGoal` union changed
+  // (`linkedSubcategoryId` removed; `explicit`/`derived` modes added) and the new
+  // SIGNED savings-role progress semantics land in the follow-up budget-domain PR.
+  // Here we only keep this compiling against the new type while preserving the
+  // prior implicit-surplus measure (income − spending, floored at 0).
+  const targetAmount = goal.mode === "explicit" ? goal.targetAmount : 0;
+  const income = monthlyIncome(transactions, budgetData, month);
+  const spending = buildBudgetVsActual(transactions, budgetData, month).totalExpenses;
+  const savedAmount = Math.max(income - spending, 0);
 
-  const targetAmount = goal.targetAmount;
   const fraction = targetAmount > 0 ? Math.min(savedAmount / targetAmount, 1) : 0;
   return {
     configured: true,
     targetAmount,
     savedAmount,
     fraction,
-    linkedSubcategoryId,
-    implicit: !linkedSubcategoryId,
+    linkedSubcategoryId: null,
+    implicit: true,
   };
 }
 

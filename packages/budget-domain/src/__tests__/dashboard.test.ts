@@ -115,17 +115,20 @@ describe("buildDashboardStats", () => {
 });
 
 describe("buildSavingsGoalProgress", () => {
-  it("uses the linked subcategory when set", () => {
-    const data = { ...BUDGET_DATA, savingsGoal: { targetAmount: 1000, linkedSubcategoryId: SUB_SAVINGS } };
+  // m16.12.0 STUB: `linkedSubcategoryId` was removed from `SavingsGoal`; the
+  // domain still measures the implicit surplus for a configured explicit goal
+  // (the real explicit/derived + signed savings-role progress is a follow-up PR).
+  it("explicit goal measures the implicit surplus (linked tracking removed — stub)", () => {
+    const data = { ...BUDGET_DATA, savingsGoal: { mode: "explicit" as const, targetAmount: 1000 } };
     const p = buildSavingsGoalProgress(TXNS, data, "2026-06");
     expect(p.configured).toBe(true);
-    expect(p.implicit).toBe(false);
-    expect(p.savedAmount).toBe(200);
-    expect(p.fraction).toBeCloseTo(0.2);
+    expect(p.implicit).toBe(true);
+    expect(p.savedAmount).toBe(5600 - 500);
+    expect(p.fraction).toBe(1);
   });
 
-  it("falls back to implicit income - spending when no link", () => {
-    const data = { ...BUDGET_DATA, savingsGoal: { targetAmount: 10000 } };
+  it("falls back to implicit income - spending", () => {
+    const data = { ...BUDGET_DATA, savingsGoal: { mode: "explicit" as const, targetAmount: 10000 } };
     const p = buildSavingsGoalProgress(TXNS, data, "2026-06");
     expect(p.implicit).toBe(true);
     expect(p.savedAmount).toBe(5600 - 500);

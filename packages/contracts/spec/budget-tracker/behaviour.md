@@ -33,16 +33,56 @@ multiple categories or subcategories may hold the same role.
   after a one-off backfill sets `role: 'income'` on existing categories named
   "Income".
 
-## Savings goal (M21)
+## Savings goal
 
-`BudgetData.savingsGoal?` is an optional per-account goal
-(`{ targetAmount; linkedSubcategoryId? }`) that travels through the existing
-budget-data read/write routes — there is no new route. Progress **this month**:
+`BudgetData.savingsGoal?` is an optional per-account goal that travels through
+the existing budget-data read/write routes — there is no new route. It is a
+discriminated union on `mode`:
 
-- `linkedSubcategoryId` set → progress = Σ|transactions| classified into that
-  subcategory this month.
-- otherwise (implicit goal) → progress = (role-based income − spending) this
-  month, using the income definition above.
+- **`{ mode: 'explicit'; targetAmount }`** — a user-set target.
+- **`{ mode: 'derived' }`** — the target is COMPUTED (see below).
+
+`linkedSubcategoryId` (the previous tracking mechanism) is **removed**; savings
+tracking is now via the `role: 'savings'` classification (§ "Category roles" and
+§ "Exclusion semantics").
+
+Progress is measured **this month**:
+
+- **explicit mode** → progress = the same-month **signed** sum across **all**
+  `role:'savings'` holders. If **no** savings holders exist, fall back to the
+  **implicit surplus**: `max(income − spending, 0)` (income role-based, per
+  § "Category roles"). This implicit fallback is the previously-shipped behaviour,
+  now the documented fallback.
+- **derived mode** → the goal (target) = Σ **monthly-normalized budgeted amounts**
+  of `role:'savings'` holders; progress is measured as in explicit mode. Derived
+  mode with **no** savings holders is **invalid** — the setter must not offer it,
+  and the contract documents `goal = 0` as the degenerate value.
+
+## Savings pots
+
+`Subcategory` may carry optional pot fields — `potTarget?`, `potDeadline?` (ISO
+year-month, e.g. `"2027-12"`), `potOpeningBalance?`. They ride the EXISTING
+`categories` concept in budget-data persistence (a `Subcategory` nests in
+`BudgetData.categories[].subcategories[]`), so there is no new route and no Lambda
+CONCEPTS extension.
+
+**Pot balance** = `potOpeningBalance` (default `0`) **plus the SIGNED sum of ALL
+transactions in that subcategory since data start.** The balance is **signed** —
+this **supersedes** the prior `Math.abs` treatment (a withdrawal reduces the pot).
+
+## Exclusion semantics
+
+A transaction classified into a `role: 'savings'` holder — a `Category` or
+`Subcategory` whose `role === 'savings'` (a category-level role covers all its
+subcategories) — is **excluded from expense aggregates**: Summary totals,
+Cashflow, and budget-vs-actual. This is the **same exclusion class** as
+`subcategory === "Transfer"`, `_business === true`, and the transaction's category
+`type === 'capital'` (the app's canonical exclusion rules). Savings money is set
+aside, not spent, so it must not inflate spending.
+
+**Historical aggregates change** once savings roles are assigned: previously
+reported expense / cashflow figures recompute to exclude the newly-classified
+savings transactions. This is **owner-acknowledged** and intended.
 
 ## Dashboard insight (M21)
 

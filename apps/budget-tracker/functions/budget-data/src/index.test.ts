@@ -72,22 +72,22 @@ describe('budget-data handler', () => {
     vi.resetModules();
   });
 
-  it('round-trips savingsGoal with a linked subcategory through PATCH then GET', async () => {
-    const savingsGoal = { targetAmount: 2500, linkedSubcategoryId: 'sub-emergency' };
+  it('round-trips an explicit savingsGoal through PATCH then GET', async () => {
+    const savingsGoal = { mode: 'explicit' as const, targetAmount: 2500 };
 
     expect((await invoke('PATCH', { savingsGoal })).budgetData.savingsGoal).toEqual(savingsGoal);
     expect((await invoke('GET')).budgetData.savingsGoal).toEqual(savingsGoal);
   });
 
-  it('round-trips savingsGoal with linkedSubcategoryId null', async () => {
-    const savingsGoal = { targetAmount: 1200, linkedSubcategoryId: null };
+  it('round-trips a derived savingsGoal', async () => {
+    const savingsGoal = { mode: 'derived' as const };
 
     expect((await invoke('PATCH', { savingsGoal })).budgetData.savingsGoal).toEqual(savingsGoal);
     expect((await invoke('GET')).budgetData.savingsGoal).toEqual(savingsGoal);
   });
 
   it('leaves stored savingsGoal untouched when a PATCH omits it', async () => {
-    const savingsGoal = { targetAmount: 3000, linkedSubcategoryId: 'sub-holiday' };
+    const savingsGoal = { mode: 'explicit' as const, targetAmount: 3000 };
 
     await invoke('PATCH', { savingsGoal });
     const afterPatch = await invoke('PATCH', { budgetAmounts: {} });

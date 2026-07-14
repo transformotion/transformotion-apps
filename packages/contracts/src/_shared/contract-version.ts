@@ -131,8 +131,37 @@
  * spec/budget-tracker/behaviour.md § "AI Review rule suggestion"). No existing
  * shape altered; no runtime code in this PR. Per-app: budget-tracker
  * m15.2.0 -> m15.3.0. Minor bump: purely additive optional fields.
+ *
+ * m16.12.0 — Breaking (budget-tracker savings pots). Three contract changes:
+ * (1) `SavingsGoal` becomes a discriminated union
+ * `{ mode: 'explicit'; targetAmount } | { mode: 'derived' }` and REMOVES
+ * `linkedSubcategoryId`. MIGRATION: an existing goal maps to
+ * `{ mode: 'explicit', targetAmount }`; a goal that carried a
+ * `linkedSubcategoryId` ALSO assigns `role: 'savings'` to that subcategory (the
+ * linked-subcategory tracking is superseded by savings-role classification /
+ * exclusion). (2) `Subcategory` gains optional pot fields `potTarget?`,
+ * `potDeadline?` (ISO year-month), `potOpeningBalance?` — they ride the EXISTING
+ * `categories` concept in budget-data persistence (Subcategory nests in
+ * `BudgetData.categories`), so NO new route and NO Lambda CONCEPTS extension.
+ * (3) Documented contract behaviour (behaviour.md): `role:'savings'` transactions
+ * are EXCLUDED from expense aggregates (Summary / Cashflow / budget-vs-actual),
+ * the same class as Transfer / `_business` / `type:'capital'` — historical
+ * aggregates change once savings roles are assigned (owner-acknowledged); the new
+ * explicit-vs-derived savings-goal progress semantics; and SIGNED pot balance
+ * (supersedes the prior `Math.abs`).
+ * Per-app: budget-tracker m15.3.0 -> m15.4.0. Minor bump: the repo ships breaking
+ * contract changes as MINOR increments within the mXX line (precedent: m16.2.0,
+ * m16.3.0, m16.4.0, m16.5.0 are all "Breaking"); per-app bump follows the #666
+ * "Version check" convention (per-app lines bump per BT contract change).
+ * DOWNSTREAM (follow-up PRs — NOT in this PR): budget-domain savings-goal +
+ * pot-balance calc replacement (SIGNED; explicit/derived) and savings-role
+ * exclusion in budget-vs-actual; budget-tab savings-goal editor rebuild (mode
+ * explicit/derived + pot-field UI); a one-off migration mapping existing goals
+ * and assigning `role:'savings'` to previously-linked subcategories. This PR
+ * carries only the contract + version + behaviour-doc; conforming code is stubbed
+ * to compile (see PR description for the exact touch list).
  */
-export const CONTRACT_VERSION = 'm16.11.0' as const;
+export const CONTRACT_VERSION = 'm16.12.0' as const;
 
 export type ContractScope =
   | '_shared'

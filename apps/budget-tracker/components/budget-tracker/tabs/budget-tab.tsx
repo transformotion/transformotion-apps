@@ -66,7 +66,6 @@ export function BudgetTab() {
   // user opens the editor; display mode reads budgetData.savingsGoal directly.
   const [goalEditing, setGoalEditing] = useState(false)
   const [goalTarget, setGoalTarget] = useState("")
-  const [goalLinkedSub, setGoalLinkedSub] = useState("")
 
   type DeleteTarget =
     | { kind: "subcategory"; subcategoryId: string; categoryId: string; count: number }
@@ -201,8 +200,10 @@ export function BudgetTab() {
   }
 
   function openGoalEditor() {
-    setGoalTarget(budgetData.savingsGoal ? String(budgetData.savingsGoal.targetAmount) : "")
-    setGoalLinkedSub(budgetData.savingsGoal?.linkedSubcategoryId ?? "")
+    // m16.12.0 stub: `SavingsGoal` is now a discriminated union; this contracts-only
+    // PR keeps the editor on the `explicit` mode. The explicit/derived + pot-field
+    // editor rebuild is a follow-up UI PR.
+    setGoalTarget(budgetData.savingsGoal?.mode === "explicit" ? String(budgetData.savingsGoal.targetAmount) : "")
     setGoalEditing(true)
   }
 
@@ -211,9 +212,7 @@ export function BudgetTab() {
     if (targetAmount <= 0) {
       updateBudgetData({ savingsGoal: undefined })
     } else {
-      updateBudgetData({
-        savingsGoal: { targetAmount, linkedSubcategoryId: goalLinkedSub || null },
-      })
+      updateBudgetData({ savingsGoal: { mode: "explicit", targetAmount } })
     }
     setGoalEditing(false)
   }
@@ -222,10 +221,6 @@ export function BudgetTab() {
     updateBudgetData({ savingsGoal: undefined })
     setGoalEditing(false)
   }
-
-  const allSubcategoryOptions = categories
-    .filter(c => !c.deleted)
-    .flatMap(c => getActiveSubcategories(c).map(s => ({ id: s.subcategoryId, label: `${c.name} › ${s.name}` })))
 
   function toggleSubcategoryExclude(sub: Subcategory, categoryId: string) {
     const updatedCategories = categories.map(cat => {
@@ -715,10 +710,9 @@ export function BudgetTab() {
               <p className="font-display text-sm font-semibold tracking-wide text-foreground">Savings Goal</p>
               {budgetData.savingsGoal ? (
                 <p className="text-xs text-muted-foreground truncate">
-                  {formatCurrency(budgetData.savingsGoal.targetAmount)} target
-                  {budgetData.savingsGoal.linkedSubcategoryId
-                    ? ` · tracked via ${allSubcategoryOptions.find(o => o.id === budgetData.savingsGoal!.linkedSubcategoryId)?.label ?? "linked subcategory"}`
-                    : " · tracked as income − spending"}
+                  {budgetData.savingsGoal.mode === "explicit"
+                    ? `${formatCurrency(budgetData.savingsGoal.targetAmount)} target`
+                    : "Derived target"}
                 </p>
               ) : (
                 <p className="text-xs text-muted-foreground">No goal set</p>
@@ -745,19 +739,6 @@ export function BudgetTab() {
                   className="w-full h-9 px-2 bg-card border border-border rounded text-sm"
                   autoFocus
                 />
-              </div>
-              <div className="flex-1">
-                <label className="text-[10px] text-muted-foreground">Track via subcategory (optional)</label>
-                <select
-                  value={goalLinkedSub}
-                  onChange={(e) => setGoalLinkedSub(e.target.value)}
-                  className="w-full h-9 px-2 bg-card border border-border rounded text-sm"
-                >
-                  <option value="">Implicit (income − spending)</option>
-                  {allSubcategoryOptions.map((o) => (
-                    <option key={o.id} value={o.id}>{o.label}</option>
-                  ))}
-                </select>
               </div>
             </div>
             <div className="flex items-center gap-2">
