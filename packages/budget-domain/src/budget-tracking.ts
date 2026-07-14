@@ -1,5 +1,5 @@
 import type { Transaction, BudgetData, BudgetFrequency, Category } from "./contracts";
-import { collectIncomeHolderIds, isIncomeCategory, isRoleTransaction } from "./roles";
+import { collectIncomeHolderIds, collectSavingsHolderIds, isIncomeCategory, isRoleTransaction } from "./roles";
 
 export const FREQ_FACTORS: Record<BudgetFrequency, number> = {
   weekly: 52 / 12,
@@ -80,6 +80,9 @@ export function buildBudgetVsActual(
 
   const regularCats = budgetData.categories.filter(c => !c.deleted && c.type === "regular");
   const incomeHolders = collectIncomeHolderIds(budgetData.categories);
+  // Savings-role holders are excluded from expense aggregates (set-aside, not
+  // spent) — same class as Transfer/_business/capital. behaviour.md § "Exclusion".
+  const savingsHolders = collectSavingsHolderIds(budgetData.categories);
 
   const totalIncome = activeTx
     .filter(t => isRoleTransaction(t, incomeHolders))
@@ -89,6 +92,7 @@ export function buildBudgetVsActual(
     .filter(t => {
       if (t._business) return false;
       if (isRoleTransaction(t, incomeHolders)) return false;
+      if (isRoleTransaction(t, savingsHolders)) return false;
       if (t.subcategoryId) {
         const sub = budgetData.categories
           .flatMap(c => c.subcategories)
@@ -111,6 +115,7 @@ export function buildBudgetVsActual(
     .filter(c => !isIncomeCategory(c))
     .flatMap(c => getActiveSubs(c))
     .filter(sub => !incomeHolders.subcategoryIds.has(sub.subcategoryId))
+    .filter(sub => !savingsHolders.subcategoryIds.has(sub.subcategoryId))
     .reduce((s, sub) => s + getSubcategoryMonthlyBudget(sub.subcategoryId, budgetData) * numMonths, 0);
 
   const categories: CategoryActual[] = regularCats
@@ -119,6 +124,7 @@ export function buildBudgetVsActual(
       const activeSubs = getActiveSubs(cat);
       const catTx = activeTx.filter(t => {
         if (t._business) return false;
+        if (isRoleTransaction(t, savingsHolders)) return false;
         if (t.subcategoryId) {
           const sub = budgetData.categories.flatMap(c => c.subcategories).find(s => s.subcategoryId === t.subcategoryId);
           if (sub?.excludeFromCashflow) return false;

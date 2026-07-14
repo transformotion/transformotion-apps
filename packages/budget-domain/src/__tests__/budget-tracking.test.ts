@@ -108,4 +108,31 @@ describe("buildBudgetVsActual", () => {
     const result = buildBudgetVsActual(transactions, BUDGET_DATA);
     expect(result.totalExpenses).toBe(0);
   });
+
+  it("excludes role:'savings' transactions from expenses AND income", () => {
+    const SUB_SAVINGS = "sub-savings-uuid";
+    const CAT_SAVINGS = "cat-savings-uuid";
+    const data: BudgetData = {
+      ...BUDGET_DATA,
+      categories: [
+        ...BUDGET_DATA.categories,
+        {
+          categoryId: CAT_SAVINGS,
+          name: "Savings",
+          type: "regular",
+          displayOrder: 2,
+          role: "savings",
+          subcategories: [{ subcategoryId: SUB_SAVINGS, name: "Emergency", displayOrder: 0 }],
+        },
+      ],
+    };
+    const transactions = [
+      tx(CAT_INCOME, SUB_A, "1000"),
+      tx(CAT_GROCERIES, SUB_B, "-200"),
+      tx(CAT_SAVINGS, SUB_SAVINGS, "300"), // a savings contribution
+    ];
+    const result = buildBudgetVsActual(transactions, data);
+    expect(result.totalIncome).toBe(1000); // savings is NOT income
+    expect(result.totalExpenses).toBe(200); // groceries only — savings is NOT an expense
+  });
 });

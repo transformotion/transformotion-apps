@@ -1,6 +1,7 @@
 import type { Transaction, BudgetData, Category } from "./contracts";
 import { getSubcategoryMonthlyBudget } from "./budget-tracking";
-import { collectIncomeHolderIds, isIncomeCategory, isRoleTransaction } from "./roles";
+import { collectIncomeHolderIds, collectSavingsHolderIds, isIncomeCategory, isRoleTransaction } from "./roles";
+import type { RoleHolderIds } from "./roles";
 
 export interface MonthlyTrendPoint {
   month: string;
@@ -55,8 +56,11 @@ function getActiveSubs(cat: Category) {
   return cat.subcategories.filter(s => !s.deleted);
 }
 
-function isExcludedTx(tx: Transaction, categories: Category[]): boolean {
+function isExcludedTx(tx: Transaction, categories: Category[], savingsHolders: RoleHolderIds): boolean {
   if (tx._business) return true;
+  // Savings-role transactions are set aside, not spent — excluded from expense
+  // aggregates (same class as Transfer/_business/capital). behaviour.md § "Exclusion".
+  if (isRoleTransaction(tx, savingsHolders)) return true;
   if (tx.subcategoryId) {
     const sub = categories.flatMap(c => c.subcategories).find(s => s.subcategoryId === tx.subcategoryId);
     if (sub?.excludeFromCashflow) return true;
@@ -75,6 +79,7 @@ export function buildMonthlyTrend(
   categories: Category[]
 ): MonthlyTrendPoint[] {
   const incomeHolders = collectIncomeHolderIds(categories);
+  const savingsHolders = collectSavingsHolderIds(categories);
   const months = [
     ...new Set(transactions.map(txMonth).filter((m): m is string => m !== null)),
   ].sort();
@@ -90,7 +95,7 @@ export function buildMonthlyTrend(
       .filter(t => {
         const cat = categories.find(c => c.categoryId === t.categoryId);
         const catName = cat?.name || t.category;
-        return !!catName && !isRoleTransaction(t, incomeHolders) && !isExcludedTx(t, categories);
+        return !!catName && !isRoleTransaction(t, incomeHolders) && !isExcludedTx(t, categories, savingsHolders);
       })
       .reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0);
 
@@ -118,11 +123,12 @@ export function buildCategoryBarData(
   const regularExpenseCats = budgetData.categories.filter(
     c => !c.deleted && c.type === "regular" && !isIncomeCategory(c)
   );
+  const savingsHolders = collectSavingsHolderIds(budgetData.categories);
 
   return regularExpenseCats.map(cat => {
     const actual = transactions
       .filter(t => {
-        if (isExcludedTx(t, budgetData.categories)) return false;
+        if (isExcludedTx(t, budgetData.categories, savingsHolders)) return false;
         return t.categoryId === cat.categoryId || (!t.categoryId && t.category === cat.name);
       })
       .reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0);

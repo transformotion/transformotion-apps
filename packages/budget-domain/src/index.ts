@@ -6,3 +6,4 @@ export * from "./budget-tracking";
 export * from "./cashflow";
 export * from "./dashboard";
 export * from "./normalise";
+export * from "./savings";

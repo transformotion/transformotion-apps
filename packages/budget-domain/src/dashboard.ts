@@ -1,6 +1,6 @@
 import type { BudgetData, Transaction } from "./contracts";
-import { buildBudgetVsActual } from "./budget-tracking";
-import { collectIncomeHolderIds, isRoleTransaction } from "./roles";
+import { buildBudgetVsActual, getSubcategoryMonthlyBudget } from "./budget-tracking";
+import { collectIncomeHolderIds, collectSavingsHolderIds, isRoleTransaction } from "./roles";
 
 /**
  * M21 — Home dashboard aggregation for Budget Tracker.
@@ -71,6 +71,19 @@ export function monthlyIncome(
     .reduce((s, t) => s + Math.abs(parseFloat(t.amount) || 0), 0);
 }
 
+/**
+ * Derived-mode target = Σ monthly-normalized budgeted amounts of the active
+ * role:'savings' subcategory holders (`savingsSubIds` already includes
+ * category-level roles inherited onto their subcategories).
+ */
+function derivedSavingsTarget(budgetData: BudgetData, savingsSubIds: Set<string>): number {
+  return budgetData.categories
+    .filter((c) => !c.deleted)
+    .flatMap((c) => c.subcategories.filter((s) => !s.deleted))
+    .filter((s) => savingsSubIds.has(s.subcategoryId))
+    .reduce((sum, s) => sum + getSubcategoryMonthlyBudget(s.subcategoryId, budgetData), 0);
+}
+
 /** Savings-goal progress for `month` per behaviour.md § "Savings goal". */
 export function buildSavingsGoalProgress(
   transactions: Transaction[],
@@ -89,24 +102,45 @@ export function buildSavingsGoalProgress(
     };
   }
 
-  // COMPILE STUB (contracts-only PR m16.12.0): the `SavingsGoal` union changed
-  // (`linkedSubcategoryId` removed; `explicit`/`derived` modes added) and the new
-  // SIGNED savings-role progress semantics land in the follow-up budget-domain PR.
-  // Here we only keep this compiling against the new type while preserving the
-  // prior implicit-surplus measure (income − spending, floored at 0).
-  const targetAmount = goal.mode === "explicit" ? goal.targetAmount : 0;
-  const income = monthlyIncome(transactions, budgetData, month);
-  const spending = buildBudgetVsActual(transactions, budgetData, month).totalExpenses;
-  const savedAmount = Math.max(income - spending, 0);
+  const savingsHolders = collectSavingsHolderIds(budgetData.categories);
+  const hasSavingsHolders =
+    savingsHolders.categoryIds.size > 0 || savingsHolders.subcategoryIds.size > 0;
 
-  const fraction = targetAmount > 0 ? Math.min(savedAmount / targetAmount, 1) : 0;
+  // Target: explicit → the set amount; derived → Σ monthly savings budgets, or 0
+  // when there are no savings holders (the degenerate derived value).
+  const targetAmount =
+    goal.mode === "explicit"
+      ? goal.targetAmount
+      : hasSavingsHolders
+        ? derivedSavingsTarget(budgetData, savingsHolders.subcategoryIds)
+        : 0;
+
+  // Progress (both modes): same-month SIGNED sum of transactions in role:'savings'
+  // holders (Math.abs superseded — a contribution is +, a withdrawal −). When no
+  // savings holders exist, fall back to the implicit surplus (income − spending,
+  // floored at 0) — the previously-shipped measure, now the documented fallback.
+  let savedAmount: number;
+  let implicit: boolean;
+  if (hasSavingsHolders) {
+    savedAmount = transactions
+      .filter((t) => txMonthKey(t) === month && isRoleTransaction(t, savingsHolders))
+      .reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
+    implicit = false;
+  } else {
+    const income = monthlyIncome(transactions, budgetData, month);
+    const spending = buildBudgetVsActual(transactions, budgetData, month).totalExpenses;
+    savedAmount = Math.max(income - spending, 0);
+    implicit = true;
+  }
+
+  const fraction = targetAmount > 0 ? Math.max(0, Math.min(savedAmount / targetAmount, 1)) : 0;
   return {
     configured: true,
     targetAmount,
     savedAmount,
     fraction,
     linkedSubcategoryId: null,
-    implicit: true,
+    implicit,
   };
 }
 

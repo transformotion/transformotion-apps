@@ -69,9 +69,26 @@ function tx(partial: Partial<Transaction>): Transaction {
 const TXNS: Transaction[] = [
   tx({ date: "01/06/2026", amount: "5600", categoryId: CAT_INCOME, subcategoryId: SUB_PAY, description: "Salary" }),
   tx({ date: "10/06/2026", amount: "-300", categoryId: CAT_GROCERIES, subcategoryId: SUB_SUPERMARKET, description: "Tesco" }),
-  tx({ date: "20/06/2026", amount: "-200", categoryId: CAT_SAVINGS, subcategoryId: SUB_SAVINGS, description: "To savings" }),
+  // Savings sign convention (behaviour.md § Savings pots): a contribution is +, a
+  // withdrawal −. "To savings" is a contribution → +200.
+  tx({ date: "20/06/2026", amount: "200", categoryId: CAT_SAVINGS, subcategoryId: SUB_SAVINGS, description: "To savings" }),
   tx({ date: "01/05/2026", amount: "5600", categoryId: CAT_INCOME, subcategoryId: SUB_PAY, description: "Salary May" }),
 ];
+
+/** Remove savings roles (for the no-savings-holders fallback cases). */
+function stripSavingsRoles(data: BudgetData): BudgetData {
+  return {
+    ...data,
+    categories: data.categories.map((c) => ({
+      ...c,
+      role: c.role === "savings" ? undefined : c.role,
+      subcategories: c.subcategories.map((s) => ({
+        ...s,
+        role: s.role === "savings" ? undefined : s.role,
+      })),
+    })),
+  };
+}
 
 describe("roles", () => {
   it("collects income holders including inherited subcategories", () => {
@@ -99,11 +116,11 @@ describe("buildDashboardStats", () => {
     const stats = buildDashboardStats(TXNS, BUDGET_DATA);
     expect(stats.month).toBe("2026-06");
     expect(stats.monthlyIncome).toBe(5600);
-    // Groceries 300 + Savings 200 both count as expenses (savings role does not
-    // exempt spending); income is excluded from expenses.
-    expect(stats.spentSoFar).toBe(500);
+    // Groceries 300 counts as expense; the Savings (role:'savings') 200 is EXCLUDED
+    // from expenses; income is excluded too.
+    expect(stats.spentSoFar).toBe(300);
     expect(stats.budgetTotal).toBe(800); // only groceries has a budget
-    expect(stats.remaining).toBe(300);
+    expect(stats.remaining).toBe(500);
     expect(stats.underBudget).toBe(true);
   });
 
@@ -115,23 +132,49 @@ describe("buildDashboardStats", () => {
 });
 
 describe("buildSavingsGoalProgress", () => {
-  // m16.12.0 STUB: `linkedSubcategoryId` was removed from `SavingsGoal`; the
-  // domain still measures the implicit surplus for a configured explicit goal
-  // (the real explicit/derived + signed savings-role progress is a follow-up PR).
-  it("explicit goal measures the implicit surplus (linked tracking removed — stub)", () => {
+  it("explicit mode: target = amount, progress = signed savings-role sum this month", () => {
     const data = { ...BUDGET_DATA, savingsGoal: { mode: "explicit" as const, targetAmount: 1000 } };
     const p = buildSavingsGoalProgress(TXNS, data, "2026-06");
     expect(p.configured).toBe(true);
-    expect(p.implicit).toBe(true);
-    expect(p.savedAmount).toBe(5600 - 500);
-    expect(p.fraction).toBe(1);
+    expect(p.implicit).toBe(false);
+    expect(p.targetAmount).toBe(1000);
+    expect(p.savedAmount).toBe(200); // the +200 "To savings" contribution
+    expect(p.fraction).toBeCloseTo(0.2);
   });
 
-  it("falls back to implicit income - spending", () => {
-    const data = { ...BUDGET_DATA, savingsGoal: { mode: "explicit" as const, targetAmount: 10000 } };
+  it("signed progress: a contribution adds, a withdrawal subtracts", () => {
+    const txns = [
+      ...TXNS,
+      tx({ date: "22/06/2026", amount: "-50", categoryId: CAT_SAVINGS, subcategoryId: SUB_SAVINGS, description: "Withdraw" }),
+    ];
+    const data = { ...BUDGET_DATA, savingsGoal: { mode: "explicit" as const, targetAmount: 1000 } };
+    // +200 − 50 = 150
+    expect(buildSavingsGoalProgress(txns, data, "2026-06").savedAmount).toBe(150);
+  });
+
+  it("derived mode: target = Σ monthly-normalized budgets of savings holders", () => {
+    const data = {
+      ...BUDGET_DATA,
+      budgetAmounts: { ...BUDGET_DATA.budgetAmounts, [SUB_SAVINGS]: 500 },
+      savingsGoal: { mode: "derived" as const },
+    };
+    const p = buildSavingsGoalProgress(TXNS, data, "2026-06");
+    expect(p.targetAmount).toBe(500); // SUB_SAVINGS monthly budget
+    expect(p.savedAmount).toBe(200);
+    expect(p.fraction).toBeCloseTo(0.4);
+  });
+
+  it("derived mode with no savings holders → target 0 (degenerate)", () => {
+    const data = { ...stripSavingsRoles(BUDGET_DATA), savingsGoal: { mode: "derived" as const } };
+    expect(buildSavingsGoalProgress(TXNS, data, "2026-06").targetAmount).toBe(0);
+  });
+
+  it("no savings holders → implicit surplus fallback (income − spending, floor 0)", () => {
+    const data = { ...stripSavingsRoles(BUDGET_DATA), savingsGoal: { mode: "explicit" as const, targetAmount: 10000 } };
     const p = buildSavingsGoalProgress(TXNS, data, "2026-06");
     expect(p.implicit).toBe(true);
-    expect(p.savedAmount).toBe(5600 - 500);
+    // income 5600 − spending (groceries 300 + now-unclassified savings 200) = 5100
+    expect(p.savedAmount).toBe(5100);
   });
 
   it("reports not-configured when absent", () => {
