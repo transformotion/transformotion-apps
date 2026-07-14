@@ -54,9 +54,30 @@ export const MOCK_SEED_BUDGET_DATA: BudgetData = {
         { subcategoryId: 'seed-sub-software', name: 'Software & subscriptions', displayOrder: 2 },
       ],
     },
+    // Savings-role category with three archetype pots (sinking fund / target-only /
+    // target+deadline behind-pace) so the Savings tab, Home tile and derived goal
+    // are demonstrable on a fresh browser. Mock-only (Local*Repository); never prod.
+    {
+      categoryId: 'seed-cat-savings',
+      name: 'Savings',
+      type: 'regular',
+      displayOrder: 5,
+      role: 'savings',
+      subcategories: [
+        { subcategoryId: 'seed-sub-holidays', name: 'Holidays', displayOrder: 1 },
+        { subcategoryId: 'seed-sub-newcar', name: 'New car', displayOrder: 2, potTarget: 15000 },
+        { subcategoryId: 'seed-sub-house', name: 'House deposit', displayOrder: 3, potTarget: 50000, potDeadline: '2027-12', potOpeningBalance: 12000 },
+      ],
+    },
   ],
-  budgetAmounts: {},
+  // Monthly contributions (per #671) — Σ = 2,150/mo, the derived savings goal.
+  budgetAmounts: {
+    'seed-sub-holidays': 250,
+    'seed-sub-newcar': 900,
+    'seed-sub-house': 1000,
+  },
   budgetFrequencies: {},
+  savingsGoal: { mode: 'derived' },
 }
 
 function seedTx(transactionId: string, date: string, amount: string, description: string): Transaction {
@@ -74,6 +95,29 @@ function seedTx(transactionId: string, date: string, amount: string, description
   }
 }
 
+// A savings pot movement: a MANUAL, categorised transaction in a savings
+// subcategory, signed per direction (contribution +, withdrawal −).
+function seedMovement(
+  id: string,
+  date: string,
+  amount: string,
+  description: string,
+  subcategoryId: string,
+): Transaction {
+  return {
+    transactionId: id,
+    accountId: 'mock-account',
+    date,
+    amount,
+    description,
+    categoryId: 'seed-cat-savings',
+    subcategoryId,
+    file: 'manual',
+    _manual: true,
+    _business: false,
+  }
+}
+
 export const MOCK_SEED_TRANSACTIONS: Transaction[] = [
   seedTx('seed-tx-1', '02/07/2026', '-84.50', 'COLES 0342 MOOLOOLABA'),
   seedTx('seed-tx-2', '04/07/2026', '-53.20', 'COLES 1122 BUDERIM'),
@@ -82,4 +126,30 @@ export const MOCK_SEED_TRANSACTIONS: Transaction[] = [
   seedTx('seed-tx-5', '05/07/2026', '-78.40', 'BP TANAWHA 4556 TANAWHA QLD'),
   seedTx('seed-tx-6', '01/07/2026', '-22.99', 'NETFLIX.COM'),
   seedTx('seed-tx-7', '01/07/2026', '3200.00', 'SALARY ACME PTY LTD'),
+
+  // Holidays — sinking fund (no target): balance 1,850; +3,000 in / −1,150 out this year.
+  seedMovement('seed-sv-h1', '15/01/2026', '1000', 'Holiday fund', 'seed-sub-holidays'),
+  seedMovement('seed-sv-h2', '10/02/2026', '-650', 'Weekend away', 'seed-sub-holidays'),
+  seedMovement('seed-sv-h3', '15/03/2026', '1000', 'Holiday fund', 'seed-sub-holidays'),
+  seedMovement('seed-sv-h4', '15/05/2026', '1000', 'Holiday fund', 'seed-sub-holidays'),
+  seedMovement('seed-sv-h5', '20/06/2026', '-500', 'Day trip', 'seed-sub-holidays'),
+
+  // New car — target $15,000, no deadline: +900/mo Jan–Jul → balance 6,300 (42%).
+  seedMovement('seed-sv-c1', '15/01/2026', '900', 'Car fund', 'seed-sub-newcar'),
+  seedMovement('seed-sv-c2', '15/02/2026', '900', 'Car fund', 'seed-sub-newcar'),
+  seedMovement('seed-sv-c3', '15/03/2026', '900', 'Car fund', 'seed-sub-newcar'),
+  seedMovement('seed-sv-c4', '15/04/2026', '900', 'Car fund', 'seed-sub-newcar'),
+  seedMovement('seed-sv-c5', '15/05/2026', '900', 'Car fund', 'seed-sub-newcar'),
+  seedMovement('seed-sv-c6', '15/06/2026', '900', 'Car fund', 'seed-sub-newcar'),
+  seedMovement('seed-sv-c7', '15/07/2026', '900', 'Car fund', 'seed-sub-newcar'),
+
+  // House deposit — target $50,000 by Dec 2027, opening $12,000: +11,400 → 23,400
+  // (47%). Budgeting $1,000/mo vs a required ~$1,565/mo → BEHIND pace.
+  seedMovement('seed-sv-d1', '15/01/2026', '5400', 'House deposit', 'seed-sub-house'),
+  seedMovement('seed-sv-d2', '15/02/2026', '1000', 'House deposit', 'seed-sub-house'),
+  seedMovement('seed-sv-d3', '15/03/2026', '1000', 'House deposit', 'seed-sub-house'),
+  seedMovement('seed-sv-d4', '15/04/2026', '1000', 'House deposit', 'seed-sub-house'),
+  seedMovement('seed-sv-d5', '15/05/2026', '1000', 'House deposit', 'seed-sub-house'),
+  seedMovement('seed-sv-d6', '15/06/2026', '1000', 'House deposit', 'seed-sub-house'),
+  seedMovement('seed-sv-d7', '15/07/2026', '1000', 'House deposit', 'seed-sub-house'),
 ]
