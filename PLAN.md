@@ -417,7 +417,7 @@ matches deployed reality.
 
 ## 8. M4 — appSlug writer and account migration  *(CLOSED — folded into M11)*
 
-**Status (2026-05-05):** Closed. The writer fix (#144 / PR #157) landed cleanly on 2026-05-04. Remaining work — data migration (#146) and provisioning verification (#147) — moved to M11 because both depend on M11's invitation flow design. Account creation under the closed-signup model happens during invitation acceptance, not during sign-in; the migration target shape and provisioning verification both depend on how M11 ends up structuring that flow.
+**Status (2026-05-05):** Closed. The writer fix (#144 / PR #157) landed cleanly on 2026-05-04. Remaining work — data migration (#146) and provisioning verification (#147) — moved to M11 because both depend on M11's account provisioning design. Account creation under the closed-signup model happens during invitation acceptance, not during sign-in; the migration target shape and provisioning verification both depend on how M11 ends up structuring that flow.
 
 The original outcomes below are preserved as historical record of what M4 was scoped for. The actual landed work was the writer fix only; the rest is M11's territory.
 
@@ -584,7 +584,7 @@ changes. All paths go through real Cognito and real DynamoDB.
 
 ### Dependencies
 
-- M4 #144 done (handleSetup writer fix; PR #157). **Done.** M6 originally listed M4-as-a-milestone as a dependency, but the only piece M6 actually needs from M4 is the writer fix to ensure account-scoped JWT claims work correctly. The remainder of M4 folded into M11 (data migration and provisioning verification both depend on M11's invitation flow design); none of that gates M6.
+- M4 #144 done (handleSetup writer fix; PR #157). **Done.** M6 originally listed M4-as-a-milestone as a dependency, but the only piece M6 actually needs from M4 is the writer fix to ensure account-scoped JWT claims work correctly. The remainder of M4 folded into M11 (data migration and provisioning verification both depend on M11's account provisioning design); none of that gates M6.
 - M5 complete (workaround gateway retired; budget-tracker routes consolidated onto the shared platform gateway alongside stock-analyser; `BudgetTrackerApiStack` continues to house app Lambdas in symmetry with `StockAnalyserApiStack`).
 - M2.1 complete (canonical persistence pattern ratified).
 
@@ -1078,65 +1078,57 @@ This milestone can run in parallel with M8 and M9.
 
 ---
 
-## 15. M11 — Invitation API and UI (sub-phase 7e-invitation)
+## 15. M11 — Account provisioning and lifecycle architecture
 
 ### Purpose
 
-The invitation flow is the primary mechanism for adding new users to the
-platform under the closed-signup model (M0). This milestone implements
-both the backend and the UI for invitations, including signup
-reconciliation.
+Currently account provisioning is centralised in a platform-tier Lambda
+that has implicit responsibility for cross-app account creation, default
+account setup, invitation handling, and the mapping between Cognito users
+and `platform.accounts` records.
 
-### Outcome
+After M9 establishes LP as the auth/identity owner, the account
+provisioning architecture needs explicit design.
 
-- Lambda for app-access invitations created or extended:
-  - Invitation record shape with `apps` + `roles` + `perApp` map (per
-    inventory Section 3.2's existing design).
-  - Site-admin / per-app-admin authorisation on the create-invitation
-    endpoint.
-  - SES email delivery for invitation links.
-- Launchpad UI for creating invitations (admin-only):
-  - Matrix of apps × roles based on caller's permissions.
-  - Email entry, expiration default, custom message option.
-- Signup reconciliation flow:
-  - Reads invitation token from OAuth state on first sign-in.
-  - Looks up pending invitation in `platform.invitations`.
-  - Adds user to assigned Cognito groups.
-  - Creates `platform.accounts` and `platform.account-members` rows per
-    invitation `perApp` shape.
-  - Per-app accounts created based on which apps the invitation grants
-    (per M2.2's per-app account model).
-  - New budget-tracker accounts seeded with default `budget-data` rows
-    (categories, empty budget amounts/frequencies) and default settings
-    (`csvFormatMappings: {}`) so the app is immediately usable without
-    manual setup. Identified as a gap during M6's inert-settings cleanup:
-    the existing account has data from migration, but invitation-created
-    accounts would otherwise start empty.
-- Multi-user platform functional end-to-end: an admin user invites
-  another email; the invitee receives an email; clicking the link signs
-  them up and gives them the granted access.
+### Questions to resolve
+
+- Does account creation happen in LP or in each app?
+- Where does `platform.accounts` vs per-app account data split (if at all)?
+- What's the relationship between Cognito users, `platform.accounts`, and
+  per-app account context?
+- How do invitations interact with account creation when invited users may
+  or may not be joining an existing account?
+- How does "default account" creation work for users granted access to an
+  app without an explicit account invitation?
 
 ### Goals served
 
-Goal 4 primarily (the invitation flow is the heart of the permissions
-model). Goal 3 (one invitation flow serves all apps via the `perApp`
-shape).
+Goal 4 (permissions model coherence).
 
 ### Gate to next
 
-End-to-end test: site-admin invites a new email to budget-tracker as
-member; recipient receives email, clicks link, signs up via Cognito,
-arrives at launchpad with budget-tracker tile visible, can navigate to
-budget-tracker and see/edit data.
+Account provisioning logic distributed appropriately between LP (identity,
+claims, invitations) and apps (account creation, account-specific data).
+Documented in CONTRIBUTING and architecture docs.
 
 ### Dependencies
 
-- M0 complete (closed-signup model is what makes invitations the only path). **Done.**
-- M2.2 complete (helper interface ratified, including `requireSiteAdmin` and `requireAccountOwner` that the invitation flow uses for authorization). **Done.**
-- M2.3 complete (contracts policy ratified — establishes location for invitation-flow contracts). **Done.**
-- M4 #144 done (handleSetup writer fix; PR #157). **Done.** Note: M4 originally listed as a milestone-level dependency, but the only piece M11 actually needed from M4 was the writer fix. The remaining M4 work (#146 data migration, #147 provisioning verification) folded into M11 because that work depends on M11's design.
+- M9 complete (LP must own the auth substrate before its provisioning
+  responsibilities can be redesigned).
 
-M10 is no longer a dependency. PLAN.md previously listed M10 because helper interfaces were originally scoped as M10's outcome. M2.2 ratified those helpers; M10 reduces to verification-only of correct usage. M11 implementation should produce code conformant to M10's verification (i.e., M10 will eventually verify M11's invitation Lambda among others), but M11 doesn't wait on M10.
+### Note on inherited state
+
+M9 relocates the `account-provisioning` Lambda to LP without redesign.
+M11 redesigns its responsibilities. The Lambda is explicitly inherited
+from M9 as-is.
+
+### Original scope note
+
+The original M11 scope (Invitation API and UI, sub-phase 7e-invitation)
+is subsumed by this broader architectural concern. The invitation flow is
+one piece of the account provisioning architecture, not a standalone UI
+milestone. The data migration and provisioning verification work folded
+in from M4 (#146, #147) are also subsumed here.
 
 ---
 
@@ -1689,7 +1681,7 @@ For quick visual reference. The full text above is the canonical source.
 | M8 | Cleanup of legacy auth substrate | 3, 4 | M2.2 |
 | M9 | Per-app architecture (REST, WSS, auth, Claude proxy, IAM) | 1, 3, 4 | M7, M2.2 |
 | M10 | Auth middleware extension | 3, 4 | M1, M2.2, M4 |
-| M11 | Invitation API and UI | 3, 4 | M0, M4, M10 |
+| M11 | Account provisioning and lifecycle architecture | 4 | M9 |
 | M12 | Forgot-provider fix | 4 | (none hard) |
 | M13 | Observability | 3, 1 | M12 |
 | M14 | Deployment verification | 2, 1, 3 | M13 |
@@ -1701,7 +1693,7 @@ For quick visual reference. The full text above is the canonical source.
 | M20 | UI reconciliation — v0 ↔ live parity (PLANNING) | 3, 1 | (audit done); §8.A discipline |
 | M21 | App Dashboards (SA + BT) — pre-req to go-live | 1, 2 | contracts m16.10.0 (PR-1) |
 
-M8, M9, M10 can run in parallel. M11 follows M10. M7 can run in parallel
+M8, M9, M10 can run in parallel. M11 follows M9. M7 can run in parallel
 with M6 once M2 and M3 complete. M13 and M14 are sequenced strictly
 linear after M12, per the user preference for focused execution.
 
